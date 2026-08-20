@@ -67,8 +67,8 @@ export function articleMatchesCategory(post: any, categoryOrSub: string): boolea
   if (!post || !categoryOrSub) return false;
   const target = categoryOrSub.toLowerCase().replace(/[^a-z0-9]/g, "");
   const cat = (post.category || post.category_name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  const subs = getArticleSubcategories(post).map(s => s.toLowerCase().replace(/[^a-z0-9]/g, ""));
-  const tags = (Array.isArray(post.tags) ? post.tags : []).map((t: string) => String(t || "").toLowerCase().replace(/[^a-z0-9]/g, ""));
+  const subs: string[] = getArticleSubcategories(post).map((s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, ""));
+  const tags: string[] = (Array.isArray(post?.tags) ? (post.tags as any[]) : []).map((t: any) => String(t || "").toLowerCase().replace(/[^a-z0-9]/g, ""));
 
   if (target === "world") {
     const WORLD_REGIONS = ["china", "unitedstates", "europe", "britain", "middleeast", "africa", "asia"];
