@@ -5,8 +5,11 @@ function decodeJWTPayload(token: string): any {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
-    const payload = Buffer.from(parts[1], 'base64').toString('utf-8');
-    return JSON.parse(payload);
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const jsonStr = typeof atob === 'function'
+      ? decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''))
+      : Buffer.from(base64, 'base64').toString('utf-8');
+    return JSON.parse(jsonStr);
   } catch (e) {
     return null;
   }
