@@ -10,7 +10,25 @@ export default function HeroSection() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [userPublishedArticles, setUserPublishedArticles] = useState<any[]>([]);
   const [userTrendingArticles, setUserTrendingArticles] = useState<any[]>([]);
+  const [profileSyncTick, setProfileSyncTick] = useState(0);
   const { articles: liveArticles } = useLiveArticles();
+
+  useEffect(() => {
+    const handleProfileSync = () => {
+      setProfileSyncTick((prev) => prev + 1);
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("dj_profile_updated", handleProfileSync);
+      window.addEventListener("storage", handleProfileSync);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("dj_profile_updated", handleProfileSync);
+        window.removeEventListener("storage", handleProfileSync);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -87,7 +105,7 @@ export default function HeroSection() {
     } catch (e) {
       console.warn("Error reading published articles for Hero:", e);
     }
-  }, [liveArticles]);
+  }, [liveArticles, profileSyncTick]);
 
   const carouselArticles = [
     {

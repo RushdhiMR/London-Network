@@ -351,21 +351,22 @@ export function getAuthorFullProfileByNameOrEmail(name?: string, email?: string)
 export function resolveUserAvatar(user?: { name?: string; role?: string; email?: string; avatar?: string } | null): string {
   if (!user) return "/author_bluesuit.jpg";
 
-  // 1. Direct valid avatar on user object
-  if (user.avatar && user.avatar.length > 5 && !user.avatar.includes("cart") && !user.avatar.includes("admin_profile")) {
-    return user.avatar;
-  }
-
-  // 2. Check saved user profile in database/localStorage by email or name
+  // 1. Check saved user profile in database/localStorage by email or name FIRST
+  // If this author has an active account or saved profile image, that ALWAYS takes priority!
   if (user.email || user.name) {
     const saved = getUserProfile(user.email);
-    if (saved?.avatar && saved.avatar.length > 5 && !saved.avatar.includes("cart")) {
+    if (saved?.avatar && saved.avatar.length > 5 && !saved.avatar.includes("cart") && !saved.avatar.includes("admin_profile")) {
       return saved.avatar;
     }
     const resolved = getAuthorAvatarByNameOrEmail(user.name, user.email);
-    if (resolved && resolved.length > 5 && !resolved.includes("cart")) {
+    if (resolved && resolved.length > 5 && !resolved.includes("cart") && !resolved.includes("admin_profile")) {
       return resolved;
     }
+  }
+
+  // 2. Direct valid avatar on user object if not generic
+  if (user.avatar && user.avatar.length > 5 && !user.avatar.includes("cart") && !user.avatar.includes("admin_profile")) {
+    return user.avatar;
   }
 
   // 3. Fallbacks for default demo authors
