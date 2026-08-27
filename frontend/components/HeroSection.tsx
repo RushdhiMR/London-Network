@@ -38,7 +38,7 @@ export default function HeroSection() {
         const resolvedAvatar = resolveUserAvatar({
           name: rawName,
           email: post.authorEmail || (post as any).author_email,
-          avatar: post.authorAvatar && !post.authorAvatar.includes("author_bluesuit") ? post.authorAvatar : undefined
+          avatar: post.authorAvatar
         });
 
         const validImg = post.imageUrl || post.image || (post as any).image_url || "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=1200&h=800&fit=crop";
@@ -255,7 +255,7 @@ export default function HeroSection() {
                 const resolvedAvatar = resolveUserAvatar({
                   name: activeArticle.author,
                   email: (activeArticle as any).authorEmail,
-                  avatar: activeArticle.authorAvatar && !activeArticle.authorAvatar.includes("author_bluesuit") ? activeArticle.authorAvatar : undefined
+                  avatar: activeArticle.authorAvatar
                 });
 
                 return (

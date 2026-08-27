@@ -2813,8 +2813,8 @@ function isWorldOrWorldSub(cat: string): boolean {
                   const activeProf = getUserProfile(currentUser?.email || "");
                   const previewAuthorName = activeProf?.name || currentUser?.name || "Author";
                   const resolvedAvatar =
-                    (activeProf?.avatar && !activeProf.avatar.includes("cart") && !activeProf.avatar.includes("author_bluesuit") ? activeProf.avatar : null) ||
-                    (currentUser?.avatar && !currentUser.avatar.includes("cart") && !currentUser.avatar.includes("author_bluesuit") ? currentUser.avatar : null) ||
+                    (activeProf?.avatar && !activeProf.avatar.includes("cart") ? activeProf.avatar : null) ||
+                    (currentUser?.avatar && !currentUser.avatar.includes("cart") ? currentUser.avatar : null) ||
                     getAuthorAvatarByNameOrEmail(previewAuthorName, currentUser?.email) ||
                     resolveUserAvatar({ name: previewAuthorName, email: currentUser?.email, avatar: currentUser?.avatar });
 

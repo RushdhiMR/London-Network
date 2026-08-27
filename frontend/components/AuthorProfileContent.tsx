@@ -146,7 +146,7 @@ export default function AuthorProfileContent({
           const itemWriterAvatar = resolveUserAvatar({
             name: finalName,
             email: post.authorEmail,
-            avatar: (finalAvatar && !finalAvatar.includes("author_bluesuit") ? finalAvatar : undefined) || (post.authorAvatar && !post.authorAvatar.includes("author_bluesuit") ? post.authorAvatar : undefined)
+            avatar: finalAvatar || post.authorAvatar
           });
 
           return {
@@ -165,7 +165,7 @@ export default function AuthorProfileContent({
         mappedArticles = initialArticles.map((art) => {
           const itemAvatar = resolveUserAvatar({
             name: finalName,
-            avatar: finalAvatar && !finalAvatar.includes("author_bluesuit") ? finalAvatar : undefined
+            avatar: finalAvatar
           });
           return {
             ...art,
@@ -299,7 +299,7 @@ export default function AuthorProfileContent({
                       const cardAuthorName = article.authorName || authorProfile.name;
                       const displayItemAvatar = resolveUserAvatar({
                         name: cardAuthorName,
-                        avatar: article.authorAvatar && !article.authorAvatar.includes("author_bluesuit") ? article.authorAvatar : (authorProfile.avatar && !authorProfile.avatar.includes("author_bluesuit") ? authorProfile.avatar : undefined)
+                        avatar: article.authorAvatar || authorProfile.avatar
                       });
 
                       return (
