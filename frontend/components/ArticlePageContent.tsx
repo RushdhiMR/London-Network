@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { CheckCircle2, Bookmark, Share2, ArrowLeft, Send, Trash2, MessageSquare, ThumbsUp, Heart, Reply, CornerDownRight, Smile, Plus, X, Image as ImageIcon } from "lucide-react";
+import { CheckCircle2, Bookmark, Share2, ArrowLeft, Send, Trash2, MessageSquare, ThumbsUp, Heart, Reply, CornerDownRight, Smile, Plus, X, Image as ImageIcon, Edit3 } from "lucide-react";
 import { generateAutoSEO } from "@/lib/seo";
 import { getUserProfile, getAuthorAvatarByNameOrEmail, getAuthorFullProfileByNameOrEmail, resolveUserAvatar } from "@/lib/userProfiles";
 import { useLiveArticles } from "@/lib/articlesSync";
@@ -16,6 +16,7 @@ interface ArticleReply {
   name: string;
   avatar?: string;
   email?: string;
+  visitorId?: string;
   role?: string;
   isArticleAuthor?: boolean;
   text: string;
@@ -25,6 +26,7 @@ interface ArticleReply {
   reactions?: Record<string, number>;
   likedBy?: string[];
   userReactions?: Record<string, boolean>;
+  isEdited?: boolean;
 }
 
 interface ArticleComment {
@@ -32,6 +34,7 @@ interface ArticleComment {
   name: string;
   avatar?: string;
   email?: string;
+  visitorId?: string;
   role?: string;
   isArticleAuthor?: boolean;
   text: string;
@@ -42,6 +45,7 @@ interface ArticleComment {
   likedBy?: string[];
   userReactions?: Record<string, boolean>;
   replies?: ArticleReply[];
+  isEdited?: boolean;
 }
 
 interface ArticleSection {
@@ -380,6 +384,10 @@ function ArticlePageContentInner({
   const commentFileInputRef = useRef<HTMLInputElement>(null);
   const replyFileInputRef = useRef<HTMLInputElement>(null);
   const [activeReactionPicker, setActiveReactionPicker] = useState<string | null>(null);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentText, setEditingCommentText] = useState<string>("");
+  const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
+  const [editingReplyText, setEditingReplyText] = useState<string>("");
   const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "👏"];
 
   const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>, isReply: boolean = false) => {
@@ -448,12 +456,17 @@ function ArticlePageContentInner({
     const authorEmail = auth.user?.email || "";
     const authorRole = auth.user?.role || (isAdmin ? "admin" : "reader");
     const isAuthor = isUserArticleAuthor(authorEmail, authorName);
+    const visitorId = typeof window !== "undefined" ? (localStorage.getItem("dj_visitor_id") || `vis_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`) : undefined;
+    if (typeof window !== "undefined" && visitorId) {
+      localStorage.setItem("dj_visitor_id", visitorId);
+    }
 
     const newComment: ArticleComment = {
       id: `comm_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       name: authorName,
       avatar: authorAvatar,
       email: authorEmail,
+      visitorId: visitorId,
       role: authorRole,
       isArticleAuthor: isAuthor,
       text: newCommentText.trim(),
@@ -487,12 +500,17 @@ function ArticlePageContentInner({
     const authorEmail = auth.user?.email || "";
     const authorRole = auth.user?.role || (isAdmin ? "admin" : "reader");
     const isAuthor = isUserArticleAuthor(authorEmail, authorName);
+    const visitorId = typeof window !== "undefined" ? (localStorage.getItem("dj_visitor_id") || `vis_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`) : undefined;
+    if (typeof window !== "undefined" && visitorId) {
+      localStorage.setItem("dj_visitor_id", visitorId);
+    }
 
     const newReply: ArticleReply = {
       id: `reply_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       name: authorName,
       avatar: authorAvatar,
       email: authorEmail,
+      visitorId: visitorId,
       role: authorRole,
       isArticleAuthor: isAuthor,
       text: replyText.trim(),
@@ -674,8 +692,56 @@ function ArticlePageContentInner({
     } catch (e) {}
   };
 
+  const canManageComment = (item: { email?: string; name?: string; visitorId?: string }): boolean => {
+    if (isAdmin) return true;
+    const currentEmail = (auth.user?.email || "").toLowerCase().trim();
+    const currentName = (auth.user?.name || "").toLowerCase().trim();
+
+    if (currentEmail && item.email && item.email.toLowerCase().trim() === currentEmail) {
+      return true;
+    }
+    if (currentName && item.name && item.name.toLowerCase().trim() === currentName) {
+      return true;
+    }
+
+    if (typeof window !== "undefined") {
+      const visitorId = localStorage.getItem("dj_visitor_id");
+      if (visitorId && item.visitorId && item.visitorId === visitorId) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const handleStartEditComment = (comment: ArticleComment) => {
+    if (!canManageComment(comment)) return;
+    setEditingCommentId(comment.id);
+    setEditingCommentText(comment.text || "");
+  };
+
+  const handleSaveEditComment = (commentId: string) => {
+    if (!editingCommentText.trim()) return;
+    const updated = comments.map((c) => {
+      if (c.id === commentId) {
+        return {
+          ...c,
+          text: editingCommentText.trim(),
+          isEdited: true
+        };
+      }
+      return c;
+    });
+    setComments(updated);
+    try {
+      localStorage.setItem(`dj_article_comments_${articleKey}`, JSON.stringify(updated));
+    } catch (e) {}
+    setEditingCommentId(null);
+    setEditingCommentText("");
+  };
+
   const handleDeleteComment = (commentId: string) => {
-    if (!isAdmin) return;
+    const comment = comments.find((c) => c.id === commentId);
+    if (!comment || !canManageComment(comment)) return;
     if (!confirm("Are you sure you want to delete this comment?")) return;
     const updated = comments.filter((c) => c.id !== commentId);
     setComments(updated);
@@ -684,8 +750,44 @@ function ArticlePageContentInner({
     } catch (e) {}
   };
 
+  const handleStartEditReply = (reply: ArticleReply) => {
+    if (!canManageComment(reply)) return;
+    setEditingReplyId(reply.id);
+    setEditingReplyText(reply.text || "");
+  };
+
+  const handleSaveEditReply = (commentId: string, replyId: string) => {
+    if (!editingReplyText.trim()) return;
+    const updated = comments.map((c) => {
+      if (c.id === commentId) {
+        return {
+          ...c,
+          replies: (c.replies || []).map((r) => {
+            if (r.id === replyId) {
+              return {
+                ...r,
+                text: editingReplyText.trim(),
+                isEdited: true
+              };
+            }
+            return r;
+          })
+        };
+      }
+      return c;
+    });
+    setComments(updated);
+    try {
+      localStorage.setItem(`dj_article_comments_${articleKey}`, JSON.stringify(updated));
+    } catch (e) {}
+    setEditingReplyId(null);
+    setEditingReplyText("");
+  };
+
   const handleDeleteReply = (commentId: string, replyId: string) => {
-    if (!isAdmin) return;
+    const comment = comments.find((c) => c.id === commentId);
+    const reply = comment?.replies?.find((r) => r.id === replyId);
+    if (!reply || !canManageComment(reply)) return;
     if (!confirm("Are you sure you want to delete this reply?")) return;
     const updated = comments.map((c) => {
       if (c.id === commentId) {
@@ -1276,26 +1378,73 @@ function ArticlePageContentInner({
                                         </span>
                                       )}
                                     </div>
-                                    <p className="text-[10px] text-zinc-400 font-mono">{comment.createdAt}</p>
+                                    <div className="flex items-center gap-1.5">
+                                      <p className="text-[10px] text-zinc-400 font-mono">{comment.createdAt}</p>
+                                      {comment.isEdited && (
+                                        <span className="text-[10px] text-zinc-400 italic">(edited)</span>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
 
-                                {/* Admin Delete Action Button */}
-                                {isAdmin && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteComment(comment.id)}
-                                    title="Delete unwanted comment (Admin Only)"
-                                    className="text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-lg flex items-center gap-1 text-[11px] font-bold cursor-pointer transition-all border border-transparent hover:border-red-200"
-                                  >
-                                    <Trash2 size={13} />
-                                    <span>Delete</span>
-                                  </button>
+                                {/* Author & Admin Action Buttons (Only for comment creator or admin) */}
+                                {canManageComment(comment) && (
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleStartEditComment(comment)}
+                                      title="Edit your comment"
+                                      className="text-slate-500 hover:text-blue-600 hover:bg-blue-50 px-2 py-1 rounded-lg flex items-center gap-1 text-[11px] font-semibold cursor-pointer transition-all border border-transparent hover:border-blue-200"
+                                    >
+                                      <Edit3 size={12} />
+                                      <span>Edit</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteComment(comment.id)}
+                                      title="Delete your comment"
+                                      className="text-slate-500 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded-lg flex items-center gap-1 text-[11px] font-semibold cursor-pointer transition-all border border-transparent hover:border-red-200"
+                                    >
+                                      <Trash2 size={12} />
+                                      <span>Delete</span>
+                                    </button>
+                                  </div>
                                 )}
                               </div>
 
-                              {/* Comment Body & Right-Aligned Like Heart Button */}
-                              {(() => {
+                              {/* Comment Body & Inline Edit Box */}
+                              {editingCommentId === comment.id ? (
+                                <div className="mt-2 mb-3 pl-10">
+                                  <div className="bg-slate-50 p-3 rounded-xl border border-blue-200 shadow-2xs">
+                                    <textarea
+                                      value={editingCommentText}
+                                      onChange={(e) => setEditingCommentText(e.target.value)}
+                                      className="w-full text-xs sm:text-sm text-slate-800 p-2.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#BF1E2D] resize-none"
+                                      rows={3}
+                                    />
+                                    <div className="flex justify-end items-center gap-2 mt-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingCommentId(null);
+                                          setEditingCommentText("");
+                                        }}
+                                        className="px-3 py-1 text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSaveEditComment(comment.id)}
+                                        disabled={!editingCommentText.trim()}
+                                        className="bg-[#BF1E2D] hover:bg-red-800 text-white font-bold text-xs px-3.5 py-1 rounded-lg transition-all cursor-pointer disabled:opacity-40"
+                                      >
+                                        Save Changes
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (() => {
                                 const currentUserKey = getCurrentUserKey();
                                 const isCommentLiked = Array.isArray(comment.likedBy) ? comment.likedBy.includes(currentUserKey) : !!comment.userReactions?.["❤️"];
                                 const commentLikeCount = Array.isArray(comment.likedBy) ? comment.likedBy.length : (comment.reactions?.["❤️"] || 0);
@@ -1553,22 +1702,68 @@ function ArticlePageContentInner({
                                             </div>
                                           </div>
                                           <div className="flex items-center gap-2">
-                                            <span className="text-[10px] text-zinc-400 font-mono">{reply.createdAt}</span>
-                                            {isAdmin && (
-                                              <button
-                                                type="button"
-                                                onClick={() => handleDeleteReply(comment.id, reply.id)}
-                                                title="Delete reply (Admin Only)"
-                                                className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors"
-                                              >
-                                                <Trash2 size={12} />
-                                              </button>
+                                            <div className="flex items-center gap-1">
+                                              <span className="text-[10px] text-zinc-400 font-mono">{reply.createdAt}</span>
+                                              {reply.isEdited && (
+                                                <span className="text-[10px] text-zinc-400 italic">(edited)</span>
+                                              )}
+                                            </div>
+                                            {canManageComment(reply) && (
+                                              <div className="flex items-center gap-0.5">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleStartEditReply(reply)}
+                                                  title="Edit your reply"
+                                                  className="text-slate-400 hover:text-blue-600 p-1 rounded hover:bg-blue-50 transition-colors"
+                                                >
+                                                  <Edit3 size={11} />
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleDeleteReply(comment.id, reply.id)}
+                                                  title="Delete your reply"
+                                                  className="text-slate-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition-colors"
+                                                >
+                                                  <Trash2 size={11} />
+                                                </button>
+                                              </div>
                                             )}
                                           </div>
                                         </div>
 
-                                        {/* Reply Body & Right-Aligned Like Heart Button */}
-                                        {(() => {
+                                        {/* Reply Body & Inline Edit Box */}
+                                        {editingReplyId === reply.id ? (
+                                          <div className="mt-1.5 mb-2 pl-7">
+                                            <div className="bg-white p-2.5 rounded-lg border border-blue-200 shadow-2xs">
+                                              <textarea
+                                                value={editingReplyText}
+                                                onChange={(e) => setEditingReplyText(e.target.value)}
+                                                className="w-full text-xs text-slate-800 p-2 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-[#BF1E2D] resize-none"
+                                                rows={2}
+                                              />
+                                              <div className="flex justify-end items-center gap-2 mt-1.5">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setEditingReplyId(null);
+                                                    setEditingReplyText("");
+                                                  }}
+                                                  className="px-2 py-0.5 text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
+                                                >
+                                                  Cancel
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleSaveEditReply(comment.id, reply.id)}
+                                                  disabled={!editingReplyText.trim()}
+                                                  className="bg-[#BF1E2D] hover:bg-red-800 text-white font-bold text-xs px-2.5 py-0.5 rounded-md transition-all cursor-pointer disabled:opacity-40"
+                                                >
+                                                  Save
+                                                </button>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        ) : (() => {
                                           const currentUserKey = getCurrentUserKey();
                                           const isReplyLiked = Array.isArray(reply.likedBy) ? reply.likedBy.includes(currentUserKey) : !!reply.userReactions?.["❤️"];
                                           const replyLikeCount = Array.isArray(reply.likedBy) ? reply.likedBy.length : (reply.reactions?.["❤️"] || 0);
