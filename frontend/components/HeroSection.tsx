@@ -11,7 +11,12 @@ export default function HeroSection() {
   const [userPublishedArticles, setUserPublishedArticles] = useState<any[]>([]);
   const [userTrendingArticles, setUserTrendingArticles] = useState<any[]>([]);
   const [profileSyncTick, setProfileSyncTick] = useState(0);
+  const [isMounted, setIsMounted] = useState(false);
   const { articles: liveArticles } = useLiveArticles();
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     const handleProfileSync = () => {
@@ -270,26 +275,29 @@ export default function HeroSection() {
 
               {/* Author Row */}
               {(() => {
-                const resolvedAvatar = resolveUserAvatar({
-                  name: activeArticle.author,
-                  email: (activeArticle as any).authorEmail,
-                  avatar: activeArticle.authorAvatar
-                });
+                const resolvedAvatar = isMounted
+                  ? resolveUserAvatar({
+                      name: activeArticle.author,
+                      email: (activeArticle as any).authorEmail,
+                      avatar: activeArticle.authorAvatar
+                    })
+                  : activeArticle.authorAvatar || "/author_bluesuit.jpg";
 
                 return (
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-6 h-6 rounded-full overflow-hidden bg-[#1E293B] text-white flex items-center justify-center font-bold text-[10px] flex-shrink-0">
+                  <div className="flex items-center gap-2 mb-3" suppressHydrationWarning>
+                    <div className="w-6 h-6 rounded-full overflow-hidden bg-[#1E293B] text-white flex items-center justify-center font-bold text-[10px] flex-shrink-0" suppressHydrationWarning>
                       {resolvedAvatar && resolvedAvatar.length > 5 ? (
                         <img
                           src={resolvedAvatar}
                           alt={activeArticle.author}
                           className="w-full h-full object-cover"
+                          suppressHydrationWarning
                         />
                       ) : (
                         <span>{(activeArticle.author || "RM").slice(0, 2).toUpperCase()}</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 text-[11px] font-sans flex-wrap">
+                    <div className="flex items-center gap-1 text-[11px] font-sans flex-wrap" suppressHydrationWarning>
                       <span className="font-bold text-gray-900">
                         By {activeArticle.author}
                       </span>
