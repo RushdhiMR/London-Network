@@ -297,10 +297,12 @@ export default function AuthorProfileContent({
                     {/* Writer Name & Writer Image Byline */}
                     {(() => {
                       const cardAuthorName = article.authorName || authorProfile.name;
-                      const displayItemAvatar = resolveUserAvatar({
-                        name: cardAuthorName,
-                        avatar: article.authorAvatar || authorProfile.avatar
-                      });
+                      const displayItemAvatar =
+                        authorProfile.avatar ||
+                        resolveUserAvatar({
+                          name: cardAuthorName,
+                          avatar: article.authorAvatar
+                        });
 
                       return (
                         <div className="flex items-center gap-2.5 mt-auto pt-1">
