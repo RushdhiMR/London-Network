@@ -1,4 +1,5 @@
 import AuthorProfileContent from '@/components/AuthorProfileContent';
+import { resolveUserAvatar } from '@/lib/userProfiles';
 
 interface AuthorPageProps {
   params: Promise<{
@@ -13,16 +14,22 @@ const authorsDatabase: Record<string, {
   bio: string;
 }> = {
   "rushdhi": {
-    name: "Rushdhi MR",
-    role: "STAFF WRITER",
+    name: "Rushdhi",
+    role: "JOURNALIST",
     avatar: "/author_bluesuit.jpg",
-    bio: "Rushdhi MR is a journalist for London BigBen covering business strategy, software architecture, emerging technology, and digital transformation."
+    bio: "Rushdhi is a journalist for London BigBen covering business strategy, software architecture, emerging technology, and digital transformation."
   },
   "rushdhi-mr": {
-    name: "Rushdhi MR",
-    role: "STAFF WRITER",
+    name: "Rushdhi",
+    role: "JOURNALIST",
     avatar: "/author_bluesuit.jpg",
-    bio: "Rushdhi MR is a journalist for London BigBen covering business strategy, software architecture, emerging technology, and digital transformation."
+    bio: "Rushdhi is a journalist for London BigBen covering business strategy, software architecture, emerging technology, and digital transformation."
+  },
+  "muba": {
+    name: "Muba",
+    role: "SENIOR WRITER",
+    avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=250&h=250&fit=crop",
+    bio: "Reports on industry disruptions, macroeconomic trends, lifestyle features, and breaking developments."
   },
   "april-hicke": {
     name: "April Hicke",
@@ -33,7 +40,7 @@ const authorsDatabase: Record<string, {
   "ronda-b": {
     name: "Ronda B",
     role: "WRITER",
-    avatar: "/author_woman.jpg",
+    avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=250&h=250&fit=crop",
     bio: "A dedicated journalist with a passion for delivering accurate, timely, and impactful news. Committed to ethical reporting and in-depth storytelling, she covers a wide range of topics with professionalism, integrity, and a focus on informing audiences through credible journalism."
   },
   "jennifer-friesen": {
@@ -44,8 +51,8 @@ const authorsDatabase: Record<string, {
   },
   "pramod-jain": {
     name: "Pramod Jain",
-    role: "SENIOR REPORTER",
-    avatar: "/author_bluesuit.jpg",
+    role: "ENERGY COLUMNIST",
+    avatar: "/author_energy.jpg",
     bio: "Pramod Jain reports on global supply chains, logistics telemetry, enterprise cloud migrations, and emerging technology markets."
   },
   "chris-hogg": {
@@ -57,7 +64,7 @@ const authorsDatabase: Record<string, {
   "dr-andrew-forde": {
     name: "Dr. Andrew Forde",
     role: "CHIEF COLUMNIST",
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=250&h=250&fit=crop",
+    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=250&h=250&fit=crop",
     bio: "Dr. Andrew Forde writes on technological convergence, machine intelligence, and structural policy frameworks."
   },
   "david-potter": {
@@ -81,7 +88,7 @@ const authorsDatabase: Record<string, {
   "frank-morgan": {
     name: "Frank Morgan",
     role: "POLITICAL CORRESPONDENT",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=250&h=250&fit=crop",
+    avatar: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=250&h=250&fit=crop",
     bio: "Frank Morgan is London BigBen's senior political correspondent covering transatlantic diplomacy, legislative policy, and international affairs."
   },
   "sarah-miller": {
@@ -99,7 +106,7 @@ const authorsDatabase: Record<string, {
   "lisa-chen": {
     name: "Lisa Chen",
     role: "DATA INFRASTRUCTURE REPORTER",
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=250&h=250&fit=crop",
+    avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=250&h=250&fit=crop",
     bio: "Lisa Chen covers next-generation data routing, enterprise AI balance nodes, and telecommunications."
   }
 };
@@ -128,11 +135,7 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
   const { slug } = await params;
   
   const rawName = slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-  const defaultAvatar = slug.includes('hicke') ? "/author_glasses.jpg"
-                      : slug.includes('jain') ? "/author_bluesuit.jpg"
-                      : slug.includes('hogg') ? "/author_beard.jpg"
-                      : slug.includes('friesen') || slug.includes('ronda') || slug.includes('lussier') ? "/author_woman.jpg"
-                      : "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=250&h=250&fit=crop";
+  const defaultAvatar = resolveUserAvatar({ name: rawName });
 
   const author = authorsDatabase[slug] || {
     name: rawName,

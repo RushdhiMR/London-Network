@@ -63,43 +63,51 @@ export function getArticleSubcategories(post: any): string[] {
   return [];
 }
 
+export function normalizeCategoryKey(name: string): string {
+  if (!name) return "";
+  const cleaned = name.toLowerCase().trim().replace(/[^a-z0-9]/g, "");
+  if (cleaned === "tech" || cleaned === "technology") return "technology";
+  if (cleaned === "biz" || cleaned === "business") return "business";
+  if (cleaned === "sport" || cleaned === "sports") return "sports";
+  if (cleaned === "economy" || cleaned === "economic" || cleaned === "economics") return "economy";
+  if (cleaned === "market" || cleaned === "markets") return "markets";
+  if (cleaned === "politic" || cleaned === "politics") return "politics";
+  if (cleaned === "health" || cleaned === "healthcare") return "health";
+  if (cleaned === "research" || cleaned === "innovation" || cleaned === "researchinnovation" || cleaned === "insights") return "research";
+  if (cleaned === "lifestyle" || cleaned === "life") return "lifestyle";
+  if (cleaned === "entertainment" || cleaned === "arts" || cleaned === "art") return "entertainment";
+  if (cleaned === "unitedstates" || cleaned === "us" || cleaned === "usa") return "unitedstates";
+  if (cleaned === "middleeast") return "middleeast";
+  return cleaned;
+}
+
 export function articleMatchesCategory(post: any, categoryOrSub: string): boolean {
   if (!post || !categoryOrSub) return false;
-  const target = categoryOrSub.toLowerCase().replace(/[^a-z0-9]/g, "");
-  const cat = (post.category || post.category_name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  const subs: string[] = getArticleSubcategories(post).map((s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, ""));
-  const tags: string[] = (Array.isArray(post?.tags) ? (post.tags as any[]) : []).map((t: any) => String(t || "").toLowerCase().replace(/[^a-z0-9]/g, ""));
+  const targetKey = normalizeCategoryKey(categoryOrSub);
+  if (!targetKey) return false;
 
-  if (target === "world") {
-    const WORLD_REGIONS = ["china", "unitedstates", "europe", "britain", "middleeast", "africa", "asia"];
-    if (cat === "world" || WORLD_REGIONS.some((r: string) => cat === r || cat.includes(r))) return true;
-    if (subs.some((s: string) => s === "world" || WORLD_REGIONS.some((r: string) => s === r || s.includes(r)))) return true;
-    if (tags.some((t: string) => t === "world" || WORLD_REGIONS.some((r: string) => t === r || t.includes(r)))) return true;
+  const catKey = normalizeCategoryKey(post.category || post.category_name || "");
+  const subsKeys = getArticleSubcategories(post).map(s => normalizeCategoryKey(s)).filter(Boolean);
+
+  // 1. Direct match with Article's Main Category
+  if (catKey === targetKey) return true;
+
+  // 2. Direct match with any of Article's Selected Sub-Categories
+  if (subsKeys.includes(targetKey)) return true;
+
+  // 3. World category hierarchy
+  const WORLD_REGIONS = ["china", "unitedstates", "europe", "britain", "middleeast", "africa", "asia"];
+  if (targetKey === "world") {
+    if (catKey === "world" || WORLD_REGIONS.includes(catKey)) return true;
+    if (subsKeys.some(s => s === "world" || WORLD_REGIONS.includes(s))) return true;
+    return false;
   }
 
-  if (target === "sports" || target === "sport") {
-    if (cat.includes("sport") || subs.some(s => s.includes("sport")) || tags.some(t => t.includes("sport"))) return true;
+  if (WORLD_REGIONS.includes(targetKey)) {
+    return catKey === targetKey || subsKeys.includes(targetKey);
   }
 
-  if (target === "research" || target === "innovation" || target === "researchinnovation") {
-    if (cat.includes("research") || cat.includes("innovat") || subs.some(s => s.includes("research") || s.includes("innovat")) || tags.some(t => t.includes("research") || t.includes("innovat"))) return true;
-  }
-
-  if (target === "economy" || target === "economics") {
-    if (cat.includes("econom") || subs.some(s => s.includes("econom")) || tags.some(t => t.includes("econom"))) return true;
-  }
-
-  if (target === "health" || target === "healthcare" || target === "wellness") {
-    if (cat.includes("health") || cat.includes("medic") || cat.includes("well") || subs.some(s => s.includes("health") || s.includes("medic")) || tags.some(t => t.includes("health") || t.includes("medic"))) return true;
-  }
-
-  return (
-    cat === target ||
-    cat.includes(target) ||
-    target.includes(cat) ||
-    subs.some((s: string) => s === target || s.includes(target) || target.includes(s)) ||
-    tags.some((t: string) => t === target || t.includes(target) || target.includes(t))
-  );
+  return false;
 }
 
 let broadcastChannel: BroadcastChannel | null = null;
@@ -159,32 +167,51 @@ export function setCachedArticles(articles: ArticleItem[], notify = true) {
   } catch (e) {}
 }
 
+let activeArticlesFetchPromise: Promise<ArticleItem[]> | null = null;
+let lastArticlesFetchTime = 0;
+const ARTICLES_FETCH_CACHE_TTL_MS = 6000;
+
 export async function fetchArticlesFromServer(): Promise<ArticleItem[]> {
-  try {
-    const res = await fetch("/api/articles", { cache: "no-store" });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.success && Array.isArray(data.articles)) {
-        const activeArticles = data.articles.filter((a: any) => !isArticleDeleted(a));
-        const localCached = getCachedArticles();
-        const mergedMap = new Map<string, ArticleItem>();
-        activeArticles.forEach((a: any) => mergedMap.set(String(a.id), a));
-        localCached.forEach((a: any) => {
-          if (!mergedMap.has(String(a.id))) {
-            mergedMap.set(String(a.id), a);
-          } else {
-            mergedMap.set(String(a.id), { ...mergedMap.get(String(a.id))!, ...a });
-          }
-        });
-        const combined = Array.from(mergedMap.values());
-        setCachedArticles(combined, false);
-        return combined;
-      }
-    }
-  } catch (e) {
-    console.warn("[articlesSync] Could not fetch articles from server:", e);
+  const now = Date.now();
+  if (now - lastArticlesFetchTime < ARTICLES_FETCH_CACHE_TTL_MS) {
+    return getCachedArticles();
   }
-  return getCachedArticles();
+  if (activeArticlesFetchPromise) {
+    return activeArticlesFetchPromise;
+  }
+
+  activeArticlesFetchPromise = (async () => {
+    try {
+      const res = await fetch("/api/articles", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.articles)) {
+          const activeArticles = data.articles.filter((a: any) => !isArticleDeleted(a));
+          const localCached = getCachedArticles();
+          const mergedMap = new Map<string, ArticleItem>();
+          activeArticles.forEach((a: any) => mergedMap.set(String(a.id), a));
+          localCached.forEach((a: any) => {
+            if (!mergedMap.has(String(a.id))) {
+              mergedMap.set(String(a.id), a);
+            } else {
+              mergedMap.set(String(a.id), { ...mergedMap.get(String(a.id))!, ...a });
+            }
+          });
+          const combined = Array.from(mergedMap.values());
+          setCachedArticles(combined, false);
+          lastArticlesFetchTime = Date.now();
+          return combined;
+        }
+      }
+    } catch (e) {
+      console.warn("[articlesSync] Could not fetch articles from server:", e);
+    } finally {
+      activeArticlesFetchPromise = null;
+    }
+    return getCachedArticles();
+  })();
+
+  return activeArticlesFetchPromise;
 }
 
 export async function saveArticleToServer(article: ArticleItem): Promise<ArticleItem[]> {
@@ -352,9 +379,9 @@ export async function deletePermanentlyOnServer(id: string | number, title?: str
   return updated;
 }
 
-export function useLiveArticles(pollingIntervalMs = 30000) {
+export function useLiveArticles() {
   const [articles, setArticles] = useState<ArticleItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
     const fresh = await fetchArticlesFromServer();
@@ -363,22 +390,20 @@ export function useLiveArticles(pollingIntervalMs = 30000) {
   }, []);
 
   useEffect(() => {
-    // Immediate load from local cache
-    const initial = getCachedArticles();
-    if (initial.length > 0) {
-      setArticles(initial);
-      setLoading(false);
+    // Populate client cache immediately on client mount
+    const cached = getCachedArticles();
+    if (cached.length > 0) {
+      setArticles(cached);
     }
 
-    // Initial server fetch
-    refresh();
+    // Initial fetch from server
+    fetchArticlesFromServer().then((fresh) => {
+      if (Array.isArray(fresh) && fresh.length > 0) {
+        setArticles(fresh);
+      }
+    });
 
-    // Polling interval for live sync across browsers
-    const timer = setInterval(() => {
-      refresh();
-    }, pollingIntervalMs);
-
-    // Event listeners
+    // Event listeners for user action updates
     const handleSync = () => {
       setArticles(getCachedArticles());
     };
@@ -396,12 +421,11 @@ export function useLiveArticles(pollingIntervalMs = 30000) {
     }
 
     return () => {
-      clearInterval(timer);
       if (typeof window !== "undefined") {
         window.removeEventListener(SYNC_EVENT_NAME, handleSync);
       }
     };
-  }, [refresh, pollingIntervalMs]);
+  }, []);
 
   return { articles, loading, refresh };
 }

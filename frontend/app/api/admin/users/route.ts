@@ -4,8 +4,8 @@ import { DB } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 
 // GET /api/admin/users - Admin only
-export async function GET() {
-  const rbac = await requireRole('admin');
+export async function GET(request: Request) {
+  const rbac = await requireRole(request, 'admin');
   if (!rbac.authorized) {
     return rbac.response;
   }
@@ -26,7 +26,7 @@ export async function GET() {
 
 // POST /api/admin/users - Admin only (Create new user)
 export async function POST(request: Request) {
-  const rbac = await requireRole('admin');
+  const rbac = await requireRole(request, 'admin');
   if (!rbac.authorized) {
     return rbac.response;
   }
@@ -106,7 +106,7 @@ export async function POST(request: Request) {
 
 // PUT /api/admin/users - Admin only (Update user name, email, role, password)
 export async function PUT(request: Request) {
-  const rbac = await requireRole('admin');
+  const rbac = await requireRole(request, 'admin');
   if (!rbac.authorized) {
     return rbac.response;
   }
@@ -205,7 +205,7 @@ export async function PUT(request: Request) {
 
 // DELETE /api/admin/users - Admin only (Delete user)
 export async function DELETE(request: Request) {
-  const rbac = await requireRole('admin');
+  const rbac = await requireRole(request, 'admin');
   if (!rbac.authorized) {
     return rbac.response;
   }
@@ -213,43 +213,41 @@ export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     let id = searchParams.get('id');
+    let email = searchParams.get('email');
 
-    if (!id) {
+    if (!id && !email) {
       try {
         const body = await request.json();
         id = body.id;
+        email = body.email;
       } catch (e) {
         // ignore JSON parse error if param was query string
       }
     }
 
-    if (!id) {
+    if (!id && !email) {
       return NextResponse.json(
-        { error: 'User ID is required' },
+        { error: 'User ID or Email is required' },
         { status: 400 }
       );
     }
 
-    const targetUser = await DB.getUserById(Number(id));
-    if (targetUser && (targetUser.id === 1 || targetUser.email === 'admin@digitaljournal.com')) {
+    const targetUser = id ? await DB.getUserById(id) : (email ? await DB.getUserByEmail(email) : null);
+    if (targetUser && (targetUser.id === 1 || targetUser.email === 'admin@digitaljournal.com' || targetUser.email === 'akramyoonos006@gmail.com')) {
       return NextResponse.json(
         { error: 'System Protection: The Default Administrator account cannot be deleted.' },
         { status: 403 }
       );
     }
 
-    const deleted = await DB.deleteUser(Number(id));
+    const targetEmail = email || targetUser?.email || (typeof id === 'string' && id.includes('@') ? id : undefined);
+    const targetId = id || targetUser?.id;
 
-    if (!deleted) {
-      return NextResponse.json(
-        { error: 'User not found or already deleted' },
-        { status: 404 }
-      );
-    }
+    const deleted = await DB.deleteUser(targetId || targetEmail || '', targetEmail);
 
     return NextResponse.json({
       success: true,
-      message: 'User deleted successfully from database',
+      message: 'User deleted and permanently revoked from database until re-added by administrator',
     });
   } catch (error: any) {
     return NextResponse.json(

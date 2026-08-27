@@ -149,33 +149,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // On mount: if we already have a tab session, use it immediately
-    // and do a background server check only once per tab lifecycle
+    // On mount: if we already have a tab session, use it and validate in background
     if (!didFetch.current) {
       didFetch.current = true;
       const cached = getTabSession();
       if (cached) {
-        setUser(cached);
         setLoading(false);
-        // Still validate with server in background — but only update if same user
+        // Validate with server in background — only update if same user
         fetch("/api/auth/me", { cache: "no-store" })
           .then((r) => r.ok ? r.json() : null)
           .then((data) => {
             if (data?.authenticated && data?.user) {
-              // Only update if the server session matches our tab session
               if (cached.id === data.user.id) {
-                // Same user — safe to update with fresh data
                 const updated: User = {
                   id: data.user.id,
                   name: data.user.name,
                   email: data.user.email,
-                  role: (data.user.role || "reader").toLowerCase() as any,
+                  role: (data.user.role || "reader").toLowerCase() as User["role"],
                   provider: data.user.provider || "local",
                 };
                 setUser(updated);
                 saveTabSession(updated);
               }
-              // If different user — do NOT overwrite this tab's session
             }
           })
           .catch(() => {});

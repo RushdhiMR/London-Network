@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { convertToWebP } from "@/lib/imageUtils";
@@ -24,9 +24,13 @@ import {
   Sparkles,
   PenTool,
   User,
-  Bell
+  Bell,
+  AlertCircle,
+  Calendar,
+  MessageSquare,
+  ArrowRight
 } from "lucide-react";
-import { saveUserProfile, getUserProfile } from "@/lib/userProfiles";
+import { saveUserProfile, getUserProfile, resolveUserAvatar } from "@/lib/userProfiles";
 import { useLiveArticles, moveArticleToTrashOnServer, deletePermanentlyOnServer, setCachedArticles } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
 
@@ -37,7 +41,7 @@ interface ArticlePost {
   summary: string;
   content: string;
   imageUrl?: string;
-  status: "Published" | "Draft" | "Pending review" | "Trash";
+  status: "Published" | "Draft" | "Pending review" | "Rejected" | "Trash" | string;
   date: string;
   reads: number;
   authorEmail?: string;
@@ -50,6 +54,8 @@ interface ArticlePost {
   readTime?: string;
   seo?: any;
   category_name?: string;
+  rejectionReason?: string;
+  rejectedAt?: string;
   [key: string]: any;
 }
 
@@ -62,8 +68,9 @@ export default function WriterDashboardPage() {
   const [lockError, setLockError] = useState("");
 
   // UI state
-  const [activeTab, setActiveTab] = useState<"Published" | "Drafts" | "Pending review" | "Trash">("Published");
+  const [activeTab, setActiveTab] = useState<"Published" | "Drafts" | "Pending review" | "Rejected" | "Trash">("Published");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedReasonPost, setSelectedReasonPost] = useState<ArticlePost | null>(null);
 
   useEffect(() => {
     const handleTabSync = () => {
@@ -76,6 +83,9 @@ export default function WriterDashboardPage() {
         try { localStorage.removeItem("dj_active_tab"); } catch (e) {}
       } else if (tabParam === "drafts" || tabParam === "draft" || savedTab === "Drafts") {
         setActiveTab("Drafts");
+        try { localStorage.removeItem("dj_active_tab"); } catch (e) {}
+      } else if (tabParam === "rejected" || savedTab === "Rejected") {
+        setActiveTab("Rejected");
         try { localStorage.removeItem("dj_active_tab"); } catch (e) {}
       } else if (tabParam === "published" || savedTab === "Published") {
         setActiveTab("Published");
@@ -168,22 +178,38 @@ export default function WriterDashboardPage() {
   const [posts, setPosts] = useState<ArticlePost[]>([]);
   const { articles: liveArticles } = useLiveArticles();
 
-  useEffect(() => {
+  const syncArticlesFromStorageAndServer = useCallback(() => {
     try {
       const localSubs = localStorage.getItem("dj_writer_submitted_articles");
       const localArticles = localSubs ? JSON.parse(localSubs) : [];
-      if (Array.isArray(localArticles) && localArticles.length > 0) {
-        const merged = [...localArticles, ...(Array.isArray(liveArticles) ? liveArticles : [])];
-        const unique = merged.filter((item, idx, self) => idx === self.findIndex(t => String(t.id) === String(item.id) || (t.title && item.title && t.title.trim().toLowerCase() === item.title.trim().toLowerCase())));
-        setPosts(unique as any);
-        return;
-      }
+      const liveList = Array.isArray(liveArticles) ? liveArticles : [];
+
+      const combined = [...(Array.isArray(localArticles) ? localArticles : []), ...liveList];
+      const seen = new Set<string>();
+      const unique = combined.filter((item) => {
+        const idKey = String(item.id || "");
+        const titleKey = (item.title || "").trim().toLowerCase();
+        if (idKey && seen.has(idKey)) return false;
+        if (titleKey && seen.has(titleKey)) return false;
+        if (idKey) seen.add(idKey);
+        if (titleKey) seen.add(titleKey);
+        return true;
+      });
+
+      setPosts(unique as any);
+      return;
     } catch (e) {}
 
     if (Array.isArray(liveArticles)) {
       setPosts(liveArticles as any);
     }
   }, [liveArticles]);
+
+  useEffect(() => {
+    syncArticlesFromStorageAndServer();
+    window.addEventListener("dj_articles_updated", syncArticlesFromStorageAndServer);
+    return () => window.removeEventListener("dj_articles_updated", syncArticlesFromStorageAndServer);
+  }, [syncArticlesFromStorageAndServer]);
 
   const auth = useAuth();
 
@@ -206,12 +232,18 @@ export default function WriterDashboardPage() {
 
       const emailToLookup = auth.user.email;
       const savedProfile = getUserProfile(emailToLookup);
+      const resolvedAvatar = resolveUserAvatar({
+        name: savedProfile?.name || auth.user.name,
+        email: emailToLookup,
+        role: "Writer",
+        avatar: savedProfile?.avatar,
+      });
 
       const finalUser = {
         name: savedProfile?.name || auth.user.name,
         email: emailToLookup,
         role: "Writer",
-        avatar: savedProfile?.avatar || "/author_bluesuit.jpg",
+        avatar: resolvedAvatar,
         bio: savedProfile?.bio,
         linkedin: savedProfile?.linkedin
       };
@@ -405,10 +437,50 @@ export default function WriterDashboardPage() {
     window.location.href = "/";
   };
 
-  // Helper function to check if post belongs to or is visible in studio
+  // Helper function to check if post belongs to the currently logged-in writer account
   const isPostVisibleInStudio = (post: ArticlePost) => {
-    // In Writer Studio, writers and editors can manage all platform articles or their created posts
-    return true;
+    const userEmail = (currentUser?.email || auth.user?.email || "").toLowerCase().trim();
+    const userName = (currentUser?.name || auth.user?.name || "").toLowerCase().trim();
+
+    if (!userEmail && !userName) return true;
+
+    const postAuthorEmail = (post.authorEmail || (post as any).author_email || (post as any).email || "").toLowerCase().trim();
+    const postAuthorName = (post.authorName || (post as any).author_name || (post as any).author || "").toLowerCase().trim();
+
+    // 1. Exact match on author email
+    if (userEmail && postAuthorEmail && userEmail === postAuthorEmail) {
+      return true;
+    }
+
+    // 2. Exact match or substring match on author name (e.g. "rushdhi" matches "Rushdhi MR")
+    if (userName && postAuthorName) {
+      if (userName === postAuthorName) return true;
+      if (postAuthorName.includes(userName) || userName.includes(postAuthorName)) return true;
+      const cleanUser = userName.replace(/[^a-z0-9]/g, "");
+      const cleanAuthor = postAuthorName.replace(/[^a-z0-9]/g, "");
+      if (cleanUser && cleanAuthor && (cleanAuthor.includes(cleanUser) || cleanUser.includes(cleanAuthor))) return true;
+    }
+
+    // 3. Match username prefix (e.g., if user is "muba" and author email is "muba@gmail.com")
+    if (userEmail && postAuthorEmail && userEmail.split('@')[0] === postAuthorEmail.split('@')[0]) {
+      return true;
+    }
+
+    if (userName && postAuthorEmail && userName === postAuthorEmail.split('@')[0]) {
+      return true;
+    }
+
+    if (userEmail && postAuthorName && userEmail.split('@')[0] === postAuthorName.replace(/[^a-z0-9]/g, "")) {
+      return true;
+    }
+
+    // Default for default writer or rushdhi
+    if (userName.includes("rushdhi") && (postAuthorName.includes("rushdhi") || postAuthorEmail.includes("rushdhi"))) {
+      return true;
+    }
+
+    // Otherwise, this article belongs to another journalist / writer
+    return false;
   };
 
   // Filter posts based on active tab, search query, and writer account ownership
@@ -421,6 +493,7 @@ export default function WriterDashboardPage() {
     if (activeTab === "Published") matchesTab = st === "published" || st === "approved";
     else if (activeTab === "Drafts") matchesTab = st === "draft" || st === "drafts";
     else if (activeTab === "Pending review") matchesTab = st.includes("pending") || st.includes("review") || st.includes("submitted");
+    else if (activeTab === "Rejected") matchesTab = st.includes("reject");
     else if (activeTab === "Trash") matchesTab = st === "trash" || st === "trashed";
 
     // Search filter
@@ -600,13 +673,14 @@ export default function WriterDashboardPage() {
         {/* Navigation Filter Tabs Bar */}
         <div className="flex items-center justify-between border-b border-gray-200 text-xs sm:text-sm font-medium mb-6 overflow-x-auto scrollbar-none max-w-full">
           <div className="flex items-center gap-6 sm:gap-8">
-            {(["Published", "Drafts", "Pending review", "Trash"] as const).map((tab) => {
+            {(["Published", "Drafts", "Pending review", "Rejected", "Trash"] as const).map((tab) => {
               const isActive = activeTab === tab;
               const count = posts.filter((p) => {
                 if (!isPostVisibleInStudio(p)) return false;
                 const st = (p.status || "").toLowerCase().trim();
                 if (tab === "Drafts") return st === "draft" || st === "drafts";
                 if (tab === "Pending review") return st.includes("pending") || st.includes("review") || st.includes("submitted");
+                if (tab === "Rejected") return st.includes("reject");
                 if (tab === "Trash") return st === "trash" || st === "trashed";
                 return st === "published" || st === "approved";
               }).length;
@@ -625,6 +699,8 @@ export default function WriterDashboardPage() {
                   <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full transition-all ${
                     tab === "Pending review" && count > 0
                       ? "bg-amber-500 text-white shadow-2xs"
+                      : tab === "Rejected" && count > 0
+                      ? "bg-rose-100 text-rose-700"
                       : isActive
                       ? "bg-blue-100 text-[#1B50E8]"
                       : "bg-gray-100 text-gray-500"
@@ -805,40 +881,64 @@ export default function WriterDashboardPage() {
 
                         <td className="py-4 pr-2 whitespace-nowrap text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => handleEditPost(post)}
-                              className="px-2.5 py-1 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
-                              title="Edit post"
-                            >
-                              <PenTool size={13} />
-                              Edit
-                            </button>
-
-                            {post.status === "Trash" ? (
-                              <>
-                                <button
-                                  onClick={() => handleRestorePost(post.id)}
-                                  className="p-1.5 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
-                                  title="Restore post"
-                                >
-                                  <RotateCcw size={15} />
-                                </button>
-                                <button
-                                  onClick={() => handleDeletePermanently(post.id)}
-                                  className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                                  title="Delete permanently"
-                                >
-                                  <Trash2 size={15} />
-                                </button>
-                              </>
-                            ) : (
+                            {post.status === "Published" ? (
                               <button
-                                onClick={() => handleMoveToTrash(post.id)}
-                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                                title="Move to trash"
+                                onClick={() => setPreviewArticle(post)}
+                                className="px-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs font-mono"
+                                title="Preview article"
                               >
-                                <Trash2 size={15} />
+                                <Eye size={13} className="text-slate-500" />
+                                Preview
                               </button>
+                            ) : (
+                              <>
+                                {((post.status || "").toLowerCase().includes("reject") || post.rejectionReason) && (
+                                  <button
+                                    onClick={() => setSelectedReasonPost(post)}
+                                    className="px-2.5 py-1 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
+                                    title="View rejection reason"
+                                  >
+                                    <AlertCircle size={13} />
+                                    Reason
+                                  </button>
+                                )}
+
+                                <button
+                                  onClick={() => handleEditPost(post)}
+                                  className="px-2.5 py-1 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
+                                  title="Edit post"
+                                >
+                                  <PenTool size={13} />
+                                  Edit
+                                </button>
+
+                                {post.status === "Trash" ? (
+                                  <>
+                                    <button
+                                      onClick={() => handleRestorePost(post.id)}
+                                      className="p-1.5 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                                      title="Restore post"
+                                    >
+                                      <RotateCcw size={15} />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeletePermanently(post.id)}
+                                      className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                      title="Delete permanently"
+                                    >
+                                      <Trash2 size={15} />
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button
+                                    onClick={() => handleMoveToTrash(post.id)}
+                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                    title="Move to trash"
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                )}
+                              </>
                             )}
                           </div>
                         </td>
@@ -993,50 +1093,122 @@ export default function WriterDashboardPage() {
 
       {/* PREVIEW POST MODAL */}
       {previewArticle && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl relative">
-            <button
-              onClick={() => setPreviewArticle(null)}
-              className="absolute top-5 right-5 text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 cursor-pointer"
-            >
-              <X size={20} />
-            </button>
-
-            <div className="mb-4">
-              <span className="px-2.5 py-1 bg-blue-50 text-blue-700 font-bold text-[10px] rounded-md tracking-wide uppercase">
-                {previewArticle.category}
-              </span>
-              <h2 className="text-2xl font-bold font-serif text-gray-900 mt-2 leading-tight">
-                {previewArticle.title}
-              </h2>
-              <p className="text-xs text-gray-500 mt-1">
-                By <span className="font-semibold text-gray-800">{currentUser?.name || "rushdhi"}</span> • {previewArticle.date}
-              </p>
-            </div>
-
-            {previewArticle.imageUrl && (
-              <div className="relative w-full aspect-video rounded-xl overflow-hidden mb-4 bg-gray-100 border border-gray-200">
-                <img src={previewArticle.imageUrl} alt={previewArticle.title} className="w-full h-full object-cover" />
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-3xl w-full p-6 sm:p-8 shadow-2xl relative max-h-[90vh] flex flex-col border border-slate-200 animate-in zoom-in-95 duration-200">
+            
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-4 pb-4 border-b border-gray-100">
+              <div>
+                <span className="px-2.5 py-1 bg-[#BF1E2D]/10 text-[#BF1E2D] border border-[#BF1E2D]/20 text-[10px] font-mono font-black uppercase rounded-lg">
+                  {previewArticle.category || "GENERAL"}
+                </span>
+                <h2 className="text-xl sm:text-2xl font-black font-serif text-gray-900 mt-2 leading-snug">
+                  {previewArticle.title}
+                </h2>
+                <div className="flex items-center gap-2 text-xs text-gray-500 font-mono mt-1">
+                  <span>By <strong className="text-gray-800 font-sans">{previewArticle.authorName || currentUser?.name || "Writer"}</strong></span>
+                  <span>•</span>
+                  <span>{previewArticle.date}</span>
+                  {previewArticle.readDuration && (
+                    <>
+                      <span>•</span>
+                      <span>{previewArticle.readDuration}</span>
+                    </>
+                  )}
+                </div>
               </div>
-            )}
 
-            <div className="prose prose-sm text-gray-800 leading-relaxed space-y-3 text-xs sm:text-sm">
-              <p className="font-semibold text-gray-700 italic border-l-2 border-blue-600 pl-3 py-1 bg-gray-50 rounded-r-lg">
-                {previewArticle.summary}
-              </p>
-              {previewArticle.content.split("\n\n").map((para, i) => (
-                <p key={i}>{para}</p>
-              ))}
-            </div>
-
-            <div className="mt-6 pt-4 border-t border-gray-200 flex justify-end">
               <button
                 onClick={() => setPreviewArticle(null)}
-                className="bg-gray-900 hover:bg-black text-white text-xs font-semibold px-5 py-2.5 rounded-full cursor-pointer"
+                className="text-gray-400 hover:text-gray-700 p-2 rounded-xl hover:bg-gray-100 cursor-pointer shrink-0 transition-colors"
+                aria-label="Close"
               >
-                Close Preview
+                <X size={20} />
               </button>
             </div>
+
+            {/* Modal Scrollable Article Body */}
+            <div className="overflow-y-auto my-4 pr-1 sm:pr-2 space-y-5 text-left flex-1 min-h-0">
+              {previewArticle.summary && (
+                <div className="font-serif text-slate-700 text-sm sm:text-base italic border-l-4 border-[#BF1E2D] pl-4 py-2.5 bg-slate-50/90 rounded-r-xl leading-relaxed">
+                  {previewArticle.summary}
+                </div>
+              )}
+
+              {/* Only show featured image banner if content does NOT already contain figure/img */}
+              {previewArticle.imageUrl && 
+                !previewArticle.content?.includes("<figure") && 
+                !previewArticle.content?.includes("<img") && (
+                <div className="relative w-full max-h-[460px] rounded-2xl overflow-hidden bg-slate-950 border border-gray-200 shadow-2xs flex items-center justify-center">
+                  <img
+                    src={previewArticle.imageUrl}
+                    alt={previewArticle.title}
+                    className="w-full h-auto max-h-[460px] object-contain mx-auto block"
+                  />
+                </div>
+              )}
+
+              {/* Rendered HTML or plain paragraphs */}
+              {previewArticle.content ? (
+                (previewArticle.content.trim().startsWith("<") || previewArticle.content.includes("<p") || previewArticle.content.includes("<figure") || previewArticle.content.includes("<div") || previewArticle.content.includes("<h")) ? (
+                  <div
+                    className="prose prose-slate max-w-none text-slate-800 leading-relaxed font-serif text-[15px] sm:text-[16px] [&_p]:mb-4 [&_figure]:my-4 [&_img]:rounded-xl [&_img]:max-h-[400px] [&_img]:w-full [&_img]:object-cover [&_h2]:font-bold [&_h2]:text-xl [&_h2]:mt-6 [&_h2]:mb-2 [&_h3]:font-bold [&_h3]:text-lg [&_h3]:mt-4 [&_h3]:mb-2 [&_blockquote]:border-l-4 [&_blockquote]:border-[#BF1E2D] [&_blockquote]:pl-4 [&_blockquote]:italic"
+                    dangerouslySetInnerHTML={{ __html: previewArticle.content }}
+                  />
+                ) : (
+                  <div className="prose prose-slate max-w-none text-slate-800 leading-relaxed font-serif text-[15px] sm:text-[16px] space-y-4">
+                    {previewArticle.content.split("\n\n").map((para, i) => (
+                      <p key={i}>{para}</p>
+                    ))}
+                  </div>
+                )
+              ) : (
+                <p className="text-sm text-slate-500 italic">No article body text available.</p>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="pt-4 border-t border-gray-100 flex items-center justify-between gap-3">
+              <span className="text-[11px] font-mono text-gray-400 hidden sm:inline-block">
+                London BigBen • Published Article Reader
+              </span>
+              <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                {(() => {
+                  const catSlug = (previewArticle.category || previewArticle.category_name || "news")
+                    .toLowerCase()
+                    .trim()
+                    .replace(/[^a-z0-9]+/g, "-")
+                    .replace(/^-|-$/g, "");
+                  
+                  const titleSlug = (previewArticle.slug || previewArticle.title || "")
+                    .toLowerCase()
+                    .trim()
+                    .replace(/[^a-z0-9]+/g, "-")
+                    .replace(/^-|-$/g, "");
+
+                  const targetHref = titleSlug ? `/${catSlug || "news"}/${titleSlug}` : `/${catSlug || "news"}`;
+
+                  return (
+                    <Link
+                      href={targetHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2.5 text-xs font-bold text-slate-700 hover:text-slate-900 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors font-mono uppercase tracking-wider shadow-2xs flex items-center gap-1.5"
+                    >
+                      <span>View on Website</span>
+                      <span>↗</span>
+                    </Link>
+                  );
+                })()}
+                <button
+                  onClick={() => setPreviewArticle(null)}
+                  className="bg-gray-900 hover:bg-black text-white text-xs font-bold font-mono uppercase tracking-wider px-6 py-2.5 rounded-xl cursor-pointer transition-all shadow-xs"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
       )}
@@ -1166,6 +1338,139 @@ export default function WriterDashboardPage() {
               </div>
 
             </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* REJECTION REASON VIEWER MODAL (London BigBen Luxury Publishing Design) */}
+      {selectedReasonPost && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200 font-sans">
+          <div className="bg-white rounded-3xl max-w-xl w-full shadow-[0_25px_70px_rgba(0,0,0,0.35)] overflow-hidden border border-slate-200/90 animate-in zoom-in-95 duration-200 relative text-left flex flex-col">
+            
+            {/* Top Red Gradient London BigBen Accent Bar */}
+            <div className="h-1.5 w-full bg-gradient-to-r from-[#BF1E2D] via-red-600 to-[#0F172A]" />
+
+            {/* Modal Header */}
+            <div className="px-6 sm:px-8 pt-6 pb-5 border-b border-slate-100 flex items-start justify-between gap-4 bg-gradient-to-b from-slate-50/70 to-white">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-red-50 border border-red-200/70 flex items-center justify-center text-[#BF1E2D] shadow-xs shrink-0">
+                  <AlertCircle className="w-6 h-6 stroke-[2.2]" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-md bg-red-100/80 text-[#BF1E2D] font-mono font-black text-[9px] uppercase tracking-wider">
+                      REVISION REQUIRED
+                    </span>
+                    <span className="text-slate-300">•</span>
+                    <span className="text-[10.5px] font-mono font-bold text-slate-400 uppercase tracking-wider">
+                      EDITORIAL BOARD
+                    </span>
+                  </div>
+                  <h3 className="text-lg sm:text-xl font-serif font-black text-slate-900 tracking-tight mt-0.5">
+                    Editorial Review Feedback
+                  </h3>
+                </div>
+              </div>
+              
+              <button
+                onClick={() => setSelectedReasonPost(null)}
+                className="w-9 h-9 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4 stroke-[2.5]" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 sm:p-8 space-y-5 overflow-y-auto max-h-[calc(85vh-160px)]">
+              
+              {/* ARTICLE METADATA CARD */}
+              <div className="bg-slate-50/90 border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-2.5 shadow-2xs">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="px-2.5 py-1 bg-[#BF1E2D]/10 text-[#BF1E2D] border border-[#BF1E2D]/20 text-[10px] font-mono font-black uppercase rounded-lg">
+                    {selectedReasonPost.category || "GENERAL"}
+                  </span>
+                  <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400 font-medium">
+                    <Calendar size={12} className="text-slate-400" />
+                    <span>Submitted: {selectedReasonPost.date}</span>
+                  </div>
+                </div>
+
+                <h4 className="text-sm sm:text-base font-serif font-extrabold text-slate-900 leading-snug">
+                  {selectedReasonPost.title}
+                </h4>
+
+                {selectedReasonPost.summary && (
+                  <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed font-normal">
+                    {selectedReasonPost.summary}
+                  </p>
+                )}
+              </div>
+
+              {/* EDITORIAL REASON & NOTES QUOTE BOX */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-mono font-extrabold uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                    <MessageSquare size={12} className="text-rose-600" />
+                    <span>EDITOR'S REMARKS & REJECTION REASON</span>
+                  </label>
+                  {selectedReasonPost.rejectedAt && (
+                    <span className="text-[10px] font-mono text-slate-400">
+                      Reviewed: {new Date(selectedReasonPost.rejectedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  )}
+                </div>
+
+                {selectedReasonPost.rejectionReason ? (
+                  <div className="relative border border-red-200/80 bg-gradient-to-br from-red-50/80 via-red-50/30 to-amber-50/20 rounded-2xl p-5 sm:p-6 shadow-2xs">
+                    {/* Decorative quote mark */}
+                    <span className="absolute top-2 right-4 text-5xl font-serif text-red-200/60 select-none pointer-events-none leading-none">
+                      “
+                    </span>
+                    <p className="text-slate-900 text-sm sm:text-[14.5px] leading-relaxed font-serif font-semibold relative z-10 whitespace-pre-wrap">
+                      "{selectedReasonPost.rejectionReason}"
+                    </p>
+                  </div>
+                ) : (
+                  <div className="border border-slate-200 bg-slate-50 rounded-2xl p-5 text-xs sm:text-sm text-slate-500 italic leading-relaxed">
+                    No specific written feedback was provided by the editor. You can review your content, adjust any formatting or citations, and resubmit for editorial review.
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 sm:px-8 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
+              <span className="text-[11px] font-mono text-slate-400 hidden sm:inline-block">
+                London BigBen Review Desk
+              </span>
+
+              <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSelectedReasonPost(null)}
+                  className="flex-1 sm:flex-none px-4 py-2.5 text-xs font-bold text-slate-700 hover:text-slate-900 bg-white border border-slate-300 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer font-mono uppercase tracking-wider shadow-2xs"
+                >
+                  Close
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const postToEdit = selectedReasonPost;
+                    setSelectedReasonPost(null);
+                    handleEditPost(postToEdit);
+                  }}
+                  className="flex-1 sm:flex-none px-6 py-2.5 text-xs font-extrabold text-white bg-[#BF1E2D] hover:bg-[#A31422] active:scale-[0.98] rounded-xl transition-all shadow-md shadow-red-950/20 cursor-pointer flex items-center justify-center gap-2 font-mono uppercase tracking-wider"
+                >
+                  <PenTool className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>Edit & Resubmit</span>
+                  <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
+                </button>
+              </div>
+            </div>
 
           </div>
         </div>

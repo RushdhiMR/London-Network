@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Link from 'next/link';
-import { useLiveArticles } from '@/lib/articlesSync';
+import { useLiveArticles, articleMatchesCategory } from '@/lib/articlesSync';
 
 interface Article {
   title: string;
@@ -63,49 +63,10 @@ export default function CategoryPageLayout({
 
   // Find all published live articles that match this category or subcategory
   const cleanTarget = (categoryName || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  const WORLD_REGIONS = ["china", "unitedstates", "europe", "britain", "middleeast", "africa", "asia"];
-  const isWorldCategory = cleanTarget === "world";
 
   const matchingLive = (Array.isArray(liveArticles) ? liveArticles : []).filter((art: any) => {
     if (!art || (art.status !== "Published" && (art.status || "").toLowerCase() !== "published")) return false;
-    const cat = (art.category_name || art.category || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-
-    let subs: string[] = [];
-    if (Array.isArray(art.subcategories)) {
-      subs = art.subcategories.map((s: any) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "")).filter(Boolean);
-    } else if (Array.isArray(art.subCategories)) {
-      subs = art.subCategories.map((s: any) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "")).filter(Boolean);
-    } else if (typeof art.subcategories === "string") {
-      try {
-        const parsed = JSON.parse(art.subcategories);
-        if (Array.isArray(parsed)) {
-          subs = parsed.map((s: any) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "")).filter(Boolean);
-        } else {
-          subs = art.subcategories.split(",").map((s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]/g, "")).filter(Boolean);
-        }
-      } catch (e) {
-        subs = art.subcategories.split(",").map((s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]/g, "")).filter(Boolean);
-      }
-    }
-
-    const tags: string[] = Array.isArray(art.tags)
-      ? art.tags.map((t: string) => String(t || "").toLowerCase().replace(/[^a-z0-9]/g, "")).filter(Boolean)
-      : [];
-
-    // On World category page, include articles from World AND all World regions
-    if (isWorldCategory) {
-      if (cat === "world" || WORLD_REGIONS.some(r => cat === r || cat.includes(r))) return true;
-      if (subs.some(s => s === "world" || WORLD_REGIONS.some(r => s === r || s.includes(r)))) return true;
-      if (tags.some(t => t === "world" || WORLD_REGIONS.some(r => t === r || t.includes(r)))) return true;
-    }
-
-    return (
-      cat === cleanTarget ||
-      cat.includes(cleanTarget) ||
-      cleanTarget.includes(cat) ||
-      subs.some((s: string) => s === cleanTarget || s.includes(cleanTarget) || cleanTarget.includes(s)) ||
-      tags.some((t: string) => t === cleanTarget || t.includes(cleanTarget) || cleanTarget.includes(t))
-    );
+    return articleMatchesCategory(art, cleanTarget || categoryName);
   // Sort newest first: higher numeric id = newer; fall back to date string comparison
   }).sort((a: any, b: any) => {
     const aId = Number(a.id) || 0;
@@ -124,55 +85,19 @@ export default function CategoryPageLayout({
     return rawAuthor;
   };
 
-  // Top Featured Story (replaces hero with the newest matching published live article)
-  const activeFeatured = matchingLive.length > 0 ? {
-    category: (matchingLive[0].category || matchingLive[0].category_name || categoryName).toUpperCase(),
-    title: matchingLive[0].title,
-    description: matchingLive[0].summary || matchingLive[0].description || (matchingLive[0].content ? matchingLive[0].content.replace(/<[^>]+>/g, "").slice(0, 160) + "..." : featured.description),
-    image: matchingLive[0].imageUrl || matchingLive[0].image || (matchingLive[0] as any).image_url || featured.image || "/ai_hero.png",
-    author: resolveLiveAuthorName(matchingLive[0].authorName || (matchingLive[0] as any).author_name || matchingLive[0].author),
-    date: matchingLive[0].date || (matchingLive[0] as any).published_at || "Just now"
-  } : featured;
+  const activeFeatured = matchingLive.length > 0
+    ? {
+        category: (matchingLive[0].category || categoryName).toUpperCase(),
+        title: matchingLive[0].title,
+        description: matchingLive[0].summary || matchingLive[0].description || (matchingLive[0].content ? matchingLive[0].content.replace(/<[^>]+>/g, "").slice(0, 180) + "..." : featured.description),
+        image: matchingLive[0].imageUrl || matchingLive[0].image || (matchingLive[0] as any).image_url || featured.image,
+        author: matchingLive[0].authorName || (matchingLive[0] as any).author_name || (matchingLive[0] as any).author || featured.author,
+        date: matchingLive[0].date || featured.date
+      }
+    : featured;
 
-  // 1. Right sidebox articles: EXACTLY the 2nd and 3rd newest published articles in order
-  const liveForSidebox: Article[] = matchingLive.slice(1, 3).map((a: any) => {
-    const aName = resolveLiveAuthorName(a.authorName || a.author_name || a.author);
-    return {
-      title: a.title,
-      image: a.imageUrl || a.image || a.image_url || "/ai_hero.png",
-      date: a.date ? `By ${aName} • ${a.date}` : `By ${aName} • Jul 2026`,
-      description: a.summary || a.description || (a.content ? a.content.replace(/<[^>]+>/g, "").slice(0, 140) + "..." : "")
-    };
-  });
-
-  const sideBoxArticles = liveForSidebox.length >= 2
-    ? liveForSidebox.slice(0, 2)
-    : [...liveForSidebox, ...secondaryArticles]
-        .filter((art, idx, self) =>
-          art.title.toLowerCase().trim() !== activeFeatured.title.toLowerCase().trim() &&
-          idx === self.findIndex(t => t.title.toLowerCase().trim() === art.title.toLowerCase().trim())
-        )
-        .slice(0, 2);
-
-  // 2. Remaining articles for lower 2x2 grid (starting from the 4th newest article, matchingLive.slice(3))
-  const liveForLowerGrid: Article[] = matchingLive.slice(3).map((a: any) => {
-    const aName = resolveLiveAuthorName(a.authorName || a.author_name || a.author);
-    return {
-      title: a.title,
-      image: a.imageUrl || a.image || a.image_url || "/ai_hero.png",
-      date: a.date ? `By ${aName} • ${a.date}` : `By ${aName} • Jul 2026`,
-      description: a.summary || a.description || (a.content ? a.content.replace(/<[^>]+>/g, "").slice(0, 140) + "..." : "")
-    };
-  });
-
-  const activeSecondaryArticles = liveForLowerGrid.length >= 4
-    ? liveForLowerGrid.slice(0, 4)
-    : [...liveForLowerGrid, ...secondaryArticles]
-        .filter((art, idx, self) =>
-          art.title.toLowerCase().trim() !== activeFeatured.title.toLowerCase().trim() &&
-          !sideBoxArticles.some(sb => sb.title.toLowerCase().trim() === art.title.toLowerCase().trim()) &&
-          idx === self.findIndex(t => t.title.toLowerCase().trim() === art.title.toLowerCase().trim())
-        );
+  const sideBoxArticles = secondaryArticles.slice(0, 4);
+  const activeSecondaryArticles = secondaryArticles.slice(0, 4);
 
   const liveFormattedArticles: Article[] = matchingLive.map((a: any) => ({
     title: a.title,
@@ -182,16 +107,30 @@ export default function CategoryPageLayout({
   }));
 
   // Combine live articles with existing newsArticles (deduplicated by title)
-  const combinedNewsArticles = liveFormattedArticles.length >= 6
-    ? liveFormattedArticles
-    : [...liveFormattedArticles, ...newsArticles].filter((art, idx, self) =>
-        idx === self.findIndex(t => t.title.toLowerCase().trim() === art.title.toLowerCase().trim())
-      );
+  const combinedNewsArticles = [
+    ...liveFormattedArticles,
+    ...newsArticles.filter(na => !liveFormattedArticles.some(la => la.title.toLowerCase().trim() === na.title.toLowerCase().trim()))
+  ];
 
-  const finalNewsTitle =
-    newsTitle.trim().toLowerCase() === 'news' && categoryName && categoryName.trim().toLowerCase() !== 'news'
-      ? `${categoryName} News`
-      : newsTitle;
+  const finalNewsTitle = (() => {
+    const raw = (newsTitle || '').trim();
+    if (!raw) {
+      return categoryName ? `${categoryName} More News` : 'More News';
+    }
+    if (raw.toLowerCase().endsWith('more news')) {
+      return raw;
+    }
+    if (raw.toLowerCase().endsWith(' news')) {
+      return raw.slice(0, -5).trim() + ' More News';
+    }
+    if (raw.toLowerCase().endsWith(' dispatches')) {
+      return raw.slice(0, -11).trim() + ' More News';
+    }
+    if (raw.toLowerCase() === 'news') {
+      return categoryName ? `${categoryName} More News` : 'More News';
+    }
+    return `${raw} More News`;
+  })();
 
   const finalGuidesTitle =
     guidesTitle.trim().toLowerCase() === 'guides' && categoryName && categoryName.trim().toLowerCase() !== 'guides'
@@ -272,12 +211,12 @@ export default function CategoryPageLayout({
           {/* Left Column (8 cols): Big Featured Image with Title, Excerpt & Byline Below */}
           <div className="lg:col-span-8 flex flex-col group">
             <Link href={getArticleHref(activeFeatured.title)} className="block">
-              <div className="relative w-full aspect-[16/9] md:aspect-[16/8.5] max-h-[360px] overflow-hidden bg-zinc-50 mb-4 rounded-sm border border-zinc-200 flex items-center justify-center">
+              <div className="relative w-full aspect-[16/11] md:aspect-[16/10.5] max-h-[500px] min-h-[370px] md:min-h-[445px] overflow-hidden bg-white mb-4 rounded-sm flex items-center justify-center">
                 <img
                   src={activeFeatured.image}
                   alt={activeFeatured.title}
                   onError={(e) => { e.currentTarget.src = "/ai_hero.png"; }}
-                  className="w-full h-full object-contain group-hover:opacity-95 transition-opacity mx-auto block"
+                  className="w-full h-full object-cover group-hover:opacity-95 transition-opacity mx-auto block"
                 />
               </div>
               <h2 className="text-[22px] md:text-[25px] font-bold leading-snug text-black group-hover:text-[#BF1E2D] transition-colors mb-2 font-standard-sans">
@@ -301,18 +240,18 @@ export default function CategoryPageLayout({
               </h1>
             </div>
 
-            {/* Articles Box / Section - Separated with Break */}
-            <div className="w-full bg-[#EEEEEE] p-5 md:p-6 flex flex-col justify-start text-black font-standard-sans rounded-xs">
-              {/* 2 Articles inside the Section - strictly the 2nd and 3rd newest articles in order */}
-              <div className="space-y-3.5 flex flex-col justify-start">
+            {/* Articles Box / Section - Plain Background */}
+            <div className="w-full bg-transparent flex flex-col justify-start text-black font-standard-sans">
+              {/* 3 Articles inside the Section */}
+              <div className="space-y-4 flex flex-col justify-start">
                 {sideBoxArticles.map((article, idx) => (
                   <Link
                     key={idx}
                     href={getArticleHref(article.title)}
-                    className="group/side flex gap-3.5 items-start pb-3.5 border-b border-zinc-300/70 last:border-b-0 last:pb-0 cursor-pointer"
+                    className="group/side flex gap-4 items-start pb-4 border-b border-zinc-200 last:border-b-0 last:pb-0 cursor-pointer"
                   >
                     {article.image && (
-                      <div className="relative w-[85px] h-[75px] shrink-0 overflow-hidden bg-zinc-200 rounded-xs">
+                      <div className="relative w-[110px] h-[88px] shrink-0 overflow-hidden bg-zinc-100 rounded-xs">
                         <img
                           src={article.image}
                           alt={article.title}
@@ -322,10 +261,10 @@ export default function CategoryPageLayout({
                       </div>
                     )}
                     <div className="flex flex-col justify-start min-w-0">
-                      <h3 className="text-[13.5px] md:text-[14px] font-bold leading-[1.3] text-black group-hover/side:text-[#BF1E2D] transition-colors line-clamp-2 mb-1">
+                      <h3 className="text-[15px] md:text-[15.5px] font-normal leading-[1.35] text-black group-hover/side:text-[#BF1E2D] transition-colors line-clamp-2 mb-1.5 font-sans">
                         {article.title}
                       </h3>
-                      <p className="text-[11px] text-zinc-500 font-sans">
+                      <p className="text-[12px] text-zinc-500 font-sans">
                         {article.date || "Latest Update"}
                       </p>
                     </div>

@@ -16,10 +16,10 @@ export default function BottomCategoryGrid() {
     });
   };
 
-  const researchLive = getCategoryArticles(["research", "innovation", "science", "industry", "insights"]);
-  const sportsLive = getCategoryArticles(["sports", "sport", "athletics", "olympics", "racing", "football"]);
-  const economyLive = getCategoryArticles(["economy", "economic", "economics", "finance", "macro", "trade"]);
-  const healthLive = getCategoryArticles(["health", "healthcare", "medical", "wellness", "medicine", "biotech", "pharma"]);
+  const researchLive = getCategoryArticles(["research", "innovation"]);
+  const sportsLive = getCategoryArticles(["sports"]);
+  const economyLive = getCategoryArticles(["economy"]);
+  const healthLive = getCategoryArticles(["health"]);
 
   const buildColumnData = (
     title: string,

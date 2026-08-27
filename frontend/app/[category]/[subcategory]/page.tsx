@@ -94,6 +94,41 @@ const parentConfig: Record<string, { name: string; color: string; desc: string }
     name: "Research",
     color: "bg-[#BEEDF7]",
     desc: "publishes open-access findings across science, technology, and engineering."
+  },
+  "europe": {
+    name: "Europe",
+    color: "bg-sky-50",
+    desc: "covers diplomatic affairs, European Union policy, and regional economic developments."
+  },
+  "china": {
+    name: "China",
+    color: "bg-sky-50",
+    desc: "tracks manufacturing trade, diplomatic summits, and cross-border developments in China."
+  },
+  "united-states": {
+    name: "United States",
+    color: "bg-sky-50",
+    desc: "covers federal policy, elections, and national developments across the United States."
+  },
+  "britain": {
+    name: "Britain",
+    color: "bg-sky-50",
+    desc: "tracks UK politics, Westminster legislation, and British industry trends."
+  },
+  "middle-east": {
+    name: "Middle East",
+    color: "bg-sky-50",
+    desc: "covers Middle Eastern diplomacy, energy markets, and regional geopolitical developments."
+  },
+  "africa": {
+    name: "Africa",
+    color: "bg-sky-50",
+    desc: "tracks African economic innovation, infrastructure projects, and trade agreements."
+  },
+  "asia": {
+    name: "Asia",
+    color: "bg-sky-50",
+    desc: "covers Asia-Pacific tech hubs, manufacturing, and diplomatic partnerships."
   }
 };
 
@@ -1487,6 +1522,36 @@ export default async function SubcategoryPage({ params }: PageProps) {
         date: "July 21, 2026",
         image: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=150&h=150&fit=crop",
         href: "/news/world/dutch-students-unveil-world-first-solar-powered-ambulance"
+      },
+      {
+        title: "Autonomous Fleet Operating Networks Expand Regional Commercial Routes",
+        date: "July 20, 2026",
+        image: "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=150&h=150&fit=crop",
+        href: "/business/companies/new-exclusive-decoration-design-fit-out-llc-structural-acrylic-pioneers-in-the-uae"
+      },
+      {
+        title: "European Tech Ecosystem Accelerates Sovereign Cloud & Quantum Infrastructure",
+        date: "July 19, 2026",
+        image: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=150&h=150&fit=crop",
+        href: "/technology/ai-innovation/meta-accelerates-generative-ai-initiatives-with-major-infrastructure-upgrade"
+      },
+      {
+        title: "Global Central Banks Navigate Shifting Inflation Frameworks",
+        date: "July 18, 2026",
+        image: "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=150&h=150&fit=crop",
+        href: "/news/markets/us-stocks-end-higher-as-sk-hynixs-wall-street-debut-and-metas-ai-momentum-lift-markets"
+      },
+      {
+        title: "Clean Energy Grid Transitions Secure Landmark Cross-Border Funding",
+        date: "July 17, 2026",
+        image: "https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=150&h=150&fit=crop",
+        href: "/industry-insights/energy/oil-market-rebalancing-amidst-refinery-maintenance-and-global-demand-trends"
+      },
+      {
+        title: "Digital Privacy Regulators Finalize Standardized Enterprise Guidelines",
+        date: "July 16, 2026",
+        image: "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=150&h=150&fit=crop",
+        href: "/news/politics/trump-declares-iran-ceasefire-over-raising-questions-about-the-next-phase-of-the-conflict"
       }
     ];
 
@@ -1571,7 +1636,7 @@ export default async function SubcategoryPage({ params }: PageProps) {
       guidesTitle={`${subName} Guides`}
       guidesDescription="Learn from hands-on architectures and system logs."
       guides={[]}
-      newsTitle={`${subName} News`}
+      newsTitle={`${subName} More News`}
       newsDescription="Get the latest regulatory policy changes."
       newsArticles={[
         {

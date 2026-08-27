@@ -13,7 +13,7 @@
   html, body {
     width: 100%;
     max-width: 100vw;
-    overflow-x: hidden !important;
+    overflow-x: clip;
     margin: 0;
     line-height: inherit;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -89,5 +89,25 @@ p.has-drop-cap-box::first-letter {
   font-family: ui-sans-serif, system-ui, sans-serif;
   font-weight: 800;
   border-radius: 4px;
+}
+
+/* FLOATED INLINE IMAGES & PROSE TEXT FLOW */
+.prose figure[style*="float: left"],
+figure[style*="float: left"] {
+  margin: 0.25rem 1rem 0.5rem 0 !important;
+  max-width: 45% !important;
+  display: inline-block !important;
+}
+
+.prose figure[style*="float: right"],
+figure[style*="float: right"] {
+  margin: 0.25rem 0 0.5rem 1rem !important;
+  max-width: 45% !important;
+  display: inline-block !important;
+}
+
+.prose p {
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 

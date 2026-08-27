@@ -129,7 +129,7 @@ export default function NewsPage() {
       guidesTitle="News Guides"
       guidesDescription="Background context and practical insights on challenging topics and what to do about it."
       guides={guides}
-      newsTitle="News"
+      newsTitle="News More News"
       newsDescription="Everything happening now that you need to know to find new ideas."
       newsArticles={newsArticles}
     />

@@ -24,8 +24,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="overflow-x-hidden w-full max-w-full">
-      <body className="font-sans antialiased bg-white text-gray-900 overflow-x-hidden w-full max-w-full">
+    <html lang="en" className="w-full max-w-full">
+      <body className="font-sans antialiased bg-white text-gray-900 w-full max-w-full overflow-x-clip">
         <AuthProvider>
           {children}
         </AuthProvider>

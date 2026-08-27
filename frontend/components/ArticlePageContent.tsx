@@ -1,16 +1,48 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import FastStartNewsletterBanner from "@/components/FastStartNewsletterBanner";
-import { CheckCircle2, Bookmark, Share2, ArrowLeft } from "lucide-react";
+import { CheckCircle2, Bookmark, Share2, ArrowLeft, Send, Trash2, MessageSquare, ThumbsUp, Heart, Reply, CornerDownRight, Smile, Plus, X, Image as ImageIcon } from "lucide-react";
 import { generateAutoSEO } from "@/lib/seo";
-import { getUserProfile, getAuthorAvatarByNameOrEmail } from "@/lib/userProfiles";
+import { getUserProfile, getAuthorAvatarByNameOrEmail, getAuthorFullProfileByNameOrEmail, resolveUserAvatar } from "@/lib/userProfiles";
 import { useLiveArticles } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
+
+interface ArticleReply {
+  id: string;
+  name: string;
+  avatar?: string;
+  email?: string;
+  role?: string;
+  isArticleAuthor?: boolean;
+  text: string;
+  image?: string;
+  createdAt: string;
+  likes: number;
+  reactions?: Record<string, number>;
+  likedBy?: string[];
+  userReactions?: Record<string, boolean>;
+}
+
+interface ArticleComment {
+  id: string;
+  name: string;
+  avatar?: string;
+  email?: string;
+  role?: string;
+  isArticleAuthor?: boolean;
+  text: string;
+  image?: string;
+  createdAt: string;
+  likes: number;
+  reactions?: Record<string, number>;
+  likedBy?: string[];
+  userReactions?: Record<string, boolean>;
+  replies?: ArticleReply[];
+}
 
 interface ArticleSection {
   heading: string;
@@ -26,9 +58,12 @@ interface ArticleData {
   date: string;
   image: string;
   caption: string;
+  credit?: string;
   sections: ArticleSection[];
   category?: string;
   subcategories?: string[];
+  tags?: string[];
+  rawContent?: string;
 }
 
 interface SidebarItem {
@@ -90,9 +125,7 @@ function parseCaptionAndCredit(rawCaption: string, rawCredit?: string) {
 
 function processContentLinks(html: string): string {
   if (!html) return "";
-  let clean = html
-    .replace(/<figure[\s\S]*?<\/figure>/gi, "")
-    .replace(/<img[^>]*\/?>/gi, "");
+  let clean = html;
 
   return clean.replace(/<a\b([^>]*)>/gi, (match, attrs) => {
     let newAttrs = attrs;
@@ -156,24 +189,35 @@ function ArticlePageContentInner({
   const resolveCleanAuthor = (rawName?: string, rawAvatar?: string, rawEmail?: string) => {
     let name = (rawName || "").trim();
     if (!name || name.toLowerCase() === "system administrator" || name.toLowerCase() === "administrator" || name.toLowerCase() === "admin" || name.toLowerCase() === "editor") {
-      name = "Rushdhi MR";
+      name = "Rushdhi";
+    }
+
+    const isRushdhi = name.toLowerCase().includes("rushdhi") || (rawEmail && rawEmail.toLowerCase().includes("rushdhi"));
+    const writerProfile = isRushdhi
+      ? (getUserProfile("rushdhiwriter@gmail.com") || getUserProfile("writer@digitaljournal.com") || getAuthorFullProfileByNameOrEmail("rushdhi"))
+      : (getUserProfile(name) || getAuthorFullProfileByNameOrEmail(name));
+
+    if (writerProfile?.name && !writerProfile.name.toLowerCase().includes("reader")) {
+      name = writerProfile.name;
     }
 
     let avatar = "";
-    // 1. Lookup custom uploaded avatar from author profile database by name or email
-    const accountAvatar = getAuthorAvatarByNameOrEmail(name, rawEmail || "");
-    if (accountAvatar && accountAvatar.length > 5 && !accountAvatar.includes("cart") && !accountAvatar.includes("author_bluesuit")) {
-      avatar = accountAvatar;
+    // 1. Lookup custom uploaded avatar from writer profile
+    if (writerProfile?.avatar && writerProfile.avatar.length > 5 && !writerProfile.avatar.includes("cart") && !writerProfile.avatar.includes("admin_profile")) {
+      avatar = writerProfile.avatar;
     }
 
-    // 2. Direct database author avatar if not generic placeholder
-    if (!avatar && rawAvatar && rawAvatar.length > 5 && !rawAvatar.includes("cart") && !rawAvatar.includes("author_bluesuit") && !rawAvatar.startsWith("data:image/svg")) {
+    // 2. Lookup custom uploaded avatar from author profile database by name or email
+    if (!avatar) {
+      const accountAvatar = getAuthorAvatarByNameOrEmail(name, isRushdhi ? "rushdhiwriter@gmail.com" : rawEmail || "");
+      if (accountAvatar && accountAvatar.length > 5 && !accountAvatar.includes("cart") && !accountAvatar.includes("admin_profile")) {
+        avatar = accountAvatar;
+      }
+    }
+
+    // 3. Direct database author avatar if not generic placeholder
+    if (!avatar && rawAvatar && rawAvatar.length > 5 && !rawAvatar.includes("cart") && !rawAvatar.includes("admin_profile") && !rawAvatar.startsWith("data:image/svg")) {
       avatar = rawAvatar;
-    }
-
-    // 3. Use accountAvatar if present
-    if (!avatar && accountAvatar && accountAvatar.length > 5 && !accountAvatar.includes("cart")) {
-      avatar = accountAvatar;
     }
 
     // 4. Fallback based on known staff names
@@ -183,7 +227,6 @@ function ArticlePageContentInner({
       else if (lower.includes("april") || lower.includes("hicke")) avatar = "/author_glasses.jpg";
       else if (lower.includes("pramod") || lower.includes("jain")) avatar = "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=250&h=250&fit=crop";
       else if (lower.includes("chris") || lower.includes("hogg")) avatar = "/author_beard.jpg";
-      else if (rawAvatar && rawAvatar.length > 5) avatar = rawAvatar;
       else avatar = "/author_bluesuit.jpg";
     }
 
@@ -202,20 +245,26 @@ function ArticlePageContentInner({
 
   useEffect(() => {
     try {
-      if (Array.isArray(liveArticles)) {
+        const searchId = searchParams?.get("id");
+        const searchSub = searchParams?.get("sub");
         const currentTitle = (newsData.title || "").trim().toLowerCase();
         const currentPath = typeof window !== "undefined" ? window.location.pathname.toLowerCase() : "";
 
         const matched = liveArticles.find((p) => {
-          if (!p || p.status !== "Published") return false;
+          if (!p || (p.status || "").toLowerCase() !== "published") return false;
+          if (searchId && (String(p.id) === String(searchId) || p.slug === searchId)) return true;
+
           const pTitle = (p.title || "").trim().toLowerCase();
           const pSlug = pTitle.replace(/[^a-z0-9]+/g, "-");
+          const normSlug = (p.slug || "").toLowerCase().trim();
+
           return (
-            currentTitle.includes(pTitle) ||
-            pTitle.includes(currentTitle) ||
-            currentPath.includes(pSlug) ||
-            (p.slug && currentPath.includes(p.slug.toLowerCase())) ||
+            (normSlug && currentPath.endsWith("/" + normSlug)) ||
+            (pSlug && currentPath.endsWith("/" + pSlug)) ||
+            (normSlug && currentPath.includes(normSlug)) ||
+            (pSlug && currentPath.includes(pSlug)) ||
             (p.id && currentPath.includes(String(p.id))) ||
+            (currentTitle && currentTitle.length > 3 && (pTitle.includes(currentTitle) || currentTitle.includes(pTitle))) ||
             (currentTitle.length > 5 && pTitle.slice(0, 15) === currentTitle.slice(0, 15))
           );
         });
@@ -244,12 +293,15 @@ function ArticlePageContentInner({
             title: matched.title,
             authorName: resolved.name,
             authorAvatar: resolved.avatar,
+            authorEmail: realEmail,
             authorBio: realAuthorBio,
             date: matched.date || newsData.date || "July 2026",
             image: matched.imageUrl || matched.image || newsData.image,
             caption: matched.subheading || matched.summary || newsData.caption,
             category: rawCategory,
             subcategories: rawSubcategories,
+            tags: matched.tags || (matched as any).tags || [],
+            rawContent: matched.content || "",
             sections: [
               {
                 heading: "",
@@ -258,11 +310,10 @@ function ArticlePageContentInner({
             ]
           });
         }
-      }
     } catch (err) {
       console.warn("Dynamic article page content sync notice:", err);
     }
-  }, [liveArticles, newsData]);
+  }, [liveArticles, newsData, searchParams]);
 
   useEffect(() => {
     const handleProfileUpdate = (e: any) => {
@@ -296,9 +347,360 @@ function ArticlePageContentInner({
     };
   }, [activeNewsData.authorName]);
 
-  const articleHref = `/${category}/${subcategory}`;
-
   const auth = useAuth();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  const isAdmin = Boolean(
+    isMounted && (
+      auth.role === "admin" ||
+      (auth.user && (auth.user.role === "admin" || auth.user.email === "admin@digitaljournal.com" || auth.user.email === "akramyoonos006@gmail.com")) ||
+      (typeof window !== "undefined" && (
+        localStorage.getItem("dj_admin_portal_authenticated") === "true" ||
+        localStorage.getItem("dj_user_role") === "admin"
+      ))
+    )
+  );
+
+  const articleKey = (activeNewsData.title || newsData.title || "article").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const [comments, setComments] = useState<ArticleComment[]>([]);
+  const [newCommentText, setNewCommentText] = useState("");
+  const [guestName, setGuestName] = useState("");
+  const [isPostingComment, setIsPostingComment] = useState(false);
+  const [commentSuccess, setCommentSuccess] = useState(false);
+
+  const [replyingToId, setReplyingToId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [replyGuestName, setReplyGuestName] = useState("");
+  const [commentImage, setCommentImage] = useState<string>("");
+  const [replyImage, setReplyImage] = useState<string>("");
+  const commentFileInputRef = useRef<HTMLInputElement>(null);
+  const replyFileInputRef = useRef<HTMLInputElement>(null);
+  const [activeReactionPicker, setActiveReactionPicker] = useState<string | null>(null);
+  const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "👏"];
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>, isReply: boolean = false) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Image file size should be less than 5MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        if (isReply) {
+          setReplyImage(reader.result);
+        } else {
+          setCommentImage(reader.result);
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const isUserArticleAuthor = (userEmail?: string, userName?: string): boolean => {
+    const artAuthor = (activeNewsData.authorName || newsData.authorName || "").toLowerCase().trim();
+    const artEmail = (activeNewsData.authorEmail || newsData.authorEmail || "").toLowerCase().trim();
+    const uName = (userName || auth.user?.name || "").toLowerCase().trim();
+    const uEmail = (userEmail || auth.user?.email || "").toLowerCase().trim();
+
+    if (artEmail && uEmail && artEmail === uEmail) return true;
+    if (artAuthor && uName && (artAuthor === uName || artAuthor.includes(uName) || uName.includes(artAuthor))) return true;
+
+    if (typeof window !== "undefined") {
+      try {
+        const writerStr = localStorage.getItem("dj_writer_user");
+        if (writerStr) {
+          const w = JSON.parse(writerStr);
+          const wName = (w.name || "").toLowerCase().trim();
+          const wEmail = (w.email || "").toLowerCase().trim();
+          if ((artEmail && wEmail === artEmail) || (artAuthor && (artAuthor === wName || artAuthor.includes(wName)))) {
+            if ((uEmail && uEmail === wEmail) || (uName && uName === wName)) return true;
+          }
+        }
+      } catch (e) {}
+    }
+    return false;
+  };
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(`dj_article_comments_${articleKey}`);
+      if (stored) {
+        setComments(JSON.parse(stored));
+      } else {
+        setComments([]);
+      }
+    } catch (e) {}
+  }, [articleKey]);
+
+  const handlePostComment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCommentText.trim() && !commentImage) return;
+
+    setIsPostingComment(true);
+    const authorName = auth.user?.name || guestName.trim() || "Reader";
+    const authorAvatar = auth.user?.avatar || "";
+    const authorEmail = auth.user?.email || "";
+    const authorRole = auth.user?.role || (isAdmin ? "admin" : "reader");
+    const isAuthor = isUserArticleAuthor(authorEmail, authorName);
+
+    const newComment: ArticleComment = {
+      id: `comm_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      name: authorName,
+      avatar: authorAvatar,
+      email: authorEmail,
+      role: authorRole,
+      isArticleAuthor: isAuthor,
+      text: newCommentText.trim(),
+      image: commentImage || undefined,
+      createdAt: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+      likes: 0,
+      reactions: {},
+      userReactions: {},
+      replies: []
+    };
+
+    const updated = [newComment, ...comments];
+    setComments(updated);
+    try {
+      localStorage.setItem(`dj_article_comments_${articleKey}`, JSON.stringify(updated));
+    } catch (e) {}
+
+    setNewCommentText("");
+    setCommentImage("");
+    setGuestName("");
+    setIsPostingComment(false);
+    setCommentSuccess(true);
+    setTimeout(() => setCommentSuccess(false), 3000);
+  };
+
+  const handlePostReply = (parentCommentId: string) => {
+    if (!replyText.trim() && !replyImage) return;
+
+    const authorName = auth.user?.name || replyGuestName.trim() || "Reader";
+    const authorAvatar = auth.user?.avatar || "";
+    const authorEmail = auth.user?.email || "";
+    const authorRole = auth.user?.role || (isAdmin ? "admin" : "reader");
+    const isAuthor = isUserArticleAuthor(authorEmail, authorName);
+
+    const newReply: ArticleReply = {
+      id: `reply_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      name: authorName,
+      avatar: authorAvatar,
+      email: authorEmail,
+      role: authorRole,
+      isArticleAuthor: isAuthor,
+      text: replyText.trim(),
+      image: replyImage || undefined,
+      createdAt: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+      likes: 0,
+      reactions: {},
+      userReactions: {}
+    };
+
+    const updated = comments.map((c) => {
+      if (c.id === parentCommentId) {
+        return {
+          ...c,
+          replies: [...(c.replies || []), newReply]
+        };
+      }
+      return c;
+    });
+
+    setComments(updated);
+    try {
+      localStorage.setItem(`dj_article_comments_${articleKey}`, JSON.stringify(updated));
+    } catch (e) {}
+
+    setReplyText("");
+    setReplyImage("");
+    setReplyGuestName("");
+    setReplyingToId(null);
+  };
+
+  const getCurrentUserKey = (): string => {
+    if (auth.user?.email) return `acc_${auth.user.email.toLowerCase().trim()}`;
+    if (auth.user?.name) return `acc_${auth.user.name.toLowerCase().trim()}`;
+    if (typeof window !== "undefined") {
+      try {
+        const writerStr = localStorage.getItem("dj_writer_user");
+        if (writerStr) {
+          const w = JSON.parse(writerStr);
+          if (w.email) return `acc_${w.email.toLowerCase().trim()}`;
+          if (w.name) return `acc_${w.name.toLowerCase().trim()}`;
+        }
+      } catch (e) {}
+
+      try {
+        const activeStr = localStorage.getItem("dj_active_user");
+        if (activeStr) {
+          const u = JSON.parse(activeStr);
+          if (u.email) return `acc_${u.email.toLowerCase().trim()}`;
+          if (u.name) return `acc_${u.name.toLowerCase().trim()}`;
+        }
+      } catch (e) {}
+
+      let visitorId = localStorage.getItem("dj_visitor_client_id");
+      if (!visitorId) {
+        visitorId = `vis_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        localStorage.setItem("dj_visitor_client_id", visitorId);
+      }
+      return visitorId;
+    }
+    return "guest_client";
+  };
+
+  const handleToggleReaction = (commentId: string, replyId?: string, emoji: string = "👍") => {
+    const userKey = getCurrentUserKey();
+
+    const updated = comments.map((c) => {
+      if (replyId && c.id === commentId) {
+        const updatedReplies = (c.replies || []).map((r) => {
+          if (r.id === replyId) {
+            let likedBy = Array.isArray(r.likedBy) ? [...r.likedBy] : [];
+            if (!Array.isArray(r.likedBy) && (r.reactions?.["❤️"] || 0) > 0) {
+              likedBy = Array.from({ length: r.reactions?.["❤️"] || 1 }, (_, i) => `prev_user_${i}`);
+            }
+            const reactions = { ...(r.reactions || {}) };
+            const userReactions = { ...(r.userReactions || {}) };
+
+            if (emoji === "❤️") {
+              const alreadyLiked = likedBy.includes(userKey);
+              let newLikedBy: string[];
+              if (alreadyLiked) {
+                // Remove this account's like
+                newLikedBy = likedBy.filter((k) => k !== userKey);
+                reactions["❤️"] = newLikedBy.length;
+                userReactions["❤️"] = false;
+              } else {
+                // Add this account's unique like
+                newLikedBy = [...likedBy, userKey];
+                reactions["❤️"] = newLikedBy.length;
+                userReactions["❤️"] = true;
+              }
+
+              const totalLikes = newLikedBy.length;
+              return {
+                ...r,
+                likedBy: newLikedBy,
+                likes: totalLikes,
+                reactions,
+                userReactions
+              };
+            } else {
+              const isReacted = !!userReactions[emoji];
+              if (isReacted) {
+                userReactions[emoji] = false;
+                reactions[emoji] = Math.max(0, (reactions[emoji] || 1) - 1);
+              } else {
+                userReactions[emoji] = true;
+                reactions[emoji] = (reactions[emoji] || 0) + 1;
+              }
+
+              const totalLikes = Object.values(reactions).reduce((a, b) => a + b, 0);
+              return {
+                ...r,
+                likes: totalLikes,
+                reactions,
+                userReactions
+              };
+            }
+          }
+          return r;
+        });
+        return { ...c, replies: updatedReplies };
+      } else if (!replyId && c.id === commentId) {
+        let likedBy = Array.isArray(c.likedBy) ? [...c.likedBy] : [];
+        if (!Array.isArray(c.likedBy) && (c.reactions?.["❤️"] || 0) > 0) {
+          likedBy = Array.from({ length: c.reactions?.["❤️"] || 1 }, (_, i) => `prev_user_${i}`);
+        }
+        const reactions = { ...(c.reactions || {}) };
+        const userReactions = { ...(c.userReactions || {}) };
+
+        if (emoji === "❤️") {
+          const alreadyLiked = likedBy.includes(userKey);
+          let newLikedBy: string[];
+          if (alreadyLiked) {
+            // Remove this account's like
+            newLikedBy = likedBy.filter((k) => k !== userKey);
+            reactions["❤️"] = newLikedBy.length;
+            userReactions["❤️"] = false;
+          } else {
+            // Add this account's unique like
+            newLikedBy = [...likedBy, userKey];
+            reactions["❤️"] = newLikedBy.length;
+            userReactions["❤️"] = true;
+          }
+
+          const totalLikes = newLikedBy.length;
+          return {
+            ...c,
+            likedBy: newLikedBy,
+            likes: totalLikes,
+            reactions,
+            userReactions
+          };
+        } else {
+          const isReacted = !!userReactions[emoji];
+          if (isReacted) {
+            userReactions[emoji] = false;
+            reactions[emoji] = Math.max(0, (reactions[emoji] || 1) - 1);
+          } else {
+            userReactions[emoji] = true;
+            reactions[emoji] = (reactions[emoji] || 0) + 1;
+          }
+
+          const totalLikes = Object.values(reactions).reduce((a, b) => a + b, 0);
+          return {
+            ...c,
+            likes: totalLikes,
+            reactions,
+            userReactions
+          };
+        }
+      }
+      return c;
+    });
+
+    setComments(updated);
+    try {
+      localStorage.setItem(`dj_article_comments_${articleKey}`, JSON.stringify(updated));
+    } catch (e) {}
+  };
+
+  const handleDeleteComment = (commentId: string) => {
+    if (!isAdmin) return;
+    if (!confirm("Are you sure you want to delete this comment?")) return;
+    const updated = comments.filter((c) => c.id !== commentId);
+    setComments(updated);
+    try {
+      localStorage.setItem(`dj_article_comments_${articleKey}`, JSON.stringify(updated));
+    } catch (e) {}
+  };
+
+  const handleDeleteReply = (commentId: string, replyId: string) => {
+    if (!isAdmin) return;
+    if (!confirm("Are you sure you want to delete this reply?")) return;
+    const updated = comments.map((c) => {
+      if (c.id === commentId) {
+        return {
+          ...c,
+          replies: (c.replies || []).filter((r) => r.id !== replyId)
+        };
+      }
+      return c;
+    });
+    setComments(updated);
+    try {
+      localStorage.setItem(`dj_article_comments_${articleKey}`, JSON.stringify(updated));
+    } catch (e) {}
+  };
 
   const getUserBookmarkStorageKey = (): string | null => {
     if (!auth.user || !auth.user.email) return null;
@@ -370,10 +772,11 @@ function ArticlePageContentInner({
         showToast("Article removed from your Saved Reading List.");
       } else {
         // Add bookmark to account
+        const currentHref = typeof window !== "undefined" ? (window.location.pathname + window.location.search) : "/";
         const newBookmark = {
           title: newsData.title,
           category: parent.name.toUpperCase(),
-          href: articleHref,
+          href: currentHref,
           date: newsData.date.split("•")[0].trim() || "Jul 2026",
           image: newsData.image,
           savedAt: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
@@ -521,192 +924,768 @@ function ArticlePageContentInner({
           );
         })()}
 
-        {/* Category Navigation Badge: Main Category Only */}
-        {(() => {
-          const formatCategorySlug = (cat: string) => {
-            return cat.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-          };
-
-          const currentPath = typeof window !== "undefined" ? window.location.pathname.toLowerCase() : "";
-          const currentTitle = (activeNewsData.title || newsData.title || "").trim().toLowerCase();
-          const matchedArticle = (Array.isArray(liveArticles) ? liveArticles : []).find((p) => {
-            if (!p || p.status !== "Published") return false;
-            const pTitle = (p.title || "").trim().toLowerCase();
-            const pSlug = pTitle.replace(/[^a-z0-9]+/g, "-");
-            return (
-              currentTitle.includes(pTitle) ||
-              pTitle.includes(currentTitle) ||
-              currentPath.includes(pSlug) ||
-              (p.slug && currentPath.includes(p.slug.toLowerCase())) ||
-              (p.id && currentPath.includes(String(p.id))) ||
-              (currentTitle.length > 5 && pTitle.slice(0, 15) === currentTitle.slice(0, 15))
-            );
-          });
-
-          // The true published main category is ALWAYS the primary main category name
-          const mainCategoryName = (matchedArticle?.category || matchedArticle?.category_name || (activeNewsData.category && activeNewsData.category !== parent?.name ? activeNewsData.category : null) || newsData.category || parent?.name || "Business").trim();
-          const mainCategorySlug = formatCategorySlug(mainCategoryName);
-          const mainCategoryHref = `/${mainCategorySlug}`;
-
-          return (
-            <div className="flex items-center gap-2 mb-3.5 font-standard-sans">
-              {/* Main Category Badge Only */}
-              <Link
-                href={mainCategoryHref}
-                className="inline-flex items-center px-3 py-1 bg-[#BF1E2D] hover:bg-[#a61724] text-white text-[11px] font-extrabold uppercase rounded-md tracking-wider transition-colors shadow-sm"
-              >
-                {mainCategoryName}
-              </Link>
-            </div>
-          );
-        })()}
-
-        {/* Main Title */}
-        <h1 className="font-serif text-[26px] sm:text-[30px] md:text-[34px] font-bold leading-[1.2] text-black mb-4 tracking-tight">
-          {activeNewsData.title}
-        </h1>
-
-        {/* Subheadline */}
-        <p className="font-serif text-[17px] md:text-[19px] text-zinc-600 italic leading-relaxed mb-6">
-          {activeNewsData.caption ? activeNewsData.caption.split('.')[0] + '.' : 'Independent analysis and verified reporting on key regulatory policy changes.'}
-        </p>
-
-        {/* Author Metadata Bar */}
-        {(() => {
-          const displayAvatar = (activeNewsData.authorAvatar && activeNewsData.authorAvatar.length > 5 && !activeNewsData.authorAvatar.startsWith("data:"))
-            ? activeNewsData.authorAvatar
-            : (getAuthorAvatarByNameOrEmail(activeNewsData.authorName, activeNewsData.authorEmail) || "/author_bluesuit.jpg");
-
-          return (
-            <div className="flex items-center gap-3.5 mb-8 pb-6 border-b border-zinc-200 font-sans">
-              <Link href={`/author/${activeNewsData.authorName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`} className="w-11 h-11 rounded-full overflow-hidden bg-[#1E293B] flex-shrink-0 border border-zinc-300 hover:opacity-80 transition-opacity flex items-center justify-center text-white font-bold text-sm">
-                {displayAvatar && displayAvatar.length > 5 ? (
-                  <img src={displayAvatar} alt={activeNewsData.authorName} className="w-full h-full object-cover" />
-                ) : (
-                  <span>{(activeNewsData.authorName || "RM").slice(0, 2).toUpperCase()}</span>
-                )}
-              </Link>
-              <div>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <p className="text-[14px] font-bold text-black font-sans leading-tight">
-                    By <Link href={`/author/${activeNewsData.authorName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`} className="underline hover:text-[#BF1E2D] transition-colors">{activeNewsData.authorName}</Link>
-                  </p>
-                  <svg className="w-4 h-4 text-[#1D9BF0]" fill="currentColor" viewBox="0 0 24 24">
-                    <title>Verified Journalist</title>
-                    <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.34-1.89-4.24-4.23-4.24-.496 0-.966.084-1.4.238C14.31 2.225 12.94 1.35 11.36 1.35c-1.58 0-2.95.875-3.6 2.148-.435-.154-.905-.238-1.4-.238-2.34 0-4.24 1.89-4.24 4.23 0 .496.084.966.238 1.4C1.225 9.55.35 10.92.35 12.5c0 1.58.875 2.95 2.148 3.6-.154.435-.238.905-.238 1.4 0 2.34 1.89 4.24 4.23 4.24.496 0 .966-.084 1.4-.238.65 1.273 2.02 2.148 3.6 2.148 1.58 0 2.95-.875 3.6-2.148.435.154.905.238 1.4.238 2.34 0 4.24-1.89 4.24-4.23 0-.496-.084-.966-.238-1.4 1.273-.65 2.148-2.02 2.148-3.6zm-12.28 4.29l-4.11-4.11 1.41-1.41 2.7 2.7 6.44-6.44 1.41 1.41-7.85 7.85z"/>
-                  </svg>
-
-                  {/* Author LinkedIn Icon Symbol */}
-                  <a
-                    href={authorLinkedinUrl}
-                    suppressHydrationWarning
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ml-1 inline-flex items-center text-[#0A66C2] hover:text-[#004182] transition-colors p-0.5"
-                    title={`Connect with ${activeNewsData.authorName} on LinkedIn`}
-                  >
-                    <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
-                      <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
-                    </svg>
-                  </a>
-                </div>
-                <p className="text-[12px] text-zinc-500 mt-0.5">{activeNewsData.date}</p>
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* Featured Image - Sharp Edges and Balanced Sizing */}
-        <div className="relative w-full max-w-[960px] mx-auto overflow-hidden bg-zinc-900 mb-2 rounded-none border border-zinc-200/50 shadow-xs">
-          <img
-            src={activeNewsData.image}
-            alt={activeNewsData.title}
-            className="w-full h-auto max-h-[420px] sm:max-h-[450px] object-cover mx-auto block aspect-[16/9] rounded-none"
-          />
-        </div>
-        
-        {/* Caption & Photo Credit Row */}
-        {(() => {
-          const info = parseCaptionAndCredit(activeNewsData.caption, (activeNewsData as any).credit);
-          return (
-            <div className="max-w-[960px] mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 mt-2 mb-4 font-sans text-[12px] text-zinc-500 border-b border-zinc-100 pb-2">
-              <span className="italic leading-normal font-sans text-zinc-600">
-                {info.caption}
-              </span>
-              {info.credit && (
-                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider font-sans shrink-0">
-                  {info.credit}
-                </span>
-              )}
-            </div>
-          );
-        })()}
-
-        {/* Body Content Grid */}
+        {/* Body Content Grid (2-Column Layout matching Preview) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 mt-2 items-start">
           
           {/* Left Column: Main News content */}
           <div className="lg:col-span-8 flex flex-col">
 
-            {/* News Body Sections */}
-            <div className="space-y-4 font-serif text-[17px] md:text-[18px] text-zinc-900 leading-[1.8] tracking-normal mt-0">
-              {activeNewsData.sections.map((sec, secIdx) => {
-                const isMultiSection = activeNewsData.sections.length > 1;
-                const midSectionIndex = Math.min(activeNewsData.sections.length - 1, Math.floor(activeNewsData.sections.length * 0.65));
-                const midParagraphIndex = Math.min(sec.paragraphs.length - 1, Math.floor(sec.paragraphs.length * 0.65));
+            {/* Category Navigation Badge */}
+            {(() => {
+              const formatCategorySlug = (cat: string) => {
+                return cat.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+              };
 
-                const cleanHeading = (sec.heading || "").trim();
-                const isOverview = cleanHeading.toLowerCase() === "overview" || cleanHeading.toLowerCase() === (activeNewsData.caption || "").toLowerCase().trim();
-
+              const currentPath = typeof window !== "undefined" ? window.location.pathname.toLowerCase() : "";
+              const currentTitle = (activeNewsData.title || newsData.title || "").trim().toLowerCase();
+              const matchedArticle = (Array.isArray(liveArticles) ? liveArticles : []).find((p) => {
+                if (!p || p.status !== "Published") return false;
+                const pTitle = (p.title || "").trim().toLowerCase();
+                const pSlug = pTitle.replace(/[^a-z0-9]+/g, "-");
                 return (
-                  <div key={secIdx} className="space-y-4">
-                    {cleanHeading && !isOverview && (
-                      <h2 className="font-serif text-[22px] md:text-[24px] font-bold text-black mt-4 mb-2 leading-snug">
-                        {sec.heading}
-                      </h2>
+                  currentTitle.includes(pTitle) ||
+                  pTitle.includes(currentTitle) ||
+                  currentPath.includes(pSlug) ||
+                  (p.slug && currentPath.includes(p.slug.toLowerCase())) ||
+                  (p.id && currentPath.includes(String(p.id))) ||
+                  (currentTitle.length > 5 && pTitle.slice(0, 15) === currentTitle.slice(0, 15))
+                );
+              });
+
+              const mainCategoryName = (matchedArticle?.category || matchedArticle?.category_name || (activeNewsData.category && activeNewsData.category !== parent?.name ? activeNewsData.category : null) || newsData.category || parent?.name || "Business").trim();
+              const mainCategorySlug = formatCategorySlug(mainCategoryName);
+              const mainCategoryHref = `/${mainCategorySlug}`;
+
+              return (
+                <div className="flex items-center gap-2 mb-3 font-standard-sans">
+                  <Link
+                    href={mainCategoryHref}
+                    className="inline-flex items-center text-[#BF1E2D] hover:text-[#a61724] text-[12px] font-black uppercase tracking-wider transition-colors"
+                  >
+                    {mainCategoryName}
+                  </Link>
+                </div>
+              );
+            })()}
+
+            {/* Main Title */}
+            <h1 className="font-serif text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 leading-tight mb-3 tracking-tight">
+              {activeNewsData.title}
+            </h1>
+
+            {/* Subheadline */}
+            {activeNewsData.caption && (
+              <p className="font-serif text-lg sm:text-xl text-slate-600 italic mb-6 sm:mb-8 leading-relaxed">
+                {activeNewsData.caption.split('.')[0] + '.'}
+              </p>
+            )}
+
+            {/* Author Metadata Bar */}
+            {(() => {
+              const cleanAuth = resolveCleanAuthor(activeNewsData.authorName, activeNewsData.authorAvatar, activeNewsData.authorEmail);
+              const authorSlug = cleanAuth.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+              return (
+                <div className="flex items-center gap-3.5 mb-4 pb-3.5 border-b border-zinc-200 font-sans">
+                  <Link href={`/author/${authorSlug}`} className="w-11 h-11 rounded-full overflow-hidden bg-[#1E293B] flex-shrink-0 border border-zinc-300 hover:opacity-80 transition-opacity flex items-center justify-center text-white font-bold text-sm">
+                    {cleanAuth.avatar && cleanAuth.avatar.length > 5 ? (
+                      <img src={cleanAuth.avatar} alt={cleanAuth.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <span>{(cleanAuth.name || "RM").slice(0, 2).toUpperCase()}</span>
                     )}
-                    {sec.paragraphs.map((p, pIdx) => (
-                      <div key={pIdx} className="space-y-5">
-                        <p 
-                          className="text-zinc-900 [&_a]:text-[#BF1E2D] [&_a]:underline [&_a]:font-semibold hover:[&_a]:text-[#901320] transition-colors"
-                          dangerouslySetInnerHTML={{ __html: processContentLinks(p) }}
+                  </Link>
+                  <div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="text-[14px] font-bold text-black font-sans leading-tight">
+                        By <Link href={`/author/${authorSlug}`} className="underline hover:text-[#BF1E2D] transition-colors">{cleanAuth.name}</Link>
+                      </p>
+                      <svg className="w-4 h-4 text-[#1D9BF0]" fill="currentColor" viewBox="0 0 24 24">
+                        <title>Verified Journalist</title>
+                        <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.34-1.89-4.24-4.23-4.24-.496 0-.966.084-1.4.238C14.31 2.225 12.94 1.35 11.36 1.35c-1.58 0-2.95.875-3.6 2.148-.435-.154-.905-.238-1.4-.238-2.34 0-4.24 1.89-4.24 4.23 0 .496.084.966.238 1.4C1.225 9.55.35 10.92.35 12.5c0 1.58.875 2.95 2.148 3.6-.154.435-.238.905-.238 1.4 0 2.34 1.89 4.24 4.23 4.24.496 0 .966-.084 1.4-.238.65 1.273 2.02 2.148 3.6 2.148 1.58 0 2.95-.875 3.6-2.148.435.154.905.238 1.4.238 2.34 0 4.24-1.89 4.24-4.23 0-.496-.084-.966-.238-1.4 1.273-.65 2.148-2.02 2.148-3.6zm-12.28 4.29l-4.11-4.11 1.41-1.41 2.7 2.7 6.44-6.44 1.41 1.41-7.85 7.85z"/>
+                      </svg>
+
+                      {/* Author LinkedIn Icon Symbol */}
+                      <a
+                        href={authorLinkedinUrl}
+                        suppressHydrationWarning
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-1 inline-flex items-center text-[#0A66C2] hover:text-[#004182] transition-colors p-0.5"
+                        title={`Connect with ${activeNewsData.authorName} on LinkedIn`}
+                      >
+                        <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
+                          <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
+                        </svg>
+                      </a>
+                    </div>
+                    <p className="text-[12px] text-zinc-500 mt-0.5">{activeNewsData.date}</p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Featured Image - only displayed if not already inside the article content */}
+            {activeNewsData.image && (!activeNewsData.rawContent || (!activeNewsData.rawContent.includes(activeNewsData.image) && !activeNewsData.rawContent.includes("<img"))) && (
+              <div className="w-full max-h-[520px] rounded-2xl overflow-hidden mb-5 border border-slate-200 shadow-sm flex items-center justify-center bg-transparent">
+                <img
+                  src={activeNewsData.image}
+                  alt={activeNewsData.title || "Article Image"}
+                  className="w-full h-auto max-h-[520px] object-cover mx-auto block"
+                />
+              </div>
+            )}
+
+            {/* News Body Content */}
+            {activeNewsData.rawContent ? (
+              <div className="prose prose-slate max-w-none text-zinc-900 leading-[1.8] font-serif text-[17px] md:text-[18px] space-y-4 flow-root [&_a]:text-[#BF1E2D] [&_a]:font-semibold [&_a]:underline hover:[&_a]:text-[#901320] [&_b]:font-bold [&_strong]:font-bold [&_blockquote]:border-l-4 [&_blockquote]:border-[#F97316] [&_blockquote]:pl-4 [&_blockquote]:py-2.5 [&_blockquote]:my-4 [&_blockquote]:italic [&_blockquote]:text-slate-700 [&_blockquote]:bg-slate-50/80 [&_blockquote]:rounded-r-xl [&_pre]:bg-slate-100/90 [&_pre]:p-3.5 [&_pre]:my-4 [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-slate-200/80 [&_pre]:overflow-x-auto [&_pre]:font-mono [&_pre]:text-sm [&_pre]:text-slate-800 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6">
+                {(() => {
+                  let rawHtml = activeNewsData.rawContent;
+                  if (rawHtml.startsWith("<") && rawHtml.includes("&lt;")) {
+                    rawHtml = rawHtml
+                      .replace(/&lt;/g, "<")
+                      .replace(/&gt;/g, ">")
+                      .replace(/&quot;/g, '"')
+                      .replace(/&#39;/g, "'")
+                      .replace(/&amp;/g, "&");
+                  }
+                  rawHtml = processContentLinks(rawHtml);
+
+                  return <div dangerouslySetInnerHTML={{ __html: rawHtml }} />;
+                })()}
+              </div>
+            ) : (
+              /* Fallback for static legacy articles */
+              <div className="space-y-4 font-serif text-[17px] md:text-[18px] text-zinc-900 leading-[1.8] tracking-normal mt-0">
+                {activeNewsData.sections.map((sec, secIdx) => {
+                  const cleanHeading = (sec.heading || "").trim();
+                  const isOverview = cleanHeading.toLowerCase() === "overview" || cleanHeading.toLowerCase() === (activeNewsData.caption || "").toLowerCase().trim();
+
+                  return (
+                    <div key={secIdx} className="space-y-4">
+                      {cleanHeading && !isOverview && (
+                        <h2 className="font-serif text-[22px] md:text-[24px] font-bold text-black mt-4 mb-2 leading-snug">
+                          {sec.heading}
+                        </h2>
+                      )}
+                      {sec.paragraphs.map((p, pIdx) => (
+                        <div key={pIdx} className="space-y-5">
+                          <p 
+                            className="text-zinc-900 [&_a]:text-[#BF1E2D] [&_a]:underline [&_a]:font-semibold hover:[&_a]:text-[#901320] transition-colors"
+                            dangerouslySetInnerHTML={{ __html: processContentLinks(p) }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* HASHTAGS SECTION */}
+            {activeNewsData.tags && activeNewsData.tags.length > 0 && (
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                {activeNewsData.tags.map((t: string) => (
+                  <span
+                    key={t}
+                    className="text-slate-800 hover:text-[#BF1E2D] font-bold text-xs cursor-pointer transition-colors"
+                  >
+                    #{t}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Bottom Saved Stories Toggle Bar */}
+            {(() => {
+              const totalCommentsCount = comments.length + comments.reduce((acc, c) => acc + (c.replies?.length || 0), 0);
+              return (
+                <>
+                  <div className="space-y-2 font-sans my-6 text-[12px] text-zinc-500">
+                    <div className="flex items-center gap-2 font-bold text-black uppercase tracking-wider text-[11.5px]">
+                      <span>💬 COMMENTS ({totalCommentsCount})</span>
+                    </div>
+                    <button
+                      onClick={toggleBookmark}
+                      className="text-[#BF1E2D] font-bold hover:underline cursor-pointer text-[13px] flex items-center gap-1.5 text-left"
+                    >
+                      <Bookmark size={16} className={isBookmarked ? "fill-[#BF1E2D]" : ""} />
+                      <span>
+                        {isBookmarked ? "✓ Saved in your Reader Reading List (Click to Remove)" : "+ Add to your saved stories"}
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* INTERACTIVE COMMENTS & OPINIONS SECTION */}
+                  <div className="mt-8 pt-6 border-t border-zinc-200 font-sans">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-bold text-black uppercase tracking-wider font-standard-sans flex items-center gap-2">
+                        <MessageSquare size={16} className="text-[#BF1E2D]" />
+                        <span>Reader Opinions & Comments</span>
+                        <span className="text-[11px] bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded-full font-mono font-bold">
+                          {totalCommentsCount}
+                        </span>
+                      </h3>
+                      {isAdmin && (
+                        <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md font-mono">
+                          🛡️ Admin Moderation
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Write Opinion / Comment Box */}
+                    <form onSubmit={handlePostComment} className="bg-slate-50/80 border border-slate-200 rounded-2xl p-4 sm:p-5 mb-8 shadow-2xs">
+                      {/* Hidden Image File Input */}
+                      <input
+                        type="file"
+                        ref={commentFileInputRef}
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => handleImageFileChange(e, false)}
+                      />
+
+                      <div className="mb-3">
+                        <textarea
+                          value={newCommentText}
+                          onChange={(e) => setNewCommentText(e.target.value)}
+                          placeholder="Share your thoughts or opinion on this article..."
+                          rows={3}
+                          className="w-full p-3.5 text-xs sm:text-sm bg-white border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all resize-y"
                         />
 
-                        {/* If single section, insert Newsletter Banner in middle of paragraphs */}
-                        {!isMultiSection && pIdx === midParagraphIndex && (
-                          <div className="my-8">
-                            <FastStartNewsletterBanner />
+                        {/* Image Preview if selected */}
+                        {commentImage && (
+                          <div className="relative inline-block mt-2.5 rounded-xl overflow-hidden border border-slate-200 shadow-2xs group">
+                            <img src={commentImage} alt="Attachment preview" className="h-20 w-auto max-w-[200px] object-cover rounded-xl" />
+                            <button
+                              type="button"
+                              onClick={() => setCommentImage("")}
+                              className="absolute top-1 right-1 bg-black/75 hover:bg-black text-white p-1 rounded-full cursor-pointer transition-colors shadow-xs"
+                              title="Remove image"
+                            >
+                              <X size={12} />
+                            </button>
                           </div>
                         )}
                       </div>
-                    ))}
 
-                    {/* If multiple sections, insert Newsletter Banner in middle of sections */}
-                    {isMultiSection && secIdx === midSectionIndex && (
-                      <div className="my-8">
-                        <FastStartNewsletterBanner />
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {!isMounted || !auth.user ? (
+                            <input
+                              type="text"
+                              value={guestName}
+                              onChange={(e) => setGuestName(e.target.value)}
+                              placeholder="Your Name (Optional)"
+                              className="px-3.5 py-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] sm:max-w-[180px]"
+                            />
+                          ) : (
+                            <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
+                              <div className="w-6 h-6 rounded-full bg-[#BF1E2D] text-white flex items-center justify-center text-[10px] font-bold overflow-hidden">
+                                {auth.user.avatar ? (
+                                  <img src={auth.user.avatar} alt={auth.user.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  auth.user.name?.charAt(0) || "U"
+                                )}
+                              </div>
+                              <span>
+                                Posting as <strong className="text-slate-900">{auth.user.name}</strong>
+                                {isUserArticleAuthor(auth.user.email, auth.user.name) && (
+                                  <span className="ml-1.5 text-[9px] font-extrabold uppercase bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded font-mono inline-flex items-center gap-0.5">
+                                    ⭐ Author
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* + Add Image Button */}
+                          <button
+                            type="button"
+                            onClick={() => commentFileInputRef.current?.click()}
+                            className="p-1.5 px-2.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 flex items-center gap-1 text-xs font-semibold transition-all cursor-pointer shadow-2xs"
+                            title="Attach an image"
+                          >
+                            <Plus size={14} className="text-[#BF1E2D]" />
+                            <span>Image</span>
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-3 self-end sm:self-auto">
+                          {commentSuccess && (
+                            <span className="text-xs font-bold text-emerald-600 animate-in fade-in">
+                              ✓ Opinion posted!
+                            </span>
+                          )}
+                          <button
+                            type="submit"
+                            disabled={(!newCommentText.trim() && !commentImage) || isPostingComment}
+                            className="bg-[#BF1E2D] hover:bg-red-800 active:scale-95 text-white font-bold text-xs px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl uppercase tracking-wider transition-all cursor-pointer shadow-xs disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+                          >
+                            <Send size={13} />
+                            <span>Post Opinion</span>
+                          </button>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                    </form>
 
-            {/* Bottom Saved Stories Toggle Bar */}
-            <div className="space-y-2 font-sans my-6 text-[12px] text-zinc-500">
-              <div className="flex items-center gap-2 font-bold text-black uppercase tracking-wider text-[11.5px]">
-                <span>💬 COMMENTS (0)</span>
-              </div>
-              <button
-                onClick={toggleBookmark}
-                className="text-[#BF1E2D] font-bold hover:underline cursor-pointer text-[13px] flex items-center gap-1.5 text-left"
-              >
-                <Bookmark size={16} className={isBookmarked ? "fill-[#BF1E2D]" : ""} />
-                <span>
-                  {isBookmarked ? "✓ Saved in your Reader Reading List (Click to Remove)" : "+ Add to your saved stories"}
-                </span>
-              </button>
-            </div>
+                    {/* Comments Feed List */}
+                    <div className="space-y-4">
+                      {comments.length === 0 ? (
+                        <div className="text-center py-6 text-zinc-400 text-xs italic bg-slate-50/50 rounded-xl border border-dashed border-zinc-200">
+                          No opinions shared yet. Be the first to share your thoughts on this story!
+                        </div>
+                      ) : (
+                        comments.map((comment) => {
+                          const isCommentAuthor = comment.isArticleAuthor || isUserArticleAuthor(comment.email, comment.name);
+                          return (
+                            <div
+                              key={comment.id}
+                              onContextMenu={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setActiveReactionPicker(activeReactionPicker === comment.id ? null : comment.id);
+                              }}
+                              className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 transition-all hover:border-slate-300 shadow-2xs group relative"
+                            >
+                              {/* Header: User Info & Badges */}
+                              <div className="flex items-center justify-between mb-2.5">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-xs font-bold text-slate-700 overflow-hidden shrink-0">
+                                    {comment.avatar ? (
+                                      <img src={comment.avatar} alt={comment.name} className="w-full h-full object-cover" />
+                                    ) : (
+                                      comment.name.charAt(0).toUpperCase()
+                                    )}
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center flex-wrap gap-1.5">
+                                      <span className="text-xs font-bold text-slate-900">{comment.name}</span>
+                                      {isCommentAuthor && (
+                                        <span className="text-[9px] font-extrabold uppercase bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded font-mono flex items-center gap-0.5 shadow-2xs">
+                                          ⭐ Author
+                                        </span>
+                                      )}
+                                      {!isCommentAuthor && comment.role === "admin" && (
+                                        <span className="text-[9px] font-extrabold uppercase bg-red-100 text-red-700 px-1.5 py-0.2 rounded font-mono">
+                                          Admin
+                                        </span>
+                                      )}
+                                      {!isCommentAuthor && comment.role === "writer" && (
+                                        <span className="text-[9px] font-extrabold uppercase bg-blue-100 text-blue-700 px-1.5 py-0.2 rounded font-mono">
+                                          Journalist
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[10px] text-zinc-400 font-mono">{comment.createdAt}</p>
+                                  </div>
+                                </div>
+
+                                {/* Admin Delete Action Button */}
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteComment(comment.id)}
+                                    title="Delete unwanted comment (Admin Only)"
+                                    className="text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-lg flex items-center gap-1 text-[11px] font-bold cursor-pointer transition-all border border-transparent hover:border-red-200"
+                                  >
+                                    <Trash2 size={13} />
+                                    <span>Delete</span>
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Comment Body & Right-Aligned Like Heart Button */}
+                              {(() => {
+                                const currentUserKey = getCurrentUserKey();
+                                const isCommentLiked = Array.isArray(comment.likedBy) ? comment.likedBy.includes(currentUserKey) : !!comment.userReactions?.["❤️"];
+                                const commentLikeCount = Array.isArray(comment.likedBy) ? comment.likedBy.length : (comment.reactions?.["❤️"] || 0);
+
+                                return (
+                                  <div className="flex items-start justify-between gap-3 pl-10 mb-2">
+                                    <div className="flex-1">
+                                      {comment.text && (
+                                        <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-sans whitespace-pre-wrap">
+                                          {comment.text}
+                                        </p>
+                                      )}
+                                      {comment.image && (
+                                        <div className="mt-2.5 max-w-sm rounded-xl overflow-hidden border border-slate-200 shadow-2xs">
+                                          <img src={comment.image} alt="Attachment" className="w-full h-auto max-h-64 object-cover" />
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Like Heart Button directly to the right side of comment (1 like per account) */}
+                                    <div className="flex flex-col items-center shrink-0 -mt-0.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleToggleReaction(comment.id, undefined, "❤️")}
+                                        className={`p-1.5 rounded-full hover:bg-red-50 transition-all cursor-pointer ${
+                                          isCommentLiked
+                                            ? "text-[#BF1E2D] scale-110"
+                                            : "text-slate-400 hover:text-[#BF1E2D]"
+                                        }`}
+                                        title={isCommentLiked ? "Unlike" : "Like comment (1 like per account)"}
+                                      >
+                                        <Heart size={16} className={isCommentLiked ? "fill-[#BF1E2D]" : ""} />
+                                      </button>
+                                      {commentLikeCount > 0 && (
+                                        <span className="text-[10px] font-bold text-slate-500 font-mono -mt-1">
+                                          {commentLikeCount}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+
+                              {/* Action Row: React & Reply Button */}
+                              <div className="relative pl-10 flex items-center flex-wrap gap-3 pt-1.5 border-t border-slate-100/90 text-xs">
+                                {/* WhatsApp / Telegram Floating Emoji Reactions Bar */}
+                                {activeReactionPicker === comment.id && (
+                                  <div
+                                    onMouseLeave={() => setActiveReactionPicker(null)}
+                                    className="absolute -top-11 left-8 z-30 flex items-center gap-1 bg-white/95 backdrop-blur-md px-2.5 py-1.5 rounded-full shadow-xl border border-slate-200/90 animate-in fade-in zoom-in-95 duration-150"
+                                  >
+                                    {QUICK_EMOJIS.map((emoji) => (
+                                      <button
+                                        key={emoji}
+                                        type="button"
+                                        onClick={() => {
+                                          handleToggleReaction(comment.id, undefined, emoji);
+                                          setActiveReactionPicker(null);
+                                        }}
+                                        className={`text-[17px] p-1 hover:scale-135 active:scale-95 transition-all rounded-full hover:bg-slate-100 cursor-pointer ${
+                                          comment.userReactions?.[emoji] ? "bg-red-50 scale-110" : ""
+                                        }`}
+                                        title={emoji}
+                                      >
+                                        {emoji}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* React Trigger Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveReactionPicker(activeReactionPicker === comment.id ? null : comment.id)}
+                                  className="text-slate-500 hover:text-[#BF1E2D] font-semibold flex items-center gap-1 cursor-pointer transition-colors text-xs"
+                                  title="Right-click comment or click here to react"
+                                >
+                                  <Smile size={14} />
+                                  <span>React</span>
+                                </button>
+
+                                {/* Reply Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setReplyingToId(replyingToId === comment.id ? null : comment.id);
+                                    setReplyText("");
+                                  }}
+                                  className="text-slate-500 hover:text-[#BF1E2D] font-semibold flex items-center gap-1 cursor-pointer transition-colors text-xs"
+                                >
+                                  <Reply size={13} />
+                                  <span>Reply</span>
+                                </button>
+
+                                {/* WhatsApp / Instagram Style Reactions Badges (Show only if reactions exist) */}
+                                {(() => {
+                                  const activeEmojis = Object.entries(comment.reactions || {}).filter(([emoji, count]) => emoji !== "❤️" && (count as number) > 0);
+                                  const totalCount = activeEmojis.reduce((acc, [_, count]) => acc + (count as number), 0);
+                                  if (totalCount === 0) return null;
+
+                                  return (
+                                    <div
+                                      onClick={() => handleToggleReaction(comment.id, undefined, activeEmojis[0][0])}
+                                      className="ml-auto inline-flex items-center gap-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 shadow-2xs px-2 py-0.5 rounded-full text-xs font-semibold text-slate-700 cursor-pointer transition-all hover:scale-105 active:scale-95"
+                                      title="Click to toggle reaction"
+                                    >
+                                      <span className="flex -space-x-1">
+                                        {activeEmojis.slice(0, 3).map(([emoji]) => (
+                                          <span key={emoji} className="text-[13px]">{emoji}</span>
+                                        ))}
+                                      </span>
+                                      <span className="text-[11px] font-bold text-slate-600 ml-0.5">{totalCount}</span>
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+
+                              {/* Inline Reply Form */}
+                              {replyingToId === comment.id && (
+                                <div className="mt-3.5 pl-10 pt-3 border-t border-slate-100">
+                                  <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                                    {/* Hidden Reply Image File Input */}
+                                    <input
+                                      type="file"
+                                      ref={replyFileInputRef}
+                                      accept="image/*"
+                                      className="hidden"
+                                      onChange={(e) => handleImageFileChange(e, true)}
+                                    />
+
+                                    <textarea
+                                      value={replyText}
+                                      onChange={(e) => setReplyText(e.target.value)}
+                                      placeholder={`Reply to ${comment.name}...`}
+                                      rows={2}
+                                      className="w-full p-2.5 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] transition-all resize-y mb-2"
+                                    />
+
+                                    {/* Reply Image Preview if selected */}
+                                    {replyImage && (
+                                      <div className="relative inline-block mb-2 rounded-lg overflow-hidden border border-slate-200 shadow-2xs group">
+                                        <img src={replyImage} alt="Reply preview" className="h-16 w-auto max-w-[150px] object-cover rounded-lg" />
+                                        <button
+                                          type="button"
+                                          onClick={() => setReplyImage("")}
+                                          className="absolute top-0.5 right-0.5 bg-black/75 hover:bg-black text-white p-0.5 rounded-full cursor-pointer transition-colors"
+                                          title="Remove image"
+                                        >
+                                          <X size={10} />
+                                        </button>
+                                      </div>
+                                    )}
+
+                                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        {!isMounted || !auth.user ? (
+                                          <input
+                                            type="text"
+                                            value={replyGuestName}
+                                            onChange={(e) => setReplyGuestName(e.target.value)}
+                                            placeholder="Your Name (Optional)"
+                                            className="px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] sm:max-w-[160px]"
+                                          />
+                                        ) : (
+                                          <div className="text-[11px] text-slate-600 font-medium">
+                                            Replying as <strong className="text-slate-900">{auth.user.name}</strong>
+                                            {isUserArticleAuthor(auth.user.email, auth.user.name) && (
+                                              <span className="ml-1 text-[9px] font-extrabold uppercase bg-amber-100 text-amber-900 border border-amber-300 px-1 py-0.2 rounded font-mono inline-block">
+                                                ⭐ Author
+                                              </span>
+                                            )}
+                                          </div>
+                                        )}
+
+                                        {/* + Image button for reply */}
+                                        <button
+                                          type="button"
+                                          onClick={() => replyFileInputRef.current?.click()}
+                                          className="p-1 px-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 flex items-center gap-1 text-[11px] font-semibold transition-all cursor-pointer shadow-2xs"
+                                          title="Attach an image"
+                                        >
+                                          <Plus size={12} className="text-[#BF1E2D]" />
+                                          <span>Image</span>
+                                        </button>
+                                      </div>
+
+                                      <div className="flex items-center gap-2 self-end sm:self-auto">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setReplyingToId(null);
+                                            setReplyImage("");
+                                          }}
+                                          className="px-3 py-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
+                                        >
+                                          Cancel
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handlePostReply(comment.id)}
+                                          disabled={!replyText.trim() && !replyImage}
+                                          className="bg-[#BF1E2D] hover:bg-red-800 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg uppercase tracking-wider transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 shadow-2xs"
+                                        >
+                                          <Send size={11} />
+                                          <span>Submit Reply</span>
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Nested Replies Thread */}
+                              {comment.replies && comment.replies.length > 0 && (
+                                <div className="mt-4 pl-4 sm:pl-8 space-y-3 border-l-2 border-slate-200 ml-5 pt-1">
+                                  {comment.replies.map((reply) => {
+                                    const isReplyAuthor = reply.isArticleAuthor || isUserArticleAuthor(reply.email, reply.name);
+                                    return (
+                                      <div
+                                        key={reply.id}
+                                        onContextMenu={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          setActiveReactionPicker(activeReactionPicker === `reply_${reply.id}` ? null : `reply_${reply.id}`);
+                                        }}
+                                        className="bg-slate-50/70 border border-slate-200/80 rounded-xl p-3 sm:p-3.5 shadow-2xs relative"
+                                      >
+                                        <div className="flex items-center justify-between mb-1.5">
+                                          <div className="flex items-center gap-2">
+                                            <CornerDownRight size={13} className="text-slate-400 shrink-0" />
+                                            <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-700 overflow-hidden shrink-0">
+                                              {reply.avatar ? (
+                                                <img src={reply.avatar} alt={reply.name} className="w-full h-full object-cover" />
+                                              ) : (
+                                                reply.name.charAt(0).toUpperCase()
+                                              )}
+                                            </div>
+                                            <div className="flex items-center flex-wrap gap-1.5">
+                                              <span className="text-xs font-bold text-slate-900">{reply.name}</span>
+                                              {isReplyAuthor && (
+                                                <span className="text-[9px] font-extrabold uppercase bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.2 rounded font-mono flex items-center gap-0.5 shadow-2xs">
+                                                  ⭐ Author
+                                                </span>
+                                              )}
+                                              {!isReplyAuthor && reply.role === "admin" && (
+                                                <span className="text-[9px] font-extrabold uppercase bg-red-100 text-red-700 px-1.5 py-0.2 rounded font-mono">
+                                                  Admin
+                                                </span>
+                                              )}
+                                              {!isReplyAuthor && reply.role === "writer" && (
+                                                <span className="text-[9px] font-extrabold uppercase bg-blue-100 text-blue-700 px-1.5 py-0.2 rounded font-mono">
+                                                  Journalist
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-[10px] text-zinc-400 font-mono">{reply.createdAt}</span>
+                                            {isAdmin && (
+                                              <button
+                                                type="button"
+                                                onClick={() => handleDeleteReply(comment.id, reply.id)}
+                                                title="Delete reply (Admin Only)"
+                                                className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors"
+                                              >
+                                                <Trash2 size={12} />
+                                              </button>
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        {/* Reply Body & Right-Aligned Like Heart Button */}
+                                        {(() => {
+                                          const currentUserKey = getCurrentUserKey();
+                                          const isReplyLiked = Array.isArray(reply.likedBy) ? reply.likedBy.includes(currentUserKey) : !!reply.userReactions?.["❤️"];
+                                          const replyLikeCount = Array.isArray(reply.likedBy) ? reply.likedBy.length : (reply.reactions?.["❤️"] || 0);
+
+                                          return (
+                                            <div className="flex items-start justify-between gap-2 pl-7 mb-1">
+                                              <div className="flex-1">
+                                                {reply.text && (
+                                                  <p className="text-xs text-slate-700 leading-relaxed font-sans whitespace-pre-wrap">
+                                                    {reply.text}
+                                                  </p>
+                                                )}
+                                                {reply.image && (
+                                                  <div className="mt-2 max-w-xs rounded-lg overflow-hidden border border-slate-200 shadow-2xs">
+                                                    <img src={reply.image} alt="Attachment" className="w-full h-auto max-h-48 object-cover" />
+                                                  </div>
+                                                )}
+                                              </div>
+
+                                              {/* Reply Like Heart Button directly to the right side (1 like per account) */}
+                                              <div className="flex flex-col items-center shrink-0 -mt-0.5">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleToggleReaction(comment.id, reply.id, "❤️")}
+                                                  className={`p-1 rounded-full hover:bg-red-50 transition-all cursor-pointer ${
+                                                    isReplyLiked
+                                                      ? "text-[#BF1E2D] scale-110"
+                                                      : "text-slate-400 hover:text-[#BF1E2D]"
+                                                  }`}
+                                                  title={isReplyLiked ? "Unlike" : "Like reply (1 like per account)"}
+                                                >
+                                                  <Heart size={14} className={isReplyLiked ? "fill-[#BF1E2D]" : ""} />
+                                                </button>
+                                                {replyLikeCount > 0 && (
+                                                  <span className="text-[9px] font-bold text-slate-500 font-mono -mt-1">
+                                                    {replyLikeCount}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </div>
+                                          );
+                                        })()}
+
+                                        {/* Reply Action Row: React Button & Reactions */}
+                                        <div className="relative pl-7 flex items-center flex-wrap gap-2 pt-1 text-xs">
+                                          {/* WhatsApp / Telegram Floating Emoji Bar for Reply */}
+                                          {activeReactionPicker === `reply_${reply.id}` && (
+                                            <div
+                                              onMouseLeave={() => setActiveReactionPicker(null)}
+                                              className="absolute -top-10 left-5 z-30 flex items-center gap-1 bg-white/95 backdrop-blur-md px-2 py-1 rounded-full shadow-xl border border-slate-200/90 animate-in fade-in zoom-in-95 duration-150"
+                                            >
+                                              {QUICK_EMOJIS.map((emoji) => (
+                                                <button
+                                                  key={emoji}
+                                                  type="button"
+                                                  onClick={() => {
+                                                    handleToggleReaction(comment.id, reply.id, emoji);
+                                                    setActiveReactionPicker(null);
+                                                  }}
+                                                  className={`text-[15px] p-1 hover:scale-135 active:scale-95 transition-all rounded-full hover:bg-slate-100 cursor-pointer ${
+                                                    reply.userReactions?.[emoji] ? "bg-red-50 scale-110" : ""
+                                                  }`}
+                                                  title={emoji}
+                                                >
+                                                  {emoji}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          )}
+
+                                          {/* React Trigger */}
+                                          <button
+                                            type="button"
+                                            onClick={() => setActiveReactionPicker(activeReactionPicker === `reply_${reply.id}` ? null : `reply_${reply.id}`)}
+                                            className="text-slate-500 hover:text-[#BF1E2D] font-semibold flex items-center gap-1 cursor-pointer transition-colors text-[11px]"
+                                            title="Right-click reply or click here to react"
+                                          >
+                                            <Smile size={13} />
+                                            <span>React</span>
+                                          </button>
+
+                                          {/* WhatsApp / Instagram Reactions Badge */}
+                                          {(() => {
+                                            const activeEmojis = Object.entries(reply.reactions || {}).filter(([emoji, count]) => emoji !== "❤️" && (count as number) > 0);
+                                            const totalCount = activeEmojis.reduce((acc, [_, count]) => acc + (count as number), 0);
+                                            if (totalCount === 0) return null;
+
+                                            return (
+                                              <div
+                                                onClick={() => handleToggleReaction(comment.id, reply.id, activeEmojis[0][0])}
+                                                className="ml-auto inline-flex items-center gap-1 bg-white hover:bg-slate-50 border border-slate-200 shadow-2xs px-1.5 py-0.5 rounded-full text-[11px] font-semibold text-slate-700 cursor-pointer transition-all hover:scale-105 active:scale-95"
+                                                title="Click to toggle reaction"
+                                              >
+                                                <span className="flex -space-x-1">
+                                                  {activeEmojis.slice(0, 3).map(([emoji]) => (
+                                                    <span key={emoji} className="text-[11px]">{emoji}</span>
+                                                  ))}
+                                                </span>
+                                                <span className="text-[10px] font-bold text-slate-600 ml-0.5">{totalCount}</span>
+                                              </div>
+                                            );
+                                          })()}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
 
           </div>
 

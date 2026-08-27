@@ -33,6 +33,15 @@ export async function POST(request: Request) {
       );
     }
 
+    // Check if email was deleted/revoked by administrator
+    const isDeleted = await DB.isEmailDeleted(normalized);
+    if (isDeleted) {
+      return NextResponse.json(
+        { error: 'Access Denied: This email address has been removed by the administrator. Registration is disabled until an admin re-adds this account.' },
+        { status: 403 }
+      );
+    }
+
     if (!password || password.length < 6) {
       return NextResponse.json(
         { error: 'Password must be at least 6 characters long' },

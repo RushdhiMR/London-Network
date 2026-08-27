@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { KeyRound, CheckCircle2, ArrowLeft, ShieldCheck } from "lucide-react";
-import { getUserProfile, saveUserProfile } from "@/lib/userProfiles";
+import { getUserProfile, saveUserProfile, isEmailDeletedOnClient } from "@/lib/userProfiles";
 
 export interface Account {
   name: string;
@@ -105,9 +105,11 @@ export default function GoogleAccountChooserModal({
         }
       }
 
-      setAccounts(deviceList);
+      // Filter out any accounts that were deleted by the administrator
+      const activeDeviceAccounts = deviceList.filter((a) => !isEmailDeletedOnClient(a.email));
+      setAccounts(activeDeviceAccounts);
 
-      if (deviceList.length === 0) {
+      if (activeDeviceAccounts.length === 0) {
         setIsAddingAccount(true);
       } else {
         setIsAddingAccount(false);
@@ -130,6 +132,7 @@ export default function GoogleAccountChooserModal({
   // Helper to check if an email is already registered in local user registry
   const isEmailRegistered = (email: string): boolean => {
     const lower = email.trim().toLowerCase();
+    if (isEmailDeletedOnClient(lower)) return false;
     const systemAccounts = [
       "admin@digitaljournal.com",
       "coadmin@digitaljournal.com",
@@ -152,6 +155,10 @@ export default function GoogleAccountChooserModal({
   };
 
   const processAccountSelection = (acc: Account) => {
+    if (isEmailDeletedOnClient(acc.email)) {
+      setEmailError("Access Denied: This account has been removed by the administrator. Access is disabled.");
+      return;
+    }
     completeSignIn(acc);
   };
 

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import SEOAssistantPanel from "@/components/SEOAssistantPanel";
 import { useAuth } from "@/lib/auth-context";
 import { generateAutoSEO, extractFocusKeyword, extractCardSummary } from "@/lib/seo";
-import { getUserProfile } from "@/lib/userProfiles";
+import { getUserProfile, resolveUserAvatar, getAuthorAvatarByNameOrEmail } from "@/lib/userProfiles";
 import { saveArticleToServer, fetchArticlesFromServer } from "@/lib/articlesSync";
 import { convertToWebP, convertHtmlImagesToWebP } from "@/lib/imageUtils";
 import {
@@ -45,7 +45,8 @@ import {
   Type,
   Plus,
   Minus,
-  GripVertical
+  GripVertical,
+  AlertCircle
 } from "lucide-react";
 
 function processContentLinks(html: string): string {
@@ -118,13 +119,14 @@ function isSameOrMatchingCategory(catA: string, catB: string): boolean {
 export default function CreatePostPage() {
   const router = useRouter();
 
+  const [mounted, setMounted] = useState(false);
+
   // Current User State
-  const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role?: string; avatar?: string } | null>({
-    name: "rushdhi",
-    email: "rushdhiriyaj2005@gmail.com",
-    role: "Writer",
-    avatar: "/author_bluesuit.jpg"
-  });
+  const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role?: string; avatar?: string } | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [isReviewMode, setIsReviewMode] = useState(false);
@@ -175,6 +177,8 @@ export default function CreatePostPage() {
   const [isFocusKwCustom, setIsFocusKwCustom] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+  const [rejectionReasonInput, setRejectionReasonInput] = useState("");
   const [isCatDropdownOpen, setIsCatDropdownOpen] = useState(false);
   const [hoveredCat, setHoveredCat] = useState<string | null>(null);
   const catDropdownRef = useRef<HTMLDivElement>(null);
@@ -205,7 +209,7 @@ export default function CreatePostPage() {
   const [originalAuthor, setOriginalAuthor] = useState<{ name?: string; email?: string; avatar?: string; bio?: string } | null>(null);
 
   const userRole = (auth.user?.role || currentUser?.role || "").toLowerCase();
-  const isAdmin = userRole === "admin" || userRole === "co-admin" || userRole === "editor" || (auth.user?.email || currentUser?.email || "").toLowerCase().includes("admin");
+  const isAdmin = mounted && (userRole === "admin" || userRole === "co-admin" || userRole === "editor" || (auth.user?.email || currentUser?.email || "").toLowerCase().includes("admin"));
 
   useEffect(() => {
     if (auth.loading) return;
@@ -246,25 +250,36 @@ export default function CreatePostPage() {
         }
 
         if (editId) {
+          let foundArticle: any = null;
           try {
             const submittedStr = localStorage.getItem("dj_writer_submitted_articles");
             if (submittedStr) {
               const list: any[] = JSON.parse(submittedStr);
               const found = list.find((p: any) => String(p.id) === String(editId) || (p.title && postToEdit?.title && p.title.trim().toLowerCase() === postToEdit.title.trim().toLowerCase()));
-              if (found) {
-                postToEdit = { ...found, ...(postToEdit || {}) };
-              }
+              if (found) foundArticle = found;
             }
           } catch (e) {}
 
-          if (!postToEdit || !postToEdit.category) {
+          if (!foundArticle) {
             try {
               const serverArticles = await fetchArticlesFromServer();
               const found = serverArticles.find((p: any) => String(p.id) === String(editId) || (p.title && postToEdit?.title && p.title.trim().toLowerCase() === postToEdit.title.trim().toLowerCase()));
-              if (found) {
-                postToEdit = { ...found, ...(postToEdit || {}) };
-              }
+              if (found) foundArticle = found;
             } catch (e) {}
+          }
+
+          if (foundArticle) {
+            postToEdit = {
+              ...foundArticle,
+              ...(postToEdit || {}),
+              subcategories: (foundArticle.subcategories && foundArticle.subcategories.length > 0)
+                ? foundArticle.subcategories
+                : (foundArticle.subCategories || postToEdit?.subcategories || postToEdit?.subCategories || []),
+              tags: (foundArticle.tags && foundArticle.tags.length > 0)
+                ? foundArticle.tags
+                : (postToEdit?.tags || []),
+              category: postToEdit?.category || foundArticle.category || foundArticle.category_name
+            };
           }
         }
 
@@ -300,20 +315,19 @@ export default function CreatePostPage() {
           }
 
           let loadedSubs: string[] = [];
-          if (Array.isArray(postToEdit.subcategories)) {
-            loadedSubs = postToEdit.subcategories;
-          } else if (Array.isArray(postToEdit.subCategories)) {
-            loadedSubs = postToEdit.subCategories;
-          } else if (typeof postToEdit.subcategories === "string") {
+          const rawSubs = postToEdit.subcategories || postToEdit.subCategories || postToEdit.subcategory;
+          if (Array.isArray(rawSubs)) {
+            loadedSubs = rawSubs.map((s: any) => String(s || "").trim()).filter(Boolean);
+          } else if (typeof rawSubs === "string" && rawSubs.trim()) {
             try {
-              const parsed = JSON.parse(postToEdit.subcategories);
-              if (Array.isArray(parsed)) loadedSubs = parsed;
-              else loadedSubs = postToEdit.subcategories.split(",").map((s: string) => s.trim()).filter(Boolean);
+              const parsed = JSON.parse(rawSubs);
+              if (Array.isArray(parsed)) loadedSubs = parsed.map((s: any) => String(s || "").trim()).filter(Boolean);
+              else loadedSubs = rawSubs.split(",").map((s: string) => s.trim()).filter(Boolean);
             } catch (e) {
-              loadedSubs = postToEdit.subcategories.split(",").map((s: string) => s.trim()).filter(Boolean);
+              loadedSubs = rawSubs.split(",").map((s: string) => s.trim()).filter(Boolean);
             }
           } else if (typeof postToEdit.subcategory_name === "string" && postToEdit.subcategory_name) {
-            loadedSubs = [postToEdit.subcategory_name];
+            loadedSubs = [postToEdit.subcategory_name.trim()];
           }
           setSelectedSubcategories(loadedSubs);
 
@@ -360,9 +374,12 @@ export default function CreatePostPage() {
     initPostData();
   }, [auth.loading, auth.authenticated, auth.user, router]);
 
-  const updateImgBoundingRect = () => {
-    if (selectedImg && editorRef.current) {
-      const imgRect = selectedImg.getBoundingClientRect();
+  const selectedImgRef = useRef<HTMLImageElement | null>(null);
+
+  const updateImgBoundingRect = (imgOverride?: HTMLImageElement | null) => {
+    const activeImg = imgOverride !== undefined ? imgOverride : (selectedImgRef.current || selectedImg);
+    if (activeImg && editorRef.current) {
+      const imgRect = activeImg.getBoundingClientRect();
       const parentRect = editorRef.current.parentElement?.getBoundingClientRect() || editorRef.current.getBoundingClientRect();
       setImgBoundingRect({
         top: imgRect.top - parentRect.top,
@@ -375,49 +392,109 @@ export default function CreatePostPage() {
     }
   };
 
-  // Event listener to track image selection in editor canvas
+  const selectImageElement = (img: HTMLImageElement) => {
+    img.ondragstart = (dragEv) => dragEv.preventDefault();
+    const parentFig = (img.closest("figure") as HTMLElement) || img;
+    parentFig.setAttribute("contenteditable", "false");
+    parentFig.ondragstart = (dragEv) => dragEv.preventDefault();
+
+    selectedImgRef.current = img;
+    setSelectedImg(img);
+    const currentWidth = img.offsetWidth || parseInt(img.style.width) || 450;
+    setSelectedImgWidth(currentWidth);
+
+    if (parentFig.style.float === "left" || img.style.float === "left") {
+      setSelectedImgAlign("left");
+    } else if (parentFig.style.float === "right" || img.style.float === "right") {
+      setSelectedImgAlign("right");
+    } else {
+      setSelectedImgAlign("center");
+    }
+    updateImgBoundingRect(img);
+  };
+
+  const deselectImageElement = () => {
+    selectedImgRef.current = null;
+    setSelectedImg(null);
+    setImgBoundingRect(null);
+  };
+
+  const handleEditorInteraction = (e: MouseEvent | React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (!target) return;
+
+    // Don't deselect if clicking inside the image resize control bar or handles
+    const resizeBar = document.getElementById("img-resize-toolbar");
+    const isHandle = target.getAttribute("data-resize-handle") === "true";
+    if ((resizeBar && resizeBar.contains(target)) || isHandle) return;
+
+    const img = target.tagName === "IMG"
+      ? (target as HTMLImageElement)
+      : (target.closest("figure")?.querySelector("img") as HTMLImageElement | null);
+
+    if (img) {
+      selectImageElement(img);
+    } else {
+      // If clicking inside the editor content area away from images, deselect
+      if (editorRef.current && (target === editorRef.current || editorRef.current.contains(target))) {
+        deselectImageElement();
+      }
+    }
+  };
+
+  // Event listeners to track image selection in editor canvas
   useEffect(() => {
-    const handleEditorClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target) return;
+    selectedImgRef.current = selectedImg;
+    updateImgBoundingRect(selectedImg);
+  }, [selectedImg, selectedImgWidth, selectedImgAlign]);
 
-      const img = target.tagName === "IMG"
-        ? (target as HTMLImageElement)
-        : (target.closest("figure")?.querySelector("img") as HTMLImageElement | null);
-
-      if (img) {
-        img.ondragstart = (dragEv) => dragEv.preventDefault();
-        const parentFig = (img.closest("figure") as HTMLElement) || img;
-        parentFig.setAttribute("contenteditable", "false");
-        parentFig.ondragstart = (dragEv) => dragEv.preventDefault();
-
-        setSelectedImg(img);
-        const currentWidth = img.offsetWidth || parseInt(img.style.width) || 450;
-        setSelectedImgWidth(currentWidth);
-
-        if (parentFig.style.float === "left" || img.style.float === "left") {
-          setSelectedImgAlign("left");
-        } else if (parentFig.style.float === "right" || img.style.float === "right") {
-          setSelectedImgAlign("right");
-        } else {
-          setSelectedImgAlign("center");
-        }
-        setTimeout(updateImgBoundingRect, 20);
-      } else {
-        // Don't deselect if clicking inside the image resize control bar or handles
-        const resizeBar = document.getElementById("img-resize-toolbar");
-        const isHandle = target.getAttribute("data-resize-handle") === "true";
-        if ((resizeBar && resizeBar.contains(target)) || isHandle) return;
-        setSelectedImg(null);
-        setImgBoundingRect(null);
+  useEffect(() => {
+    const onScrollOrResize = () => {
+      if (selectedImgRef.current) {
+        updateImgBoundingRect(selectedImgRef.current);
       }
     };
 
+    window.addEventListener("resize", onScrollOrResize);
+    window.addEventListener("scroll", onScrollOrResize, true);
+    return () => {
+      window.removeEventListener("resize", onScrollOrResize);
+      window.removeEventListener("scroll", onScrollOrResize, true);
+    };
+  }, []);
+
+  useEffect(() => {
     const ed = editorRef.current;
-    if (ed) {
-      ed.addEventListener("click", handleEditorClick);
-      return () => ed.removeEventListener("click", handleEditorClick);
-    }
+    if (!ed) return;
+
+    const handleClick = (e: MouseEvent) => handleEditorInteraction(e);
+    const handleMousedown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === "IMG" || target.closest("figure"))) {
+        handleEditorInteraction(e);
+      }
+    };
+    const handleDblClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target) return;
+      const img = target.tagName === "IMG"
+        ? (target as HTMLImageElement)
+        : (target.closest("figure")?.querySelector("img") as HTMLImageElement | null);
+      if (img) {
+        selectImageElement(img);
+        handleEditSelectedImage(img);
+      }
+    };
+
+    ed.addEventListener("click", handleClick);
+    ed.addEventListener("mousedown", handleMousedown);
+    ed.addEventListener("dblclick", handleDblClick);
+
+    return () => {
+      ed.removeEventListener("click", handleClick);
+      ed.removeEventListener("mousedown", handleMousedown);
+      ed.removeEventListener("dblclick", handleDblClick);
+    };
   }, []);
 
   // Dedicated Pointer Drag Logic for Repositioning Images Anywhere Without Duplication
@@ -487,15 +564,7 @@ export default function CreatePostPage() {
     window.addEventListener("mouseup", handleMouseUp);
   };
 
-  useEffect(() => {
-    updateImgBoundingRect();
-    window.addEventListener("resize", updateImgBoundingRect);
-    window.addEventListener("scroll", updateImgBoundingRect, true);
-    return () => {
-      window.removeEventListener("resize", updateImgBoundingRect);
-      window.removeEventListener("scroll", updateImgBoundingRect, true);
-    };
-  }, [selectedImg, selectedImgWidth, selectedImgAlign]);
+
 
   // Smooth Drag Handle Resize Logic (Corners & Side Edges)
   const handleStartResizeDrag = (e: React.MouseEvent, handlePos: string) => {
@@ -615,19 +684,43 @@ export default function CreatePostPage() {
     }
   };
 
-  const handleEditSelectedImage = () => {
-    if (selectedImg) {
-      setImageUrl(selectedImg.src || "");
-      const fig = selectedImg.closest("figure");
+  const handleEditSelectedImage = (targetImg?: HTMLImageElement | null) => {
+    const imgToEdit = targetImg || selectedImg || selectedImgRef.current;
+    if (imgToEdit) {
+      setImageUrl(imgToEdit.src || "");
+      const fig = imgToEdit.closest("figure");
       if (fig) {
-        const captionElem = fig.querySelector("figcaption span:first-child") || fig.querySelector("figcaption");
-        if (captionElem) {
-          setImageCaption(captionElem.textContent?.replace(/\(PHOTO:.*\)/gi, "").trim() || "");
+        const spans = fig.querySelectorAll("figcaption span");
+        if (spans.length >= 2) {
+          setImageCaption(spans[0].textContent?.trim() || "");
+          const cred = spans[1].textContent?.replace(/[()]/g, "").replace(/^PHOTO:\s*/i, "").trim() || "";
+          setImageCredit(cred);
+        } else if (spans.length === 1) {
+          const capText = spans[0].textContent?.trim() || "";
+          const match = capText.match(/\((?:photo:?\s*)?([^)]+)\)$/i);
+          if (match) {
+            setImageCredit(match[1].trim().toUpperCase());
+            setImageCaption(capText.replace(match[0], "").trim());
+          } else {
+            setImageCaption(capText);
+          }
         } else {
-          setImageCaption(selectedImg.alt || "");
+          setImageCaption(imgToEdit.alt || "");
+        }
+
+        if (fig.style.float === "left") setImageAlignment("Left (Wrap Text)");
+        else if (fig.style.float === "right") setImageAlignment("Right (Wrap Text)");
+        else setImageAlignment("Center (No Wrap)");
+
+        if (fig.style.maxWidth === "300px" || (imgToEdit.offsetWidth && imgToEdit.offsetWidth <= 320)) {
+          setImageSize("Small (Width: 300px)");
+        } else if (fig.style.maxWidth === "650px" || fig.style.maxWidth === "450px" || (imgToEdit.offsetWidth && imgToEdit.offsetWidth < 700)) {
+          setImageSize("Medium (Width: 450px)");
+        } else {
+          setImageSize("Full Width (100%)");
         }
       } else {
-        setImageCaption(selectedImg.alt || "");
+        setImageCaption(imgToEdit.alt || "");
       }
       setShowImageModal(true);
     }
@@ -677,10 +770,10 @@ export default function CreatePostPage() {
 
       const fig = selectedImg.closest("figure");
       if (fig) {
-        let alignStyle = "margin: 1.25rem auto; display: block;";
-        if (imageAlignment.includes("Left")) alignStyle = "float: left; margin: 0.5rem 1.5rem 0.75rem 0; display: inline-block;";
-        if (imageAlignment.includes("Right")) alignStyle = "float: right; margin: 0.5rem 0 0.75rem 1.5rem; display: inline-block;";
-        fig.style.cssText = `${alignStyle} max-width: ${maxWidthVal}; width: 100%; text-align: left;`;
+        let alignStyle = "margin: 1.25rem auto; display: block; max-width: 100%;";
+        if (imageAlignment.includes("Left")) alignStyle = "float: left; margin: 0.25rem 1rem 0.5rem 0; max-width: 45%; display: block;";
+        if (imageAlignment.includes("Right")) alignStyle = "float: right; margin: 0.25rem 0 0.5rem 1rem; max-width: 45%; display: block;";
+        fig.style.cssText = `${alignStyle} text-align: left;`;
 
         let figcaption = fig.querySelector("figcaption");
         if (rawCap || rawCred) {
@@ -688,7 +781,7 @@ export default function CreatePostPage() {
             figcaption.innerHTML = captionInnerHtml;
           } else {
             const newCap = document.createElement("figcaption");
-            newCap.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 1rem; font-size: 0.75rem; color: #64748B; margin-top: 0.5rem; width: 100%; font-family: sans-serif; box-sizing: border-box;";
+            newCap.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.75rem; color: #64748B; margin-top: 0.35rem; width: 100%; font-family: sans-serif; box-sizing: border-box;";
             newCap.innerHTML = captionInnerHtml;
             fig.appendChild(newCap);
           }
@@ -719,24 +812,19 @@ export default function CreatePostPage() {
     }
 
     // INSERT NEW IMAGE
-    let maxWidthVal = "100%";
-    if (imageSize.includes("Small")) maxWidthVal = "300px";
-    else if (imageSize.includes("Medium")) maxWidthVal = "650px";
-    else if (imageSize.includes("Full")) maxWidthVal = "100%";
-
-    let alignStyle = "margin: 1.25rem auto; display: block;";
-    if (imageAlignment.includes("Left")) alignStyle = "float: left; margin: 0.5rem 1.5rem 0.75rem 0; display: inline-block;";
-    if (imageAlignment.includes("Right")) alignStyle = "float: right; margin: 0.5rem 0 0.75rem 1.5rem; display: inline-block;";
+    let alignStyle = "margin: 1.25rem auto; display: block; max-width: 100%;";
+    if (imageAlignment.includes("Left")) alignStyle = "float: left; margin: 0.25rem 1rem 0.5rem 0; max-width: 45%; display: block;";
+    if (imageAlignment.includes("Right")) alignStyle = "float: right; margin: 0.25rem 0 0.5rem 1rem; max-width: 45%; display: block;";
 
     const captionHtml = (rawCap || rawCred)
-      ? `<figcaption style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; font-size: 0.75rem; color: #64748B; margin-top: 0.5rem; width: 100%; font-family: sans-serif; box-sizing: border-box;">
+      ? `<figcaption style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.75rem; color: #64748B; margin-top: 0.35rem; width: 100%; font-family: sans-serif; box-sizing: border-box;">
           ${captionInnerHtml}
         </figcaption>`
       : "";
 
-    const imgTag = `<figure contenteditable="false" style="${alignStyle} max-width: ${maxWidthVal}; width: 100%; text-align: left; user-select: none;"><img src="${imageUrl.trim()}" alt="${
+    const imgTag = `<figure contenteditable="false" style="${alignStyle} text-align: left; user-select: none;"><img src="${imageUrl.trim()}" alt="${
       rawCap || "Article Image"
-    }" draggable="false" style="width: 100%; border-radius: 0; object-fit: cover; display: block; user-select: none;" />${captionHtml}</figure><p style="clear: both;"><br/></p>`;
+    }" draggable="false" style="width: 100%; border-radius: 0; object-fit: cover; display: block; user-select: none;" />${captionHtml}</figure>`;
 
     if (editorRef.current) {
       editorRef.current.focus();
@@ -768,8 +856,15 @@ export default function CreatePostPage() {
         break;
       case "link":
         const url = prompt("Enter Link URL:", "https://");
-        if (url) {
-          document.execCommand("createLink", false, url);
+        if (url && url.trim() && url !== "https://") {
+          const cleanUrl = url.trim().startsWith("http://") || url.trim().startsWith("https://") || url.trim().startsWith("mailto:") ? url.trim() : `https://${url.trim()}`;
+          const sel = window.getSelection();
+          if (sel && !sel.isCollapsed && sel.toString().trim()) {
+            document.execCommand("createLink", false, cleanUrl);
+          } else {
+            const linkText = prompt("Enter Link Text:", cleanUrl) || cleanUrl;
+            document.execCommand("insertHTML", false, `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="text-[#BF1E2D] underline font-semibold hover:text-[#901320] transition-colors cursor-pointer">${linkText}</a>`);
+          }
           if (editorRef.current) {
             const anchors = editorRef.current.querySelectorAll("a");
             anchors.forEach((a) => {
@@ -788,10 +883,20 @@ export default function CreatePostPage() {
         document.execCommand("insertOrderedList", false, undefined);
         break;
       case "quote":
-        document.execCommand("formatBlock", false, "blockquote");
+        const currentBlock = document.queryCommandValue("formatBlock");
+        if (currentBlock === "blockquote") {
+          document.execCommand("formatBlock", false, "p");
+        } else {
+          document.execCommand("formatBlock", false, "blockquote");
+        }
         break;
       case "code":
-        document.execCommand("formatBlock", false, "pre");
+        const isPre = document.queryCommandValue("formatBlock") === "pre";
+        if (isPre) {
+          document.execCommand("formatBlock", false, "p");
+        } else {
+          document.execCommand("formatBlock", false, "pre");
+        }
         break;
       case "undo":
         document.execCommand("undo", false, undefined);
@@ -820,8 +925,26 @@ export default function CreatePostPage() {
     if (!editorRef.current) return;
     editorRef.current.focus();
 
-    // Find container paragraph or block under selection cursor, fallback to first paragraph
     const sel = window.getSelection();
+    // If text is highlighted / selected, apply font-size to the selected text range
+    if (sel && !sel.isCollapsed && sel.rangeCount > 0 && sel.toString().trim()) {
+      const span = document.createElement("span");
+      span.style.fontSize = `${newSize}px`;
+      const range = sel.getRangeAt(0);
+      try {
+        const contents = range.extractContents();
+        span.appendChild(contents);
+        range.insertNode(span);
+        sel.removeAllRanges();
+        const newRange = document.createRange();
+        newRange.selectNodeContents(span);
+        sel.addRange(newRange);
+        setContent(editorRef.current.innerHTML);
+        return;
+      } catch (e) {}
+    }
+
+    // Find container paragraph or block under selection cursor, fallback to first paragraph
     let targetP: HTMLElement | null = null;
 
     if (sel && sel.rangeCount > 0) {
@@ -956,6 +1079,12 @@ function isWorldOrWorldSub(cat: string): boolean {
   const displayedSubcategories = ALL_SUB_CATEGORIES.filter((sub) => {
     if (isSameOrMatchingCategory(sub, category)) return false;
     if (isWorldOrWorldSub(category) && sub.toLowerCase() === "world") return false;
+    return true;
+  });
+
+  // Filtered world subcategory options: excludes the currently selected country / region if chosen as main category
+  const displayedWorldSubcategories = WORLD_SUBCATEGORIES.filter((sub) => {
+    if (isSameOrMatchingCategory(sub, category)) return false;
     return true;
   });
 
@@ -1115,24 +1244,18 @@ function isWorldOrWorldSub(cat: string): boolean {
     let finalAuthorAvatar = "";
     let finalAuthorBio = "";
 
-    if (originalAuthor?.name && (isAdmin || !originalAuthor.name.toLowerCase().includes("admin"))) {
+    if (editingPostId && originalAuthor?.name && (isAdmin || !originalAuthor.name.toLowerCase().includes("admin"))) {
       finalAuthorName = originalAuthor.name;
-      finalAuthorEmail = originalAuthor.email || "rushdhiriyaj2005@gmail.com";
-      finalAuthorAvatar = originalAuthor.avatar || "/author_bluesuit.jpg";
-      finalAuthorBio = originalAuthor.bio || `${finalAuthorName} is a journalist for Digital Journal.`;
+      finalAuthorEmail = originalAuthor.email || auth.user?.email || currentUser?.email || "writer@digitaljournal.com";
+      finalAuthorAvatar = originalAuthor.avatar || resolveUserAvatar({ name: finalAuthorName, email: finalAuthorEmail, role: "Writer" });
+      finalAuthorBio = originalAuthor.bio || `${finalAuthorName} is a journalist for London BigBen.`;
     } else {
-      const savedProf = getUserProfile(activeEmail || currentUser?.email || auth.user?.email || "");
-      finalAuthorName = auth.user?.name || currentUser?.name || savedProf?.name || activeName || "Rushdhi MR";
-      finalAuthorEmail = auth.user?.email || currentUser?.email || activeEmail || "rushdhiriyaj2005@gmail.com";
-      finalAuthorAvatar = savedProf?.avatar || auth.user?.avatar || currentUser?.avatar || activeAvatar || "/author_bluesuit.jpg";
-      finalAuthorBio = savedProf?.bio || (auth.user as any)?.bio || (currentUser as any)?.bio || activeBio || `${finalAuthorName} is a journalist for Digital Journal.`;
-    }
-
-    if (finalAuthorName.toLowerCase() === "administrator" || finalAuthorName.toLowerCase() === "admin") {
-      const writerProf = getUserProfile("rushdhiriyaj2005@gmail.com");
-      finalAuthorName = writerProf?.name || "Rushdhi MR";
-      finalAuthorEmail = "rushdhiriyaj2005@gmail.com";
-      finalAuthorAvatar = writerProf?.avatar || "/author_bluesuit.jpg";
+      const activeUserEmail = auth.user?.email || currentUser?.email || activeEmail || "";
+      const savedProf = getUserProfile(activeUserEmail);
+      finalAuthorName = auth.user?.name || currentUser?.name || savedProf?.name || activeName || "Writer";
+      finalAuthorEmail = activeUserEmail || "writer@digitaljournal.com";
+      finalAuthorAvatar = resolveUserAvatar({ name: finalAuthorName, email: finalAuthorEmail, role: "Writer", avatar: savedProf?.avatar || auth.user?.avatar || currentUser?.avatar });
+      finalAuthorBio = savedProf?.bio || (auth.user as any)?.bio || (currentUser as any)?.bio || activeBio || `${finalAuthorName} is a journalist for London BigBen.`;
     }
 
     const autoSeo = generateAutoSEO({
@@ -1348,61 +1471,86 @@ function isWorldOrWorldSub(cat: string): boolean {
     }
   };
 
-  const handleRejectToTrash = async () => {
-    if (!confirm(`Are you sure you want to reject this article and move it to Trash?`)) return;
+  const handleRejectToTrash = () => {
+    setRejectionReasonInput("");
+    setIsRejectModalOpen(true);
+  };
+
+  const handleConfirmRejectSubmission = async () => {
     setIsSubmitting(true);
     try {
       const liveTitle = title.trim() || "Untitled Article";
-      const trashItem = {
-        id: editingPostId || Date.now(),
+      const rejectionReason = rejectionReasonInput.trim() || undefined;
+      const rejectedAt = new Date().toISOString();
+
+      const targetAuthorEmail = originalAuthor?.email || (currentUser?.role?.toLowerCase() === "admin" ? "rushdhiriyaj2005@gmail.com" : currentUser?.email || "writer@digitaljournal.com");
+      const targetAuthorName = originalAuthor?.name || (currentUser?.role?.toLowerCase() === "admin" ? "Rushdhi MR" : currentUser?.name || "Rushdhi MR");
+      const targetAuthorAvatar = originalAuthor?.avatar || currentUser?.avatar || "/author_bluesuit.jpg";
+
+      const rejectedArticle = {
+        id: editingPostId || `art_${Date.now()}`,
         title: liveTitle,
-        category_name: category,
-        description: subheading || "",
+        category,
+        subcategories: selectedSubcategories,
+        tags,
+        summary: subheading,
+        content: editorRef.current ? editorRef.current.innerHTML : content,
         imageUrl: imageUrl || "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=150&h=150&fit=crop",
-        published_at: "Today",
-        readTime: readDuration,
-        author_name: currentUser?.name || "Writer",
-        status: "Trash",
-        original_status: "Pending review"
+        status: "Rejected",
+        rejectionReason,
+        rejectedAt,
+        authorEmail: targetAuthorEmail,
+        authorName: targetAuthorName,
+        authorAvatar: targetAuthorAvatar
       };
 
-      // Update trashed cache
-      const trashedStr = localStorage.getItem("dj_trashed_articles");
-      const trashedList = trashedStr ? JSON.parse(trashedStr) : [];
-      localStorage.setItem("dj_trashed_articles", JSON.stringify([trashItem, ...trashedList]));
-
-      // Update submissions
+      // 1. Update/upsert submissions with status Rejected in localStorage
       const subsStr = localStorage.getItem("dj_writer_submitted_articles");
+      let subsList: any[] = [];
       if (subsStr) {
-        const parsed = JSON.parse(subsStr);
-        const updated = parsed.map((p: any) =>
-          (String(p.id) === String(editingPostId) || p.title.trim().toLowerCase() === liveTitle.toLowerCase())
-            ? { ...p, status: "Trash" }
-            : p
-        );
-        localStorage.setItem("dj_writer_submitted_articles", JSON.stringify(updated));
+        try {
+          subsList = JSON.parse(subsStr);
+        } catch (e) {}
       }
 
-      const { deleteArticleOnServer } = await import("@/lib/articlesSync");
-      await deleteArticleOnServer(editingPostId || "", liveTitle);
+      const existingIndex = subsList.findIndex((p: any) =>
+        String(p.id) === String(editingPostId) || (p.title && p.title.trim().toLowerCase() === liveTitle.toLowerCase())
+      );
 
+      if (existingIndex >= 0) {
+        subsList[existingIndex] = {
+          ...subsList[existingIndex],
+          ...rejectedArticle
+        };
+      } else {
+        subsList.unshift(rejectedArticle);
+      }
+      localStorage.setItem("dj_writer_submitted_articles", JSON.stringify(subsList));
+
+      // 2. Persist to backend server API
+      const { saveArticleToServer } = await import("@/lib/articlesSync");
+      await saveArticleToServer(rejectedArticle);
+
+      // 3. Dispatch live sync event across all browser windows/tabs
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("dj_articles_updated"));
       }
 
-      localStorage.setItem("dj_toast", `Article moved to Trash.`);
+      setIsRejectModalOpen(false);
+      localStorage.setItem("dj_toast", `✓ Article marked as Rejected.`);
       localStorage.removeItem("dj_editing_post");
 
       router.push("/admin");
     } catch (e) {
-      console.warn("Reject to trash error:", e);
+      console.warn("Reject submission error:", e);
+      setIsRejectModalOpen(false);
       router.push("/admin");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const isUserAdmin = (currentUser?.role || auth.user?.role || "").toLowerCase() === "admin" || (currentUser?.role || auth.user?.role || "").toLowerCase() === "co-admin";
+  const isUserAdmin = mounted && ((currentUser?.role || auth.user?.role || "").toLowerCase() === "admin" || (currentUser?.role || auth.user?.role || "").toLowerCase() === "co-admin");
 
   return (
     <div className="min-h-screen bg-slate-100/70 flex flex-col font-sans antialiased text-slate-900 selection:bg-orange-100 selection:text-orange-900">
@@ -1464,7 +1612,7 @@ function isWorldOrWorldSub(cat: string): boolean {
                 className="bg-[#D31220] hover:bg-[#B91C1C] active:scale-[0.98] text-white font-bold text-[11px] sm:text-xs px-3.5 sm:px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-sm shadow-red-900/30 transition-all cursor-pointer uppercase tracking-wider disabled:opacity-60 disabled:cursor-not-allowed font-mono"
               >
                 <X size={14} strokeWidth={2.5} />
-                <span>REJECT TO TRASH</span>
+                <span>REJECT</span>
               </button>
 
               <button
@@ -1558,6 +1706,7 @@ function isWorldOrWorldSub(cat: string): boolean {
             <div className="lg:col-span-8 flex items-center flex-wrap gap-2 sm:gap-2.5 text-slate-700 select-none pl-3 sm:pl-6">
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => applyTextFormat("undo")}
                 className="p-1.5 hover:bg-slate-200/80 rounded text-slate-700 transition-colors cursor-pointer"
                 title="Undo"
@@ -1566,6 +1715,7 @@ function isWorldOrWorldSub(cat: string): boolean {
               </button>
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => applyTextFormat("redo")}
                 className="p-1.5 hover:bg-slate-200/80 rounded text-slate-700 transition-colors cursor-pointer"
                 title="Redo"
@@ -1577,6 +1727,7 @@ function isWorldOrWorldSub(cat: string): boolean {
 
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => applyTextFormat("bold")}
                 className={`p-1.5 rounded transition-colors cursor-pointer ${
                   activeFormats.bold ? "bg-blue-100 text-blue-700 font-bold" : "hover:bg-slate-200/80 text-slate-700"
@@ -1587,6 +1738,7 @@ function isWorldOrWorldSub(cat: string): boolean {
               </button>
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => applyTextFormat("italic")}
                 className={`p-1.5 rounded transition-colors cursor-pointer ${
                   activeFormats.italic ? "bg-blue-100 text-blue-700 font-bold" : "hover:bg-slate-200/80 text-slate-700"
@@ -1597,6 +1749,7 @@ function isWorldOrWorldSub(cat: string): boolean {
               </button>
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => applyTextFormat("underline")}
                 className={`p-1.5 rounded transition-colors cursor-pointer ${
                   activeFormats.underline ? "bg-blue-100 text-blue-700 font-bold" : "hover:bg-slate-200/80 text-slate-700"
@@ -1610,6 +1763,7 @@ function isWorldOrWorldSub(cat: string): boolean {
 
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => applyTextFormat("link")}
                 className="p-1.5 hover:bg-slate-200/80 rounded text-slate-700 transition-colors cursor-pointer"
                 title="Insert Link ([text](url))"
@@ -1618,6 +1772,7 @@ function isWorldOrWorldSub(cat: string): boolean {
               </button>
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => applyTextFormat("bullet")}
                 className="p-1.5 hover:bg-slate-200/80 rounded text-slate-700 transition-colors cursor-pointer"
                 title="Bullet List (• item)"
@@ -1626,6 +1781,7 @@ function isWorldOrWorldSub(cat: string): boolean {
               </button>
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => applyTextFormat("number")}
                 className="p-1.5 hover:bg-slate-200/80 rounded text-slate-700 transition-colors cursor-pointer"
                 title="Numbered List (1. item)"
@@ -1637,6 +1793,7 @@ function isWorldOrWorldSub(cat: string): boolean {
 
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => applyTextFormat("quote")}
                 className="p-1.5 hover:bg-slate-200/80 rounded text-slate-700 transition-colors cursor-pointer"
                 title="Blockquote (> quote)"
@@ -1645,6 +1802,7 @@ function isWorldOrWorldSub(cat: string): boolean {
               </button>
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => applyTextFormat("code")}
                 className="p-1.5 hover:bg-slate-200/80 rounded text-slate-700 transition-colors cursor-pointer"
                 title="Code (`code`)"
@@ -1658,6 +1816,7 @@ function isWorldOrWorldSub(cat: string): boolean {
               <div className="flex items-center gap-1 bg-slate-50 p-0.5 rounded-lg border border-slate-200/90">
                 <button
                   type="button"
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={() => handleAdjustFirstLetterSize(4)}
                   disabled={firstLetterSize >= MAX_FIRST_LETTER_SIZE}
                   className="p-1 px-2.5 rounded text-xs font-bold hover:bg-white text-slate-800 transition-all cursor-pointer disabled:opacity-30 flex items-center justify-center gap-0.5 shadow-2xs border border-transparent hover:border-slate-200"
@@ -1669,6 +1828,7 @@ function isWorldOrWorldSub(cat: string): boolean {
 
                 <button
                   type="button"
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={() => handleAdjustFirstLetterSize(-4)}
                   disabled={firstLetterSize <= MIN_FIRST_LETTER_SIZE}
                   className="p-1 px-2.5 rounded text-xs font-bold hover:bg-white text-slate-800 transition-all cursor-pointer disabled:opacity-30 flex items-center justify-center gap-0.5 shadow-2xs border border-transparent hover:border-slate-200"
@@ -1685,14 +1845,25 @@ function isWorldOrWorldSub(cat: string): boolean {
 
               <span className="text-slate-300">|</span>
 
-              {/* INSERT IMAGE BUTTON */}
+              {/* INSERT / EDIT IMAGE BUTTON */}
               <button
                 type="button"
-                onClick={() => setShowImageModal(true)}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  if (selectedImg) {
+                    handleEditSelectedImage(selectedImg);
+                  } else {
+                    setImageUrl("");
+                    setImageCaption("");
+                    setImageCredit("");
+                    setImageFileName("No file chosen");
+                    setShowImageModal(true);
+                  }
+                }}
                 className="border border-orange-200 bg-orange-50/80 text-[#F97316] hover:bg-orange-100 font-bold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer uppercase tracking-wider transition-colors shadow-2xs"
               >
                 <ImageIcon size={14} />
-                INSERT IMAGE
+                {selectedImg ? "EDIT IMAGE" : "INSERT IMAGE"}
               </button>
             </div>
           </div>
@@ -1700,11 +1871,11 @@ function isWorldOrWorldSub(cat: string): boolean {
       </div>
 
       {/* MAIN CONTENT WORKSPACE GRID */}
-      <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 pt-[124px] pb-12 flex-1">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 pt-[124px] pb-4 flex-1 lg:h-[calc(100vh-124px)] lg:overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start lg:h-full">
           
           {/* LEFT COLUMN: MAIN RICH TEXT ARTICLE CANVAS */}
-          <div className="lg:col-span-8 bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-10 shadow-sm hover:shadow-md transition-all min-h-[750px] flex flex-col">
+          <div className="lg:col-span-8 bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-10 shadow-sm hover:shadow-md transition-all min-h-[750px] flex flex-col lg:h-full lg:overflow-y-auto overscroll-contain scrollbar-thin">
 
             {/* TITLE INPUT - MULTI-LINE AUTO-EXPANDING TEXTAREA */}
             <textarea
@@ -1727,9 +1898,15 @@ function isWorldOrWorldSub(cat: string): boolean {
             <textarea
               placeholder="Add Subheading / Deck..."
               value={subheading}
-              onChange={(e) => setSubheading(e.target.value)}
-              rows={1}
-              className="w-full font-serif text-lg sm:text-xl font-normal text-slate-600 placeholder:text-slate-300 focus:outline-none border-none py-2 mb-6 bg-transparent resize-none leading-relaxed overflow-hidden whitespace-normal break-words"
+              onChange={(e) => {
+                const newSub = e.target.value;
+                setSubheading(newSub);
+                if (!isCardSummaryCustom) {
+                  setCardSummary(newSub);
+                }
+              }}
+              rows={2}
+              className="w-full font-serif text-lg sm:text-xl font-normal text-slate-600 placeholder:text-slate-300 focus:outline-none border-none py-1 mb-6 bg-transparent resize-none leading-relaxed overflow-hidden whitespace-normal break-words"
               onInput={(e: any) => {
                 e.target.style.height = "auto";
                 e.target.style.height = e.target.scrollHeight + "px";
@@ -1742,6 +1919,23 @@ function isWorldOrWorldSub(cat: string): boolean {
                 ref={editorRef}
                 contentEditable
                 suppressContentEditableWarning
+                onClick={handleEditorInteraction}
+                onMouseDown={(e) => {
+                  const target = e.target as HTMLElement;
+                  if (target && (target.tagName === "IMG" || target.closest("figure"))) {
+                    handleEditorInteraction(e);
+                  }
+                }}
+                onDoubleClick={(e) => {
+                  const target = e.target as HTMLElement;
+                  const img = target?.tagName === "IMG"
+                    ? (target as HTMLImageElement)
+                    : (target?.closest("figure")?.querySelector("img") as HTMLImageElement | null);
+                  if (img) {
+                    selectImageElement(img);
+                    handleEditSelectedImage(img);
+                  }
+                }}
                 onInput={() => {
                   if (editorRef.current) {
                     setContent(editorRef.current.innerHTML);
@@ -1766,11 +1960,17 @@ function isWorldOrWorldSub(cat: string): boolean {
                   }, 10);
                 }}
                 data-placeholder="Start writing or type / for plugins"
-                className="w-full font-sans text-slate-800 text-sm sm:text-base leading-relaxed focus:outline-none border-none py-2 min-h-[400px] flex-1 outline-none relative empty:before:content-[attr(data-placeholder)] empty:before:text-slate-300 empty:before:pointer-events-none [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_u]:underline [&_blockquote]:border-l-4 [&_blockquote]:border-blue-500 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-slate-600 [&_blockquote]:my-3 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_pre]:bg-slate-900 [&_pre]:text-slate-100 [&_pre]:p-3 [&_pre]:rounded-xl [&_a]:text-blue-600 [&_a]:underline"
+                className="article-content-editor outline-none text-slate-800 leading-relaxed min-h-[420px] pb-24 text-[16px] select-text focus:outline-none focus:ring-0 [&_figure]:cursor-pointer [&_img]:cursor-pointer [&_blockquote]:border-l-4 [&_blockquote]:border-[#F97316] [&_blockquote]:pl-4 [&_blockquote]:py-2.5 [&_blockquote]:my-4 [&_blockquote]:italic [&_blockquote]:text-slate-700 [&_blockquote]:bg-slate-50/80 [&_blockquote]:rounded-r-xl [&_pre]:bg-slate-100/90 [&_pre]:p-3.5 [&_pre]:my-4 [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-slate-200/80 [&_pre]:overflow-x-auto [&_pre]:font-mono [&_pre]:text-sm [&_pre]:text-slate-800 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:my-3 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:my-3 [&_li]:my-1"
+                style={{
+                  minHeight: "420px",
+                  lineHeight: "1.85",
+                  fontSize: "1.05rem",
+                  fontFamily: "Georgia, Cambria, 'Times New Roman', Times, serif",
+                }}
               />
 
-              {/* FLOATING TOP NAVY PILL TOOLBAR */}
-              {imgBoundingRect && selectedImg && (
+              {/* FLOATING ACTION TOOLBAR OVER SELECTED IMAGE */}
+              {selectedImg && imgBoundingRect && (
                 <div
                   id="img-resize-toolbar"
                   style={{
@@ -1877,7 +2077,7 @@ function isWorldOrWorldSub(cat: string): boolean {
 
                   <button
                     type="button"
-                    onClick={handleEditSelectedImage}
+                    onClick={() => handleEditSelectedImage()}
                     className="p-1 px-2 hover:bg-slate-800 bg-amber-500/20 text-amber-300 hover:text-amber-200 border border-amber-500/30 rounded transition-colors cursor-pointer flex items-center gap-1 font-bold"
                     title="Edit / Replace Image & Caption"
                   >
@@ -1971,11 +2171,10 @@ function isWorldOrWorldSub(cat: string): boolean {
               )}
             </div>
 
-
           </div>
 
           {/* RIGHT COLUMN: ARTICLE SETTINGS SIDEBAR PANEL */}
-          <div className="lg:col-span-4 bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs sticky top-20">
+          <div className="lg:col-span-4 bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs lg:h-full lg:overflow-y-auto overscroll-contain scrollbar-thin">
             
             {/* Sidebar Title Header */}
             <div className="flex items-center gap-2 mb-5 text-slate-800">
@@ -2014,7 +2213,6 @@ function isWorldOrWorldSub(cat: string): boolean {
             {/* TAB CONTENT: DETAILS */}
             {sidebarTab === "DETAILS" && (
               <div className="space-y-5">
-                
                 {/* 1. SELECT CATEGORY (MAIN) WITH FLYOUT SUBCATEGORIES SIDEBAR */}
                 <div className="relative" ref={catDropdownRef}>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
@@ -2027,83 +2225,101 @@ function isWorldOrWorldSub(cat: string): boolean {
                     onClick={() => setIsCatDropdownOpen((prev) => !prev)}
                     className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 flex items-center justify-between focus:outline-none focus:border-orange-500 cursor-pointer shadow-2xs hover:border-slate-300 transition-colors"
                   >
-                    <span>{category}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-[#F97316]"></span>
+                      <span className="font-bold">{category}</span>
+                    </div>
                     <ChevronDown size={14} className={`text-slate-400 transition-transform duration-200 ${isCatDropdownOpen ? "rotate-180" : ""}`} />
                   </button>
 
-                  {/* Custom Dropdown Menu with Cascading Sidebar for World */}
+                  {/* Custom Dropdown Menu with Side-by-Side World Countries Sidebar */}
                   {isCatDropdownOpen && (
                     <div 
-                      onMouseLeave={() => setHoveredCat(null)}
-                      className="absolute top-full left-0 mt-1.5 w-full bg-white border border-slate-200 rounded-xl shadow-2xl z-50 py-1.5 animate-in fade-in slide-in-from-top-1 duration-150"
+                      onWheel={(e) => e.stopPropagation()}
+                      className={`absolute top-full left-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 py-1 animate-in fade-in slide-in-from-top-1 duration-150 overflow-hidden ${
+                        hoveredCat === "World" || category.toLowerCase() === "world" || WORLD_SUBCATEGORIES.some(w => w.toLowerCase() === category.toLowerCase())
+                          ? "w-full sm:min-w-[340px] grid grid-cols-2 divide-x divide-slate-100"
+                          : "w-full"
+                      }`}
                     >
-                      <div className="space-y-0.5">
+                      {/* Left Pane: Main Categories List */}
+                      <div 
+                        onWheel={(e) => e.stopPropagation()}
+                        className="space-y-0.5 max-h-72 overflow-y-auto overscroll-contain scrollbar-thin p-1"
+                      >
                         {ALL_MAIN_CATEGORIES.map((cat) => {
                           const isSelected = category.toLowerCase() === cat.toLowerCase();
                           const isWorld = cat.toLowerCase() === "world";
+                          const isWorldActive = isWorld && (hoveredCat === "World" || category.toLowerCase() === "world" || WORLD_SUBCATEGORIES.some(w => w.toLowerCase() === category.toLowerCase()));
 
                           return (
-                            <div
+                            <button
                               key={cat}
-                              className="relative"
+                              type="button"
                               onMouseEnter={() => setHoveredCat(cat)}
+                              onClick={() => {
+                                if (isWorld) {
+                                  setHoveredCat("World");
+                                } else {
+                                  handleCategoryChange(cat);
+                                  setHoveredCat(null);
+                                }
+                              }}
+                              className={`w-full text-left px-3 py-2 text-xs font-medium rounded-lg flex items-center justify-between transition-colors cursor-pointer ${
+                                isSelected || isWorldActive
+                                  ? "bg-orange-50 text-orange-700 font-bold"
+                                  : "text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                              }`}
                             >
-                              <button
-                                type="button"
-                                onClick={() => handleCategoryChange(cat)}
-                                className={`w-full text-left px-3.5 py-2 text-xs font-medium flex items-center justify-between transition-colors cursor-pointer ${
-                                  isSelected
-                                    ? "bg-orange-50 text-orange-700 font-bold"
-                                    : "text-slate-700 hover:bg-slate-50 hover:text-slate-900"
-                                }`}
-                              >
-                                <span>{cat}</span>
-                                {isWorld && (
-                                  <ChevronRight size={13} className="text-slate-400 group-hover:text-orange-600 transition-transform" />
-                                )}
-                              </button>
-
-                              {/* Flyout Subcategories Sidebar on Hover for World */}
-                              {isWorld && hoveredCat === "World" && (
-                                <div 
-                                  onMouseEnter={() => setHoveredCat("World")}
-                                  className="absolute right-full top-0 mr-1.5 w-48 bg-white border border-slate-200 rounded-xl shadow-2xl z-[100] p-2 text-left animate-in fade-in slide-in-from-right-1 duration-150 before:content-[''] before:absolute before:-right-3 before:top-0 before:bottom-0 before:w-4"
-                                >
-                                  <div className="px-2 py-1 mb-1 border-b border-slate-100 flex items-center justify-between">
-                                    <span className="text-[10px] font-extrabold uppercase text-orange-600 tracking-wider">
-                                      World Subcategories
-                                    </span>
-                                    <span className="text-[9px] text-slate-400 font-mono">7 Regions</span>
-                                  </div>
-                                  <div className="space-y-0.5">
-                                    {WORLD_SUBCATEGORIES.map((sub) => {
-                                      const isSubSelected = category.toLowerCase() === sub.toLowerCase();
-                                      return (
-                                        <button
-                                          key={sub}
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleCategoryChange(sub);
-                                          }}
-                                          className={`w-full text-left px-2.5 py-1.5 text-xs rounded-lg flex items-center justify-between transition-colors cursor-pointer ${
-                                            isSubSelected
-                                              ? "bg-orange-50 text-orange-700 font-bold"
-                                              : "text-slate-700 hover:bg-slate-100"
-                                          }`}
-                                        >
-                                          <span>{sub}</span>
-                                          {isSubSelected && <Check size={11} strokeWidth={3} className="text-orange-600" />}
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
+                              <span>{cat}</span>
+                              {isWorld && (
+                                <ChevronRight size={13} className={`text-orange-500 transition-transform ${isWorldActive ? "translate-x-0.5" : ""}`} />
                               )}
-                            </div>
+                            </button>
                           );
                         })}
                       </div>
+
+                      {/* Right Pane: World Countries / Regions Sidebar (Brought up on hover over World) */}
+                      {(hoveredCat === "World" || category.toLowerCase() === "world" || WORLD_SUBCATEGORIES.some(w => w.toLowerCase() === category.toLowerCase())) && (
+                        <div 
+                          onMouseEnter={() => setHoveredCat("World")}
+                          className="p-1.5 bg-slate-50/60 flex flex-col max-h-72 overflow-y-auto overscroll-contain scrollbar-thin animate-in fade-in duration-150"
+                        >
+                          <div className="px-2 py-1 mb-1 border-b border-slate-200/80 flex items-center justify-between">
+                            <span className="text-[10px] font-extrabold uppercase text-orange-600 tracking-wider">
+                              World Regions
+                            </span>
+                            <span className="text-[9px] text-slate-400 font-mono">7 Regions</span>
+                          </div>
+                          
+                          <div className="space-y-0.5 flex-1">
+                            {WORLD_SUBCATEGORIES.map((sub) => {
+                              const isSubSelected = category.toLowerCase() === sub.toLowerCase();
+                              return (
+                                <button
+                                  key={sub}
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCategoryChange(sub);
+                                    setIsCatDropdownOpen(false);
+                                    setHoveredCat(null);
+                                  }}
+                                  className={`w-full text-left px-2.5 py-1.5 text-xs rounded-lg flex items-center justify-between transition-colors cursor-pointer ${
+                                    isSubSelected
+                                      ? "bg-orange-100/90 text-orange-800 font-bold"
+                                      : "text-slate-700 hover:bg-white hover:text-orange-700 shadow-2xs hover:shadow-xs"
+                                  }`}
+                                >
+                                  <span>{sub}</span>
+                                  {isSubSelected && <Check size={12} strokeWidth={3} className="text-orange-600" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -2116,90 +2332,138 @@ function isWorldOrWorldSub(cat: string): boolean {
                     </label>
                   </div>
                   
-                  <div className="border border-slate-200/90 rounded-xl p-3 bg-slate-50/50 max-h-48 overflow-y-auto mb-2 scrollbar-thin">
+                  <div 
+                    onWheel={(e) => e.stopPropagation()}
+                    className="border border-slate-200/90 rounded-xl p-3 bg-slate-50/50 max-h-56 overflow-y-auto overscroll-contain mb-2 scrollbar-thin space-y-3"
+                  >
+                    {/* Main Categories */}
                     <div className="grid grid-cols-2 gap-2">
                       {displayedSubcategories.map((sub) => {
                         const isChecked = selectedSubcategories.some((item) => isSameOrMatchingCategory(item, sub));
+                        const isDisabled = !isChecked && selectedSubcategories.length >= 5;
                         return (
                           <label
                             key={sub}
-                            onClick={() => handleSubcategoryToggle(sub)}
-                            className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer select-none py-1 px-1.5 rounded hover:bg-slate-100/80 transition-colors"
+                            onClick={() => !isDisabled && handleSubcategoryToggle(sub)}
+                            className={`flex items-center gap-2 text-xs py-1 px-1.5 rounded transition-colors select-none ${
+                              isDisabled
+                                ? "opacity-40 cursor-not-allowed text-slate-400"
+                                : "text-slate-700 cursor-pointer hover:bg-slate-100/80"
+                            }`}
                           >
-                            <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
-                              isChecked ? "bg-[#F97316] border-[#F97316] text-white" : "border-slate-300 bg-white"
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${
+                              isChecked
+                                ? "bg-[#F97316] border-[#F97316] text-white"
+                                : isDisabled
+                                  ? "border-slate-200 bg-slate-100/80"
+                                  : "border-slate-300 bg-white"
                             }`}>
-                              {isChecked && <Check size={12} strokeWidth={3} />}
+                              {isChecked && <Check size={12} strokeWidth={3} className="text-white" />}
                             </div>
                             <span className="truncate">{sub}</span>
                           </label>
                         );
                       })}
                     </div>
+
+                    {/* Regional Countries Section */}
+                    {displayedWorldSubcategories.length > 0 && (
+                      <div className="border-t border-slate-200/60 pt-2.5">
+                        <span className="block text-[9px] font-extrabold uppercase text-slate-400 tracking-wider mb-2">
+                          World
+                        </span>
+                        <div className="grid grid-cols-2 gap-2">
+                          {displayedWorldSubcategories.map((sub) => {
+                            const isChecked = selectedSubcategories.some((item) => isSameOrMatchingCategory(item, sub));
+                            const isDisabled = !isChecked && selectedSubcategories.length >= 5;
+                            return (
+                              <label
+                                key={sub}
+                                onClick={() => !isDisabled && handleSubcategoryToggle(sub)}
+                                className={`flex items-center gap-2 text-xs py-1 px-1.5 rounded transition-colors select-none ${
+                                  isDisabled
+                                    ? "opacity-40 cursor-not-allowed text-slate-400"
+                                    : "text-slate-700 cursor-pointer hover:bg-slate-100/80"
+                                }`}
+                              >
+                                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${
+                                  isChecked
+                                    ? "bg-[#F97316] border-[#F97316] text-white"
+                                    : isDisabled
+                                      ? "border-slate-200 bg-slate-100/80"
+                                      : "border-slate-300 bg-white"
+                                }`}>
+                                  {isChecked && <Check size={12} strokeWidth={3} className="text-white" />}
+                                </div>
+                                <span className="truncate">{sub}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  <p className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">
+                  <span className="text-[10px] text-slate-400 font-semibold block mb-3">
                     SELECTED: {selectedSubcategories.length} / 5
-                  </p>
+                  </span>
                 </div>
 
-                {/* 3. TAGS */}
+                {/* 3. TAGS INPUT */}
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
                     TAGS
                   </label>
+                  
+                  <div className="border-2 border-orange-500/80 rounded-xl p-3 bg-white focus-within:ring-2 focus-within:ring-orange-500/20 transition-all shadow-xs">
+                    {/* Render Active Tag Pills */}
+                    {tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        {tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="bg-orange-50 text-orange-700 border border-orange-200 text-xs font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1 group"
+                          >
+                            <span>#{tag}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveTag(tag)}
+                              className="hover:text-red-600 cursor-pointer transition-colors"
+                            >
+                              <X size={12} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
 
-                  {/* TAGS INPUT BOX MATCHING REFERENCE IMAGE */}
-                  <div
-                    onClick={() => {
-                      const inputElem = document.getElementById("writer-tag-input");
-                      if (inputElem) inputElem.focus();
-                    }}
-                    className="w-full bg-white border-2 border-[#F97316] rounded-2xl p-3 flex flex-wrap items-center gap-2 min-h-[56px] cursor-text focus-within:ring-2 focus-within:ring-orange-100 transition-all shadow-xs"
-                  >
-                    {/* DARK NAVY TAG PILLS WITH WHITE TEXT & # PREFIX */}
-                    {tags.map((t) => (
-                      <span
-                        key={t}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRemoveTag(t);
-                        }}
-                        className="bg-[#1E293B] hover:bg-[#0F172A] text-white font-bold text-xs px-3 py-1.5 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs group"
-                        title="Click to remove"
-                      >
-                        #{t}
-                        <X size={11} className="text-slate-400 group-hover:text-red-400 transition-colors" />
-                      </span>
-                    ))}
-
-                    {/* INLINE TEXT INPUT */}
+                    {/* Tag Text Input */}
                     <input
-                      id="writer-tag-input"
                       type="text"
-                      placeholder={tags.length > 0 ? "Add more tags..." : "e.g. BreakingNews, Football, WorldCup2026"}
+                      placeholder={tags.length === 0 ? "e.g. BreakingNews, Football, WorldCup2026" : "Add another tag..."}
                       value={tagInput}
                       onChange={(e) => setTagInput(e.target.value)}
                       onKeyDown={handleAddTag}
-                      className="flex-1 min-w-[120px] bg-transparent text-xs sm:text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none py-1 border-none"
+                      className="w-full text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none bg-transparent"
                     />
                   </div>
-
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-1.5">
+                  
+                  <span className="text-[9px] text-slate-400 font-medium block mt-1.5">
                     PRESS ENTER, COMMA OR SPACE TO ADD • CLICK TAG TO REMOVE • {tags.length} TAGS
-                  </p>
+                  </span>
                 </div>
 
-                {/* 4. READ DURATION */}
+                {/* 4. READ DURATION ESTIMATION */}
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
                     READ DURATION
                   </label>
                   <input
                     type="text"
                     value={readDuration}
                     onChange={(e) => setReadDuration(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-orange-500"
+                    placeholder="e.g. 5 min read"
+                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all shadow-2xs"
                   />
                 </div>
 
@@ -2509,13 +2773,6 @@ function isWorldOrWorldSub(cat: string): boolean {
               </button>
 
               <div className="flex items-center gap-2.5">
-                {/* Font Size Selector */}
-                <div className="flex items-center gap-1.5 bg-slate-100/90 border border-slate-200/80 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-700 select-none">
-                  <span className="text-[10px] text-slate-500">A</span>
-                  <span className="text-xs text-slate-900 font-extrabold">A</span>
-                  <span className="text-sm text-slate-500">A</span>
-                </div>
-
                 {/* Bookmark Button */}
                 <button className="w-8 h-8 rounded-full border border-slate-200/90 flex items-center justify-center text-slate-500 hover:bg-slate-50 cursor-pointer transition-colors">
                   <Bookmark size={14} />
@@ -2535,7 +2792,7 @@ function isWorldOrWorldSub(cat: string): boolean {
               <div className="lg:col-span-8">
                 
                 {/* CATEGORY TAG */}
-                <span className="text-xs text-[#0F172A] tracking-widest font-black uppercase mb-3 block">
+                <span className="text-xs text-[#BF1E2D] tracking-widest font-black uppercase mb-3 block">
                   {category || "BUSINESS"}
                 </span>
 
@@ -2554,15 +2811,22 @@ function isWorldOrWorldSub(cat: string): boolean {
                 {/* AUTHOR META ROW */}
                 {(() => {
                   const activeProf = getUserProfile(currentUser?.email || "");
-                  const previewAuthorName = activeProf?.name || currentUser?.name || "Rushdhi MR";
-                  const previewAuthorAvatar = activeProf?.avatar || currentUser?.avatar || "/author_bluesuit.jpg";
+                  const previewAuthorName = activeProf?.name || currentUser?.name || "Author";
+                  const resolvedAvatar =
+                    (activeProf?.avatar && !activeProf.avatar.includes("cart") && !activeProf.avatar.includes("author_bluesuit") ? activeProf.avatar : null) ||
+                    (currentUser?.avatar && !currentUser.avatar.includes("cart") && !currentUser.avatar.includes("author_bluesuit") ? currentUser.avatar : null) ||
+                    getAuthorAvatarByNameOrEmail(previewAuthorName, currentUser?.email) ||
+                    resolveUserAvatar({ name: previewAuthorName, email: currentUser?.email, avatar: currentUser?.avatar });
+
                   return (
-                    <div className="flex items-center gap-3.5 border-b border-slate-100 pb-6 mb-8 mt-6 sm:mt-8">
-                      <img
-                        src={previewAuthorAvatar}
-                        alt={previewAuthorName}
-                        className="w-10 h-10 rounded-full border border-slate-200 object-cover shrink-0"
-                      />
+                    <div className="flex items-center gap-3.5 border-b border-slate-100 pb-3.5 mb-4 mt-4 sm:mt-5">
+                      <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-200 shrink-0 flex items-center justify-center bg-slate-100 aspect-square">
+                        <img
+                          src={resolvedAvatar}
+                          alt={previewAuthorName}
+                          className="w-full h-full object-cover rounded-full aspect-square"
+                        />
+                      </div>
                       <div>
                         <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
                           <span>By {previewAuthorName}</span>
@@ -2588,17 +2852,17 @@ function isWorldOrWorldSub(cat: string): boolean {
 
                 {/* FEATURED COVER IMAGE IN PREVIEW */}
                 {imageUrl && !content.includes(imageUrl) && !content.includes("<img") && (
-                  <div className="w-full aspect-[16/9] sm:aspect-[21/9] max-h-[420px] rounded-2xl overflow-hidden mb-8 bg-slate-900 border border-slate-200 shadow-sm">
+                  <div className="w-full max-h-[520px] rounded-2xl overflow-hidden mb-5 border border-slate-200 shadow-sm flex items-center justify-center bg-transparent">
                     <img
                       src={imageUrl}
                       alt={title || "Article Image"}
-                      className="w-full h-full object-cover"
+                      className="w-full h-auto max-h-[520px] object-cover mx-auto block"
                     />
                   </div>
                 )}
 
                 {/* ARTICLE BODY & INLINE IMAGES CANVAS WITH MID-ARTICLE NEWSLETTER WIDGET */}
-                <div className="prose prose-slate max-w-none text-slate-800 leading-relaxed font-serif text-base sm:text-lg space-y-4 flow-root [&_a]:text-[#F97316] [&_a]:font-semibold [&_a]:underline hover:[&_a]:text-[#EA580C] [&_figure]:my-6 [&_figure]:max-w-full [&_figcaption]:text-center [&_figcaption]:text-xs [&_figcaption]:text-slate-500 [&_figcaption]:italic [&_img]:rounded-xl [&_b]:font-bold [&_strong]:font-bold [&_blockquote]:border-l-4 [&_blockquote]:border-blue-500 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-slate-600 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6">
+                <div className="prose prose-slate max-w-none text-slate-800 leading-relaxed font-serif text-base sm:text-lg space-y-4 flow-root [&_a]:text-[#F97316] [&_a]:font-semibold [&_a]:underline hover:[&_a]:text-[#EA580C] [&_b]:font-bold [&_strong]:font-bold [&_blockquote]:border-l-4 [&_blockquote]:border-blue-500 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-slate-600 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6">
                   {(() => {
                     const newsletterWidget = (
                       <div className="clear-both w-full my-8 bg-amber-50/40 border-t-2 border-b-2 border-[#B45309]/30 p-6 md:p-8 text-left not-prose font-sans" style={{ clear: 'both' }}>
@@ -2735,6 +2999,70 @@ function isWorldOrWorldSub(cat: string): boolean {
 
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* REJECT ARTICLE REASON MODAL */}
+      {isRejectModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative font-sans text-left border border-slate-200">
+            {/* Close Button */}
+            <button
+              onClick={() => setIsRejectModalOpen(false)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-slate-700 cursor-pointer p-1 rounded-lg hover:bg-slate-100 transition-colors"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                <AlertCircle size={22} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  Reject Article Submission
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Article will be sent to the writer&apos;s rejected queue
+                </p>
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                Reason for Rejection (Optional)
+              </label>
+              <textarea
+                placeholder="Give a reason or editorial feedback (optional)..."
+                value={rejectionReasonInput}
+                onChange={(e) => setRejectionReasonInput(e.target.value)}
+                rows={3}
+                className="w-full text-xs text-slate-800 p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-red-500 focus:bg-white resize-none transition-colors"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">
+                If left blank, the article will be rejected without additional feedback.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsRejectModalOpen(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRejectSubmission}
+                disabled={isSubmitting}
+                className="px-4 py-2 text-xs font-bold text-white bg-[#D31220] hover:bg-[#B91C1C] active:scale-[0.98] rounded-xl transition-all cursor-pointer shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <X size={14} strokeWidth={2.5} />
+                <span>{isSubmitting ? "Rejecting..." : "Reject Article"}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

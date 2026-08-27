@@ -6,7 +6,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useLiveArticles } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
-import { getUserProfile, getAuthorAvatarByNameOrEmail } from "@/lib/userProfiles";
+import { getUserProfile, getAuthorAvatarByNameOrEmail, getAuthorFullProfileByNameOrEmail, resolveUserAvatar } from "@/lib/userProfiles";
 
 interface ArticleItem {
   category: string;
@@ -48,34 +48,57 @@ export default function AuthorProfileContent({
   const [articlesList, setArticlesList] = useState<ArticleItem[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [profileVersion, setProfileVersion] = useState(0);
   const { articles: liveArticles } = useLiveArticles();
   const auth = useAuth();
+
+  useEffect(() => {
+    const handleProfileUpdate = () => {
+      setProfileVersion((v) => v + 1);
+    };
+    window.addEventListener("dj_profile_updated", handleProfileUpdate);
+    window.addEventListener("dj_auth_change", handleProfileUpdate);
+    window.addEventListener("dj_articles_updated", handleProfileUpdate);
+    return () => {
+      window.removeEventListener("dj_profile_updated", handleProfileUpdate);
+      window.removeEventListener("dj_auth_change", handleProfileUpdate);
+      window.removeEventListener("dj_articles_updated", handleProfileUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     try {
       const slugClean = slug.toLowerCase().replace(/-/g, " ").trim();
 
       // 1. Establish baseline from author prop passed by server/route (or database lookup)
-      let finalName = author.name;
+      let finalName = author.name || "Author";
       let finalAvatar = author.avatar;
-      let finalRole = author.role || "STAFF WRITER";
+      let finalRole = author.role || "JOURNALIST";
       let finalBio = author.bio;
 
-      // 2. Handle Rushdhi MR author page explicitly
+      // 2. Look up live profile data from user profiles database (by slug or email)
       const isRushdhiPage = slugClean.includes("rushdhi") || slug === "rushdhi" || slug === "rushdhi-mr";
+      const savedProfile = isRushdhiPage
+        ? (getUserProfile("rushdhiwriter@gmail.com") || getUserProfile("writer@digitaljournal.com") || getAuthorFullProfileByNameOrEmail("rushdhi"))
+        : (getUserProfile(slugClean) || getAuthorFullProfileByNameOrEmail(slugClean));
 
-      if (isRushdhiPage) {
-        finalName = "Rushdhi MR";
-        finalRole = "STAFF WRITER";
-        finalBio = "Rushdhi MR is a journalist for London BigBen covering business strategy, software architecture, emerging technology, and digital transformation.";
-
-        // Resolve real account avatar image for Rushdhi MR
-        const accountAvatar = getAuthorAvatarByNameOrEmail("Rushdhi MR", "writer@digitaljournal.com");
-        if (accountAvatar) {
-          finalAvatar = accountAvatar;
-        } else if (auth.user && auth.user.avatar && !auth.user.avatar.includes("cart")) {
-          finalAvatar = auth.user.avatar;
+      if (savedProfile) {
+        if (savedProfile.name && !savedProfile.name.toLowerCase().includes("reader")) finalName = savedProfile.name;
+        if (savedProfile.role && !savedProfile.role.toLowerCase().includes("reader")) finalRole = savedProfile.role;
+        if (savedProfile.bio && !savedProfile.bio.toLowerCase().includes("avid reader")) finalBio = savedProfile.bio;
+        if (savedProfile.avatar && savedProfile.avatar.length > 5 && !savedProfile.avatar.includes("cart") && !savedProfile.avatar.includes("admin_profile")) {
+          finalAvatar = savedProfile.avatar;
         }
+      }
+
+      // Check author avatar resolution from auth session or writer stores
+      const resolvedAvatar =
+        (savedProfile?.avatar && !savedProfile.avatar.includes("cart") && !savedProfile.avatar.includes("admin_profile") ? savedProfile.avatar : null) ||
+        (auth.user && auth.user.avatar && !auth.user.avatar.includes("cart") && (auth.user.name === finalName || isRushdhiPage) ? auth.user.avatar : null) ||
+        getAuthorAvatarByNameOrEmail(finalName, isRushdhiPage ? "rushdhiwriter@gmail.com" : undefined);
+
+      if (resolvedAvatar && resolvedAvatar.length > 5 && !resolvedAvatar.includes("cart") && !resolvedAvatar.includes("admin_profile")) {
+        finalAvatar = resolvedAvatar;
       }
 
       setAuthorProfile({
@@ -94,16 +117,17 @@ export default function AuthorProfileContent({
             const st = (post.status || "Published").toLowerCase();
             if (st !== "published" && st !== "approved") return false;
 
-            const pName = (post.authorName || "").toLowerCase().trim();
+            const pName = (post.authorName || (post as any).author_name || (post as any).author || "").toLowerCase().trim();
+            const pEmail = (post.authorEmail || (post as any).author_email || "").toLowerCase().trim();
             const targetName = finalName.toLowerCase().trim();
 
             if (isRushdhiPage) {
-              return pName.includes("rushdhi") || pName.includes("admin") || (post.authorEmail && post.authorEmail.includes("rushdhi"));
+              return pName === "rushdhi" || pName === "rushdhi mr" || pName === "rushdhi mr." || (pEmail.length > 0 && pEmail.includes("rushdhi"));
             } else {
-              return pName === targetName || (pName.length > 3 && (pName.includes(slugClean) || slugClean.includes(pName)));
+              return pName === targetName || (pName.length > 3 && pName === slugClean);
             }
           });
-        } catch (e) {}
+        } catch (e) { }
       }
 
       let mappedArticles: ArticleItem[] = [];
@@ -117,14 +141,13 @@ export default function AuthorProfileContent({
             .trim()
             .replace(/\s+/g, "-");
 
-          const itemWriterName = post.authorName && !post.authorName.toLowerCase().includes("admin")
-            ? post.authorName
-            : finalName;
+          const itemWriterName = finalName;
 
-          const resolvedAvatar = getAuthorAvatarByNameOrEmail(itemWriterName, post.authorEmail || "writer@digitaljournal.com");
-          const itemWriterAvatar = resolvedAvatar || (post.authorAvatar && !post.authorAvatar.includes("cart") && post.authorAvatar !== "/author_bluesuit.jpg"
-            ? post.authorAvatar
-            : finalAvatar);
+          const itemWriterAvatar = resolveUserAvatar({
+            name: finalName,
+            email: post.authorEmail,
+            avatar: (finalAvatar && !finalAvatar.includes("author_bluesuit") ? finalAvatar : undefined) || (post.authorAvatar && !post.authorAvatar.includes("author_bluesuit") ? post.authorAvatar : undefined)
+          });
 
           return {
             category: (post.category || "BUSINESS").toUpperCase(),
@@ -140,11 +163,14 @@ export default function AuthorProfileContent({
       } else {
         // Fallback initial articles with Target Author Name and Target Author Image
         mappedArticles = initialArticles.map((art) => {
-          const resolvedAvatar = getAuthorAvatarByNameOrEmail(finalName, "writer@digitaljournal.com");
+          const itemAvatar = resolveUserAvatar({
+            name: finalName,
+            avatar: finalAvatar && !finalAvatar.includes("author_bluesuit") ? finalAvatar : undefined
+          });
           return {
             ...art,
             authorName: finalName,
-            authorAvatar: resolvedAvatar || finalAvatar,
+            authorAvatar: itemAvatar,
           };
         });
       }
@@ -163,7 +189,7 @@ export default function AuthorProfileContent({
         const detail = e.detail || (e.key === "dj_user_profile" && e.newValue ? JSON.parse(e.newValue) : null);
         if (detail && detail.avatar && detail.avatar.length > 5 && !detail.avatar.includes("cart")) {
           const slugClean = slug.toLowerCase().replace(/-/g, " ").trim();
-          const matchesRushdhi = (slugClean.includes("rushdhi") || slug.includes("rushdhi")) && 
+          const matchesRushdhi = (slugClean.includes("rushdhi") || slug.includes("rushdhi")) &&
             ((detail.email && detail.email.toLowerCase().includes("rushdhi")) || (detail.name && detail.name.toLowerCase().includes("rushdhi")));
           const matchesName = detail.name && detail.name.toLowerCase().trim() === authorProfile.name.toLowerCase().trim();
 
@@ -176,7 +202,7 @@ export default function AuthorProfileContent({
             }));
           }
         }
-      } catch (err) {}
+      } catch (err) { }
     };
 
     if (typeof window !== "undefined") {
@@ -210,7 +236,7 @@ export default function AuthorProfileContent({
       <Header />
 
       <div className="max-w-[1400px] mx-auto px-4 md:px-8 py-10">
-        
+
         {/* Author / Writer Bio Header Card */}
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 pb-8 mb-8 border-b border-zinc-200 py-2">
           {/* Writer Profile Image */}
@@ -241,7 +267,7 @@ export default function AuthorProfileContent({
 
         {/* 8 Cols / 4 Cols Content Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
-          
+
           {/* Left Column: Author Articles List */}
           <div className="lg:col-span-8 space-y-8">
             {paginatedArticles.length > 0 ? (
@@ -271,13 +297,10 @@ export default function AuthorProfileContent({
                     {/* Writer Name & Writer Image Byline */}
                     {(() => {
                       const cardAuthorName = article.authorName || authorProfile.name;
-                      let displayItemAvatar = (article.authorAvatar && article.authorAvatar.length > 5 && !article.authorAvatar.includes("cart") && !article.authorAvatar.startsWith("data:") && article.authorAvatar !== "/author_bluesuit.jpg")
-                        ? article.authorAvatar
-                        : (authorProfile.avatar && authorProfile.avatar !== "/author_bluesuit.jpg" ? authorProfile.avatar : null);
-
-                      if (!displayItemAvatar || displayItemAvatar === "/author_bluesuit.jpg") {
-                        displayItemAvatar = getAuthorAvatarByNameOrEmail(cardAuthorName, "writer@digitaljournal.com") || authorProfile.avatar || "/author_bluesuit.jpg";
-                      }
+                      const displayItemAvatar = resolveUserAvatar({
+                        name: cardAuthorName,
+                        avatar: article.authorAvatar && !article.authorAvatar.includes("author_bluesuit") ? article.authorAvatar : (authorProfile.avatar && !authorProfile.avatar.includes("author_bluesuit") ? authorProfile.avatar : undefined)
+                      });
 
                       return (
                         <div className="flex items-center gap-2.5 mt-auto pt-1">
@@ -322,11 +345,10 @@ export default function AuthorProfileContent({
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className={`px-4 py-2 border font-bold rounded transition-colors ${
-                    currentPage === 1
+                  className={`px-4 py-2 border font-bold rounded transition-colors ${currentPage === 1
                       ? "border-zinc-200 text-zinc-400 cursor-not-allowed bg-zinc-50"
                       : "border-zinc-300 text-slate-800 hover:border-[#BF1E2D] hover:text-[#BF1E2D] cursor-pointer bg-white"
-                  }`}
+                    }`}
                 >
                   PREV
                 </button>
@@ -335,11 +357,10 @@ export default function AuthorProfileContent({
                   <button
                     key={`page-${pageNum}`}
                     onClick={() => handlePageChange(pageNum)}
-                    className={`w-9 h-9 font-bold flex items-center justify-center rounded border transition-colors cursor-pointer ${
-                      currentPage === pageNum
+                    className={`w-9 h-9 font-bold flex items-center justify-center rounded border transition-colors cursor-pointer ${currentPage === pageNum
                         ? "border-[#BF1E2D] bg-[#BF1E2D] text-white shadow-sm"
                         : "border-zinc-200 bg-white text-slate-700 hover:border-[#BF1E2D] hover:text-[#BF1E2D]"
-                    }`}
+                      }`}
                   >
                     {pageNum}
                   </button>
@@ -348,11 +369,10 @@ export default function AuthorProfileContent({
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className={`px-4 py-2 border font-bold rounded transition-colors ${
-                    currentPage === totalPages
+                  className={`px-4 py-2 border font-bold rounded transition-colors ${currentPage === totalPages
                       ? "border-zinc-200 text-zinc-400 cursor-not-allowed bg-zinc-50"
                       : "border-zinc-300 text-slate-800 hover:border-[#BF1E2D] hover:text-[#BF1E2D] cursor-pointer bg-white"
-                  }`}
+                    }`}
                 >
                   NEXT
                 </button>
@@ -362,7 +382,7 @@ export default function AuthorProfileContent({
 
           {/* Right Column: Sidebar (MOST READ + Ad Banner) */}
           <div className="lg:col-span-4 lg:pl-2 space-y-8">
-            
+
             {/* MOST READ Card Widget */}
             <div className="border border-zinc-200 rounded-xl p-6 bg-white shadow-xs">
               <div className="flex items-center gap-2 pb-4 mb-4 border-b border-zinc-200">
@@ -397,7 +417,7 @@ export default function AuthorProfileContent({
                 className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-500"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent"></div>
-              
+
               <div className="relative z-10 text-white font-serif">
                 <p className="text-[22px] font-bold tracking-[2px] uppercase leading-tight mb-1">
                   LOUIS VUITTON

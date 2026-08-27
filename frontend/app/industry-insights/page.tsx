@@ -129,7 +129,7 @@ export default function IndustryInsightsPage() {
       guidesTitle="Industry Insights Guides"
       guidesDescription="Background context and practical insights on challenging topics and what to do about it."
       guides={guides}
-      newsTitle="Industry Insights News"
+      newsTitle="Industry Insights More News"
       newsDescription="Everything happening now that you need to know to find new ideas."
       newsArticles={newsArticles}
     />

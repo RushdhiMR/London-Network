@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { useLiveArticles } from "@/lib/articlesSync";
-import { getAuthorAvatarByNameOrEmail } from "@/lib/userProfiles";
+import { getAuthorAvatarByNameOrEmail, resolveUserAvatar } from "@/lib/userProfiles";
 
 export default function HeroSection() {
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -35,8 +35,11 @@ export default function HeroSection() {
           .replace(/\s+/g, "-");
         
         const rawName = (post.authorName || (post as any).author_name || post.author || "Rushdhi MR").trim();
-        const resolvedAvatar = getAuthorAvatarByNameOrEmail(rawName, post.authorEmail || (post as any).author_email) || 
-          (post.authorAvatar && post.authorAvatar.length > 5 && !post.authorAvatar.includes("cart") ? post.authorAvatar : "/author_bluesuit.jpg");
+        const resolvedAvatar = resolveUserAvatar({
+          name: rawName,
+          email: post.authorEmail || (post as any).author_email,
+          avatar: post.authorAvatar && !post.authorAvatar.includes("author_bluesuit") ? post.authorAvatar : undefined
+        });
 
         const validImg = post.imageUrl || post.image || (post as any).image_url || "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=1200&h=800&fit=crop";
 
@@ -249,8 +252,11 @@ export default function HeroSection() {
 
               {/* Author Row */}
               {(() => {
-                const resolvedAvatar = getAuthorAvatarByNameOrEmail(activeArticle.author, (activeArticle as any).authorEmail) ||
-                  (activeArticle.authorAvatar && activeArticle.authorAvatar.length > 5 && !activeArticle.authorAvatar.includes("cart") ? activeArticle.authorAvatar : "/author_bluesuit.jpg");
+                const resolvedAvatar = resolveUserAvatar({
+                  name: activeArticle.author,
+                  email: (activeArticle as any).authorEmail,
+                  avatar: activeArticle.authorAvatar && !activeArticle.authorAvatar.includes("author_bluesuit") ? activeArticle.authorAvatar : undefined
+                });
 
                 return (
                   <div className="flex items-center gap-2 mb-3">

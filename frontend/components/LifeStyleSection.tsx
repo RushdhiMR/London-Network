@@ -56,9 +56,12 @@ export default function LifeStyleSection() {
     href: `/${(a.category || "business").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}?id=${a.id}`
   }));
 
-  const displayArticles = mappedLive.length >= 2
-    ? mappedLive.slice(0, 2)
-    : (mappedLive.length > 0 ? [...mappedLive, ...FALLBACK_LIFESTYLE_ARTICLES].slice(0, 2) : FALLBACK_LIFESTYLE_ARTICLES);
+  const displayArticles = [
+    ...mappedLive,
+    ...FALLBACK_LIFESTYLE_ARTICLES.filter(
+      (fb) => !mappedLive.some((m) => m.title.toLowerCase().trim() === fb.title.toLowerCase().trim())
+    )
+  ].slice(0, 4);
 
   return (
     <section className="max-w-[1400px] mx-auto px-4 md:px-6 py-10 border-b border-gray-200 font-sans">

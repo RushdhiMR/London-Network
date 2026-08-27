@@ -96,7 +96,7 @@ interface SubmittedDraft {
   summary: string;
   content: string;
   imageUrl: string;
-  status: "Draft" | "Submitted" | "Published" | "Pending review" | string;
+  status: "Draft" | "Submitted" | "Published" | "Pending review" | "Rejected" | string;
   date: string;
   reads?: number;
   authorName?: string;
@@ -108,6 +108,8 @@ interface SubmittedDraft {
   placement?: string;
   seo?: any;
   category_name?: string;
+  rejectionReason?: string;
+  rejectedAt?: string;
 }
 
 interface SubscriberItem {
@@ -245,8 +247,13 @@ export default function AdminDashboardPage() {
   >("overview");
 
   const [userSubTab, setUserSubTab] = useState<"ALL" | "ADMINS" | "WRITERS" | "READERS">("ALL");
-  const [postSubTab, setPostSubTab] = useState<"published" | "drafts" | "pending" | "trash">("published");
+  const [postSubTab, setPostSubTab] = useState<"published" | "drafts" | "pending" | "rejected" | "trash">("published");
   const [trashedArticles, setTrashedArticles] = useState<Article[]>([]);
+
+  // Rejection Modal State
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+  const [rejectionTargetSubmission, setRejectionTargetSubmission] = useState<SubmittedDraft | null>(null);
+  const [rejectionReasonInput, setRejectionReasonInput] = useState("");
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -522,8 +529,8 @@ export default function AdminDashboardPage() {
     monthlyAdRevenue: "$14,850.00"
   });
 
-  // Submitted drafts awaiting admin approval
-  const [writerSubmissions, setWriterSubmissions] = useState<SubmittedDraft[]>([
+  // Default fallback submissions
+  const DEFAULT_MOCK_SUBMISSIONS: SubmittedDraft[] = [
     {
       id: "sub-100",
       title: "Why Latin America and Parts of Europe Are Moving Right While the American Left Gains Momentum",
@@ -576,7 +583,32 @@ export default function AdminDashboardPage() {
       authorName: "David Potter",
       readTime: "5 min read"
     }
-  ]);
+  ];
+
+  // Submitted drafts awaiting admin approval
+  const [writerSubmissions, setWriterSubmissions] = useState<SubmittedDraft[]>(() => {
+    if (typeof window === "undefined") return DEFAULT_MOCK_SUBMISSIONS;
+    try {
+      const nonPendingIds = new Set<string>();
+      const nonPendingTitles = new Set<string>();
+      const subsStr = localStorage.getItem("dj_writer_submitted_articles");
+      if (subsStr) {
+        const parsed = JSON.parse(subsStr);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((p: any) => {
+            const st = (p.status || "").toLowerCase().trim();
+            if (st === "rejected" || st === "published" || st === "trash" || st === "approved") {
+              if (p.id) nonPendingIds.add(String(p.id));
+              if (p.title) nonPendingTitles.add(p.title.trim().toLowerCase());
+            }
+          });
+        }
+      }
+      return DEFAULT_MOCK_SUBMISSIONS.filter(m => !nonPendingIds.has(String(m.id)) && !nonPendingTitles.has(m.title.trim().toLowerCase()));
+    } catch (e) {
+      return DEFAULT_MOCK_SUBMISSIONS;
+    }
+  });
 
   // London BigBen Newsletter Subscribers Roster
   const [newsletterSubscribers, setNewsletterSubscribers] = useState<SubscriberItem[]>([
@@ -690,6 +722,7 @@ export default function AdminDashboardPage() {
   // London BigBen Workspace Users
   const [workspaceUsers, setWorkspaceUsers] = useState<WorkspaceUser[]>([
     { id: 1, name: "System Administrator", email: "admin@digitaljournal.com", role: "ADMIN", isDefaultAdmin: true, joinedDate: "Aug 01, 2026", status: "Active" },
+    { id: 15, name: "Rushdhi", email: "rushdhiwriter@gmail.com", role: "WRITER", joinedDate: "Aug 26, 2026", status: "Active" },
     { id: 2, name: "Jennifer Friesen", email: "writer@digitaljournal.com", role: "WRITER", joinedDate: "Aug 01, 2026", status: "Active" },
     { id: 3, name: "Alex Reader", email: "reader@digitaljournal.com", role: "READER", joinedDate: "Aug 01, 2026", status: "Active" },
     { id: 4, name: "Operations Co-Admin", email: "coadmin@digitaljournal.com", role: "ADMIN", joinedDate: "Aug 01, 2026", status: "Active" },
@@ -1060,29 +1093,133 @@ export default function AdminDashboardPage() {
     initAdminAuth();
   }, [auth.loading, auth.authenticated, auth.user, router]);
 
+  useEffect(() => {
+    fetchDashboardData();
+
+    const handleStorageChange = () => {
+      fetchDashboardData();
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, [activeTab]);
+
   const fetchDashboardData = async () => {
     // 1. Synchronize Real Database Users
     try {
-      const resUsers = await fetch("/api/admin/users");
+      const resUsers = await fetch("/api/admin/users", {
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-portal": "dj_admin_portal_authenticated_2026",
+        },
+      });
+
+      let dbUsersList: any[] = [];
       if (resUsers.ok) {
         const data = await resUsers.json();
-        if (data.success && Array.isArray(data.users) && data.users.length > 0) {
-          const mappedUsers: WorkspaceUser[] = data.users
-            .filter((u: any) => u && u.email && !u.email.toLowerCase().startsWith("hacker_") && !u.email.toLowerCase().startsWith("test_") && u.name !== "Sneaky Hacker")
-            .map((u: any, idx: number) => ({
-              id: u.id || `u-${idx}-${u.email}`,
-              name: u.name || u.email.split('@')[0],
-              email: u.email,
-              role: (u.role || "reader").toUpperCase() as "ADMIN" | "WRITER" | "READER",
-              isDefaultAdmin: u.email === "admin@digitaljournal.com" || u.email === "akramyoonos006@gmail.com",
-              joinedDate: u.created_at ? new Date(u.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Aug 2026",
-              status: "Active"
-            }));
-
-          const uniqueUsers = mappedUsers.filter((u, i, self) => i === self.findIndex(t => t.email.toLowerCase() === u.email.toLowerCase()));
-          setWorkspaceUsers(uniqueUsers);
-          setStats(prev => ({ ...prev, totalUsers: uniqueUsers.length }));
+        if (data.success && Array.isArray(data.users)) {
+          dbUsersList = data.users;
         }
+      }
+
+      // Collect all real users
+      const localUsersMap = new Map<string, WorkspaceUser>();
+
+      // A. Add from Database API
+      dbUsersList.forEach((u: any, idx: number) => {
+        if (!u || !u.email) return;
+        const cleanEmail = u.email.toLowerCase().trim();
+        if (cleanEmail.startsWith("hacker_") || cleanEmail.startsWith("test_") || u.name === "Sneaky Hacker") return;
+
+        localUsersMap.set(cleanEmail, {
+          id: u.id || `u-${idx}-${u.email}`,
+          name: u.name || u.email.split('@')[0],
+          email: u.email,
+          role: (u.role || "reader").toUpperCase() as "ADMIN" | "WRITER" | "READER",
+          isDefaultAdmin: cleanEmail === "admin@digitaljournal.com" || cleanEmail === "akramyoonos006@gmail.com",
+          joinedDate: u.created_at ? new Date(u.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Aug 2026",
+          status: "Active"
+        });
+      });
+
+      // B. Add from localStorage registered users
+      if (typeof window !== "undefined") {
+        try {
+          const regStr = localStorage.getItem("dj_registered_users");
+          if (regStr) {
+            const regList: any[] = JSON.parse(regStr);
+            regList.forEach((u: any, idx: number) => {
+              if (!u || !u.email) return;
+              const cleanEmail = u.email.toLowerCase().trim();
+              if (cleanEmail.startsWith("hacker_") || cleanEmail.startsWith("test_") || u.name === "Sneaky Hacker") return;
+
+              const existing = localUsersMap.get(cleanEmail);
+              localUsersMap.set(cleanEmail, {
+                id: u.id || existing?.id || `reg-${idx}-${cleanEmail}`,
+                name: u.name || existing?.name || cleanEmail.split('@')[0],
+                email: u.email,
+                role: (u.role || existing?.role || "READER").toUpperCase() as "ADMIN" | "WRITER" | "READER",
+                isDefaultAdmin: cleanEmail === "admin@digitaljournal.com" || cleanEmail === "akramyoonos006@gmail.com",
+                joinedDate: u.joinedDate || u.created_at || existing?.joinedDate || "Aug 2026",
+                status: "Active"
+              });
+            });
+          }
+        } catch (e) {}
+
+        // C. Add from central profiles DB
+        try {
+          const profDbStr = localStorage.getItem("dj_user_profiles_db");
+          if (profDbStr) {
+            const profDb: Record<string, any> = JSON.parse(profDbStr);
+            Object.values(profDb).forEach((u: any, idx: number) => {
+              if (!u || !u.email) return;
+              const cleanEmail = u.email.toLowerCase().trim();
+              if (cleanEmail.startsWith("hacker_") || cleanEmail.startsWith("test_") || u.name === "Sneaky Hacker") return;
+
+              const existing = localUsersMap.get(cleanEmail);
+              localUsersMap.set(cleanEmail, {
+                id: u.id || existing?.id || `prof-${idx}-${cleanEmail}`,
+                name: u.name || existing?.name || cleanEmail.split('@')[0],
+                email: u.email,
+                role: (u.role || existing?.role || "READER").toUpperCase() as "ADMIN" | "WRITER" | "READER",
+                isDefaultAdmin: cleanEmail === "admin@digitaljournal.com" || cleanEmail === "akramyoonos006@gmail.com",
+                joinedDate: u.joinedDate || existing?.joinedDate || "Aug 2026",
+                status: "Active"
+              });
+            });
+          }
+        } catch (e) {}
+
+        // D. Add active writer / reader sessions
+        ["dj_user", "dj_writer_user"].forEach((k) => {
+          try {
+            const str = localStorage.getItem(k);
+            if (str) {
+              const u = JSON.parse(str);
+              if (u && u.email) {
+                const cleanEmail = u.email.toLowerCase().trim();
+                if (cleanEmail.startsWith("hacker_") || cleanEmail.startsWith("test_") || u.name === "Sneaky Hacker") return;
+                const existing = localUsersMap.get(cleanEmail);
+                localUsersMap.set(cleanEmail, {
+                  id: u.id || existing?.id || Date.now(),
+                  name: u.name || existing?.name || cleanEmail.split('@')[0],
+                  email: u.email,
+                  role: (u.role || (k === "dj_writer_user" ? "WRITER" : "READER")).toUpperCase() as "ADMIN" | "WRITER" | "READER",
+                  isDefaultAdmin: cleanEmail === "admin@digitaljournal.com" || cleanEmail === "akramyoonos006@gmail.com",
+                  joinedDate: existing?.joinedDate || "Aug 2026",
+                  status: "Active"
+                });
+              }
+            }
+          } catch (e) {}
+        });
+      }
+
+      const allMergedUsers = Array.from(localUsersMap.values());
+      if (allMergedUsers.length > 0) {
+        setWorkspaceUsers(allMergedUsers);
+        setStats((prev) => ({ ...prev, totalUsers: allMergedUsers.length }));
       }
     } catch (err) {
       console.warn("Real user DB sync notice:", err);
@@ -1121,7 +1258,7 @@ export default function AdminDashboardPage() {
         setArticles(publishedOnly);
         setStats(prev => ({ ...prev, totalArticles: publishedOnly.length }));
 
-        // Include any server articles with Pending review status into writerSubmissions
+        // Include server articles with Pending review status
         const serverPending = serverArticles
           .filter((a: any) => {
             const st = (a.status || "").toLowerCase();
@@ -1139,62 +1276,124 @@ export default function AdminDashboardPage() {
             readDuration: a.readDuration || a.readTime || "5 min read",
             authorName: a.authorName || a.author || "Writer",
             reads: Number(a.reads || a.views || 0),
-            status: "Pending review",
+            status: "Pending review" as const,
             subcategories: a.subcategories || a.subCategories || [],
             tags: a.tags || [],
             placement: a.placement || "Standard Post",
             seo: a.seo || null
           }));
 
-        if (serverPending.length > 0) {
-          setWriterSubmissions(prev => {
-            const combined = [...serverPending, ...prev];
-            return combined.filter((item, idx, self) => {
-              const st = (item.status || "pending").toLowerCase();
-              const isStillPending = st === "pending review" || st === "pending" || st === "submitted";
-              const isUnique = idx === self.findIndex(t => String(t.id) === String(item.id));
-              return isStillPending && isUnique;
-            });
+        // Gather all rejected, published, and trashed IDs and titles
+        const nonPendingIds = new Set<string>();
+        const nonPendingTitles = new Set<string>();
+
+        serverArticles.forEach((a: any) => {
+          const st = (a.status || "").toLowerCase().trim();
+          if (st === "rejected" || st === "published" || st === "trash" || st === "trashed" || st === "approved") {
+            if (a.id) nonPendingIds.add(String(a.id));
+            if (a.title) nonPendingTitles.add(a.title.trim().toLowerCase());
+          }
+        });
+
+        if (Array.isArray(articles)) {
+          articles.forEach((a: any) => {
+            const st = (a.status || "").toLowerCase().trim();
+            if (st === "rejected" || st === "published" || st === "trash" || st === "trashed" || st === "approved") {
+              if (a.id) nonPendingIds.add(String(a.id));
+              if (a.title) nonPendingTitles.add(a.title.trim().toLowerCase());
+            }
           });
         }
+
+        const subsStr = localStorage.getItem("dj_writer_submitted_articles");
+        let localPending: any[] = [];
+        if (subsStr) {
+          try {
+            const parsed = JSON.parse(subsStr);
+            if (Array.isArray(parsed)) {
+              parsed.forEach((p: any) => {
+                const st = (p.status || "").toLowerCase().trim();
+                if (st === "rejected" || st === "published" || st === "trash" || st === "trashed" || st === "approved") {
+                  if (p.id) nonPendingIds.add(String(p.id));
+                  if (p.title) nonPendingTitles.add(p.title.trim().toLowerCase());
+                } else if (st === "pending review" || st === "pending" || st === "submitted") {
+                  localPending.push({
+                    ...p,
+                    id: String(p.id),
+                    category: p.category || p.category_name || "Business",
+                    subcategories: p.subcategories || p.subCategories || [],
+                    tags: p.tags || [],
+                    placement: p.placement || "Standard Post",
+                    status: "Pending review" as const
+                  });
+                }
+              });
+            }
+          } catch (e) {}
+        }
+
+        const fallbackPending = DEFAULT_MOCK_SUBMISSIONS.filter(m =>
+          !nonPendingIds.has(String(m.id)) && !nonPendingTitles.has(m.title.trim().toLowerCase())
+        );
+
+        const allCandidates = [...localPending, ...serverPending, ...fallbackPending];
+        const seen = new Set<string>();
+        const finalPending = allCandidates.filter((item) => {
+          const idKey = String(item.id || "");
+          const titleKey = (item.title || "").trim().toLowerCase();
+          const isNotRejected = !nonPendingIds.has(idKey) && (!titleKey || !nonPendingTitles.has(titleKey));
+          if (!isNotRejected) return false;
+          if (idKey && seen.has(idKey)) return false;
+          if (titleKey && seen.has(titleKey)) return false;
+          if (idKey) seen.add(idKey);
+          if (titleKey) seen.add(titleKey);
+          return true;
+        });
+
+        setWriterSubmissions(finalPending);
       }
     } catch (err) {
       console.warn("Live articles sync notice:", err);
     }
 
-    // 3. Pending Writer Queue Sync
+    // 4. Newsletter Subscribers Sync from Database and Local Cache
     try {
-      const subsStr = localStorage.getItem("dj_writer_submitted_articles");
-      if (subsStr) {
-        const parsed = JSON.parse(subsStr);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const pendingOnly = parsed.filter((item: any) => {
-            const st = (item.status || "").toLowerCase();
-            return st === "pending review" || st === "pending" || st === "submitted";
-          }).map((item: any) => ({
-            ...item,
-            id: String(item.id),
-            category: item.category || item.category_name || "Business",
-            subcategories: item.subcategories || item.subCategories || [],
-            tags: item.tags || [],
-            placement: item.placement || "Standard Post"
-          }));
-          setWriterSubmissions(prev => {
-            const combined = [...pendingOnly, ...prev];
-            return combined.filter((item, idx, self) => {
-              const st = (item.status || "pending").toLowerCase();
-              const isStillPending = st === "pending review" || st === "pending" || st === "submitted";
-              const isUnique = idx === self.findIndex(t => String(t.id) === String(item.id));
-              return isStillPending && isUnique;
-            });
+      const resSubs = await fetch("/api/newsletter/subscribe");
+      if (resSubs.ok) {
+        const subsData = await resSubs.json();
+        if (subsData.success && Array.isArray(subsData.subscribers)) {
+          const localStr = typeof window !== "undefined" ? localStorage.getItem("dj_newsletter_subscribers") : null;
+          let localSubs: any[] = [];
+          if (localStr) {
+            try { localSubs = JSON.parse(localStr); } catch (e) {}
+          }
+          if (!Array.isArray(localSubs)) localSubs = [];
+
+          const mergedMap = new Map<string, any>();
+          subsData.subscribers.forEach((s: any) => {
+            if (s && s.email) mergedMap.set(s.email.toLowerCase().trim(), s);
           });
+          localSubs.forEach((s: any) => {
+            if (s && s.email) mergedMap.set(s.email.toLowerCase().trim(), s);
+          });
+
+          const finalSubs = Array.from(mergedMap.values()).map((s, idx) => ({
+            id: s.id || 1000 + idx,
+            email: s.email,
+            topics: Array.isArray(s.topics) && s.topics.length > 0 ? s.topics : ["ALL NEWS"],
+            date: s.date || "Aug 2026",
+            status: s.status || "Active"
+          }));
+
+          setNewsletterSubscribers(finalSubs);
+          setStats(prev => ({ ...prev, totalSubscribers: finalSubs.length }));
         }
       }
     } catch (err) {
-      console.warn("Writer submissions queue sync notice:", err);
+      console.warn("Newsletter subscribers sync notice:", err);
     }
 
-    // 4. Trashed Articles Sync
+    // 5. Trashed Articles Sync
     try {
       const trashedStr = localStorage.getItem("dj_trashed_articles");
       if (trashedStr) {
@@ -1320,54 +1519,77 @@ export default function AdminDashboardPage() {
     showNotification(`🎉 Article "${sub.title.slice(0, 35)}..." Approved & Published Live!`);
   };
 
-  const handleRejectSubmission = async (sub: SubmittedDraft) => {
-    const trashedItem: Article = {
+  const handleOpenRejectModal = (sub: SubmittedDraft) => {
+    setRejectionTargetSubmission(sub);
+    setRejectionReasonInput("");
+    setIsRejectModalOpen(true);
+  };
+
+  const handleConfirmReject = async () => {
+    const sub = rejectionTargetSubmission || reviewingSubmission;
+    if (!sub) return;
+
+    const reason = rejectionReasonInput.trim();
+    const rejectedAt = new Date().toISOString();
+
+    const targetAuthorEmail = (sub as any).authorEmail || (sub.authorName?.toLowerCase().includes("rushdhi") ? "rushdhiriyaj2005@gmail.com" : "writer@digitaljournal.com");
+    const targetAuthorName = sub.authorName || (sub as any).author || "Rushdhi MR";
+    const targetAuthorAvatar = (sub as any).authorAvatar || "/author_bluesuit.jpg";
+
+    const rejectedItem = {
+      ...sub,
       id: sub.id,
       title: sub.title,
-      slug: (sub.title || "").toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-      description: sub.summary || sub.content || "",
-      category_name: (sub.category || "GENERAL").toUpperCase(),
-      author_name: sub.authorName || "Writer",
-      readTime: sub.readTime || "5 min read",
-      imageUrl: sub.imageUrl || "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=150&h=150&fit=crop",
-      views: 0,
-      comments: 0,
-      is_featured: false,
-      is_editors_pick: false,
-      placement: "Standard Post",
-      published_at: sub.date || new Date().toISOString(),
-      status: "Trash",
-      original_status: "Pending review"
+      status: "Rejected",
+      rejectionReason: reason || undefined,
+      rejectedAt,
+      authorEmail: targetAuthorEmail,
+      authorName: targetAuthorName,
+      authorAvatar: targetAuthorAvatar
     };
 
-    setWriterSubmissions(prev => prev.filter(s => String(s.id) !== String(sub.id) && s.title !== sub.title));
+    // 1. Remove from Pending Review queue
+    setWriterSubmissions(prev => prev.filter(s =>
+      String(s.id) !== String(sub.id) && (!s.title || !sub.title || s.title.trim().toLowerCase() !== sub.title.trim().toLowerCase())
+    ));
 
-    setTrashedArticles(prev => {
-      const next = [trashedItem, ...prev.filter(t => String(t.id) !== String(sub.id) && t.title !== sub.title)];
-      try {
-        localStorage.setItem("dj_trashed_articles", JSON.stringify(next));
-      } catch (e) {}
-      return next;
-    });
-
+    // 2. Persist to server and local storage
     try {
-      const { deleteArticleOnServer } = await import("@/lib/articlesSync");
-      await deleteArticleOnServer(sub.id, sub.title);
+      const { saveArticleToServer } = await import("@/lib/articlesSync");
+      await saveArticleToServer(rejectedItem);
 
       const subsStr = localStorage.getItem("dj_writer_submitted_articles");
+      let subsList: any[] = [];
       if (subsStr) {
-        const parsed = JSON.parse(subsStr);
-        const filtered = parsed.filter((p: any) => String(p.id) !== String(sub.id) && (p.title || "").trim().toLowerCase() !== sub.title.trim().toLowerCase());
-        localStorage.setItem("dj_writer_submitted_articles", JSON.stringify(filtered));
+        try { subsList = JSON.parse(subsStr); } catch (e) {}
       }
+
+      const existingIdx = subsList.findIndex((p: any) =>
+        String(p.id) === String(sub.id) || (p.title && sub.title && p.title.trim().toLowerCase() === sub.title.trim().toLowerCase())
+      );
+
+      if (existingIdx >= 0) {
+        subsList[existingIdx] = {
+          ...subsList[existingIdx],
+          ...rejectedItem
+        };
+      } else {
+        subsList.unshift(rejectedItem);
+      }
+      localStorage.setItem("dj_writer_submitted_articles", JSON.stringify(subsList));
 
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("dj_articles_updated"));
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn("Reject submission error:", e);
+    }
 
+    setIsRejectModalOpen(false);
+    setRejectionTargetSubmission(null);
+    setRejectionReasonInput("");
     setReviewingSubmission(null);
-    showNotification(`Article "${sub.title.slice(0, 35)}..." moved to Trash.`);
+    showNotification(`✓ Article "${sub.title.slice(0, 35)}..." marked as Rejected.`);
   };
 
   const openStudioForArticle = (sub: SubmittedDraft) => {
@@ -1678,6 +1900,8 @@ export default function AdminDashboardPage() {
     e.preventDefault();
     if (!newUserName.trim() || !newUserEmail.trim()) return;
 
+    const emailNorm = newUserEmail.trim().toLowerCase();
+
     if (newUserRole === "ADMIN" && !isCurrentAdminDefault) {
       alert("Permission Denied: Only the Default Administrator can create or assign Admin accounts. Normal admins can only add Writers and Readers.");
       return;
@@ -1686,10 +1910,13 @@ export default function AdminDashboardPage() {
     try {
       const res = await fetch("/api/admin/users", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-portal": "dj_admin_portal_authenticated_2026",
+        },
         body: JSON.stringify({
           name: newUserName.trim(),
-          email: newUserEmail.trim().toLowerCase(),
+          email: emailNorm,
           password: newUserPassword.trim() || "digitaljournal123",
           role: newUserRole.toLowerCase(),
         }),
@@ -1701,35 +1928,29 @@ export default function AdminDashboardPage() {
         return;
       }
 
-      const createdUser: WorkspaceUser = {
-        id: data.user?.id || Date.now(),
-        name: data.user?.name || newUserName.trim(),
-        email: data.user?.email || newUserEmail.trim().toLowerCase(),
-        role: newUserRole,
-        joinedDate: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-        status: "Active"
-      };
+      // Unblacklist email from local storage blacklist if previously deleted
+      try {
+        const blStr = localStorage.getItem("dj_deleted_users_blacklist");
+        if (blStr) {
+          const blacklist: string[] = JSON.parse(blStr);
+          const filtered = blacklist.filter(e => e.toLowerCase() !== emailNorm);
+          localStorage.setItem("dj_deleted_users_blacklist", JSON.stringify(filtered));
+        }
+      } catch (e) {}
 
-      setWorkspaceUsers(prev => [createdUser, ...prev]);
+      // Refresh real database users roster live from API
+      await fetchDashboardData();
+
+      setUserSubTab("ALL");
       setIsAddUserModalOpen(false);
       setNewUserName("");
       setNewUserEmail("");
       setNewUserPassword("");
       setNewUserRole("WRITER");
-      showNotification(`✓ New ${newUserRole} "${createdUser.name}" created and synced with Database!`);
+      showNotification(`✓ New ${newUserRole} "${data.user?.name || newUserName}" added from database!`);
     } catch (err) {
       console.error("Create user API error:", err);
-      const newUser: WorkspaceUser = {
-        id: Date.now(),
-        name: newUserName.trim(),
-        email: newUserEmail.trim().toLowerCase(),
-        role: newUserRole,
-        joinedDate: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-        status: "Active"
-      };
-      setWorkspaceUsers(prev => [newUser, ...prev]);
-      setIsAddUserModalOpen(false);
-      showNotification(`✓ New ${newUserRole} "${newUser.name}" added to Workspace!`);
+      showNotification(`✓ User added.`);
     }
   };
 
@@ -1751,9 +1972,12 @@ export default function AdminDashboardPage() {
     }
 
     try {
-      const res = await fetch("/api/admin/users", {
+      await fetch("/api/admin/users", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-portal": "dj_admin_portal_authenticated_2026",
+        },
         body: JSON.stringify({
           id: editingUser.id,
           name: editUserName.trim(),
@@ -1761,12 +1985,6 @@ export default function AdminDashboardPage() {
           role: editUserRole.toLowerCase(),
         }),
       });
-
-      const data = await res.json();
-      if (!res.ok) {
-        alert(data.error || "Failed to update user");
-        return;
-      }
 
       setWorkspaceUsers(prev => prev.map(u => u.id === editingUser.id ? {
         ...u,
@@ -1777,7 +1995,8 @@ export default function AdminDashboardPage() {
 
       setIsEditUserModalOpen(false);
       setEditingUser(null);
-      showNotification(`✓ User "${editUserName}" updated in Database!`);
+      await fetchDashboardData();
+      showNotification(`✓ User "${editUserName}" updated successfully!`);
     } catch (err) {
       console.error("Update user API error:", err);
       setWorkspaceUsers(prev => prev.map(u => u.id === editingUser.id ? {
@@ -1798,27 +2017,99 @@ export default function AdminDashboardPage() {
       return;
     }
 
-    if (!confirm(`Are you sure you want to delete user "${name}" from Workspace Desk? This action is permanent.`)) {
+    const targetUser = workspaceUsers.find(u => String(u.id) === String(id) || u.name === name);
+    const targetEmail = targetUser?.email || (typeof id === 'string' && id.includes('@') ? id : "");
+
+    if (targetEmail.toLowerCase() === "admin@digitaljournal.com" || targetEmail.toLowerCase() === "akramyoonos006@gmail.com") {
+      alert("🚫 System Protection: The Default Administrator account cannot be deleted.");
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to delete user "${name}" (${targetEmail || id}) from the database? This action is permanent and will block this email from logging in until re-added.`)) {
       return;
     }
 
     try {
-      const res = await fetch(`/api/admin/users?id=${encodeURIComponent(String(id))}`, {
+      await fetch(`/api/admin/users?id=${encodeURIComponent(String(id))}&email=${encodeURIComponent(targetEmail)}`, {
         method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-portal": "dj_admin_portal_authenticated_2026",
+        },
       });
-      const data = await res.json();
-      if (!res.ok) {
-        alert(data.error || "Failed to delete user");
-        return;
-      }
-
-      setWorkspaceUsers(prev => prev.filter(u => u.id !== id));
-      showNotification(`✓ User "${name}" permanently deleted from database.`);
     } catch (err) {
       console.error("Delete user API error:", err);
-      setWorkspaceUsers(prev => prev.filter(u => u.id !== id));
-      showNotification(`User "${name}" removed from Workspace.`);
     }
+
+    // Purge from all client storage registries & add to blacklist
+    if (typeof window !== "undefined" && targetEmail) {
+      const emailLower = targetEmail.toLowerCase().trim();
+
+      // 1. Add to deleted users blacklist in localStorage
+      try {
+        const blStr = localStorage.getItem("dj_deleted_users_blacklist");
+        const blacklist: string[] = blStr ? JSON.parse(blStr) : [];
+        if (!blacklist.includes(emailLower)) {
+          blacklist.push(emailLower);
+          localStorage.setItem("dj_deleted_users_blacklist", JSON.stringify(blacklist));
+        }
+      } catch (e) {}
+
+      // 2. Remove from registered users list
+      try {
+        const regStr = localStorage.getItem("dj_registered_users");
+        if (regStr) {
+          const regList: any[] = JSON.parse(regStr);
+          const filtered = regList.filter(u => (u.email || '').toLowerCase().trim() !== emailLower);
+          localStorage.setItem("dj_registered_users", JSON.stringify(filtered));
+        }
+      } catch (e) {}
+
+      // 3. Remove from user profiles DB
+      try {
+        const dbStr = localStorage.getItem("dj_user_profiles_db");
+        if (dbStr) {
+          const dbObj = JSON.parse(dbStr);
+          delete dbObj[emailLower];
+          localStorage.setItem("dj_user_profiles_db", JSON.stringify(dbObj));
+        }
+      } catch (e) {}
+
+      // 4. Remove from writers list
+      try {
+        const wStr = localStorage.getItem("dj_writers_list");
+        if (wStr) {
+          const wList: any[] = JSON.parse(wStr);
+          const filtered = wList.filter(w => (w.email || '').toLowerCase().trim() !== emailLower);
+          localStorage.setItem("dj_writers_list", JSON.stringify(filtered));
+        }
+      } catch (e) {}
+
+      // 5. Remove from device google accounts
+      try {
+        const dStr = localStorage.getItem("dj_device_google_accounts");
+        if (dStr) {
+          const dList: any[] = JSON.parse(dStr);
+          const filtered = dList.filter(d => (d.email || '').toLowerCase().trim() !== emailLower);
+          localStorage.setItem("dj_device_google_accounts", JSON.stringify(filtered));
+        }
+      } catch (e) {}
+
+      // 6. Clear session if currently active user was deleted
+      try {
+        const activeUserStr = localStorage.getItem("dj_user");
+        if (activeUserStr) {
+          const active = JSON.parse(activeUserStr);
+          if ((active?.email || '').toLowerCase().trim() === emailLower) {
+            localStorage.removeItem("dj_user");
+            sessionStorage.removeItem("dj_tab_session");
+          }
+        }
+      } catch (e) {}
+    }
+
+    await fetchDashboardData();
+    showNotification(`✓ User "${name}" permanently deleted from database.`);
   };
 
   // Subscriber Checkbox Functions
@@ -1838,20 +2129,58 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const handleRemoveSingleSubscriber = (id: number | string, email: string) => {
-    setNewsletterSubscribers(newsletterSubscribers.filter(s => s.id !== id));
-    setSelectedSubscribers(selectedSubscribers.filter(item => item !== id));
+  const handleRemoveSingleSubscriber = async (id: number | string, email: string) => {
+    try {
+      await fetch(`/api/newsletter/subscribe?id=${encodeURIComponent(String(id))}&email=${encodeURIComponent(email)}`, {
+        method: "DELETE"
+      });
+    } catch (e) {}
+
+    if (typeof window !== "undefined") {
+      try {
+        const localStr = localStorage.getItem("dj_newsletter_subscribers");
+        if (localStr) {
+          const parsed: any[] = JSON.parse(localStr);
+          const filtered = parsed.filter((s: any) => s.id !== id && s.email?.toLowerCase() !== email.toLowerCase());
+          localStorage.setItem("dj_newsletter_subscribers", JSON.stringify(filtered));
+        }
+      } catch (e) {}
+    }
+
+    setNewsletterSubscribers(prev => prev.filter(s => s.id !== id && s.email.toLowerCase() !== email.toLowerCase()));
+    setSelectedSubscribers(prev => prev.filter(item => item !== id));
     showNotification(`Subscriber ${email} removed.`);
   };
 
-  const handleBulkRemoveSubscribers = () => {
+  const handleBulkRemoveSubscribers = async () => {
     if (selectedSubscribers.length === 0) return;
-    setNewsletterSubscribers(newsletterSubscribers.filter(s => !selectedSubscribers.includes(s.id)));
-    showNotification(`✓ ${selectedSubscribers.length} subscriber(s) removed from mailing list.`);
+    const toRemoveIds = [...selectedSubscribers];
+    for (const subId of toRemoveIds) {
+      const sub = newsletterSubscribers.find(s => s.id === subId);
+      try {
+        await fetch(`/api/newsletter/subscribe?id=${encodeURIComponent(String(subId))}&email=${encodeURIComponent(sub?.email || "")}`, {
+          method: "DELETE"
+        });
+      } catch (e) {}
+    }
+
+    if (typeof window !== "undefined") {
+      try {
+        const localStr = localStorage.getItem("dj_newsletter_subscribers");
+        if (localStr) {
+          const parsed: any[] = JSON.parse(localStr);
+          const filtered = parsed.filter((s: any) => !toRemoveIds.includes(s.id));
+          localStorage.setItem("dj_newsletter_subscribers", JSON.stringify(filtered));
+        }
+      } catch (e) {}
+    }
+
+    setNewsletterSubscribers(prev => prev.filter(s => !toRemoveIds.includes(s.id)));
+    showNotification(`✓ ${toRemoveIds.length} subscriber(s) removed from mailing list.`);
     setSelectedSubscribers([]);
   };
 
-  const handleAddSubscriber = (e: React.FormEvent) => {
+  const handleAddSubscriber = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubscriberEmail.trim()) return;
 
@@ -1860,15 +2189,35 @@ export default function AdminDashboardPage() {
       .map(t => t.trim().toUpperCase())
       .filter(t => t.length > 0);
 
+    const finalTopics = topicsArray.length > 0 ? topicsArray : ["TECHNOLOGY", "NEWS"];
+
+    try {
+      await fetch("/api/newsletter/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: newSubscriberEmail.trim(), topics: finalTopics })
+      });
+    } catch (e) {}
+
     const newSub: SubscriberItem = {
       id: Date.now(),
       email: newSubscriberEmail.trim(),
-      topics: topicsArray.length > 0 ? topicsArray : ["TECHNOLOGY", "NEWS"],
+      topics: finalTopics,
       date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
       status: "Active"
     };
 
-    setNewsletterSubscribers([newSub, ...newsletterSubscribers]);
+    if (typeof window !== "undefined") {
+      try {
+        const subsStr = localStorage.getItem("dj_newsletter_subscribers");
+        let subsList: any[] = subsStr ? JSON.parse(subsStr) : [];
+        if (!Array.isArray(subsList)) subsList = [];
+        subsList.unshift(newSub);
+        localStorage.setItem("dj_newsletter_subscribers", JSON.stringify(subsList));
+      } catch (e) {}
+    }
+
+    setNewsletterSubscribers(prev => [newSub, ...prev.filter(s => s.email.toLowerCase() !== newSub.email.toLowerCase())]);
     setNewSubscriberEmail("");
     setIsNewsletterModalOpen(false);
     showNotification(`✓ Subscriber ${newSub.email} added to mailing list!`);
@@ -2618,6 +2967,17 @@ export default function AdminDashboardPage() {
                   </button>
 
                   <button
+                    onClick={() => setPostSubTab("rejected")}
+                    className={`pb-2 font-bold transition-all cursor-pointer border-b-2 tracking-tight ${
+                      postSubTab === "rejected"
+                        ? "border-rose-600 text-rose-600 font-extrabold"
+                        : "border-transparent text-slate-500 hover:text-slate-900"
+                    }`}
+                  >
+                    Rejected <span className="ml-1.5 px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 text-[11px] font-extrabold">{writerSubmissions.filter(s => (s.status || "").toLowerCase().includes("reject")).length}</span>
+                  </button>
+
+                  <button
                     onClick={() => setPostSubTab("trash")}
                     className={`pb-2 font-bold transition-all cursor-pointer border-b-2 tracking-tight ${
                       postSubTab === "trash"
@@ -2950,6 +3310,110 @@ export default function AdminDashboardPage() {
                                     <button
                                       onClick={() => handleTrashDraftOrPending(sub, "Pending review")}
                                       title="Move Pending Review to Trash"
+                                      className="w-8 h-8 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors cursor-pointer"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SUB-TAB 3: REJECTED */}
+            {postSubTab === "rejected" && (
+              <div className="space-y-6">
+                <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-200/60 bg-slate-50/80 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 font-mono">
+                          <th className="py-3.5 px-6">ARTICLE DETAILS</th>
+                          <th className="py-3.5 px-4">CATEGORY</th>
+                          <th className="py-3.5 px-4">AUTHOR</th>
+                          <th className="py-3.5 px-4">REJECTION FEEDBACK</th>
+                          <th className="py-3.5 px-6 text-right">ACTIONS</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-xs">
+                        {writerSubmissions.filter(s => (s.status || "").toLowerCase().includes("reject")).length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="py-12 text-center text-slate-400 font-mono">
+                              No rejected articles. Articles rejected with editorial feedback will appear here.
+                            </td>
+                          </tr>
+                        ) : (
+                          writerSubmissions
+                            .filter(s => (s.status || "").toLowerCase().includes("reject"))
+                            .map((sub, idx) => (
+                              <tr key={`rejected-${sub.id}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
+                                <td className="py-4 px-6 max-w-md">
+                                  <div className="flex items-start gap-3.5">
+                                    <img
+                                      src={sub.imageUrl || "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=150&h=150&fit=crop"}
+                                      alt="Thumbnail"
+                                      className="w-12 h-12 rounded-xl object-cover border border-slate-200 flex-shrink-0 shadow-sm opacity-80"
+                                    />
+                                    <div>
+                                      <h3 className="font-extrabold text-slate-900 text-[13px] leading-snug line-clamp-1">
+                                        {sub.title}
+                                      </h3>
+                                      <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 font-normal">
+                                        {sub.summary}
+                                      </p>
+                                      <div className="flex items-center gap-2 mt-1">
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 text-[9px] font-extrabold rounded font-mono uppercase">
+                                          REJECTED
+                                        </span>
+                                        {sub.rejectedAt && (
+                                          <span className="text-[10px] text-slate-400 font-mono">
+                                            {new Date(sub.rejectedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+
+                                <td className="py-4 px-4 whitespace-nowrap">
+                                  <span className="inline-block px-2.5 py-0.5 bg-slate-100 text-slate-700 border border-slate-200 text-[9px] font-extrabold uppercase rounded-md font-mono">
+                                    {sub.category}
+                                  </span>
+                                </td>
+
+                                <td className="py-4 px-4 whitespace-nowrap font-bold text-slate-700">
+                                  {sub.authorName || "Writer"}
+                                </td>
+
+                                <td className="py-4 px-4 max-w-xs">
+                                  {sub.rejectionReason ? (
+                                    <div className="p-2 bg-rose-50/70 border border-rose-200 rounded-lg text-[11px] text-rose-900 font-medium leading-tight">
+                                      <span className="font-bold block text-[10px] text-rose-700 uppercase font-mono mb-0.5">Feedback:</span>
+                                      "{sub.rejectionReason}"
+                                    </div>
+                                  ) : (
+                                    <span className="text-[11px] text-slate-400 italic">No feedback provided</span>
+                                  )}
+                                </td>
+
+                                <td className="py-4 px-6 whitespace-nowrap text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button
+                                      onClick={() => openStudioForArticle(sub)}
+                                      className="border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 font-bold px-3.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer shadow-xs"
+                                    >
+                                      Re-Review
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleTrashDraftOrPending(sub, "Pending review")}
+                                      title="Move to Trash"
                                       className="w-8 h-8 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors cursor-pointer"
                                     >
                                       <Trash2 className="w-4 h-4" />
@@ -4318,13 +4782,14 @@ export default function AdminDashboardPage() {
 
               <button
                 onClick={() => {
-                  handleRejectSubmission(reviewingSubmission);
-                  setReviewingSubmission(null);
+                  if (reviewingSubmission) {
+                    handleOpenRejectModal(reviewingSubmission);
+                  }
                 }}
                 className="flex items-center gap-1.5 bg-[#D31220] hover:bg-red-700 text-white text-xs font-extrabold px-4 py-1.5 rounded-lg cursor-pointer transition-all shadow-sm"
               >
                 <X className="w-3.5 h-3.5" />
-                REJECT TO TRASH
+                REJECT
               </button>
 
               <button
@@ -4554,33 +5019,72 @@ export default function AdminDashboardPage() {
                         </label>
                       </div>
 
-                      <div className="border border-slate-200 rounded-xl p-3 max-h-48 overflow-y-auto grid grid-cols-2 gap-2 text-xs font-medium text-slate-700 bg-slate-50/50">
-                        {ALL_SUB_CATEGORIES
-                          .filter((subCat) => {
-                            if (isSameOrMatchingCategory(subCat, reviewCategory)) return false;
-                            if (isWorldOrWorldSub(reviewCategory) && subCat.toLowerCase() === "world") return false;
-                            return true;
-                          })
-                          .map((subCat) => {
-                            const isChecked = reviewSubCategories.some((s) => isSameOrMatchingCategory(s, subCat));
-                            return (
-                              <label key={subCat} className="flex items-center gap-2 cursor-pointer select-none">
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  onChange={() => {
-                                    if (isChecked) {
-                                      setReviewSubCategories(reviewSubCategories.filter((s) => !isSameOrMatchingCategory(s, subCat)));
-                                    } else if (reviewSubCategories.length < 5) {
-                                      setReviewSubCategories([...reviewSubCategories, subCat]);
-                                    }
-                                  }}
-                                  className="rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                />
-                                <span className={isChecked ? "font-bold text-slate-900" : "text-slate-600"}>{subCat}</span>
-                              </label>
-                            );
-                          })}
+                      <div className="border border-slate-200 rounded-xl p-3 max-h-56 overflow-y-auto space-y-3 text-xs font-medium text-slate-700 bg-slate-50/50">
+                        <div className="grid grid-cols-2 gap-2">
+                          {ALL_SUB_CATEGORIES
+                            .filter((subCat) => {
+                              if (isSameOrMatchingCategory(subCat, reviewCategory)) return false;
+                              if (isWorldOrWorldSub(reviewCategory) && subCat.toLowerCase() === "world") return false;
+                              return true;
+                            })
+                            .map((subCat) => {
+                              const isChecked = reviewSubCategories.some((s) => isSameOrMatchingCategory(s, subCat));
+                              const isDisabled = !isChecked && reviewSubCategories.length >= 5;
+                              return (
+                                <label key={subCat} className={`flex items-center gap-2 select-none ${isDisabled ? "opacity-40 cursor-not-allowed text-slate-400" : "cursor-pointer text-slate-700"}`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    disabled={isDisabled}
+                                    onChange={() => {
+                                      if (isChecked) {
+                                        setReviewSubCategories(reviewSubCategories.filter((s) => !isSameOrMatchingCategory(s, subCat)));
+                                      } else if (reviewSubCategories.length < 5) {
+                                        setReviewSubCategories([...reviewSubCategories, subCat]);
+                                      }
+                                    }}
+                                    className="rounded text-blue-600 focus:ring-blue-500 cursor-pointer disabled:cursor-not-allowed"
+                                  />
+                                  <span className={isChecked ? "font-bold text-slate-900" : (isDisabled ? "text-slate-400" : "text-slate-600")}>{subCat}</span>
+                                </label>
+                              );
+                            })}
+                        </div>
+
+                        {/* World Subcategories Section */}
+                        {WORLD_SUBCATEGORIES.filter(w => !isSameOrMatchingCategory(w, reviewCategory)).length > 0 && (
+                          <div className="pt-2.5 border-t border-slate-200/80">
+                            <div className="text-[10px] font-mono font-extrabold uppercase tracking-wider text-slate-400 mb-2">
+                              World
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {WORLD_SUBCATEGORIES
+                                .filter(w => !isSameOrMatchingCategory(w, reviewCategory))
+                                .map((worldSub) => {
+                                  const isChecked = reviewSubCategories.some((s) => isSameOrMatchingCategory(s, worldSub));
+                                  const isDisabled = !isChecked && reviewSubCategories.length >= 5;
+                                  return (
+                                    <label key={worldSub} className={`flex items-center gap-2 select-none ${isDisabled ? "opacity-40 cursor-not-allowed text-slate-400" : "cursor-pointer text-slate-700"}`}>
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        disabled={isDisabled}
+                                        onChange={() => {
+                                          if (isChecked) {
+                                            setReviewSubCategories(reviewSubCategories.filter((s) => !isSameOrMatchingCategory(s, worldSub)));
+                                          } else if (reviewSubCategories.length < 5) {
+                                            setReviewSubCategories([...reviewSubCategories, worldSub]);
+                                          }
+                                        }}
+                                        className="rounded text-blue-600 focus:ring-blue-500 cursor-pointer disabled:cursor-not-allowed"
+                                      />
+                                      <span className={isChecked ? "font-bold text-slate-900" : (isDisabled ? "text-slate-400" : "text-slate-600")}>{worldSub}</span>
+                                    </label>
+                                  );
+                                })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <div className="text-[10px] font-mono font-extrabold text-slate-400 uppercase tracking-wider">
                         SELECTED: {reviewSubCategories.length} / 5
@@ -4778,6 +5282,99 @@ export default function AdminDashboardPage() {
                 className="bg-slate-900 text-white font-extrabold px-6 py-2.5 rounded-xl text-xs cursor-pointer"
               >
                 Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REJECTION REASON MODAL (Optional Editorial Feedback) */}
+      {isRejectModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150 font-sans">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-rose-50 border-b border-rose-100 flex items-center justify-between">
+              <div className="flex items-center gap-2.5 text-rose-700">
+                <div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center font-bold text-rose-600">
+                  <X className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900">Reject Article Submission</h3>
+                  <p className="text-[11px] text-rose-800/80 font-medium">Provide optional editorial feedback for the author.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsRejectModalOpen(false);
+                  setRejectionTargetSubmission(null);
+                  setRejectionReasonInput("");
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4">
+              {rejectionTargetSubmission && (
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80">
+                  <span className="text-[10px] font-mono font-extrabold uppercase tracking-wider text-slate-400 block mb-1">
+                    Article Being Rejected
+                  </span>
+                  <p className="text-xs font-extrabold text-slate-900 line-clamp-2">
+                    {rejectionTargetSubmission.title}
+                  </p>
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                    Author: {rejectionTargetSubmission.authorName || "Writer"} • Category: {rejectionTargetSubmission.category || "General"}
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span>Rejection Reason / Editorial Notes</span>
+                  <span className="text-[10px] font-mono text-slate-400 font-normal uppercase">Optional</span>
+                </label>
+                <textarea
+                  rows={4}
+                  value={rejectionReasonInput}
+                  onChange={(e) => setRejectionReasonInput(e.target.value)}
+                  placeholder="Enter reason for rejection (e.g., Needs better citations, duplicate submission, grammar issues, topic misaligned with editorial policy)... If you wish to reject without a reason, you can leave this blank."
+                  className="w-full p-3 text-xs border border-slate-300 rounded-xl focus:outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 text-slate-800 placeholder-slate-400 transition-all resize-none"
+                  autoFocus
+                />
+              </div>
+
+              <div className="text-[11px] text-slate-500 bg-amber-50/80 border border-amber-200/70 p-2.5 rounded-lg flex items-start gap-2">
+                <span className="text-amber-600 font-bold">ℹ</span>
+                <span>
+                  This submission will be moved to the <strong>Rejected</strong> section. If a reason is provided, it will be visible to the author so they can make improvements.
+                </span>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRejectModalOpen(false);
+                  setRejectionTargetSubmission(null);
+                  setRejectionReasonInput("");
+                }}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-900 bg-white border border-slate-300 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmReject}
+                className="px-5 py-2 text-xs font-extrabold text-white bg-[#D31220] hover:bg-red-700 rounded-xl transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
+              >
+                <X className="w-3.5 h-3.5" />
+                Reject Article
               </button>
             </div>
           </div>

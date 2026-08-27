@@ -17,38 +17,32 @@ export async function POST(request: Request) {
     const normalized = normalizeEmail(email);
     const cleanPassword = password.trim();
 
-    // Query user directly from Database (Source of Truth)
+    // 1. Check if user was deleted/revoked by administrator in database
+    const isDeleted = await DB.isEmailDeleted(normalized);
+    if (isDeleted) {
+      return NextResponse.json(
+        { error: 'Access Denied: This account has been removed by the administrator. Access is disabled until re-added.' },
+        { status: 403 }
+      );
+    }
+
+    // 2. Query user directly from Database (Source of Truth)
     let user = await DB.getUserByEmail(normalized);
 
-    // Default fallback accounts if DB is initializing or empty
-    if (!user) {
-      if (normalized === 'admin@digitaljournal.com') {
-        user = {
-          id: 1,
-          name: 'System Administrator',
-          email: 'admin@digitaljournal.com',
-          password_hash: '$2a$10$8.z8pM12Z1fLzW1N1t2kceJ4G5.J8a4l9q2u.x5f9.z',
-          provider: 'local',
-          google_id: null,
-          role: 'admin',
-          email_verified: 1,
-          reset_token: null,
-          reset_token_expires: null
-        };
-      } else if (normalized === 'writer@digitaljournal.com' || normalized.includes('rushdhi')) {
-        user = {
-          id: 2,
-          name: 'Rushdhi MR',
-          email: normalized,
-          password_hash: '$2a$10$8.z8pM12Z1fLzW1N1t2kceJ4G5.J8a4l9q2u.x5f9.z',
-          provider: 'local',
-          google_id: null,
-          role: 'writer',
-          email_verified: 1,
-          reset_token: null,
-          reset_token_expires: null
-        };
-      }
+    // Only default system admin can be fallback initialized if database is completely fresh
+    if (!user && normalized === 'admin@digitaljournal.com') {
+      user = {
+        id: 1,
+        name: 'System Administrator',
+        email: 'admin@digitaljournal.com',
+        password_hash: '$2a$10$8.z8pM12Z1fLzW1N1t2kceJ4G5.J8a4l9q2u.x5f9.z',
+        provider: 'local',
+        google_id: null,
+        role: 'admin',
+        email_verified: 1,
+        reset_token: null,
+        reset_token_expires: null
+      };
     }
 
     if (user) {

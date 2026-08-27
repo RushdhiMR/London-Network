@@ -19,7 +19,7 @@ import {
   Lock,
   ExternalLink
 } from "lucide-react";
-import { getUserProfile, saveUserProfile } from "@/lib/userProfiles";
+import { getUserProfile, saveUserProfile, resolveUserAvatar } from "@/lib/userProfiles";
 
 export default function ReaderDashboardPage() {
   const [currentUser, setCurrentUser] = useState<{
@@ -87,12 +87,20 @@ export default function ReaderDashboardPage() {
     try {
       const activeEmail = auth.user.email;
       const savedProfile = getUserProfile(activeEmail);
+      const displayRole = auth.user.role === "admin" ? "Admin" : auth.user.role === "writer" ? "Writer" : "Reader";
+
+      const resolvedAvatar = resolveUserAvatar({
+        name: savedProfile?.name || auth.user.name,
+        email: activeEmail,
+        role: displayRole,
+        avatar: savedProfile?.avatar,
+      });
 
       const finalUser = {
         name: savedProfile?.name || auth.user.name,
         email: activeEmail,
-        avatar: savedProfile?.avatar || "/author_bluesuit.jpg",
-        role: auth.user.role === "admin" ? "Admin" : auth.user.role === "writer" ? "Writer" : "Reader",
+        avatar: resolvedAvatar,
+        role: displayRole,
         bio: savedProfile?.bio || "Avid reader of global economics and technology innovation."
       };
 

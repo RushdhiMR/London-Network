@@ -37,6 +37,367 @@ export interface CategoryData {
 export function getCategoryData(slug: string): CategoryData {
   const norm = slug.toLowerCase().replace(/[^a-z0-9]/g, "");
 
+  if (norm.includes("politic")) {
+    return {
+      categoryName: "Politics & Policy",
+      categoryColor: "bg-red-50",
+      infoBoxText: `London BigBen's Politics & Policy coverage delivers objective analysis of parliamentary debates, geopolitical agreements, election cycles, and regulatory reforms shaping modern democracies.\nOur correspondents report directly from legislative chambers, providing essential context on decisions that impact civil society and international relations.`,
+      featured: {
+        category: "POLITICS • GLOBAL DIPLOMACY & LEGISLATION",
+        title: "International defense leaders sign landmark multi-nation security and cybersecurity treaty",
+        description: "Delegates conclude marathon bilateral negotiations in Geneva, establishing mutual defense protocols against state-sponsored infrastructure cyberattacks and setting joint standards.",
+        image: "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=1200&h=800&fit=crop",
+        author: "Marcus Vance",
+        date: "July 16, 2026"
+      },
+      secondaryArticles: [
+        {
+          title: "Parliament debates landmark artificial intelligence transparency and safety bill",
+          image: "https://images.unsplash.com/photo-1521791136064-7986c2920216?w=150&h=150&fit=crop",
+          date: "July 16, 2026"
+        },
+        {
+          title: "Voter turnout surges across provincial elections following digital balloting rollout",
+          image: "https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?w=150&h=150&fit=crop",
+          date: "July 15, 2026"
+        },
+        {
+          title: "Public ethics committee updates guidelines on campaign finance and donor disclosures",
+          image: "https://images.unsplash.com/photo-1450133064473-71024230f91b?w=150&h=150&fit=crop",
+          date: "July 15, 2026"
+        },
+        {
+          title: "Bipartisan infrastructure funding package clears final senate budget committee",
+          image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=150&h=150&fit=crop",
+          date: "July 14, 2026"
+        }
+      ],
+      guidesTitle: "POLITICS & GOVERNANCE GUIDES",
+      guidesDescription: "In-depth legislative breakdowns, policy analysis, and civic governance deep dives.",
+      guides: [
+        {
+          title: "Understanding the legislative lifecycle: From committee markup to final enactment",
+          description: "How statutory provisions evolve through floor amendments, reconciliation, and presidential review...",
+          author: "By Jennifer Abbott • July 15, 2026"
+        },
+        {
+          title: "The citizen's manual to public regulatory comment periods and rule-making hearings",
+          description: "How administrative agencies evaluate feedback before finalizing binding administrative standards...",
+          author: "By Jane Smith • July 14, 2026"
+        },
+        {
+          title: "Campaign finance laws: Political action committees and independent expenditure rules",
+          description: "Analyzing disclosure thresholds, donor anonymity limits, and enforcement authority benchmarks...",
+          author: "By David Chen • July 14, 2026"
+        },
+        {
+          title: "Evaluating public polling methodology: Margin of error, weighting, and sample bias",
+          description: "A framework for distinguishing high-quality probability polls from unweighted digital surveys...",
+          author: "By Sarah Miller • July 13, 2026"
+        }
+      ],
+      newsTitle: "Politics & Policy More News",
+      newsDescription: "Breaking reports, legislative votes, and policy developments across the globe.",
+      newsArticles: [
+        {
+          title: "Supreme court hears landmark arguments on digital privacy and government surveillance limits",
+          image: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=300&h=200&fit=crop",
+          description: "Justices weigh constitutional protections for cloud data backups against warrant requirements.",
+          date: "July 16, 2026"
+        },
+        {
+          title: "Municipal mayors form national coalition to accelerate affordable urban housing permits",
+          image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=300&h=200&fit=crop",
+          description: "Standardized zoning blueprints aim to reduce project approval times from years to weeks.",
+          date: "July 15, 2026"
+        },
+        {
+          title: "Electoral commission approves automated paper ballot auditing in all swing districts",
+          image: "https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?w=300&h=200&fit=crop",
+          description: "High-resolution optical scanners verify physical tally sheets against digital summaries.",
+          date: "July 15, 2026"
+        },
+        {
+          title: "Foreign affairs committee holds hearings on diplomatic trade corridor expansion",
+          image: "https://images.unsplash.com/photo-1526470608268-f674ce90ebd4?w=300&h=200&fit=crop",
+          description: "Ambassadors present strategic assessments on maritime trade routes and regional security pacts.",
+          date: "July 14, 2026"
+        }
+      ]
+    };
+  }
+
+  if (norm.includes("world") || norm === "china" || norm === "europe" || norm === "unitedstates" || norm === "britain" || norm === "middleeast" || norm === "africa" || norm === "asia") {
+    const regionTitle = norm === "world" ? "World News & Global Affairs" : `${slug.replace(/[^a-zA-Z0-9]/g, " ").replace(/\b\w/g, c => c.toUpperCase())} News & Analysis`;
+    return {
+      categoryName: regionTitle,
+      categoryColor: "bg-sky-50",
+      infoBoxText: `London BigBen's World News desk reports on international diplomacy, cross-border trade pacts, humanitarian summits, and global security.\nOur international correspondents deliver verified, on-the-ground reporting from diplomatic centers across Europe, the Americas, Asia-Pacific, Africa, and the Middle East.`,
+      featured: {
+        category: "WORLD • INTERNATIONAL DIPLOMACY",
+        title: "Global climate summit concludes with historic consensus on clean energy infrastructure",
+        description: "Envoys from over 140 nations ratify accelerated renewable power grid interconnects and unified cross-border carbon measurement standards in landmark multilateral summit.",
+        image: "https://images.unsplash.com/photo-1526470608268-f674ce90ebd4?w=1200&h=800&fit=crop",
+        author: "David Chen",
+        date: "July 16, 2026"
+      },
+      secondaryArticles: [
+        {
+          title: "European Union leaders approve cross-border high-speed rail network expansion",
+          image: "https://images.unsplash.com/photo-1474487548417-781cb71495f3?w=150&h=150&fit=crop",
+          date: "July 16, 2026"
+        },
+        {
+          title: "Pacific trade ministers finalize updated digital customs and automated tariffs treaty",
+          image: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=150&h=150&fit=crop",
+          date: "July 15, 2026"
+        },
+        {
+          title: "International atomic energy inspectors verify regional nuclear safety protocols",
+          image: "https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=150&h=150&fit=crop",
+          date: "July 15, 2026"
+        },
+        {
+          title: "United Nations launches emergency humanitarian relief corridor for drought zones",
+          image: "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=150&h=150&fit=crop",
+          date: "July 14, 2026"
+        }
+      ],
+      guidesTitle: "GLOBAL AFFAIRS & GEOPOLITICS GUIDES",
+      guidesDescription: "In-depth regional analysis, diplomatic treaties, and cross-border trade overviews.",
+      guides: [
+        {
+          title: "A journalist's guide to verifying digital source materials and field dispatches",
+          description: "Techniques for cross-referencing satellite imagery, verified geolocations, and digital timestamps...",
+          author: "By Jane Smith • July 15, 2026"
+        },
+        {
+          title: "Understanding multilateral trade agreements: Rules of origin and tariff quotas",
+          description: "How international trade frameworks establish duty-free thresholds and customs compliance...",
+          author: "By Sarah Miller • July 15, 2026"
+        },
+        {
+          title: "International human rights treaties: Enforcement mechanisms and compliance monitoring",
+          description: "Evaluating reporting structures and tribunal jurisdictions across international legal bodies...",
+          author: "By David Chen • July 14, 2026"
+        },
+        {
+          title: "Maritime security and shipping corridors: The law of the sea and territorial waters",
+          description: "Navigating exclusive economic zones, straits transit rules, and international navigation rights...",
+          author: "By Jennifer Abbott • July 13, 2026"
+        }
+      ],
+      newsTitle: "World News More News",
+      newsDescription: "International coverage, global summits, and breaking overseas dispatches.",
+      newsArticles: [
+        {
+          title: "Pacific Rim nations sign historic semiconductor research and material supply accord",
+          image: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=300&h=200&fit=crop",
+          description: "Joint research hubs in Tokyo, Seoul, and Taipei accelerate next-generation silicon photonics.",
+          date: "July 16, 2026"
+        },
+        {
+          title: "Latin American clean energy corridor completes first cross-border electricity transfer",
+          image: "https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=300&h=200&fit=crop",
+          description: "Hydropower and solar arrays deliver synchronized power across national electrical grids.",
+          date: "July 15, 2026"
+        },
+        {
+          title: "African Union launches unified digital identification framework for cross-border travel",
+          image: "https://images.unsplash.com/photo-1508614589041-895b88991e3e?w=300&h=200&fit=crop",
+          description: "Biometric e-passports simplify transit times and trade clearances at regional border crossings.",
+          date: "July 15, 2026"
+        },
+        {
+          title: "Arctic research expedition completes comprehensive ice-core biodiversity survey",
+          image: "https://images.unsplash.com/photo-1483921020237-2ff51e8e4b22?w=300&h=200&fit=crop",
+          description: "Microbiological analysis reveals prehistoric genetic markers preserved in glacial strata.",
+          date: "July 14, 2026"
+        }
+      ]
+    };
+  }
+
+  if (norm.includes("econom")) {
+    return {
+      categoryName: "Economy & Global Trade",
+      categoryColor: "bg-emerald-50",
+      infoBoxText: `London BigBen's Economy desk provides rigorous reporting on macroeconomic data, central bank monetary policies, global supply chains, and labor market trends.\nOur economists and financial journalists analyze GDP forecasts, inflation indices, commodity shifts, and corporate fiscal health for market leaders.`,
+      featured: {
+        category: "ECONOMY • CENTRAL BANKS & MONETARY POLICY",
+        title: "Federal Reserve and European Central Bank signal rate adjustments amid cooling inflation",
+        description: "Central bank governors emphasize balanced liquidity measures as industrial manufacturing output stabilizes and consumer confidence gains momentum across major economies.",
+        image: "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=1200&h=800&fit=crop",
+        author: "Rachel Vance",
+        date: "July 16, 2026"
+      },
+      secondaryArticles: [
+        {
+          title: "Global container shipping freight rates normalize following major port automation upgrades",
+          image: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=150&h=150&fit=crop",
+          date: "July 16, 2026"
+        },
+        {
+          title: "Labor statistics report shows steady job growth in renewable engineering and technical trades",
+          image: "https://images.unsplash.com/photo-1521791136064-7986c2920216?w=150&h=150&fit=crop",
+          date: "July 15, 2026"
+        },
+        {
+          title: "Consumer spending resilience drives third-quarter gross domestic product upward",
+          image: "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=150&h=150&fit=crop",
+          date: "July 15, 2026"
+        },
+        {
+          title: "Commercial real estate lending standards tighten as debt refinancing waves approach",
+          image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=150&h=150&fit=crop",
+          date: "July 14, 2026"
+        }
+      ],
+      guidesTitle: "MACROECONOMICS & FISCAL POLICY GUIDES",
+      guidesDescription: "Analysis of economic indicators, monetary policy instruments, and trade frameworks.",
+      guides: [
+        {
+          title: "How central banks use quantitative tightening and overnight reverse repo facilities",
+          description: "Dissecting open market operations, balance sheet reduction, and systemic liquidity buffers...",
+          author: "By David Potter • July 15, 2026"
+        },
+        {
+          title: "Understanding consumer price index (CPI) vs personal consumption expenditures (PCE)",
+          description: "Comparing weighting formulas, substitution effects, and core inflation calculation models...",
+          author: "By Chris Hogg • July 14, 2026"
+        },
+        {
+          title: "The yield curve inverted: What bond market spreads signal about economic growth cycles",
+          description: "Analyzing the 2-year vs 10-year treasury spread and historical business cycle correlations...",
+          author: "By Jennifer Abbott • July 14, 2026"
+        },
+        {
+          title: "Global currency reserve shifts: De-dollarization trends and bilateral currency swaps",
+          description: "Evaluating central bank reserve diversification into gold, treasury alternatives, and digital assets...",
+          author: "By Pramod Jain • July 13, 2026"
+        }
+      ],
+      newsTitle: "Economy & Global Trade More News",
+      newsDescription: "Macroeconomic updates, inflation data, trade balances, and central bank actions.",
+      newsArticles: [
+        {
+          title: "Global manufacturing purchasing managers index (PMI) rebounds into expansion territory",
+          image: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=300&h=200&fit=crop",
+          description: "Factory orders in Germany, the US, and South Korea indicate strengthening export demand.",
+          date: "July 16, 2026"
+        },
+        {
+          title: "Energy commodity prices steady as strategic reserves replenish across major consuming nations",
+          image: "https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?w=300&h=200&fit=crop",
+          description: "Natural gas storage levels reach 92% capacity ahead of winter distribution schedules.",
+          date: "July 15, 2026"
+        },
+        {
+          title: "Agricultural export volumes break records backed by modern precision farming yields",
+          image: "https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=300&h=200&fit=crop",
+          description: "Grain shipments stabilize global food supply pipelines and ease commodity market pressures.",
+          date: "July 15, 2026"
+        },
+        {
+          title: "Venture capital dry powder deployment accelerates in industrial robotics manufacturing",
+          image: "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=300&h=200&fit=crop",
+          description: "Investors target scalable factory automation and automated assembly line solutions.",
+          date: "July 14, 2026"
+        }
+      ]
+    };
+  }
+
+  if (norm.includes("market")) {
+    return {
+      categoryName: "Markets & Financial Assets",
+      categoryColor: "bg-indigo-50",
+      infoBoxText: `London BigBen's Markets desk delivers real-time market movements, corporate earnings reports, equity valuations, commodities, and currency fluctuations.\nWe provide continuous analysis of Wall Street, European bourses, Asian stock exchanges, sovereign bonds, and alternative investment assets.`,
+      featured: {
+        category: "MARKETS • WALL STREET & GLOBAL EQUITIES",
+        title: "Global equity indices reach all-time highs fueled by semiconductor and cloud earnings",
+        description: "Strong corporate balance sheets and resilient institutional inflows push benchmark indexes into fresh record territory across Tokyo, London, and New York bourses.",
+        image: "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=1200&h=800&fit=crop",
+        author: "Alexander Ross",
+        date: "July 16, 2026"
+      },
+      secondaryArticles: [
+        {
+          title: "Treasury bond yields steady after 10-year debt auction attracts robust international demand",
+          image: "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=150&h=150&fit=crop",
+          date: "July 16, 2026"
+        },
+        {
+          title: "Crude oil futures settle near $75 per barrel following balanced global inventory disclosures",
+          image: "https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?w=150&h=150&fit=crop",
+          date: "July 15, 2026"
+        },
+        {
+          title: "Tech IPO pipeline reopens with premium valuations for cybersecurity enterprise providers",
+          image: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=150&h=150&fit=crop",
+          date: "July 15, 2026"
+        },
+        {
+          title: "Currency markets see dollar consolidation following coordinated central bank statements",
+          image: "https://images.unsplash.com/photo-1580519542036-c47de6196ba5?w=150&h=150&fit=crop",
+          date: "July 14, 2026"
+        }
+      ],
+      guidesTitle: "INVESTING STRATEGY & FINANCIAL MARKETS GUIDES",
+      guidesDescription: "Professional frameworks on portfolio allocation, technical analysis, and derivatives.",
+      guides: [
+        {
+          title: "Institutional equity valuation: Discounted cash flow (DCF) models vs multiple metrics",
+          description: "Building robust financial models accounting for terminal growth rates and cost of capital...",
+          author: "By Chris Hogg • July 15, 2026"
+        },
+        {
+          title: "Options market dynamics: Implied volatility rank, skew, and delta-neutral hedging",
+          description: "How institutional desks manage gamma risk around corporate earnings announcements...",
+          author: "By David Potter • July 14, 2026"
+        },
+        {
+          title: "Fixed income portfolio strategies in shifting interest rate environments",
+          description: "Duration matching, barbell vs bullet yield curve positioning, and credit spread analysis...",
+          author: "By Jennifer Abbott • July 14, 2026"
+        },
+        {
+          title: "The retail investor's guide to index fund liquidity and market-maker bid-ask spreads",
+          description: "Understanding ETF creation and redemption baskets, tracking errors, and execution timing...",
+          author: "By Pramod Jain • July 13, 2026"
+        }
+      ],
+      newsTitle: "Markets & Financial Assets More News",
+      newsDescription: "Live market reports, earnings season updates, commodities, and currency shifts.",
+      newsArticles: [
+        {
+          title: "Semiconductor sector ETF surges 4.2% following breakthrough fabrication plant announcements",
+          image: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=300&h=200&fit=crop",
+          description: "Leading chip designers report record order backlogs from enterprise AI server customers.",
+          date: "July 16, 2026"
+        },
+        {
+          title: "Gold prices consolidate near record highs as institutional funds maintain safe-haven hedges",
+          image: "https://images.unsplash.com/photo-1610375461246-83df859d849d?w=300&h=200&fit=crop",
+          description: "Central bank gold purchases reach multi-decade highs according to World Gold Council data.",
+          date: "July 15, 2026"
+        },
+        {
+          title: "Corporate bond spreads tighten to multi-year lows amid strong balance sheet performance",
+          image: "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=300&h=200&fit=crop",
+          description: "High-yield and investment-grade corporate issuances are heavily oversubscribed by funds.",
+          date: "July 15, 2026"
+        },
+        {
+          title: "Fintech payment processors rally after international merchant adoption surpasses forecasts",
+          image: "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=300&h=200&fit=crop",
+          description: "Cross-border payment volume grew 28% year-over-year in the latest quarterly disclosures.",
+          date: "July 14, 2026"
+        }
+      ]
+    };
+  }
+
   if (norm.includes("lifestyle")) {
     return {
       categoryName: "Lifestyle & Culture",
@@ -96,7 +457,7 @@ export function getCategoryData(slug: string): CategoryData {
           author: "By Marcus Vance • July 13, 2026"
         }
       ],
-      newsTitle: "LIFESTYLE & CULTURE DISPATCHES",
+      newsTitle: "Lifestyle & Culture More News",
       newsDescription: "The latest stories, trends, and features shaping modern living across the globe.",
       newsArticles: [
         {
@@ -186,7 +547,7 @@ export function getCategoryData(slug: string): CategoryData {
           author: "By Dr. Rachel Green • July 13, 2026"
         }
       ],
-      newsTitle: "SPORTS & ATHLETICS DISPATCHES",
+      newsTitle: "Sports & Athletics More News",
       newsDescription: "Breaking reports, championship coverage, and athletic technology updates.",
       newsArticles: [
         {
@@ -276,7 +637,7 @@ export function getCategoryData(slug: string): CategoryData {
           author: "By Sarah Jenkins • July 13, 2026"
         }
       ],
-      newsTitle: "ENTERTAINMENT & ARTS DISPATCHES",
+      newsTitle: "Entertainment & Arts More News",
       newsDescription: "The latest news from cinema, television, music, and digital performance.",
       newsArticles: [
         {
@@ -366,7 +727,7 @@ export function getCategoryData(slug: string): CategoryData {
           author: "By Dr. Sarah Mitchell • July 13, 2026"
         }
       ],
-      newsTitle: "HEALTH & MEDICINE DISPATCHES",
+      newsTitle: "Health & Medicine More News",
       newsDescription: "The latest clinical reports, biotech breakthroughs, and wellness news.",
       newsArticles: [
         {
@@ -456,7 +817,7 @@ export function getCategoryData(slug: string): CategoryData {
           author: "By David Potter • July 13, 2026"
         }
       ],
-      newsTitle: "RESEARCH & INDUSTRY DISPATCHES",
+      newsTitle: "Research & Industry Insights More News",
       newsDescription: "Executive summaries, whitepaper releases, and market research studies.",
       newsArticles: [
         {
@@ -551,7 +912,7 @@ export function getCategoryData(slug: string): CategoryData {
         author: "By Jennifer Abbott • July 15, 2026"
       }
     ],
-    newsTitle: `${displayName.toUpperCase()} DISPATCHES`,
+    newsTitle: `${displayName} More News`,
     newsDescription: `The latest stories, breaking updates, and features in ${displayName}.`,
     newsArticles: [
       {

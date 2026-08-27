@@ -43,7 +43,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   // Enforce Writer or Admin role requirement for creating/syncing articles
-  const rbac = await requireRole('writer', 'admin');
+  const rbac = await requireRole(request, 'writer', 'admin');
   if (!rbac.authorized) {
     return rbac.response;
   }
@@ -109,7 +109,7 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   // Enforce Writer or Admin role requirement for updating articles
-  const rbac = await requireRole('writer', 'admin');
+  const rbac = await requireRole(request, 'writer', 'admin');
   if (!rbac.authorized) {
     return rbac.response;
   }

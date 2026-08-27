@@ -129,7 +129,7 @@ export default function TechnologyPage() {
       guidesTitle="Technology Guides"
       guidesDescription="Background context and practical insights on challenging topics and what to do about it."
       guides={guides}
-      newsTitle="Technology News"
+      newsTitle="Technology More News"
       newsDescription="Things happening now that you need to know to find new ideas."
       newsArticles={newsArticles}
     />

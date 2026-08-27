@@ -123,7 +123,7 @@ export default function BusinessPage() {
       guidesTitle="Business Guides"
       guidesDescription="Background context and practical insights on challenging topics and what to do about it."
       guides={guides}
-      newsTitle="Business News"
+      newsTitle="Business More News"
       newsDescription="Everything happening now that you need to know to find new ideas."
       newsArticles={newsArticles}
     />

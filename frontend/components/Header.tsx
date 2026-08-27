@@ -5,9 +5,10 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Search, ChevronDown, User, Mail, Menu, X, PenTool, LogOut, Settings, BookOpen, ShieldCheck, Bell } from "lucide-react";
-import { saveUserProfile, getUserProfile } from "@/lib/userProfiles";
+import { saveUserProfile, getUserProfile, resolveUserAvatar } from "@/lib/userProfiles";
 import { useLiveArticles } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
+import { getAllSearchableArticles, searchArticlesByQuery, SearchableArticle } from "@/lib/searchArticles";
 
 const megaMenuData: Record<string, {
   diveDeeper: string[];
@@ -89,10 +90,17 @@ export default function Header() {
 
   const userDropdownRef = useRef<HTMLDivElement>(null);
   const notifDropdownRef = useRef<HTMLDivElement>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
 
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [allSearchArticles, setAllSearchArticles] = useState<SearchableArticle[]>([]);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [articleNotifications, setArticleNotifications] = useState<{ id: string; title: string; status: string; date: string }[]>([]);
   const { articles: liveArticles } = useLiveArticles();
+
+  useEffect(() => {
+    setAllSearchArticles(getAllSearchableArticles());
+  }, [liveArticles]);
 
   useEffect(() => {
     if (Array.isArray(liveArticles)) {
@@ -100,11 +108,24 @@ export default function Header() {
     }
   }, [liveArticles]);
 
-  // Close notifications dropdown on click outside
+  // Close all menus/dropdowns on route navigation
+  useEffect(() => {
+    setActiveMenu(null);
+    setIsMobileMenuOpen(false);
+    setIsUserDropdownOpen(false);
+    setIsNotificationsOpen(false);
+    setIsEditionOpen(false);
+    setIsSearchFocused(false);
+  }, [pathname]);
+
+  // Close notifications & search dropdown on click outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (notifDropdownRef.current && !notifDropdownRef.current.contains(event.target as Node)) {
         setIsNotificationsOpen(false);
+      }
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setIsSearchFocused(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -171,15 +192,28 @@ export default function Header() {
   const auth = useAuth();
 
   useEffect(() => {
+    try {
+      router.prefetch("/search");
+    } catch (e) {}
+  }, [router]);
+
+  useEffect(() => {
     if (auth.user) {
       const savedProfile = getUserProfile(auth.user.email);
       const normalizedRole = (auth.user.role || "").toLowerCase();
       const displayRole = normalizedRole === 'admin' ? 'Admin' : normalizedRole === 'writer' ? 'Writer' : 'Reader';
+      const resolvedAvatar = resolveUserAvatar({
+        name: savedProfile?.name || auth.user.name,
+        email: auth.user.email,
+        role: displayRole,
+        avatar: savedProfile?.avatar,
+      });
+
       setCurrentUser({
         name: savedProfile?.name || auth.user.name,
         email: auth.user.email,
         role: displayRole,
-        avatar: savedProfile?.avatar || (displayRole === 'Admin' ? '/author_beard.jpg' : displayRole === 'Writer' ? '/author_woman.jpg' : '/author_bluesuit.jpg'),
+        avatar: resolvedAvatar,
         bio: savedProfile?.bio,
         linkedin: savedProfile?.linkedin
       });
@@ -221,11 +255,58 @@ export default function Header() {
     router.push(query ? `/search?q=${encodeURIComponent(query)}` : "/search");
   };
 
+  const isCurrentCategoryActive = (cat: { name: string; href: string }) => {
+    if (!pathname) return false;
+    const currentPath = pathname.toLowerCase();
+    const catName = cat.name.toLowerCase();
+
+    if (catName === "world") {
+      return (
+        currentPath === "/news/world" ||
+        currentPath === "/world" ||
+        currentPath.startsWith("/news/world/") ||
+        currentPath.startsWith("/world/") ||
+        ["/china", "/united-states", "/europe", "/britain", "/middle-east", "/africa", "/asia"].some(r => currentPath === r || currentPath.startsWith(r + "/"))
+      );
+    }
+    if (catName === "politics") {
+      return currentPath === "/news/politics" || currentPath === "/politics" || currentPath.startsWith("/news/politics/") || currentPath.startsWith("/politics/");
+    }
+    if (catName === "business") {
+      return currentPath === "/business" || currentPath.startsWith("/business/");
+    }
+    if (catName === "technology") {
+      return currentPath === "/technology" || currentPath.startsWith("/technology/");
+    }
+    if (catName === "economy") {
+      return currentPath === "/news/economy" || currentPath === "/economy" || currentPath.startsWith("/news/economy/") || currentPath.startsWith("/economy/");
+    }
+    if (catName === "markets") {
+      return currentPath === "/news/markets" || currentPath === "/markets" || currentPath.startsWith("/news/markets/") || currentPath.startsWith("/markets/");
+    }
+    if (catName === "lifestyle") {
+      return currentPath === "/news/lifestyle" || currentPath === "/lifestyle" || currentPath.startsWith("/news/lifestyle/") || currentPath.startsWith("/lifestyle/");
+    }
+    if (catName === "sports") {
+      return currentPath === "/news/sports" || currentPath === "/sports" || currentPath.startsWith("/news/sports/") || currentPath.startsWith("/sports/");
+    }
+    if (catName === "entertainment") {
+      return currentPath === "/news/entertainment" || currentPath === "/entertainment" || currentPath.startsWith("/news/entertainment/") || currentPath.startsWith("/entertainment/");
+    }
+    if (catName === "health") {
+      return currentPath === "/news/health" || currentPath === "/health" || currentPath.startsWith("/news/health/") || currentPath.startsWith("/health/");
+    }
+    if (catName === "research") {
+      return currentPath === "/industry-insights" || currentPath === "/research" || currentPath.startsWith("/industry-insights/") || currentPath.startsWith("/research/");
+    }
+    return currentPath === cat.href.toLowerCase();
+  };
+
   const navCategories = [
-    { name: "World", href: "/news/world", hasSub: true, active: true },
-    { name: "Politics", href: "/news/politics", hasSub: true },
-    { name: "Business", href: "/business", hasSub: true },
-    { name: "Technology", href: "/technology", hasSub: true },
+    { name: "World", href: "/news/world", hasSub: true },
+    { name: "Politics", href: "/news/politics", hasSub: false },
+    { name: "Business", href: "/business", hasSub: false },
+    { name: "Technology", href: "/technology", hasSub: false },
     { name: "Economy", href: "/news/economy", hasSub: false },
     { name: "Markets", href: "/news/markets", hasSub: false },
     { name: "Lifestyle", href: "/news/lifestyle", hasSub: false },
@@ -255,7 +336,7 @@ export default function Header() {
   ];
 
   return (
-    <header className="relative w-full bg-white text-gray-900 z-50 font-sans border-b border-gray-200">
+    <header className="relative w-full bg-white text-gray-900 font-sans">
       
       {/* Sign-in Toast Banner */}
       {toastMessage && (
@@ -267,8 +348,9 @@ export default function Header() {
         </div>
       )}
 
-      {/* ================= ROW 1: BRAND LOGO, SEARCH, & ACTION BUTTONS ================= */}
-      <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 sm:gap-6 relative z-50 w-full">
+      {/* ================= ROW 1 (FIXED TOP): BRAND LOGO, SEARCH, & ACTION BUTTONS ================= */}
+      <div className="fixed top-0 left-0 right-0 z-50 w-full bg-white border-b border-gray-200 shadow-xs">
+        <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 sm:gap-6 relative z-50 w-full">
         
         {/* LOGO & BRAND */}
         <Link href="/" className="flex items-center group shrink-0 py-0.5" aria-label="London BigBen">
@@ -282,26 +364,26 @@ export default function Header() {
           />
         </Link>
 
-        {/* SEARCH INPUT BAR */}
-        <form 
-          onSubmit={handleSearchSubmit} 
-          className="hidden md:flex items-center relative flex-1 max-w-[460px] lg:max-w-[540px] mx-4 lg:mx-8"
-        >
-          <input
-            type="text"
-            placeholder="Search for news, topics, companies..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-4 pr-10 py-2 text-[13px] border border-gray-300 rounded-full focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-[#BF1E2D] bg-gray-50/70 hover:bg-white focus:bg-white text-gray-800 placeholder-gray-400 transition-all cursor-pointer shadow-2xs"
-          />
-          <button
-            type="submit"
-            className="absolute right-3.5 text-gray-400 hover:text-[#BF1E2D] cursor-pointer transition-colors"
-            aria-label="Submit Search"
-          >
-            <Search size={16} strokeWidth={2.2} />
-          </button>
-        </form>
+        {/* SEARCH INPUT BAR (Instant navigation link to /search, hidden when already on /search) */}
+        {pathname !== "/search" ? (
+          <div className="hidden md:block relative flex-1 max-w-[460px] lg:max-w-[540px] mx-4 lg:mx-8">
+            <Link
+              href="/search"
+              prefetch={true}
+              className="flex items-center justify-between w-full pl-4 pr-3.5 py-2 text-[13px] border border-gray-300 rounded-full bg-gray-50/70 hover:bg-white hover:border-[#BF1E2D] text-gray-400 hover:text-gray-700 transition-all cursor-pointer shadow-2xs group"
+              aria-label="Open Search"
+            >
+              <span className="truncate select-none">
+                Search for news, topics, companies...
+              </span>
+              <span className="text-gray-400 group-hover:text-[#BF1E2D] transition-colors ml-2 shrink-0">
+                <Search size={16} strokeWidth={2.2} />
+              </span>
+            </Link>
+          </div>
+        ) : (
+          <div className="hidden md:block flex-1 mx-4 lg:mx-8" />
+        )}
 
         {/* RIGHT ACTION BUTTONS */}
         <div className="flex items-center gap-2 sm:gap-3.5 text-[13px] font-medium shrink-0">
@@ -344,14 +426,14 @@ export default function Header() {
 
               {/* USER ACCOUNT DROPDOWN POPOVER */}
               {isUserDropdownOpen && (
-                <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-slate-200 shadow-2xl rounded-xl text-left z-[1000] overflow-hidden font-sans animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="absolute right-0 top-full mt-1.5 w-52 bg-white border border-slate-200 shadow-xl rounded-xl text-left z-[1000] overflow-hidden font-sans animate-in fade-in slide-in-from-top-1 duration-150">
                   
                   {/* Section 1: User Profile Header */}
-                  <div className="px-5 py-4 border-b border-slate-100">
-                    <p className="text-sm font-extrabold text-slate-900 leading-snug tracking-tight">
+                  <div className="px-3.5 py-2.5 border-b border-slate-100 bg-slate-50/50">
+                    <p className="text-[12.5px] font-extrabold text-slate-900 leading-snug tracking-tight truncate">
                       {currentUser.name || "rushdi admin"}
                     </p>
-                    <p className="text-xs text-slate-400 font-mono tracking-tight mt-0.5 font-normal truncate">
+                    <p className="text-[10px] text-slate-400 font-mono tracking-tight mt-0.5 truncate">
                       {currentUser.email || "rushdhi5002@gmail.com"}
                     </p>
                   </div>
@@ -361,10 +443,10 @@ export default function Header() {
                     <Link
                       href="/admin"
                       onClick={() => setIsUserDropdownOpen(false)}
-                      className="px-5 py-3 flex items-center gap-3 border-b border-slate-100 hover:bg-red-50/50 transition-colors cursor-pointer group"
+                      className="px-3.5 py-2 flex items-center gap-2.5 border-b border-slate-100 hover:bg-red-50/50 transition-colors cursor-pointer group"
                     >
-                      <ShieldCheck size={18} className="text-[#D31220] flex-shrink-0" />
-                      <span className="text-[#D31220] font-extrabold text-sm tracking-tight">
+                      <ShieldCheck size={15} className="text-[#D31220] flex-shrink-0" />
+                      <span className="text-[#D31220] font-bold text-xs tracking-tight">
                         Admin Control Panel
                       </span>
                     </Link>
@@ -375,10 +457,10 @@ export default function Header() {
                     <Link
                       href="/writer"
                       onClick={() => setIsUserDropdownOpen(false)}
-                      className="px-5 py-3 flex items-center gap-3 border-b border-slate-100 hover:bg-blue-50/50 transition-colors cursor-pointer group"
+                      className="px-3.5 py-2 flex items-center gap-2.5 border-b border-slate-100 hover:bg-blue-50/50 transition-colors cursor-pointer group"
                     >
-                      <PenTool size={18} className="text-[#1B50E8] flex-shrink-0" />
-                      <span className="text-[#1B50E8] font-bold text-sm tracking-tight">
+                      <PenTool size={15} className="text-[#1B50E8] flex-shrink-0" />
+                      <span className="text-[#1B50E8] font-bold text-xs tracking-tight">
                         Author Workspace
                       </span>
                     </Link>
@@ -389,10 +471,10 @@ export default function Header() {
                     <Link
                       href="/reader"
                       onClick={() => setIsUserDropdownOpen(false)}
-                      className="px-5 py-3 flex items-center gap-3 border-b border-slate-100 hover:bg-red-50/40 transition-colors cursor-pointer group"
+                      className="px-3.5 py-2 flex items-center gap-2.5 border-b border-slate-100 hover:bg-red-50/40 transition-colors cursor-pointer group"
                     >
-                      <BookOpen size={18} className="text-[#BF1E2D] flex-shrink-0" />
-                      <span className="text-[#BF1E2D] font-bold text-sm tracking-tight">
+                      <BookOpen size={15} className="text-[#BF1E2D] flex-shrink-0" />
+                      <span className="text-[#BF1E2D] font-bold text-xs tracking-tight">
                         Reader Dashboard
                       </span>
                     </Link>
@@ -404,10 +486,10 @@ export default function Header() {
                       setIsUserDropdownOpen(false);
                       setIsProfileSettingsOpen(true);
                     }}
-                    className="w-full text-left px-5 py-3 flex items-center gap-3 border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer group"
+                    className="w-full text-left px-3.5 py-2 flex items-center gap-2.5 border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer group"
                   >
-                    <User size={18} className="text-slate-400 group-hover:text-slate-700 flex-shrink-0" />
-                    <span className="text-slate-800 font-bold text-sm tracking-tight">
+                    <User size={15} className="text-slate-400 group-hover:text-slate-700 flex-shrink-0" />
+                    <span className="text-slate-800 font-bold text-xs tracking-tight">
                       Profile Settings
                     </span>
                   </button>
@@ -415,10 +497,10 @@ export default function Header() {
                   {/* Sign Out Terminal Option */}
                   <button
                     onClick={handleSignOut}
-                    className="w-full text-left px-5 py-3 flex items-center gap-3 hover:bg-slate-50 transition-colors cursor-pointer group"
+                    className="w-full text-left px-3.5 py-2 flex items-center gap-2.5 hover:bg-slate-50 transition-colors cursor-pointer group"
                   >
-                    <LogOut size={18} className="text-slate-400 group-hover:text-slate-700 flex-shrink-0" />
-                    <span className="text-slate-800 font-bold text-sm tracking-tight">
+                    <LogOut size={15} className="text-slate-400 group-hover:text-slate-700 flex-shrink-0" />
+                    <span className="text-slate-800 font-bold text-xs tracking-tight">
                       Sign Out Terminal
                     </span>
                   </button>
@@ -456,9 +538,13 @@ export default function Header() {
         </div>
 
       </div>
+    </div>
+
+      {/* Spacer placeholder matching fixed Row 1 height */}
+      <div className="h-[58px] sm:h-[68px] w-full" aria-hidden="true" />
 
       {/* ================= ROW 2: CATEGORY NAVIGATION BAR ================= */}
-      <div className="w-full border-t border-b border-gray-200 bg-white relative z-40 overflow-visible">
+      <div className="w-full border-b border-gray-200 bg-white relative z-40 overflow-visible">
         <div className="max-w-[1400px] mx-auto px-3 sm:px-6 flex items-center justify-between gap-4 w-full overflow-visible">
           
           {/* Main Horizontal Category Nav Items */}
@@ -466,11 +552,12 @@ export default function Header() {
             {navCategories.map((cat) => {
               const isWorld = cat.name === "World";
               const isWorldActive = isWorld && activeMenu === "WORLD";
+              const isActive = isCurrentCategoryActive(cat);
 
               return (
                 <div
                   key={cat.name}
-                  className={`relative flex items-center group ${isWorld ? "cursor-pointer" : ""}`}
+                  className="relative flex items-center group"
                   onMouseEnter={() => {
                     if (isWorld) {
                       setActiveMenu("WORLD");
@@ -480,24 +567,27 @@ export default function Header() {
                   }}
                   onMouseLeave={() => setActiveMenu(null)}
                 >
-                  {isWorld ? (
-                    <div className="flex items-center gap-1 border-b-2 border-[#BF1E2D] pb-0.5 px-1.5 cursor-pointer">
-                      <Link
-                        href="/news/world"
-                        className="transition-colors text-gray-900 font-bold hover:text-[#BF1E2D] flex items-center gap-1"
-                      >
-                        <span>World</span>
-                        <ChevronDown size={12} strokeWidth={2.5} className="text-gray-500 group-hover:text-[#BF1E2D] transition-transform duration-200 group-hover:rotate-180" />
-                      </Link>
-                    </div>
-                  ) : (
-                    <Link
-                      href={cat.href}
-                      className="flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded transition-colors text-gray-800 hover:text-[#BF1E2D] hover:bg-gray-50"
-                    >
-                      <span>{cat.name}</span>
-                    </Link>
-                  )}
+                  <Link
+                    href={cat.href}
+                    onClick={() => {
+                      setActiveMenu(null);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`flex items-center gap-1 pb-0.5 px-1.5 transition-colors font-bold whitespace-nowrap ${
+                      isActive
+                        ? "text-gray-900 border-b-2 border-[#BF1E2D]"
+                        : "text-gray-800 hover:text-[#BF1E2D] border-b-2 border-transparent"
+                    }`}
+                  >
+                    <span>{cat.name}</span>
+                    {isWorld && (
+                      <ChevronDown
+                        size={12}
+                        strokeWidth={2.5}
+                        className="text-gray-500 group-hover:text-[#BF1E2D] transition-transform duration-200 group-hover:rotate-180"
+                      />
+                    )}
+                  </Link>
 
                   {/* Dropdown Menu on Hover for World (Countries & Regions List) */}
                   {isWorld && (
@@ -621,19 +711,18 @@ export default function Header() {
       {isMobileMenuOpen && (
         <div className="md:hidden bg-white text-gray-900 border-t border-gray-200 py-4 px-4 space-y-4 shadow-2xl animate-in slide-in-from-top-2 duration-200">
           
-          {/* Mobile Search Input */}
-          <form onSubmit={handleSearchSubmit} className="relative">
-            <input
-              type="text"
-              placeholder="Search news, topics, companies..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-4 pr-10 py-2.5 text-xs border border-gray-300 rounded-full focus:outline-none focus:border-[#BF1E2D] bg-gray-50 text-gray-900 cursor-pointer"
-            />
-            <button type="submit" className="absolute right-3 top-2.5 text-gray-400">
-              <Search size={16} />
-            </button>
-          </form>
+          {/* Mobile Search Button (Instant navigation link to /search, hidden on /search page) */}
+          {pathname !== "/search" && (
+            <Link
+              href="/search"
+              prefetch={true}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="flex items-center justify-between w-full pl-4 pr-3.5 py-2.5 text-xs border border-gray-300 rounded-full bg-gray-50 text-gray-500 hover:text-gray-900 cursor-pointer"
+            >
+              <span>Search news, topics, companies...</span>
+              <Search size={16} className="text-gray-400" />
+            </Link>
+          )}
 
           {/* Action Row 1: Subscribe & Newsletter */}
           <div className="grid grid-cols-2 gap-2.5">

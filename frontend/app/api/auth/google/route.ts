@@ -54,6 +54,15 @@ export async function POST(request: Request) {
     const normalized = normalizeEmail(verifiedEmail);
     const userName = verifiedName || normalized.split('@')[0];
 
+    // Check if user was deleted/revoked by administrator
+    const isDeleted = await DB.isEmailDeleted(normalized);
+    if (isDeleted) {
+      return NextResponse.json(
+        { error: 'Access Denied: This account has been removed by the administrator. Access is disabled until an admin re-adds this account.' },
+        { status: 403 }
+      );
+    }
+
     // Query existing user in DB
     const existingUser = await DB.getUserByEmail(normalized);
     let userPayload;
