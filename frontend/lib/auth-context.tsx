@@ -171,19 +171,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setUser(updated);
                 saveTabSession(updated);
               }
+            } else {
+              // Session expired or invalid on server
+              setUser(null);
+              saveTabSession(null);
             }
           })
           .catch(() => {});
       } else {
-        fetchCurrentUser();
+        // No active session for this tab - stay signed out
+        setUser(null);
+        setLoading(false);
       }
     }
 
     const handleAuthEvent = () => {
-      // Only re-fetch if this tab has no session (e.g., after explicit logout)
       const cached = getTabSession();
       if (!cached) {
-        fetchCurrentUser();
+        setUser(null);
+        setLoading(false);
       }
     };
 

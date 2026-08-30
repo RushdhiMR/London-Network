@@ -47,6 +47,32 @@ export default function EditorsPicks() {
 
   useEffect(() => {
     try {
+      const getArticleTimestamp = (item: any): number => {
+        if (!item) return 0;
+        if (item.createdAt) {
+          const t = new Date(item.createdAt).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+        if (item.created_at) {
+          const t = new Date(item.created_at).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+        if (item.publishedAt) {
+          const t = new Date(item.publishedAt).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+        if (item.date) {
+          const t = new Date(item.date).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+        if (typeof item.id === "number") return item.id;
+        if (typeof item.id === "string") {
+          const num = parseInt(item.id.replace(/[^0-9]/g, ""), 10);
+          if (!isNaN(num) && num > 0) return num;
+        }
+        return 0;
+      };
+
       const picks = (Array.isArray(liveArticles) ? liveArticles : []).filter(
         (a) => {
           if (!a || (a.status || "").toLowerCase() !== "published") return false;
@@ -54,6 +80,8 @@ export default function EditorsPicks() {
           return pl.includes("editor") || a.is_editors_pick === true;
         }
       );
+
+      picks.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
 
       if (picks.length > 0) {
         const formatted = picks.map((post, idx) => {

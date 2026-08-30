@@ -16,11 +16,39 @@ export default function LatestNewsSection() {
 
   useEffect(() => {
     try {
+      const getArticleTimestamp = (item: any): number => {
+        if (!item) return 0;
+        if (item.createdAt) {
+          const t = new Date(item.createdAt).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+        if (item.created_at) {
+          const t = new Date(item.created_at).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+        if (item.publishedAt) {
+          const t = new Date(item.publishedAt).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+        if (item.date) {
+          const t = new Date(item.date).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+        if (typeof item.id === "number") return item.id;
+        if (typeof item.id === "string") {
+          const num = parseInt(item.id.replace(/[^0-9]/g, ""), 10);
+          if (!isNaN(num) && num > 0) return num;
+        }
+        return 0;
+      };
+
       const approved = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
         if (!p || (p.status || "").toLowerCase() !== "published") return false;
         const pl = (p.placement || "").toLowerCase();
         return pl.includes("latest") || pl === "latest news" || pl === "latest news section";
       });
+
+      approved.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
       const formatted = approved.map((post, idx) => ({
         id: post.id || `pub-latest-${idx}`,
         category: (post.category || "WORLD").toUpperCase(),

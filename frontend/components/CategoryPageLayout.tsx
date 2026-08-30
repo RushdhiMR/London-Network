@@ -64,17 +64,45 @@ export default function CategoryPageLayout({
   // Find all published live articles that match this category or subcategory
   const cleanTarget = (categoryName || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
+  const getArticleTimestamp = (item: any): number => {
+    if (!item) return 0;
+    if (item.published_at || item.publishedAt) {
+      const t = new Date(item.published_at || item.publishedAt).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    if (item.createdAt || item.created_at) {
+      const t = new Date(item.createdAt || item.created_at).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    if (item.date && item.date !== "Just now" && item.date !== "Today" && item.date !== "Just published") {
+      const t = new Date(item.date).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    if (typeof item.id === "number") return item.id;
+    if (typeof item.id === "string") {
+      const match = item.id.match(/\d{10,}/);
+      if (match) {
+        const num = parseInt(match[0], 10);
+        if (!isNaN(num) && num > 0) return num;
+      }
+      const num = parseInt(item.id.replace(/[^0-9]/g, ""), 10);
+      if (!isNaN(num) && num > 0) return num;
+    }
+    return 0;
+  };
+
   const matchingLive = (Array.isArray(liveArticles) ? liveArticles : []).filter((art: any) => {
-    if (!art || (art.status !== "Published" && (art.status || "").toLowerCase() !== "published")) return false;
+    if (!art) return false;
+    const st = (art.status || "").toLowerCase().trim();
+    if (st !== "published" && st !== "approved") return false;
     return articleMatchesCategory(art, cleanTarget || categoryName);
-  // Sort newest first: higher numeric id = newer; fall back to date string comparison
   }).sort((a: any, b: any) => {
+    const timeA = getArticleTimestamp(a);
+    const timeB = getArticleTimestamp(b);
+    if (timeA !== timeB) return timeB - timeA;
     const aId = Number(a.id) || 0;
     const bId = Number(b.id) || 0;
-    if (aId !== bId) return bId - aId;
-    const aDate = new Date(a.date || a.published_at || 0).getTime() || 0;
-    const bDate = new Date(b.date || b.published_at || 0).getTime() || 0;
-    return bDate - aDate;
+    return bId - aId;
   });
 
   const resolveLiveAuthorName = (rawAuthor?: string) => {
@@ -91,18 +119,30 @@ export default function CategoryPageLayout({
         title: matchingLive[0].title,
         description: matchingLive[0].summary || matchingLive[0].description || (matchingLive[0].content ? matchingLive[0].content.replace(/<[^>]+>/g, "").slice(0, 180) + "..." : featured.description),
         image: matchingLive[0].imageUrl || matchingLive[0].image || (matchingLive[0] as any).image_url || featured.image,
-        author: matchingLive[0].authorName || (matchingLive[0] as any).author_name || (matchingLive[0] as any).author || featured.author,
-        date: matchingLive[0].date || featured.date
+        author: resolveLiveAuthorName(matchingLive[0].authorName || (matchingLive[0] as any).author_name || (matchingLive[0] as any).author) || featured.author,
+        date: matchingLive[0].date || (matchingLive[0].published_at ? new Date(matchingLive[0].published_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : featured.date)
       }
     : featured;
 
-  const sideBoxArticles = secondaryArticles.slice(0, 4);
-  const activeSecondaryArticles = secondaryArticles.slice(0, 4);
+  // The older articles (relative to the brand new featured hero article) show top-to-bottom in order newest to oldest:
+  const liveSecondaryFormatted: Article[] = matchingLive.slice(1, 5).map((a: any) => ({
+    title: a.title,
+    image: a.imageUrl || a.image || a.image_url || "/ai_hero.png",
+    date: a.date ? `By ${resolveLiveAuthorName(a.authorName || a.author_name || a.author)} • ${a.date}` : (a.published_at ? `By ${resolveLiveAuthorName(a.authorName || a.author_name || a.author)} • ${new Date(a.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : "July 2026"),
+    description: a.summary || a.description || (a.content ? a.content.replace(/<[^>]+>/g, "").slice(0, 140) + "..." : "")
+  }));
+
+  const sideBoxArticles = [
+    ...liveSecondaryFormatted,
+    ...secondaryArticles.filter(sa => !liveSecondaryFormatted.some(la => la.title.toLowerCase().trim() === sa.title.toLowerCase().trim()))
+  ].slice(0, 4);
+
+  const activeSecondaryArticles = sideBoxArticles;
 
   const liveFormattedArticles: Article[] = matchingLive.map((a: any) => ({
     title: a.title,
     image: a.imageUrl || a.image || a.image_url || "/ai_hero.png",
-    date: a.date ? `By ${a.authorName || a.author_name || a.author || "Staff Journalist"} • ${a.date}` : `By ${a.authorName || a.author_name || a.author || "Staff Journalist"} • Jul 2026`,
+    date: a.date ? `By ${resolveLiveAuthorName(a.authorName || a.author_name || a.author)} • ${a.date}` : `By ${resolveLiveAuthorName(a.authorName || a.author_name || a.author)} • Jul 2026`,
     description: a.summary || a.description || (a.content ? a.content.replace(/<[^>]+>/g, "").slice(0, 140) + "..." : "")
   }));
 

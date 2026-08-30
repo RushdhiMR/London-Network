@@ -160,6 +160,28 @@ export default function CreatePostPage() {
   const [category, setCategory] = useState("Business");
   const [selectedSubcategories, setSelectedSubcategories] = useState<string[]>([]);
   const [placement, setPlacement] = useState("Standard Post");
+  const [adSlot, setAdSlot] = useState("none");
+
+  const normalizePlacement = (pl: string | undefined | null): string => {
+    if (!pl) return "Standard Post";
+    const clean = pl.toLowerCase().trim();
+    if (clean.includes("a+ section 2") || clean.includes("a+ 2") || clean.includes("section 2")) {
+      return "Home Page A+ Section 2";
+    }
+    if (clean.includes("a+") || clean.includes("hero")) {
+      return "Home Page A+ Section";
+    }
+    if (clean.includes("trending")) {
+      return "Trending Now";
+    }
+    if (clean.includes("editor") || clean.includes("pick")) {
+      return "Editor's Picks";
+    }
+    if (clean.includes("latest")) {
+      return "Latest News";
+    }
+    return "Standard Post";
+  };
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [readDuration, setReadDuration] = useState("5 min read");
@@ -269,9 +291,18 @@ export default function CreatePostPage() {
           }
 
           if (foundArticle) {
+            const rawFoundPlacement = foundArticle.placement || (foundArticle.is_featured ? "Home Page A+ Section" : foundArticle.is_editors_pick ? "Editor's Picks" : null);
+            const rawStoredPlacement = postToEdit?.placement || (postToEdit?.is_featured ? "Home Page A+ Section" : postToEdit?.is_editors_pick ? "Editor's Picks" : null);
+            const finalPlacement = rawStoredPlacement && rawStoredPlacement !== "Standard Post" && rawStoredPlacement !== "None"
+              ? rawStoredPlacement
+              : (rawFoundPlacement || rawStoredPlacement || "Standard Post");
+
             postToEdit = {
               ...foundArticle,
               ...(postToEdit || {}),
+              placement: finalPlacement,
+              is_featured: foundArticle.is_featured ?? postToEdit?.is_featured,
+              is_editors_pick: foundArticle.is_editors_pick ?? postToEdit?.is_editors_pick,
               subcategories: (foundArticle.subcategories && foundArticle.subcategories.length > 0)
                 ? foundArticle.subcategories
                 : (foundArticle.subCategories || postToEdit?.subcategories || postToEdit?.subCategories || []),
@@ -352,7 +383,15 @@ export default function CreatePostPage() {
           }
 
           if (postToEdit.placement) {
-            setPlacement(postToEdit.placement);
+            setPlacement(normalizePlacement(postToEdit.placement));
+          } else if (postToEdit.is_editors_pick) {
+            setPlacement("Editor's Picks");
+          } else if (postToEdit.is_featured) {
+            setPlacement("Home Page A+ Section");
+          }
+
+          if (postToEdit.adSlot || postToEdit.adPlacement) {
+            setAdSlot(postToEdit.adSlot || postToEdit.adPlacement);
           }
 
           if (postToEdit.seo) {
@@ -375,6 +414,18 @@ export default function CreatePostPage() {
   }, [auth.loading, auth.authenticated, auth.user, router]);
 
   const selectedImgRef = useRef<HTMLImageElement | null>(null);
+  const savedSelectionRangeRef = useRef<Range | null>(null);
+
+  const saveCurrentSelection = () => {
+    if (typeof window === "undefined") return;
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && editorRef.current) {
+      const range = sel.getRangeAt(0);
+      if (editorRef.current.contains(range.commonAncestorContainer)) {
+        savedSelectionRangeRef.current = range.cloneRange();
+      }
+    }
+  };
 
   const updateImgBoundingRect = (imgOverride?: HTMLImageElement | null) => {
     const activeImg = imgOverride !== undefined ? imgOverride : (selectedImgRef.current || selectedImg);
@@ -504,14 +555,18 @@ export default function CreatePostPage() {
     if (!selectedImg || !editorRef.current) return;
 
     const figureToMove = (selectedImg.closest("figure") as HTMLElement) || selectedImg;
-    figureToMove.style.opacity = "0.35";
+    figureToMove.style.opacity = "0.4";
+    figureToMove.style.outline = "2px dashed #2563EB";
     document.body.style.cursor = "grabbing";
+    document.body.style.userSelect = "none";
 
     let targetBlock: HTMLElement | null = null;
     let isInsertAfter = false;
 
     const clearIndicators = () => {
-      document.querySelectorAll(".drop-indicator-active").forEach(el => {
+      if (!editorRef.current) return;
+      const allElements = editorRef.current.querySelectorAll(".drop-indicator-active");
+      allElements.forEach((el) => {
         (el as HTMLElement).classList.remove("drop-indicator-active");
         (el as HTMLElement).style.borderTop = "";
         (el as HTMLElement).style.borderBottom = "";
@@ -519,39 +574,60 @@ export default function CreatePostPage() {
     };
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!editorRef.current) return;
       clearIndicators();
-      const elemUnderPoint = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY) as HTMLElement | null;
-      if (elemUnderPoint && editorRef.current && editorRef.current.contains(elemUnderPoint)) {
-        const block = elemUnderPoint.closest("p, h1, h2, h3, h4, blockquote, figure, ul, ol, div") as HTMLElement | null;
-        if (block && block !== figureToMove && editorRef.current.contains(block)) {
-          targetBlock = block;
-          const rect = block.getBoundingClientRect();
-          isInsertAfter = (moveEvent.clientY - rect.top) > (rect.height / 2);
-          if (isInsertAfter) {
-            block.style.borderBottom = "3px solid #2563EB";
-          } else {
-            block.style.borderTop = "3px solid #2563EB";
-          }
-          block.classList.add("drop-indicator-active");
+
+      const blocks = Array.from(editorRef.current.children).filter(
+        (child) => child !== figureToMove && (child as HTMLElement).id !== "img-resize-toolbar" && (child as HTMLElement).id !== "img-selection-overlay"
+      ) as HTMLElement[];
+
+      if (blocks.length === 0) return;
+
+      const clientY = moveEvent.clientY;
+      let closestBlock: HTMLElement | null = null;
+      let closestDist = Infinity;
+      let placeAfter = false;
+
+      for (const block of blocks) {
+        const rect = block.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        const dist = Math.abs(clientY - midY);
+
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestBlock = block;
+          placeAfter = clientY > midY;
         }
+      }
+
+      if (closestBlock) {
+        targetBlock = closestBlock;
+        isInsertAfter = placeAfter;
+        if (placeAfter) {
+          closestBlock.style.borderBottom = "3px solid #2563EB";
+        } else {
+          closestBlock.style.borderTop = "3px solid #2563EB";
+        }
+        closestBlock.classList.add("drop-indicator-active");
       }
     };
 
     const handleMouseUp = () => {
-      document.body.style.cursor = "default";
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
       figureToMove.style.opacity = "1";
+      figureToMove.style.outline = "";
       clearIndicators();
 
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
 
       if (targetBlock && targetBlock !== figureToMove && editorRef.current && editorRef.current.contains(targetBlock)) {
-        // Move the node in the DOM directly with zero duplication
         figureToMove.remove();
         if (isInsertAfter) {
-          targetBlock.parentNode?.insertBefore(figureToMove, targetBlock.nextSibling);
+          targetBlock.after(figureToMove);
         } else {
-          targetBlock.parentNode?.insertBefore(figureToMove, targetBlock);
+          targetBlock.before(figureToMove);
         }
         if (editorRef.current) {
           setContent(editorRef.current.innerHTML);
@@ -828,6 +904,16 @@ export default function CreatePostPage() {
 
     if (editorRef.current) {
       editorRef.current.focus();
+
+      // Restore saved cursor selection if available
+      const sel = window.getSelection();
+      if (savedSelectionRangeRef.current && sel) {
+        try {
+          sel.removeAllRanges();
+          sel.addRange(savedSelectionRangeRef.current);
+        } catch (e) {}
+      }
+
       document.execCommand("insertHTML", false, imgTag);
       setContent(editorRef.current.innerHTML);
     }
@@ -1155,20 +1241,26 @@ function isWorldOrWorldSub(cat: string): boolean {
       currentContent = editorRef.current.innerHTML || editorRef.current.innerText || "";
       setContent(currentContent);
     }
-    const cleanText = currentContent.replace(/<[^>]*>/g, "").trim();
-    if (!title.trim()) {
-      alert("Please enter an article title before submitting.");
+    const finalTitle = title.trim();
+    if (!finalTitle) {
+      alert("Please enter an article title before submitting for review.");
       return;
     }
-    if (!cleanText) {
-      alert("Please write body content for your article before submitting.");
-      return;
+
+    let hasImage = !!imageUrl.trim();
+    if (!hasImage && editorRef.current) {
+      const firstImg = editorRef.current.querySelector("img");
+      if (firstImg && firstImg.src) hasImage = true;
     }
-    const hasImage = !!(imageUrl && imageUrl.trim()) || currentContent.includes("<img");
+    if (!hasImage && currentContent) {
+      hasImage = /<img[^>]+src=["'][^"']+["']/i.test(currentContent);
+    }
+
     if (!hasImage) {
-      alert("⚠️ Image Required: Please add a cover image or insert an image into your article before submitting for review.");
+      alert("Please insert an image before submitting the article for review.");
       return;
     }
+
     setSubmittingAction("publish");
     savePost("Pending review", currentContent);
   };
@@ -1179,22 +1271,26 @@ function isWorldOrWorldSub(cat: string): boolean {
       currentContent = editorRef.current.innerHTML || editorRef.current.innerText || "";
       setContent(currentContent);
     }
-    const cleanText = currentContent.replace(/<[^>]*>/g, "").trim();
+    const finalTitle = title.trim() || "Untitled Article";
     if (!title.trim()) {
-      alert("Please enter an article title.");
-      return;
+      setTitle(finalTitle);
     }
-    if (status !== "Draft" && !cleanText) {
-      alert("Please write body content for your article before publishing.");
-      return;
-    }
-    if (status !== "Draft") {
-      const hasImage = !!(imageUrl && imageUrl.trim()) || currentContent.includes("<img");
+
+    if (status === "Pending review" || status === "Published") {
+      let hasImage = !!imageUrl.trim();
+      if (!hasImage && editorRef.current) {
+        const firstImg = editorRef.current.querySelector("img");
+        if (firstImg && firstImg.src) hasImage = true;
+      }
+      if (!hasImage && currentContent) {
+        hasImage = /<img[^>]+src=["'][^"']+["']/i.test(currentContent);
+      }
       if (!hasImage) {
-        alert("⚠️ Image Required: Please add a cover image or insert an image into your article before publishing.");
+        alert("Please insert an image before submitting the article for review.");
         return;
       }
     }
+
     setSubmittingAction(status === "Draft" ? "draft" : "publish");
     savePost(status, currentContent);
   };
@@ -1211,6 +1307,28 @@ function isWorldOrWorldSub(cat: string): boolean {
     }
 
     let processedImageUrl = imageUrl.trim();
+    if (!processedImageUrl && editorRef.current) {
+      const firstImg = editorRef.current.querySelector("img");
+      if (firstImg && firstImg.src) {
+        processedImageUrl = firstImg.src;
+      }
+    }
+    if (!processedImageUrl && bodyContent) {
+      const match = bodyContent.match(/<img[^>]+src=["']([^"']+)["']/i);
+      if (match) {
+        processedImageUrl = match[1];
+      }
+    }
+
+    if (status === "Pending review" || status === "Published") {
+      if (!processedImageUrl) {
+        alert("Please insert an image before submitting the article for review.");
+        setIsSubmitting(false);
+        setSubmittingAction(null);
+        return;
+      }
+    }
+
     if (processedImageUrl && !processedImageUrl.startsWith("data:image/webp") && !processedImageUrl.endsWith(".webp") && processedImageUrl.startsWith("data:image/")) {
       try {
         processedImageUrl = await convertToWebP(processedImageUrl, 0.85);
@@ -1273,8 +1391,9 @@ function isWorldOrWorldSub(cat: string): boolean {
       ogImage: processedImageUrl || undefined
     });
 
-    const isPostFeatured = placement === "Home Page A+ Section" || placement === "A+ Section" || placement === "Featured Story";
-    const isPostEditorsPick = placement === "Editors's Picks" || placement === "Editor's Pick" || placement === "Editors Picks" || placement === "Editor's Picks Section";
+    const canonicalPlacement = normalizePlacement(placement);
+    const isPostFeatured = canonicalPlacement === "Home Page A+ Section";
+    const isPostEditorsPick = canonicalPlacement === "Editor's Picks";
 
     const postToSave = {
       id: editingPostId || `post-${Date.now()}`,
@@ -1286,9 +1405,14 @@ function isWorldOrWorldSub(cat: string): boolean {
       content: bodyContent.trim(),
       imageUrl: processedImageUrl || "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=600&h=350&fit=crop",
       status: status,
+      rejectionReason: status === "Pending review" || status === "Published" ? undefined : undefined,
+      rejection_reason: status === "Pending review" || status === "Published" ? undefined : undefined,
+      rejectedAt: status === "Pending review" || status === "Published" ? undefined : undefined,
       date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
       reads: 0,
-      placement: placement || "Standard Post",
+      placement: canonicalPlacement,
+      adSlot: adSlot,
+      adPlacement: adSlot !== "none" ? adSlot : undefined,
       is_featured: isPostFeatured,
       is_editors_pick: isPostEditorsPick,
       tags: tags,
@@ -1312,18 +1436,70 @@ function isWorldOrWorldSub(cat: string): boolean {
       try {
         const subsStr = localStorage.getItem("dj_writer_submitted_articles");
         const existingList: any[] = subsStr ? JSON.parse(subsStr) : [];
-        const idx = existingList.findIndex(p => String(p.id) === String(postToSave.id) || (p.title && postToSave.title && p.title.trim().toLowerCase() === postToSave.title.trim().toLowerCase()));
-        let updatedList: any[];
-        if (idx >= 0) {
-          updatedList = [...existingList];
-          updatedList[idx] = { ...updatedList[idx], ...postToSave };
-        } else {
-          updatedList = [postToSave, ...existingList];
+        const targetId = String(postToSave.id);
+        const targetTitle = postToSave.title.trim().toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ');
+        
+        let foundInSubs = false;
+        const updatedList = existingList.map((p: any) => {
+          const pTitle = (p.title || "").trim().toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ');
+          if (String(p.id) === targetId || (pTitle && pTitle === targetTitle)) {
+            foundInSubs = true;
+            const updated = { ...p, ...postToSave, id: p.id || postToSave.id, status };
+            if (status === "Pending review" || status === "Published") {
+              delete updated.rejectionReason;
+              delete updated.rejection_reason;
+              delete updated.rejectedAt;
+            }
+            return updated;
+          }
+          return p;
+        });
+
+        if (!foundInSubs) {
+          updatedList.unshift(postToSave);
         }
-        localStorage.setItem("dj_writer_submitted_articles", JSON.stringify(updatedList));
+
+        // Deduplicate by normalized title and ID
+        const deduplicatedList: any[] = [];
+        const seenSubsTitles = new Set<string>();
+        const seenSubsIds = new Set<string>();
+        updatedList.forEach((item) => {
+          const tKey = (item.title || "").trim().toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ');
+          const idKey = String(item.id || "");
+          if ((!tKey || !seenSubsTitles.has(tKey)) && (!idKey || !seenSubsIds.has(idKey))) {
+            if (tKey) seenSubsTitles.add(tKey);
+            if (idKey) seenSubsIds.add(idKey);
+            deduplicatedList.push(item);
+          }
+        });
+
+        localStorage.setItem("dj_writer_submitted_articles", JSON.stringify(deduplicatedList));
+
+        // Also update live articles cache directly
+        const { getCachedArticles, setCachedArticles } = await import("@/lib/articlesSync");
+        const cached = getCachedArticles();
+        let foundInCache = false;
+        const updatedCache = cached.map((a: any) => {
+          const aTitle = (a.title || "").trim().toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ');
+          if (String(a.id) === targetId || (aTitle && aTitle === targetTitle)) {
+            foundInCache = true;
+            const updated = { ...a, ...postToSave, id: a.id || postToSave.id, status };
+            if (status === "Pending review" || status === "Published") {
+              delete updated.rejectionReason;
+              delete updated.rejection_reason;
+              delete updated.rejectedAt;
+            }
+            return updated;
+          }
+          return a;
+        });
+        if (!foundInCache) {
+          updatedCache.unshift(postToSave as any);
+        }
+        setCachedArticles(updatedCache, true);
       } catch (e) {}
 
-      await saveArticleToServer(postToSave);
+      saveArticleToServer(postToSave).catch(err => console.warn("Background server save:", err));
 
       try {
         localStorage.setItem(
@@ -1354,6 +1530,13 @@ function isWorldOrWorldSub(cat: string): boolean {
       const userRole = (currentUser?.role || auth.user?.role || "").toLowerCase();
       if (status === "Pending review") {
         router.push("/writer?tab=pending");
+        if (typeof window !== "undefined") {
+          setTimeout(() => {
+            if (window.location.pathname.includes("/writer/create")) {
+              window.location.href = "/writer?tab=pending";
+            }
+          }, 300);
+        }
       } else if (status === "Published") {
         if (userRole === "admin" || userRole === "co-admin") {
           router.push("/");
@@ -1363,7 +1546,7 @@ function isWorldOrWorldSub(cat: string): boolean {
       } else {
         router.push("/writer?tab=drafts");
       }
-    }, 600);
+    }, 200);
   };
 
   const handleApprovePublish = async () => {
@@ -1428,8 +1611,11 @@ function isWorldOrWorldSub(cat: string): boolean {
         content: liveContent,
         category: category,
         subcategories: selectedSubcategories,
-        tags: tags,
-        placement: placement,
+        placement: normalizePlacement(placement),
+        is_featured: normalizePlacement(placement) === "Home Page A+ Section",
+        is_editors_pick: normalizePlacement(placement) === "Editor's Picks",
+        adSlot: adSlot,
+        adPlacement: adSlot !== "none" ? adSlot : undefined,
         readDuration: readDuration,
         imageUrl: liveImageUrl,
         status: "Published",
@@ -1603,16 +1789,16 @@ function isWorldOrWorldSub(cat: string): boolean {
             <span>PREVIEW</span>
           </button>
 
-          {isReviewMode ? (
+          {isReviewMode || (isAdmin && editingPostId) ? (
             <>
               <button
                 type="button"
                 onClick={handleRejectToTrash}
                 disabled={isSubmitting}
-                className="bg-[#D31220] hover:bg-[#B91C1C] active:scale-[0.98] text-white font-bold text-[11px] sm:text-xs px-3.5 sm:px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-sm shadow-red-900/30 transition-all cursor-pointer uppercase tracking-wider disabled:opacity-60 disabled:cursor-not-allowed font-mono"
+                className="bg-[#8B0000] hover:bg-[#A00000] active:scale-[0.98] text-white font-bold text-[11px] sm:text-xs px-3.5 sm:px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-sm shadow-red-950/40 transition-all cursor-pointer uppercase tracking-wider disabled:opacity-60 disabled:cursor-not-allowed font-mono"
               >
                 <X size={14} strokeWidth={2.5} />
-                <span>REJECT</span>
+                <span>REJECT TO TRASH</span>
               </button>
 
               <button
@@ -1656,24 +1842,36 @@ function isWorldOrWorldSub(cat: string): boolean {
               </button>
 
               {isAdmin ? (
-                <button
-                  type="button"
-                  onClick={() => handleSaveArticle("Published")}
-                  disabled={isSubmitting}
-                  className="bg-[#059669] hover:bg-[#047857] active:scale-[0.98] text-white font-bold text-[10px] sm:text-xs px-3 sm:px-5 py-1.5 sm:py-2 rounded-xl flex items-center gap-1.5 sm:gap-2 shadow-sm shadow-emerald-600/30 transition-all cursor-pointer uppercase tracking-wider disabled:opacity-60 disabled:cursor-not-allowed font-mono"
-                >
-                  {isSubmitting && submittingAction === "publish" ? (
-                    <>
-                      <Loader2 size={14} className="animate-spin text-white" />
-                      <span>PUBLISHING...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check size={14} strokeWidth={3} />
-                      <span>PUBLISH LIVE</span>
-                    </>
-                  )}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={handleRejectToTrash}
+                    disabled={isSubmitting}
+                    className="bg-[#8B0000] hover:bg-[#A00000] active:scale-[0.98] text-white font-bold text-[10px] sm:text-xs px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl flex items-center gap-1.5 shadow-sm shadow-red-950/40 transition-all cursor-pointer uppercase tracking-wider disabled:opacity-60 disabled:cursor-not-allowed font-mono"
+                  >
+                    <X size={14} strokeWidth={2.5} />
+                    <span>REJECT TO TRASH</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSaveArticle("Published")}
+                    disabled={isSubmitting}
+                    className="bg-[#059669] hover:bg-[#047857] active:scale-[0.98] text-white font-bold text-[10px] sm:text-xs px-3 sm:px-5 py-1.5 sm:py-2 rounded-xl flex items-center gap-1.5 sm:gap-2 shadow-sm shadow-emerald-600/30 transition-all cursor-pointer uppercase tracking-wider disabled:opacity-60 disabled:cursor-not-allowed font-mono"
+                  >
+                    {isSubmitting && submittingAction === "publish" ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin text-white" />
+                        <span>PUBLISHING...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check size={14} strokeWidth={3} />
+                        <span>APPROVE & PUBLISH</span>
+                      </>
+                    )}
+                  </button>
+                </>
               ) : (
                 <button
                   type="button"
@@ -1853,6 +2051,7 @@ function isWorldOrWorldSub(cat: string): boolean {
                   if (selectedImg) {
                     handleEditSelectedImage(selectedImg);
                   } else {
+                    saveCurrentSelection();
                     setImageUrl("");
                     setImageCaption("");
                     setImageCredit("");
@@ -1871,11 +2070,11 @@ function isWorldOrWorldSub(cat: string): boolean {
       </div>
 
       {/* MAIN CONTENT WORKSPACE GRID */}
-      <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 pt-[124px] pb-4 flex-1 lg:h-[calc(100vh-124px)] lg:overflow-hidden">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start lg:h-full">
+      <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 pt-[124px] pb-16 flex-1">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
           {/* LEFT COLUMN: MAIN RICH TEXT ARTICLE CANVAS */}
-          <div className="lg:col-span-8 bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-10 shadow-sm hover:shadow-md transition-all min-h-[750px] flex flex-col lg:h-full lg:overflow-y-auto overscroll-contain scrollbar-thin">
+          <div className="lg:col-span-8 bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-10 shadow-sm hover:shadow-md transition-all min-h-[750px] flex flex-col">
 
             {/* TITLE INPUT - MULTI-LINE AUTO-EXPANDING TEXTAREA */}
             <textarea
@@ -2174,7 +2373,7 @@ function isWorldOrWorldSub(cat: string): boolean {
           </div>
 
           {/* RIGHT COLUMN: ARTICLE SETTINGS SIDEBAR PANEL */}
-          <div className="lg:col-span-4 bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs lg:h-full lg:overflow-y-auto overscroll-contain scrollbar-thin">
+          <div className="lg:col-span-4 bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs sticky top-[136px] max-h-[calc(100vh-150px)] overflow-y-auto scrollbar-thin">
             
             {/* Sidebar Title Header */}
             <div className="flex items-center gap-2 mb-5 text-slate-800">
@@ -2467,55 +2666,53 @@ function isWorldOrWorldSub(cat: string): boolean {
                   />
                 </div>
 
-                {/* 5. HOMEPAGE PLACEMENT SECTION (Admin Only) */}
-                {isAdmin && (
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block text-[10px] font-extrabold text-[#D31220] uppercase tracking-wider">
-                        HOMEPAGE PLACEMENT
-                      </label>
-                      <span className="text-[9.5px] font-mono text-slate-400">Admin Section Control</span>
-                    </div>
-
-                    <div className="space-y-1.5 bg-slate-50/80 border border-slate-200/90 rounded-2xl p-2.5">
-                      {[
-                        { id: "Home Page A+ Section", label: "Home Page A+ Section", desc: "Top Hero Carousel main story" },
-                        { id: "Trending Now", label: "Trending Now Section", desc: "Trending sidebar list beside Hero" },
-                        { id: "Editors's Picks", label: "Editor's Picks Section", desc: "4-Card featured row below Hero" },
-                        { id: "Latest News", label: "Latest News Section", desc: "Latest news feed and featured lead" },
-                        { id: "Home Page A+ Section 2", label: "Home Page A+ Section 2", desc: "Middle dark spotlight banner" },
-                        { id: "Standard Post", label: "Category Section Only", desc: "Default category news feed" },
-                      ].map((item) => {
-                        const isSelected = placement === item.id;
-                        return (
-                          <div
-                            key={item.id}
-                            onClick={() => setPlacement(item.id)}
-                            className={`flex items-start gap-2.5 p-2 rounded-xl cursor-pointer transition-all ${
-                              isSelected
-                                ? "bg-white border-2 border-[#D31220] shadow-sm"
-                                : "border border-transparent hover:bg-white/70"
-                            }`}
-                          >
-                            <div className={`w-4 h-4 mt-0.5 rounded-full border flex items-center justify-center shrink-0 ${
-                              isSelected ? "border-[#D31220] bg-[#D31220] text-white" : "border-slate-300 bg-white"
-                            }`}>
-                              {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className={`text-xs font-bold leading-tight ${isSelected ? "text-[#D31220]" : "text-slate-800"}`}>
-                                {item.label}
-                              </p>
-                              <p className="text-[10px] text-slate-500 font-normal leading-snug mt-0.5">
-                                {item.desc}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                {/* 5. HOMEPAGE PLACEMENT SECTION */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-[10px] font-extrabold text-[#D31220] uppercase tracking-wider">
+                      HOMEPAGE PLACEMENT
+                    </label>
+                    <span className="text-[9.5px] font-mono text-slate-400">Section Control</span>
                   </div>
-                )}
+
+                  <div className="space-y-1.5 bg-slate-50/80 border border-slate-200/90 rounded-2xl p-2.5">
+                    {[
+                      { id: "Home Page A+ Section", label: "Home Page A+ Section", desc: "Top Hero Carousel main story" },
+                      { id: "Trending Now", label: "Trending Now Section", desc: "Trending sidebar list beside Hero" },
+                      { id: "Editor's Picks", label: "Editor's Picks Section", desc: "4-Card featured row below Hero" },
+                      { id: "Latest News", label: "Latest News Section", desc: "Latest news feed and featured lead" },
+                      { id: "Home Page A+ Section 2", label: "Home Page A+ Section 2", desc: "Middle dark spotlight banner" },
+                      { id: "Standard Post", label: "Category Section Only", desc: "Default category news feed" },
+                    ].map((item) => {
+                      const isSelected = normalizePlacement(placement) === normalizePlacement(item.id);
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => setPlacement(item.id)}
+                          className={`flex items-start gap-2.5 p-2 rounded-xl cursor-pointer transition-all ${
+                            isSelected
+                              ? "bg-white border-2 border-[#D31220] shadow-sm"
+                              : "border border-transparent hover:bg-white/70"
+                          }`}
+                        >
+                          <div className={`w-4 h-4 mt-0.5 rounded-full border flex items-center justify-center shrink-0 ${
+                            isSelected ? "border-[#D31220] bg-[#D31220] text-white" : "border-slate-300 bg-white"
+                          }`}>
+                            {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className={`text-xs font-bold leading-tight ${isSelected ? "text-[#D31220]" : "text-slate-800"}`}>
+                              {item.label}
+                            </p>
+                            <p className="text-[10px] text-slate-500 font-normal leading-snug mt-0.5">
+                              {item.desc}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
 
               </div>
             )}

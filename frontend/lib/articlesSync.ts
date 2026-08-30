@@ -32,17 +32,166 @@ export interface ArticleItem {
   [key: string]: any;
 }
 
+export interface AdSlotItem {
+  id: string;
+  dimensions: string;
+  title: string;
+  description: string;
+  categoryGroup: "HOMEPAGE" | "CATEGORY" | "AUTHOR";
+  imageUrl: string;
+  actionType: string;
+  targetUrl: string;
+  isActive: boolean;
+}
+
+export const DEFAULT_AD_SLOTS: AdSlotItem[] = [
+  {
+    id: "slot-1",
+    dimensions: "728X250",
+    title: "Homepage — Mid Leaderboard Banner (Slot 2)",
+    description: "Full-width banner between Technology & Markets sections",
+    categoryGroup: "HOMEPAGE",
+    imageUrl: "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=1200&h=300&fit=crop",
+    actionType: "External Link (URL)",
+    targetUrl: "https://www.top-scholarships.com/",
+    isActive: true
+  },
+  {
+    id: "slot-2",
+    dimensions: "728X250",
+    title: "Homepage — Bottom Leaderboard Banner (Slot 3)",
+    description: "Full-width banner between Lifestyle & Bottom Category Grid",
+    categoryGroup: "HOMEPAGE",
+    imageUrl: "https://images.unsplash.com/photo-1557804506-669a67965ba0?w=1200&h=300&fit=crop",
+    actionType: "External Link (URL)",
+    targetUrl: "https://www.amazon.com/",
+    isActive: true
+  },
+  {
+    id: "slot-3",
+    dimensions: "300X250",
+    title: "Homepage — Business Section Top-Right Ad Box",
+    description: "Square 300x250 ad box inside the Business section top-right",
+    categoryGroup: "HOMEPAGE",
+    imageUrl: "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=600&h=300&fit=crop",
+    actionType: "External Link (URL)",
+    targetUrl: "https://www.pepsi.com/",
+    isActive: true
+  },
+  {
+    id: "slot-4",
+    dimensions: "300X250",
+    title: "Category Pages — Sidebar Top Ad Box",
+    description: "Right sidebar top box on Category news feeds (Politics, Tech, etc.)",
+    categoryGroup: "CATEGORY",
+    imageUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&h=300&fit=crop",
+    actionType: "External Link (URL)",
+    targetUrl: "https://www.nvidia.com/en-in/",
+    isActive: true
+  },
+  {
+    id: "slot-5",
+    dimensions: "300X600",
+    title: "Category Pages — Sidebar Bottom Tall Ad Box",
+    description: "Vertical 300x600 tall skyscraper ad box on category sidebars",
+    categoryGroup: "CATEGORY",
+    imageUrl: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=600&h=300&fit=crop",
+    actionType: "External Link (URL)",
+    targetUrl: "https://www.tesla.com/",
+    isActive: true
+  },
+  {
+    id: "slot-6",
+    dimensions: "300X250",
+    title: "Author Profile Pages — Sidebar Ad Box",
+    description: "Medium 300x250 sponsor box displayed on author profile pages",
+    categoryGroup: "AUTHOR",
+    imageUrl: "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=600&h=300&fit=crop",
+    actionType: "External Link (URL)",
+    targetUrl: "https://in.louisvuitton.com/eng-in/homepage",
+    isActive: true
+  }
+];
+
+const AD_STORAGE_KEY = "dj_site_ad_slots";
+const AD_SYNC_EVENT = "dj_ad_slots_updated";
+
+export function useLiveAdSlots() {
+  const [adSlots, setAdSlots] = useState<AdSlotItem[]>(DEFAULT_AD_SLOTS);
+
+  const loadSlots = useCallback(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const stored = localStorage.getItem(AD_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setAdSlots(parsed);
+          return;
+        }
+      }
+    } catch (e) {}
+    setAdSlots(DEFAULT_AD_SLOTS);
+  }, []);
+
+  useEffect(() => {
+    loadSlots();
+    window.addEventListener(AD_SYNC_EVENT, loadSlots);
+    window.addEventListener("storage", loadSlots);
+    return () => {
+      window.removeEventListener(AD_SYNC_EVENT, loadSlots);
+      window.removeEventListener("storage", loadSlots);
+    };
+  }, [loadSlots]);
+
+  const saveAdSlots = useCallback((newSlots: AdSlotItem[]) => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(AD_STORAGE_KEY, JSON.stringify(newSlots));
+      window.dispatchEvent(new Event(AD_SYNC_EVENT));
+    } catch (e) {}
+    setAdSlots(newSlots);
+  }, []);
+
+  return { adSlots, saveAdSlots };
+}
+
 export function isTopPlacementArticle(post: any): boolean {
   if (!post) return false;
-  const pl = (post.placement || "").toLowerCase();
-  return (
-    pl.includes("a+") ||
+  const pl = (post.placement || "").toLowerCase().trim();
+  if (
+    pl === "standard post" ||
+    pl === "category section only" ||
+    pl === "none" ||
+    pl === "standard" ||
+    pl === "" ||
+    pl.includes("section only") ||
+    pl.includes("technology") ||
+    pl.includes("business") ||
+    pl.includes("politics") ||
+    pl.includes("market") ||
+    pl.includes("lifestyle")
+  ) {
+    return false;
+  }
+  if (
+    pl === "home page a+ section" ||
+    pl === "home page a+ section 2" ||
+    pl === "a+ section" ||
+    pl === "trending now" ||
+    pl === "trending now section" ||
+    pl === "editor's pick" ||
+    pl === "editor's picks" ||
+    pl === "latest news" ||
+    pl === "latest news section" ||
+    pl.includes("a+ section") ||
     pl.includes("trending") ||
     pl.includes("editor") ||
-    pl.includes("latest") ||
-    post.is_featured === true ||
-    post.is_editors_pick === true
-  );
+    pl.includes("latest")
+  ) {
+    return true;
+  }
+  return false;
 }
 
 export function getArticleSubcategories(post: any): string[] {
@@ -66,48 +215,49 @@ export function getArticleSubcategories(post: any): string[] {
 export function normalizeCategoryKey(name: string): string {
   if (!name) return "";
   const cleaned = name.toLowerCase().trim().replace(/[^a-z0-9]/g, "");
-  if (cleaned === "tech" || cleaned === "technology") return "technology";
-  if (cleaned === "biz" || cleaned === "business") return "business";
-  if (cleaned === "sport" || cleaned === "sports") return "sports";
-  if (cleaned === "economy" || cleaned === "economic" || cleaned === "economics") return "economy";
-  if (cleaned === "market" || cleaned === "markets") return "markets";
-  if (cleaned === "politic" || cleaned === "politics") return "politics";
-  if (cleaned === "health" || cleaned === "healthcare") return "health";
-  if (cleaned === "research" || cleaned === "innovation" || cleaned === "researchinnovation" || cleaned === "insights") return "research";
-  if (cleaned === "lifestyle" || cleaned === "life") return "lifestyle";
-  if (cleaned === "entertainment" || cleaned === "arts" || cleaned === "art") return "entertainment";
-  if (cleaned === "unitedstates" || cleaned === "us" || cleaned === "usa") return "unitedstates";
-  if (cleaned === "middleeast") return "middleeast";
+  if (cleaned.includes("tech")) return "technology";
+  if (cleaned.includes("biz") || cleaned.includes("business")) return "business";
+  if (cleaned.includes("sport")) return "sports";
+  if (cleaned.includes("econom")) return "economy";
+  if (cleaned.includes("market")) return "markets";
+  if (cleaned.includes("politic")) return "politics";
+  if (cleaned.includes("health") || cleaned.includes("medic")) return "health";
+  if (cleaned.includes("research") || cleaned.includes("innovat") || cleaned.includes("insight")) return "research";
+  if (cleaned.includes("lifestyle") || cleaned.includes("life")) return "lifestyle";
+  if (cleaned.includes("entertain") || cleaned.includes("art")) return "entertainment";
+  if (cleaned.includes("china")) return "china";
+  if (cleaned.includes("unitedstates") || cleaned === "us" || cleaned === "usa" || cleaned.includes("america")) return "unitedstates";
+  if (cleaned.includes("europe")) return "europe";
+  if (cleaned.includes("britain") || cleaned.includes("uk")) return "britain";
+  if (cleaned.includes("middleeast")) return "middleeast";
+  if (cleaned.includes("africa")) return "africa";
+  if (cleaned.includes("asia")) return "asia";
+  if (cleaned.includes("world")) return "world";
   return cleaned;
 }
 
-export function articleMatchesCategory(post: any, categoryOrSub: string): boolean {
-  if (!post || !categoryOrSub) return false;
-  const targetKey = normalizeCategoryKey(categoryOrSub);
+export function articleBelongsToCategory(post: any, targetCategory: string): boolean {
+  if (!post || !targetCategory) return false;
+  const targetKey = normalizeCategoryKey(targetCategory);
   if (!targetKey) return false;
 
   const catKey = normalizeCategoryKey(post.category || post.category_name || "");
-  const subsKeys = getArticleSubcategories(post).map(s => normalizeCategoryKey(s)).filter(Boolean);
-
-  // 1. Direct match with Article's Main Category
+  // 1. Direct match with Main Category
   if (catKey === targetKey) return true;
 
-  // 2. Direct match with any of Article's Selected Sub-Categories
+  // 2. Direct match with selected Subcategories
+  const subsKeys = getArticleSubcategories(post).map((s: any) => normalizeCategoryKey(s)).filter(Boolean);
   if (subsKeys.includes(targetKey)) return true;
 
-  // 3. World category hierarchy
-  const WORLD_REGIONS = ["china", "unitedstates", "europe", "britain", "middleeast", "africa", "asia"];
-  if (targetKey === "world") {
-    if (catKey === "world" || WORLD_REGIONS.includes(catKey)) return true;
-    if (subsKeys.some(s => s === "world" || WORLD_REGIONS.includes(s))) return true;
-    return false;
-  }
-
-  if (WORLD_REGIONS.includes(targetKey)) {
-    return catKey === targetKey || subsKeys.includes(targetKey);
-  }
+  // 3. Direct match with placement (e.g. "Politics Section", "Business Section", "Technology Section")
+  const plKey = normalizeCategoryKey(post.placement || "");
+  if (plKey === targetKey || plKey.includes(targetKey)) return true;
 
   return false;
+}
+
+export function articleMatchesCategory(post: any, categoryOrSub: string): boolean {
+  return articleBelongsToCategory(post, categoryOrSub);
 }
 
 let broadcastChannel: BroadcastChannel | null = null;
@@ -225,7 +375,7 @@ export async function saveArticleToServer(article: ArticleItem): Promise<Article
   } else {
     updated = [article, ...cached];
   }
-  setCachedArticles(updated, false);
+  setCachedArticles(updated, true);
 
   try {
     const res = await fetch("/api/articles", {
@@ -238,10 +388,39 @@ export async function saveArticleToServer(article: ArticleItem): Promise<Article
       if (data.articles && Array.isArray(data.articles)) {
         const serverList = data.articles;
         const mergedMap = new Map<string, ArticleItem>();
-        updated.forEach((item) => mergedMap.set(String(item.id), item));
-        serverList.forEach((item: any) => mergedMap.set(String(item.id), { ...mergedMap.get(String(item.id)), ...item }));
-        const mergedList = Array.from(mergedMap.values());
-        setCachedArticles(mergedList, false);
+        const cleanTitleKey = (t: string) => (t || "").trim().toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ');
+
+        serverList.forEach((item: any) => {
+          const titleKey = cleanTitleKey(item.title);
+          if (titleKey) mergedMap.set(`t_${titleKey}`, item);
+          mergedMap.set(String(item.id), item);
+        });
+
+        updated.forEach((item) => {
+          const titleKey = cleanTitleKey(item.title);
+          const serverMatch = (titleKey && mergedMap.get(`t_${titleKey}`)) || mergedMap.get(String(item.id));
+          if (serverMatch) {
+            const merged = { ...serverMatch, ...item, id: serverMatch.id };
+            mergedMap.set(String(serverMatch.id), merged);
+            if (titleKey) mergedMap.set(`t_${titleKey}`, merged);
+          } else {
+            mergedMap.set(String(item.id), item);
+          }
+        });
+
+        const mergedList: ArticleItem[] = [];
+        const seen = new Set<string>();
+        for (const [k, item] of mergedMap.entries()) {
+          if (k.startsWith("t_")) continue;
+          const tKey = cleanTitleKey(item.title);
+          const idKey = String(item.id);
+          if ((!tKey || !seen.has(tKey)) && !seen.has(idKey)) {
+            if (tKey) seen.add(tKey);
+            seen.add(idKey);
+            mergedList.push(item);
+          }
+        }
+        setCachedArticles(mergedList, true);
         return mergedList;
       }
     }
@@ -410,6 +589,8 @@ export function useLiveArticles() {
 
     if (typeof window !== "undefined") {
       window.addEventListener(SYNC_EVENT_NAME, handleSync);
+      window.addEventListener("dj_articles_updated", handleSync);
+      window.addEventListener("storage", handleSync);
     }
 
     if (broadcastChannel) {
@@ -423,6 +604,8 @@ export function useLiveArticles() {
     return () => {
       if (typeof window !== "undefined") {
         window.removeEventListener(SYNC_EVENT_NAME, handleSync);
+        window.removeEventListener("dj_articles_updated", handleSync);
+        window.removeEventListener("storage", handleSync);
       }
     };
   }, []);

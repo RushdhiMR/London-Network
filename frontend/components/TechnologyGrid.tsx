@@ -23,17 +23,41 @@ const FALLBACK_TECH_ARTICLES = [
 export default function TechnologyGrid() {
   const { articles: liveArticles = [] } = useLiveArticles();
 
+  const getArticleTimestamp = (item: any): number => {
+    if (!item) return 0;
+    if (item.published_at || item.publishedAt) {
+      const t = new Date(item.published_at || item.publishedAt).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    if (item.createdAt || item.created_at) {
+      const t = new Date(item.createdAt || item.created_at).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    if (item.date && item.date !== "Just now" && item.date !== "Today" && item.date !== "Just published") {
+      const t = new Date(item.date).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    if (typeof item.id === "number") return item.id;
+    if (typeof item.id === "string") {
+      const match = item.id.match(/\d{10,}/);
+      if (match) {
+        const num = parseInt(match[0], 10);
+        if (!isNaN(num) && num > 0) return num;
+      }
+      const num = parseInt(item.id.replace(/[^0-9]/g, ""), 10);
+      if (!isNaN(num) && num > 0) return num;
+    }
+    return 0;
+  };
+
   const techLive = (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
     if (!art || (art.status || "").toLowerCase() !== "published") return false;
     if (isTopPlacementArticle(art)) return false;
-    return (
-      articleMatchesCategory(art, "technology") ||
-      articleMatchesCategory(art, "tech") ||
-      articleMatchesCategory(art, "ai") ||
-      articleMatchesCategory(art, "cyber") ||
-      articleMatchesCategory(art, "software")
-    );
+    return articleMatchesCategory(art, "technology");
   });
+
+  // Sort strictly by timestamp descending (newest first)
+  techLive.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
 
   const mappedLive = techLive.map((a: ArticleItem) => ({
     id: a.id,
@@ -43,9 +67,7 @@ export default function TechnologyGrid() {
     href: `/${(a.category || "technology").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}?id=${a.id}`
   }));
 
-  const displayArticles = mappedLive.length >= 2
-    ? mappedLive.slice(0, 2)
-    : (mappedLive.length > 0 ? [...mappedLive, ...FALLBACK_TECH_ARTICLES].slice(0, 2) : FALLBACK_TECH_ARTICLES);
+  const displayArticles = [...mappedLive, ...FALLBACK_TECH_ARTICLES].slice(0, 2);
 
   return (
     <section className="max-w-[1400px] mx-auto px-4 md:px-6 py-10 border-b border-gray-200 font-sans">

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesCategory } from "@/lib/articlesSync";
+import { useLiveArticles, useLiveAdSlots, ArticleItem, isTopPlacementArticle, articleMatchesCategory } from "@/lib/articlesSync";
 
 const FALLBACK_BUSINESS_BOTTOM = [
   {
@@ -27,29 +27,61 @@ const FALLBACK_BUSINESS_BOTTOM = [
     time: "2 hrs ago | US & Canada",
     image: "https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?w=500&h=330&fit=crop",
     href: "/business/biden-ghostwriter-classified-documents"
+  },
+  {
+    id: "biz-b-4",
+    title: "China's new challenge as natural disasters strike - fake AI videos",
+    description: "Storms and flooding incidents over the last few months have seen fake videos inundating social media.",
+    image: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&h=375&fit=crop",
+    time: "7 hrs ago | Asia",
+    href: "/business/china-fake-ai-videos-disasters"
   }
 ];
 
 export default function BusinessGrid() {
   const { articles: liveArticles = [] } = useLiveArticles();
 
+  const getArticleTimestamp = (item: any): number => {
+    if (!item) return 0;
+    if (item.published_at || item.publishedAt) {
+      const t = new Date(item.published_at || item.publishedAt).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    if (item.createdAt || item.created_at) {
+      const t = new Date(item.createdAt || item.created_at).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    if (item.date && item.date !== "Just now" && item.date !== "Today" && item.date !== "Just published") {
+      const t = new Date(item.date).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    if (typeof item.id === "number") return item.id;
+    if (typeof item.id === "string") {
+      const match = item.id.match(/\d{10,}/);
+      if (match) {
+        const num = parseInt(match[0], 10);
+        if (!isNaN(num) && num > 0) return num;
+      }
+      const num = parseInt(item.id.replace(/[^0-9]/g, ""), 10);
+      if (!isNaN(num) && num > 0) return num;
+    }
+    return 0;
+  };
+
   const businessLive = (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
     if (!art || (art.status || "").toLowerCase() !== "published") return false;
     if (isTopPlacementArticle(art)) return false;
-    const plc = (art.placement || "").toLowerCase();
-    return (
-      plc === "business section" ||
-      articleMatchesCategory(art, "business") ||
-      articleMatchesCategory(art, "finance") ||
-      articleMatchesCategory(art, "economy")
-    );
+    return articleMatchesCategory(art, "business");
   });
+
+  // Sort chronological descending: Newest article first
+  businessLive.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
 
   const featuredStory = businessLive.length > 0 ? {
     title: businessLive[0].title,
     description: businessLive[0].description || businessLive[0].summary || "",
-    image: businessLive[0].imageUrl || "https://images.unsplash.com/photo-1547683905-f686c993aae5?w=1000&h=650&fit=crop",
-    time: "7 hrs ago | Asia",
+    image: businessLive[0].imageUrl || businessLive[0].image || "https://images.unsplash.com/photo-1547683905-f686c993aae5?w=1000&h=650&fit=crop",
+    time: businessLive[0].date || "Just published",
     href: `/business/${businessLive[0].slug || String(businessLive[0].id)}`
   } : {
     title: "'It took everything from us': India's Assam faces worst floods in years",
@@ -59,31 +91,19 @@ export default function BusinessGrid() {
     href: "/business/assam-worst-floods-in-years"
   };
 
-  const secondaryStory = businessLive.length > 1 ? {
-    title: businessLive[1].title,
-    description: businessLive[1].description || businessLive[1].summary || "",
-    image: businessLive[1].imageUrl || "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&h=375&fit=crop",
-    time: "7 hrs ago | Asia",
-    href: `/business/${businessLive[1].slug || String(businessLive[1].id)}`
-  } : {
-    title: "China's new challenge as natural disasters strike - fake AI videos",
-    description: "Storms and flooding incidents over the last few months have seen fake videos inundating social media.",
-    image: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&h=375&fit=crop",
-    time: "7 hrs ago | Asia",
-    href: "/business/china-fake-ai-videos-disasters"
-  };
+  const userBottomArticles = businessLive.slice(1).map((a, idx) => ({
+    id: a.id || `biz-user-${idx}`,
+    title: a.title,
+    description: a.description || a.summary || "",
+    time: a.date || "Just published",
+    image: a.imageUrl || a.image || "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=500&h=330&fit=crop",
+    href: `/business/${a.slug || String(a.id)}`
+  }));
 
-  const bottomItems = businessLive.length > 2 ? [
-    ...businessLive.slice(2, 5).map((a, idx) => ({
-      id: a.id || idx,
-      title: a.title,
-      description: a.description || a.summary || "",
-      time: "Just now | Business",
-      image: a.imageUrl || a.image || "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=500&h=330&fit=crop",
-      href: `/business/${a.slug || String(a.id)}`
-    })),
-    ...FALLBACK_BUSINESS_BOTTOM
-  ].slice(0, 3) : FALLBACK_BUSINESS_BOTTOM;
+  const bottomCards = [...userBottomArticles, ...FALLBACK_BUSINESS_BOTTOM].slice(0, 4);
+
+  const { adSlots } = useLiveAdSlots();
+  const businessAdSlot = adSlots.find(s => s.id === "slot-3" || s.title.includes("Business Section Top-Right") || s.title.includes("Business Section"));
 
   return (
     <section className="max-w-[1400px] mx-auto px-4 md:px-6 py-8 font-sans">
@@ -136,18 +156,36 @@ export default function BusinessGrid() {
 
         {/* TOP-RIGHT ADVERTISEMENT BOX (1 Column) */}
         <div className="lg:col-span-1 flex flex-col h-full">
-          <div className="w-full h-full min-h-[220px] aspect-[16/10] lg:aspect-auto bg-black flex items-center justify-center cursor-pointer group hover:bg-neutral-900 transition-colors">
-            <span className="text-white font-bold text-sm tracking-wide">
-              Ad
-            </span>
-          </div>
+          {businessAdSlot && businessAdSlot.isActive && businessAdSlot.imageUrl ? (
+            <a
+              href={businessAdSlot.targetUrl || "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full h-full min-h-[220px] aspect-[16/10] lg:aspect-auto bg-black flex items-center justify-center cursor-pointer group hover:opacity-95 transition-opacity relative overflow-hidden border border-zinc-800"
+            >
+              <img
+                src={businessAdSlot.imageUrl}
+                alt={businessAdSlot.title}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              />
+              <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-xs px-2 py-0.5 text-[9px] font-mono tracking-widest uppercase text-white border border-white/10">
+                Ad
+              </div>
+            </a>
+          ) : (
+            <div className="w-full h-full min-h-[220px] aspect-[16/10] lg:aspect-auto bg-black flex items-center justify-center cursor-pointer group hover:bg-neutral-900 transition-colors">
+              <span className="text-white font-bold text-sm tracking-wide">
+                Ad
+              </span>
+            </div>
+          )}
         </div>
 
       </div>
 
-      {/* BOTTOM ROW: 4 Columns (3 News Cards + 1 Secondary Article Card) */}
+      {/* BOTTOM ROW: 4 Columns in sequential chronological order */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
-        {bottomItems.map((item) => (
+        {bottomCards.map((item) => (
           <article key={item.id} className="flex flex-col group cursor-pointer">
             <Link href={item.href} className="relative w-full aspect-[16/10] overflow-hidden bg-gray-100 mb-2.5 block">
               <img
@@ -170,29 +208,6 @@ export default function BusinessGrid() {
             </span>
           </article>
         ))}
-
-        {/* 4TH COLUMN: ARTICLE CARD (SECONDARY STORY) */}
-        <article className="flex flex-col group cursor-pointer">
-          <Link href={secondaryStory.href} className="relative w-full aspect-[16/10] overflow-hidden bg-gray-100 mb-2.5 block">
-            <img
-              src={secondaryStory.image}
-              alt={secondaryStory.title}
-              onError={(e) => { e.currentTarget.src = "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&h=375&fit=crop"; }}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            />
-          </Link>
-          <h4 className="text-[14px] font-bold leading-snug text-gray-900 group-hover:text-[#D31220] transition-colors mb-1.5 font-serif">
-            <Link href={secondaryStory.href}>
-              {secondaryStory.title}
-            </Link>
-          </h4>
-          <p className="text-[12px] text-gray-600 leading-normal mb-2 line-clamp-3">
-            {secondaryStory.description}
-          </p>
-          <span className="text-[11px] text-gray-400 font-medium mt-auto">
-            {secondaryStory.time}
-          </span>
-        </article>
       </div>
 
     </section>

@@ -10,13 +10,12 @@ export default function BottomCategoryGrid() {
   const getCategoryArticles = (keywords: string[]) => {
     return (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
       if (!art || (art.status || "").toLowerCase() !== "published") return false;
-      const pl = (art.placement || "").toLowerCase();
-      if (pl.includes("home page a+") || pl.includes("a+ section") || pl.includes("trending")) return false;
+      if (isTopPlacementArticle(art)) return false;
       return keywords.some(k => articleMatchesCategory(art, k));
     });
   };
 
-  const researchLive = getCategoryArticles(["research", "innovation"]);
+  const researchLive = getCategoryArticles(["research"]);
   const sportsLive = getCategoryArticles(["sports"]);
   const economyLive = getCategoryArticles(["economy"]);
   const healthLive = getCategoryArticles(["health"]);

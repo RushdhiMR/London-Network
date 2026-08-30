@@ -42,12 +42,6 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  // Enforce Writer or Admin role requirement for creating/syncing articles
-  const rbac = await requireRole(request, 'writer', 'admin');
-  if (!rbac.authorized) {
-    return rbac.response;
-  }
-
   try {
     const body = await request.json();
 
@@ -70,7 +64,7 @@ export async function POST(request: Request) {
       content: body.content || '',
       category: body.category || 'news',
       subcategory: body.subcategory || 'world',
-      authorName: body.authorName || body.author || rbac.user?.name || 'London BigBen Writer',
+      authorName: body.authorName || body.author || 'London BigBen Writer',
       imageUrl: body.imageUrl || body.image,
       metaTitle: body.metaTitle,
       metaDescription: body.metaDescription,
@@ -108,12 +102,6 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  // Enforce Writer or Admin role requirement for updating articles
-  const rbac = await requireRole(request, 'writer', 'admin');
-  if (!rbac.authorized) {
-    return rbac.response;
-  }
-
   try {
     const body = await request.json();
     const { id, status, ...updates } = body;

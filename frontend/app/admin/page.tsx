@@ -464,8 +464,18 @@ export default function AdminDashboardPage() {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
           const updatedCached = parsed.map((p: any) =>
-            String(p.id) === String(reviewingSubmission.id)
-              ? { ...p, status: "Published", category: reviewCategory, subcategories: reviewSubCategories, tags: reviewTags }
+            (String(p.id) === String(reviewingSubmission.id) || (p.title && newArt.title && p.title.trim().toLowerCase() === newArt.title.trim().toLowerCase()))
+              ? {
+                  ...p,
+                  ...postToSave,
+                  status: "Published",
+                  placement: reviewPlacement,
+                  is_featured: newArt.is_featured,
+                  is_editors_pick: newArt.is_editors_pick,
+                  category: reviewCategory,
+                  subcategories: reviewSubCategories,
+                  tags: reviewTags
+                }
               : p
           );
           localStorage.setItem("dj_writer_submitted_articles", JSON.stringify(updatedCached));
@@ -945,8 +955,8 @@ export default function AdminDashboardPage() {
     {
       id: "slot-1",
       dimensions: "728X250",
-      title: "Leaderboard Ad 2",
-      description: "Displayed horizontally near the bottom of the homepage between Tech/Sports and CEO Spotlight/Travel rows.",
+      title: "Homepage — Mid Leaderboard Banner (Slot 2)",
+      description: "Full-width banner between Technology & Markets sections",
       categoryGroup: "HOMEPAGE",
       imageUrl: "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&h=300&fit=crop",
       actionType: "External Link (URL)",
@@ -955,9 +965,20 @@ export default function AdminDashboardPage() {
     },
     {
       id: "slot-2",
+      dimensions: "728X250",
+      title: "Homepage — Bottom Leaderboard Banner (Slot 3)",
+      description: "Full-width banner between Lifestyle & Bottom Category Grid",
+      categoryGroup: "HOMEPAGE",
+      imageUrl: "https://images.unsplash.com/photo-1557804506-669a67965ba0?w=600&h=300&fit=crop",
+      actionType: "External Link (URL)",
+      targetUrl: "https://www.amazon.com/",
+      isActive: true
+    },
+    {
+      id: "slot-3",
       dimensions: "300X250",
-      title: "Sidebar Ad",
-      description: "Displayed inside the right-hand column of the Tertiary Grid (below the Contributor section).",
+      title: "Homepage — Business Section Top-Right Ad Box",
+      description: "Square 300x250 ad box inside the Business section top-right",
       categoryGroup: "HOMEPAGE",
       imageUrl: "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=600&h=300&fit=crop",
       actionType: "External Link (URL)",
@@ -965,10 +986,10 @@ export default function AdminDashboardPage() {
       isActive: true
     },
     {
-      id: "slot-3",
+      id: "slot-4",
       dimensions: "300X250",
-      title: "Category — Sidebar Slot 1 (IBT Spotlight)",
-      description: "Medium rectangle box displayed in the right sidebar of category pages, above the Calculator widget.",
+      title: "Category Pages — Sidebar Top Ad Box",
+      description: "Right sidebar top box on Category news feeds (Politics, Tech, etc.)",
       categoryGroup: "CATEGORY",
       imageUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&h=300&fit=crop",
       actionType: "External Link (URL)",
@@ -976,10 +997,10 @@ export default function AdminDashboardPage() {
       isActive: true
     },
     {
-      id: "slot-4",
+      id: "slot-5",
       dimensions: "300X600",
-      title: "Category — Sidebar Slot 2 (Calculator)",
-      description: "Vertical layout box displayed at the bottom of the category page sidebar.",
+      title: "Category Pages — Sidebar Bottom Tall Ad Box",
+      description: "Vertical 300x600 tall skyscraper ad box on category sidebars",
       categoryGroup: "CATEGORY",
       imageUrl: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=600&h=300&fit=crop",
       actionType: "External Link (URL)",
@@ -987,10 +1008,10 @@ export default function AdminDashboardPage() {
       isActive: true
     },
     {
-      id: "slot-5",
+      id: "slot-6",
       dimensions: "300X250",
-      title: "Author Page — Sidebar Slot",
-      description: "Medium rectangle box displayed in the right sidebar of author profile pages (replaces the static IBT Spotlight widget).",
+      title: "Author Profile Pages — Sidebar Ad Box",
+      description: "Medium 300x250 sponsor box displayed on author profile pages",
       categoryGroup: "AUTHOR",
       imageUrl: "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=600&h=300&fit=crop",
       actionType: "External Link (URL)",
@@ -999,32 +1020,67 @@ export default function AdminDashboardPage() {
     }
   ]);
 
+  // Load initial saved ad slots from localStorage
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const stored = localStorage.getItem("dj_site_ad_slots");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setAdSlots(parsed);
+        }
+      }
+    } catch (e) {}
+  }, []);
+
+  const saveUpdatedSlots = (newSlots: AdSlotItem[]) => {
+    setAdSlots(newSlots);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("dj_site_ad_slots", JSON.stringify(newSlots));
+        window.dispatchEvent(new Event("dj_ad_slots_updated"));
+      } catch (e) {}
+    }
+  };
+
   const toggleAdActive = (id: string) => {
-    setAdSlots(adSlots.map(s => s.id === id ? { ...s, isActive: !s.isActive } : s));
+    const updated = adSlots.map(s => s.id === id ? { ...s, isActive: !s.isActive } : s);
+    saveUpdatedSlots(updated);
     showNotification("✓ Ad slot status updated!");
   };
 
   const updateAdField = (id: string, field: keyof AdSlotItem, value: any) => {
-    setAdSlots(adSlots.map(s => s.id === id ? { ...s, [field]: value } : s));
+    const updated = adSlots.map(s => s.id === id ? { ...s, [field]: value } : s);
+    saveUpdatedSlots(updated);
   };
 
   const handleAdImageUpload = (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const url = URL.createObjectURL(file);
-      setAdSlots(adSlots.map(s => s.id === id ? { ...s, imageUrl: url } : s));
-      showNotification("✓ New ad banner image uploaded!");
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64 = event.target?.result as string;
+        if (base64) {
+          const updated = adSlots.map(s => s.id === id ? { ...s, imageUrl: base64 } : s);
+          saveUpdatedSlots(updated);
+          showNotification("✓ New ad banner image uploaded and saved!");
+        }
+      };
+      reader.readAsDataURL(file);
     }
   };
 
   const handleClearAdImage = (id: string) => {
-    setAdSlots(adSlots.map(s => s.id === id ? { ...s, imageUrl: "https://images.unsplash.com/photo-1557804506-669a67965ba0?w=600&h=300&fit=crop" } : s));
-    showNotification("Ad banner image cleared.");
+    const updated = adSlots.map(s => s.id === id ? { ...s, imageUrl: "https://images.unsplash.com/photo-1557804506-669a67965ba0?w=600&h=300&fit=crop" } : s);
+    saveUpdatedSlots(updated);
+    showNotification("Ad banner image reset.");
   };
 
   const handleSaveAdConfig = (id: string) => {
+    saveUpdatedSlots(adSlots);
     const slot = adSlots.find(s => s.id === id);
-    showNotification(`✓ "${slot?.title || 'Ad'}" configuration saved to live production website!`);
+    showNotification(`✓ "${slot?.title || 'Ad'}" configuration saved to live website!`);
   };
 
   // Dynamic Auth & Backend Database Synchronizer
@@ -1101,7 +1157,11 @@ export default function AdminDashboardPage() {
     };
 
     window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
+    window.addEventListener("dj_articles_updated", handleStorageChange);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("dj_articles_updated", handleStorageChange);
+    };
   }, [activeTab]);
 
   const fetchDashboardData = async () => {
@@ -1234,6 +1294,7 @@ export default function AdminDashboardPage() {
           title: a.title,
           slug: a.slug || a.title.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-'),
           description: a.description || a.summary || "",
+          content: a.content || a.description || a.summary || "",
           category_name: (a.category_name || a.category || "TECHNOLOGY").toUpperCase(),
           author_name: a.author_name || a.author || a.authorName || "Staff Journalist",
           readTime: a.readDuration || a.readTime || "5 min read",
@@ -1242,7 +1303,10 @@ export default function AdminDashboardPage() {
           comments: a.comments || 18,
           is_featured: !!a.is_featured,
           is_editors_pick: !!a.is_editors_pick,
-          placement: a.is_featured ? "Featured Story" : a.is_editors_pick ? "Editor's Pick" : "Standard Post",
+          placement: a.placement || (a.is_featured ? "Home Page A+ Section" : a.is_editors_pick ? "Editor's Picks" : "Standard Post"),
+          subcategories: a.subcategories || a.subCategories || [],
+          tags: a.tags || [],
+          seo: a.seo || null,
           published_at: a.published_at || a.date || new Date().toISOString(),
           status: a.status || "Published"
         }));
@@ -1258,11 +1322,14 @@ export default function AdminDashboardPage() {
         setArticles(publishedOnly);
         setStats(prev => ({ ...prev, totalArticles: publishedOnly.length }));
 
-        // Include server articles with Pending review status
-        const serverPending = serverArticles
+        // 3. Synchronize All Writer Submissions (Pending review, Drafts, Rejected)
+        const cleanKey = (val: any) => String(val || "").trim().toLowerCase();
+
+        // A. Server non-published submissions
+        const serverSubmissions = serverArticles
           .filter((a: any) => {
-            const st = (a.status || "").toLowerCase();
-            return st === "pending review" || st === "pending" || st === "submitted";
+            const st = (a.status || "").toLowerCase().trim();
+            return st !== "published" && st !== "approved" && st !== "trash";
           })
           .map((a: any) => ({
             id: String(a.id),
@@ -1276,81 +1343,85 @@ export default function AdminDashboardPage() {
             readDuration: a.readDuration || a.readTime || "5 min read",
             authorName: a.authorName || a.author || "Writer",
             reads: Number(a.reads || a.views || 0),
-            status: "Pending review" as const,
+            status: a.status || "Pending review",
             subcategories: a.subcategories || a.subCategories || [],
             tags: a.tags || [],
             placement: a.placement || "Standard Post",
-            seo: a.seo || null
+            seo: a.seo || null,
+            rejectionReason: a.rejectionReason
           }));
 
-        // Gather all rejected, published, and trashed IDs and titles
-        const nonPendingIds = new Set<string>();
-        const nonPendingTitles = new Set<string>();
-
-        serverArticles.forEach((a: any) => {
-          const st = (a.status || "").toLowerCase().trim();
-          if (st === "rejected" || st === "published" || st === "trash" || st === "trashed" || st === "approved") {
-            if (a.id) nonPendingIds.add(String(a.id));
-            if (a.title) nonPendingTitles.add(a.title.trim().toLowerCase());
-          }
-        });
-
-        if (Array.isArray(articles)) {
-          articles.forEach((a: any) => {
-            const st = (a.status || "").toLowerCase().trim();
-            if (st === "rejected" || st === "published" || st === "trash" || st === "trashed" || st === "approved") {
-              if (a.id) nonPendingIds.add(String(a.id));
-              if (a.title) nonPendingTitles.add(a.title.trim().toLowerCase());
-            }
-          });
-        }
-
+        // B. Local writer submitted articles (top priority)
         const subsStr = localStorage.getItem("dj_writer_submitted_articles");
-        let localPending: any[] = [];
+        let localSubsList: any[] = [];
         if (subsStr) {
           try {
             const parsed = JSON.parse(subsStr);
             if (Array.isArray(parsed)) {
-              parsed.forEach((p: any) => {
-                const st = (p.status || "").toLowerCase().trim();
-                if (st === "rejected" || st === "published" || st === "trash" || st === "trashed" || st === "approved") {
-                  if (p.id) nonPendingIds.add(String(p.id));
-                  if (p.title) nonPendingTitles.add(p.title.trim().toLowerCase());
-                } else if (st === "pending review" || st === "pending" || st === "submitted") {
-                  localPending.push({
-                    ...p,
-                    id: String(p.id),
-                    category: p.category || p.category_name || "Business",
-                    subcategories: p.subcategories || p.subCategories || [],
-                    tags: p.tags || [],
-                    placement: p.placement || "Standard Post",
-                    status: "Pending review" as const
-                  });
-                }
-              });
+              localSubsList = parsed
+                .filter((p: any) => {
+                  const st = (p.status || "").toLowerCase().trim();
+                  return st !== "published" && st !== "approved" && st !== "trash";
+                })
+                .map((p: any) => ({
+                  ...p,
+                  id: String(p.id),
+                  category: p.category || p.category_name || "Business",
+                  subcategories: p.subcategories || p.subCategories || [],
+                  tags: p.tags || [],
+                  placement: p.placement || "Standard Post",
+                  status: p.status || "Pending review"
+                }));
             }
           } catch (e) {}
         }
 
-        const fallbackPending = DEFAULT_MOCK_SUBMISSIONS.filter(m =>
-          !nonPendingIds.has(String(m.id)) && !nonPendingTitles.has(m.title.trim().toLowerCase())
-        );
-
-        const allCandidates = [...localPending, ...serverPending, ...fallbackPending];
-        const seen = new Set<string>();
-        const finalPending = allCandidates.filter((item) => {
-          const idKey = String(item.id || "");
-          const titleKey = (item.title || "").trim().toLowerCase();
-          const isNotRejected = !nonPendingIds.has(idKey) && (!titleKey || !nonPendingTitles.has(titleKey));
-          if (!isNotRejected) return false;
-          if (idKey && seen.has(idKey)) return false;
-          if (titleKey && seen.has(titleKey)) return false;
-          if (idKey) seen.add(idKey);
-          if (titleKey) seen.add(titleKey);
-          return true;
+        // C. Merge serverSubmissions and localSubsList
+        const subMap = new Map<string, any>();
+        serverSubmissions.forEach((item) => {
+          const idKey = cleanKey(item.id);
+          const titleKey = cleanKey(item.title);
+          if (idKey) subMap.set(idKey, item);
+          if (titleKey) subMap.set(titleKey, item);
         });
 
-        setWriterSubmissions(finalPending);
+        localSubsList.forEach((item) => {
+          const idKey = cleanKey(item.id);
+          const titleKey = cleanKey(item.title);
+          const existing = (idKey && subMap.get(idKey)) || (titleKey && subMap.get(titleKey)) || {};
+          const merged = { ...existing, ...item };
+          if (idKey) subMap.set(idKey, merged);
+          if (titleKey) subMap.set(titleKey, merged);
+        });
+
+        const mergedSubsList: any[] = [];
+        const seenSubs = new Set<string>();
+
+        localSubsList.forEach((item) => {
+          const idKey = cleanKey(item.id);
+          const titleKey = cleanKey(item.title);
+          const resolved = (idKey && subMap.get(idKey)) || (titleKey && subMap.get(titleKey)) || item;
+          const mainKey = idKey || titleKey;
+          if (mainKey && !seenSubs.has(mainKey)) {
+            if (idKey) seenSubs.add(idKey);
+            if (titleKey) seenSubs.add(titleKey);
+            mergedSubsList.push(resolved);
+          }
+        });
+
+        serverSubmissions.forEach((item) => {
+          const idKey = cleanKey(item.id);
+          const titleKey = cleanKey(item.title);
+          const isSeen = (idKey && seenSubs.has(idKey)) || (titleKey && seenSubs.has(titleKey));
+          if (!isSeen) {
+            if (idKey) seenSubs.add(idKey);
+            if (titleKey) seenSubs.add(titleKey);
+            const resolved = (idKey && subMap.get(idKey)) || (titleKey && subMap.get(titleKey)) || item;
+            mergedSubsList.push(resolved);
+          }
+        });
+
+        setWriterSubmissions(mergedSubsList);
       }
     } catch (err) {
       console.warn("Live articles sync notice:", err);
@@ -1496,8 +1567,18 @@ export default function AdminDashboardPage() {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
           const updatedCached = parsed.map((p: any) =>
-            String(p.id) === String(sub.id)
-              ? { ...p, status: "Published", category: matchedMainCat, subcategories: (sub as any).subcategories || (sub as any).subCategories || [], tags: (sub as any).tags || [] }
+            (String(p.id) === String(sub.id) || (p.title && newArt.title && p.title.trim().toLowerCase() === newArt.title.trim().toLowerCase()))
+              ? {
+                  ...p,
+                  ...updatedPostToSave,
+                  status: "Published",
+                  placement: (sub as any).placement || "Standard Post",
+                  is_featured: newArt.is_featured,
+                  is_editors_pick: newArt.is_editors_pick,
+                  category: matchedMainCat,
+                  subcategories: (sub as any).subcategories || (sub as any).subCategories || [],
+                  tags: (sub as any).tags || []
+                }
               : p
           );
           localStorage.setItem("dj_writer_submitted_articles", JSON.stringify(updatedCached));
@@ -1548,10 +1629,18 @@ export default function AdminDashboardPage() {
       authorAvatar: targetAuthorAvatar
     };
 
-    // 1. Remove from Pending Review queue
-    setWriterSubmissions(prev => prev.filter(s =>
-      String(s.id) !== String(sub.id) && (!s.title || !sub.title || s.title.trim().toLowerCase() !== sub.title.trim().toLowerCase())
-    ));
+    // 1. Remove from Pending Review queue and update in writerSubmissions as Rejected
+    setWriterSubmissions(prev => {
+      const exists = prev.some(s => String(s.id) === String(sub.id) || (s.title && sub.title && s.title.trim().toLowerCase() === sub.title.trim().toLowerCase()));
+      if (exists) {
+        return prev.map(s =>
+          (String(s.id) === String(sub.id) || (s.title && sub.title && s.title.trim().toLowerCase() === sub.title.trim().toLowerCase()))
+            ? { ...s, ...rejectedItem, status: "Rejected" }
+            : s
+        );
+      }
+      return [rejectedItem, ...prev];
+    });
 
     // 2. Persist to server and local storage
     try {
@@ -1651,6 +1740,8 @@ export default function AdminDashboardPage() {
     const rawCat = art.category_name || (art as any).category || "Business";
     const matchedMainCat = ALL_MAIN_CATEGORIES.find(c => isSameOrMatchingCategory(c, rawCat) || c.toLowerCase() === rawCat.toLowerCase()) || rawCat;
 
+    const postPlacement = (art as any).placement || ((art as any).is_editors_pick ? "Editor's Picks" : (art as any).is_featured ? "Home Page A+ Section" : "Standard Post");
+
     const postToEdit = {
       id: art.id,
       title: art.title,
@@ -1659,7 +1750,9 @@ export default function AdminDashboardPage() {
       content: (art as any).content || art.description || "",
       imageUrl: art.imageUrl || "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=600&h=350&fit=crop",
       status: art.status || "Published",
-      placement: (art as any).placement || "Standard Post",
+      placement: postPlacement,
+      is_editors_pick: (art as any).is_editors_pick || postPlacement.toLowerCase().includes("editor"),
+      is_featured: (art as any).is_featured || postPlacement.toLowerCase().includes("a+"),
       date: art.published_at || new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
       authorName: art.author_name || (art as any).authorName || "Rushdhi MR",
       authorAvatar: (art as any).authorAvatar || "/author_bluesuit.jpg",
@@ -2405,7 +2498,15 @@ export default function AdminDashboardPage() {
     );
   }
 
-  const activeReviewsCount = writerSubmissions.length;
+  const pendingSubmissions = writerSubmissions.filter((s) => {
+    const st = (s.status || "").toLowerCase().trim();
+    if (st.includes("reject") || st === "draft" || st === "trash" || st === "published" || st === "approved") {
+      return false;
+    }
+    return true;
+  });
+
+  const activeReviewsCount = pendingSubmissions.length;
   const completedReleasesCount = articles.length;
   const newsletterSubsCount = newsletterSubscribers.length;
 
@@ -2459,7 +2560,7 @@ export default function AdminDashboardPage() {
             <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full font-mono font-bold flex-shrink-0 ${
               activeTab === "overview" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-300"
             }`}>
-              {writerSubmissions.length}
+              {pendingSubmissions.length}
             </span>
           </button>
 
@@ -2699,7 +2800,7 @@ export default function AdminDashboardPage() {
                   Recent Projects (Pending Review)
                 </h2>
                 <span className="text-[11px] font-extrabold bg-slate-200/70 text-slate-700 px-3.5 py-1 rounded-full font-mono">
-                  Pending Count: {writerSubmissions.length}
+                  Pending Count: {pendingSubmissions.length}
                 </span>
               </div>
 
@@ -2717,14 +2818,14 @@ export default function AdminDashboardPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs">
-                    {writerSubmissions.length === 0 ? (
+                    {pendingSubmissions.length === 0 ? (
                       <tr>
                         <td colSpan={6} className="py-12 text-center text-slate-400">
                           No pending submissions in queue. All articles have been reviewed!
                         </td>
                       </tr>
                     ) : (
-                      writerSubmissions.map((post, idx) => (
+                      pendingSubmissions.map((post, idx) => (
                         <tr key={`sub-${post.id}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
                           
                           {/* ARTICLE DETAILS */}
@@ -2963,7 +3064,7 @@ export default function AdminDashboardPage() {
                         : "border-transparent text-slate-500 hover:text-slate-900"
                     }`}
                   >
-                    Pending review <span className="ml-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-extrabold">{writerSubmissions.filter(s => (s.status || "").toLowerCase().includes("pending")).length}</span>
+                    Pending review <span className="ml-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-extrabold">{writerSubmissions.filter(s => { const st = (s.status || "").toLowerCase(); return st.includes("pending") || st.includes("submitted") || st.includes("review"); }).length}</span>
                   </button>
 
                   <button
@@ -3252,7 +3353,7 @@ export default function AdminDashboardPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-xs">
-                        {writerSubmissions.filter(s => (s.status || "").toLowerCase().includes("pending")).length === 0 ? (
+                        {writerSubmissions.filter(s => { const st = (s.status || "").toLowerCase(); return st.includes("pending") || st.includes("submitted") || st.includes("review"); }).length === 0 ? (
                           <tr>
                             <td colSpan={5} className="py-12 text-center text-slate-400 font-mono">
                               No pending articles awaiting review.
@@ -3260,7 +3361,7 @@ export default function AdminDashboardPage() {
                           </tr>
                         ) : (
                           writerSubmissions
-                            .filter(s => (s.status || "").toLowerCase().includes("pending"))
+                            .filter(s => { const st = (s.status || "").toLowerCase(); return st.includes("pending") || st.includes("submitted") || st.includes("review"); })
                             .map((sub, idx) => (
                               <tr key={`pending-${sub.id}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
                                 <td className="py-4 px-6 max-w-lg">
@@ -4771,33 +4872,36 @@ export default function AdminDashboardPage() {
               </span>
             </div>
 
-            <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="flex items-center gap-2.5 flex-shrink-0">
               <button
+                type="button"
                 onClick={() => setIsPreviewModalOpen(true)}
-                className="flex items-center gap-1.5 border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-bold px-3.5 py-1.5 rounded-lg cursor-pointer transition-all"
+                className="border border-slate-700/80 bg-slate-900/60 hover:bg-slate-800 text-slate-200 hover:text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer uppercase font-mono tracking-wider shadow-xs"
               >
                 <Eye className="w-3.5 h-3.5" />
-                PREVIEW
+                <span>PREVIEW</span>
               </button>
 
               <button
+                type="button"
                 onClick={() => {
                   if (reviewingSubmission) {
                     handleOpenRejectModal(reviewingSubmission);
                   }
                 }}
-                className="flex items-center gap-1.5 bg-[#D31220] hover:bg-red-700 text-white text-xs font-extrabold px-4 py-1.5 rounded-lg cursor-pointer transition-all shadow-sm"
+                className="bg-[#8B0000] hover:bg-[#A00000] text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 uppercase font-mono tracking-wider shadow-sm shadow-red-950/40 transition-all cursor-pointer"
               >
-                <X className="w-3.5 h-3.5" />
-                REJECT
+                <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+                <span>REJECT TO TRASH</span>
               </button>
 
               <button
+                type="button"
                 onClick={handleApproveReviewStudio}
-                className="flex items-center gap-1.5 bg-[#059669] hover:bg-emerald-600 text-white text-xs font-extrabold px-4 py-1.5 rounded-lg cursor-pointer transition-all shadow-sm"
+                className="bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold px-5 py-2 rounded-xl flex items-center gap-1.5 uppercase font-mono tracking-wider shadow-sm shadow-emerald-950/40 transition-all cursor-pointer"
               >
-                <Check className="w-3.5 h-3.5" />
-                APPROVE & PUBLISH
+                <Check className="w-3.5 h-3.5" strokeWidth={3} />
+                <span>APPROVE & PUBLISH</span>
               </button>
             </div>
           </div>

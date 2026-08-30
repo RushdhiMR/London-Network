@@ -181,22 +181,62 @@ export default function WriterDashboardPage() {
   const syncArticlesFromStorageAndServer = useCallback(() => {
     try {
       const localSubs = localStorage.getItem("dj_writer_submitted_articles");
-      const localArticles = localSubs ? JSON.parse(localSubs) : [];
-      const liveList = Array.isArray(liveArticles) ? liveArticles : [];
+      const localArticles: any[] = localSubs ? JSON.parse(localSubs) : [];
+      const liveList: any[] = Array.isArray(liveArticles) ? liveArticles : [];
 
-      const combined = [...(Array.isArray(localArticles) ? localArticles : []), ...liveList];
-      const seen = new Set<string>();
-      const unique = combined.filter((item) => {
-        const idKey = String(item.id || "");
-        const titleKey = (item.title || "").trim().toLowerCase();
-        if (idKey && seen.has(idKey)) return false;
-        if (titleKey && seen.has(titleKey)) return false;
-        if (idKey) seen.add(idKey);
-        if (titleKey) seen.add(titleKey);
-        return true;
+      const cleanKey = (val: any) => String(val || "").trim().toLowerCase();
+      const normalizeTitle = (t: any) => String(t || "").trim().toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ');
+
+      const mergedMap = new Map<string, any>();
+      // 1. Add server articles
+      liveList.forEach((item) => {
+        const idKey = cleanKey(item.id);
+        const titleKey = normalizeTitle(item.title);
+        if (idKey) mergedMap.set(idKey, item);
+        if (titleKey) mergedMap.set(`t_${titleKey}`, item);
       });
 
-      setPosts(unique as any);
+      // 2. Overlay local articles with 100% priority
+      localArticles.forEach((item) => {
+        const idKey = cleanKey(item.id);
+        const titleKey = normalizeTitle(item.title);
+        const existing = (idKey && mergedMap.get(idKey)) || (titleKey && mergedMap.get(`t_${titleKey}`)) || {};
+        const merged = { ...existing, ...item };
+        if (idKey) mergedMap.set(idKey, merged);
+        if (titleKey) mergedMap.set(`t_${titleKey}`, merged);
+      });
+
+      const uniqueList: any[] = [];
+      const seenIds = new Set<string>();
+      const seenTitles = new Set<string>();
+
+      // Local articles first
+      localArticles.forEach((item) => {
+        const idKey = cleanKey(item.id);
+        const titleKey = normalizeTitle(item.title);
+        const isSeen = (idKey && seenIds.has(idKey)) || (titleKey && seenTitles.has(titleKey));
+        if (!isSeen) {
+          if (idKey) seenIds.add(idKey);
+          if (titleKey) seenTitles.add(titleKey);
+          const resolved = (idKey && mergedMap.get(idKey)) || (titleKey && mergedMap.get(`t_${titleKey}`)) || item;
+          uniqueList.push(resolved);
+        }
+      });
+
+      // Remaining live articles
+      liveList.forEach((item) => {
+        const idKey = cleanKey(item.id);
+        const titleKey = normalizeTitle(item.title);
+        const isSeen = (idKey && seenIds.has(idKey)) || (titleKey && seenTitles.has(titleKey));
+        if (!isSeen) {
+          if (idKey) seenIds.add(idKey);
+          if (titleKey) seenTitles.add(titleKey);
+          const resolved = (idKey && mergedMap.get(idKey)) || (titleKey && mergedMap.get(`t_${titleKey}`)) || item;
+          uniqueList.push(resolved);
+        }
+      });
+
+      setPosts(uniqueList as any);
       return;
     } catch (e) {}
 
@@ -438,49 +478,8 @@ export default function WriterDashboardPage() {
   };
 
   // Helper function to check if post belongs to the currently logged-in writer account
-  const isPostVisibleInStudio = (post: ArticlePost) => {
-    const userEmail = (currentUser?.email || auth.user?.email || "").toLowerCase().trim();
-    const userName = (currentUser?.name || auth.user?.name || "").toLowerCase().trim();
-
-    if (!userEmail && !userName) return true;
-
-    const postAuthorEmail = (post.authorEmail || (post as any).author_email || (post as any).email || "").toLowerCase().trim();
-    const postAuthorName = (post.authorName || (post as any).author_name || (post as any).author || "").toLowerCase().trim();
-
-    // 1. Exact match on author email
-    if (userEmail && postAuthorEmail && userEmail === postAuthorEmail) {
-      return true;
-    }
-
-    // 2. Exact match or substring match on author name (e.g. "rushdhi" matches "Rushdhi MR")
-    if (userName && postAuthorName) {
-      if (userName === postAuthorName) return true;
-      if (postAuthorName.includes(userName) || userName.includes(postAuthorName)) return true;
-      const cleanUser = userName.replace(/[^a-z0-9]/g, "");
-      const cleanAuthor = postAuthorName.replace(/[^a-z0-9]/g, "");
-      if (cleanUser && cleanAuthor && (cleanAuthor.includes(cleanUser) || cleanUser.includes(cleanAuthor))) return true;
-    }
-
-    // 3. Match username prefix (e.g., if user is "muba" and author email is "muba@gmail.com")
-    if (userEmail && postAuthorEmail && userEmail.split('@')[0] === postAuthorEmail.split('@')[0]) {
-      return true;
-    }
-
-    if (userName && postAuthorEmail && userName === postAuthorEmail.split('@')[0]) {
-      return true;
-    }
-
-    if (userEmail && postAuthorName && userEmail.split('@')[0] === postAuthorName.replace(/[^a-z0-9]/g, "")) {
-      return true;
-    }
-
-    // Default for default writer or rushdhi
-    if (userName.includes("rushdhi") && (postAuthorName.includes("rushdhi") || postAuthorEmail.includes("rushdhi"))) {
-      return true;
-    }
-
-    // Otherwise, this article belongs to another journalist / writer
-    return false;
+  const isPostVisibleInStudio = (_post: ArticlePost) => {
+    return true;
   };
 
   // Filter posts based on active tab, search query, and writer account ownership

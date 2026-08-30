@@ -200,13 +200,12 @@ export function getAuthorAvatarByNameOrEmail(name?: string, email?: string): str
   if (!cleanName && !cleanEmail) return null;
 
   const isNameMatch = (target: string): boolean => {
-    if (!cleanName || !target) return false;
-    const s1 = cleanName.replace(/[^a-z0-9]/g, "");
-    const s2 = target.toLowerCase().replace(/[^a-z0-9]/g, "");
-    if (!s1 || !s2) return false;
-    if (s1 === s2) return true;
-    if (s1.length >= 3 && s2.length >= 3 && (s1.includes(s2) || s2.includes(s1))) return true;
-    if (s1.includes("rushdhi") && s2.includes("rushdhi")) return true;
+    if (!target) return false;
+    const s1 = cleanName ? cleanName.replace(/[^a-z0-9]/g, "").toLowerCase() : "";
+    const s2 = target.replace(/[^a-z0-9]/g, "").toLowerCase();
+    if (!s2) return false;
+    if (s1 && (s1 === s2 || s1.includes(s2) || s2.includes(s1))) return true;
+    if ((s1.includes("rushdhi") || cleanEmail.includes("rushdhi")) && (s2.includes("rushdhi") || target.toLowerCase().includes("rushdhi"))) return true;
     return false;
   };
 
@@ -220,7 +219,7 @@ export function getAuthorAvatarByNameOrEmail(name?: string, email?: string): str
           if (u.avatar && u.avatar.length > 5 && !u.avatar.includes("cart") && !u.avatar.includes("admin_profile")) {
             const uName = (u.name || "").toLowerCase().trim();
             const uEmail = (u.email || "").toLowerCase().trim();
-            if ((cleanEmail && uEmail === cleanEmail) || isNameMatch(uName)) {
+            if ((cleanEmail && uEmail === cleanEmail) || isNameMatch(uName) || isNameMatch(uEmail)) {
               return u.avatar;
             }
           }
@@ -240,8 +239,9 @@ export function getAuthorAvatarByNameOrEmail(name?: string, email?: string): str
           if (!p || !p.avatar || p.avatar.length <= 5 || p.avatar.includes("cart")) continue;
           const pName = (p.name || "").toLowerCase().trim();
           const pEmail = (p.email || "").toLowerCase().trim();
-          if (cleanEmail && pEmail === cleanEmail) return p.avatar;
-          if (isNameMatch(pName)) return p.avatar;
+          if ((cleanEmail && pEmail === cleanEmail) || isNameMatch(pName) || isNameMatch(pEmail)) {
+            return p.avatar;
+          }
         }
       } catch (e) {}
     }
@@ -255,8 +255,9 @@ export function getAuthorAvatarByNameOrEmail(name?: string, email?: string): str
           if (!u || !u.avatar || u.avatar.length <= 5 || u.avatar.includes("cart")) continue;
           const uName = (u.name || "").toLowerCase().trim();
           const uEmail = (u.email || "").toLowerCase().trim();
-          if (cleanEmail && uEmail === cleanEmail) return u.avatar;
-          if (isNameMatch(uName)) return u.avatar;
+          if ((cleanEmail && uEmail === cleanEmail) || isNameMatch(uName) || isNameMatch(uEmail)) {
+            return u.avatar;
+          }
         }
       } catch (e) {}
     }
@@ -270,8 +271,9 @@ export function getAuthorAvatarByNameOrEmail(name?: string, email?: string): str
           if (!d || !d.avatar || d.avatar.length <= 5 || d.avatar.includes("cart")) continue;
           const dName = (d.name || "").toLowerCase().trim();
           const dEmail = (d.email || "").toLowerCase().trim();
-          if (cleanEmail && dEmail === cleanEmail) return d.avatar;
-          if (isNameMatch(dName)) return d.avatar;
+          if ((cleanEmail && dEmail === cleanEmail) || isNameMatch(dName) || isNameMatch(dEmail)) {
+            return d.avatar;
+          }
         }
       } catch (e) {}
     }

@@ -189,6 +189,11 @@ function ArticlePageContentInner({
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const resolveCleanAuthor = (rawName?: string, rawAvatar?: string, rawEmail?: string) => {
     let name = (rawName || "").trim();
@@ -197,9 +202,11 @@ function ArticlePageContentInner({
     }
 
     const isRushdhi = name.toLowerCase().includes("rushdhi") || (rawEmail && rawEmail.toLowerCase().includes("rushdhi"));
-    const writerProfile = isRushdhi
-      ? (getUserProfile("rushdhiwriter@gmail.com") || getUserProfile("writer@digitaljournal.com") || getAuthorFullProfileByNameOrEmail("rushdhi"))
-      : (getUserProfile(name) || getAuthorFullProfileByNameOrEmail(name));
+    const writerProfile = typeof window !== "undefined" && isMounted
+      ? (isRushdhi
+        ? (getUserProfile("rushdhiwriter@gmail.com") || getUserProfile("writer@digitaljournal.com") || getAuthorFullProfileByNameOrEmail("rushdhi"))
+        : (getUserProfile(name) || getAuthorFullProfileByNameOrEmail(name)))
+      : null;
 
     if (writerProfile?.name && !writerProfile.name.toLowerCase().includes("reader")) {
       name = writerProfile.name;
@@ -212,7 +219,7 @@ function ArticlePageContentInner({
     }
 
     // 2. Lookup custom uploaded avatar from author profile database by name or email
-    if (!avatar) {
+    if (!avatar && typeof window !== "undefined" && isMounted) {
       const accountAvatar = getAuthorAvatarByNameOrEmail(name, isRushdhi ? "rushdhiwriter@gmail.com" : rawEmail || "");
       if (accountAvatar && accountAvatar.length > 5 && !accountAvatar.includes("cart") && !accountAvatar.includes("admin_profile")) {
         avatar = accountAvatar;
@@ -249,28 +256,39 @@ function ArticlePageContentInner({
 
   useEffect(() => {
     try {
-        const searchId = searchParams?.get("id");
-        const searchSub = searchParams?.get("sub");
+        const searchId = searchParams?.get("id") || (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("id") : null);
         const currentTitle = (newsData.title || "").trim().toLowerCase();
         const currentPath = typeof window !== "undefined" ? window.location.pathname.toLowerCase() : "";
+        const pathSegments = currentPath.split("/").filter(Boolean);
+        const lastSegment = pathSegments[pathSegments.length - 1] || "";
+        const clean = (str?: string) => (str || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        const cleanLastSegment = clean(lastSegment);
+        const cleanCurrentTitle = clean(currentTitle);
 
         const matched = liveArticles.find((p) => {
           if (!p || (p.status || "").toLowerCase() !== "published") return false;
+          // 1. Direct ID match from URL param
           if (searchId && (String(p.id) === String(searchId) || p.slug === searchId)) return true;
 
-          const pTitle = (p.title || "").trim().toLowerCase();
-          const pSlug = pTitle.replace(/[^a-z0-9]+/g, "-");
-          const normSlug = (p.slug || "").toLowerCase().trim();
+          const pCleanSlug = clean(p.slug);
+          const pCleanTitle = clean(p.title);
 
-          return (
-            (normSlug && currentPath.endsWith("/" + normSlug)) ||
-            (pSlug && currentPath.endsWith("/" + pSlug)) ||
-            (normSlug && currentPath.includes(normSlug)) ||
-            (pSlug && currentPath.includes(pSlug)) ||
-            (p.id && currentPath.includes(String(p.id))) ||
-            (currentTitle && currentTitle.length > 3 && (pTitle.includes(currentTitle) || currentTitle.includes(pTitle))) ||
-            (currentTitle.length > 5 && pTitle.slice(0, 15) === currentTitle.slice(0, 15))
-          );
+          // 2. Exact slug or title match on URL's last segment
+          if (cleanLastSegment && (pCleanSlug === cleanLastSegment || pCleanTitle === cleanLastSegment)) {
+            return true;
+          }
+
+          // 3. Exact ID match on URL's last segment
+          if (lastSegment && String(p.id) === lastSegment) {
+            return true;
+          }
+
+          // 4. Exact title matching
+          if (cleanCurrentTitle && pCleanTitle && (pCleanTitle === cleanCurrentTitle || (cleanCurrentTitle.length > 15 && pCleanTitle.includes(cleanCurrentTitle)))) {
+            return true;
+          }
+
+          return false;
         });
 
         if (matched) {
@@ -352,11 +370,6 @@ function ArticlePageContentInner({
   }, [activeNewsData.authorName]);
 
   const auth = useAuth();
-  const [isMounted, setIsMounted] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   const isAdmin = Boolean(
     isMounted && (
@@ -1088,12 +1101,12 @@ function ArticlePageContentInner({
               const authorSlug = cleanAuth.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
               return (
-                <div className="flex items-center gap-3.5 mb-4 pb-3.5 border-b border-zinc-200 font-sans">
-                  <Link href={`/author/${authorSlug}`} className="w-11 h-11 rounded-full overflow-hidden bg-[#1E293B] flex-shrink-0 border border-zinc-300 hover:opacity-80 transition-opacity flex items-center justify-center text-white font-bold text-sm">
+                <div className="flex items-center gap-3.5 mb-4 pb-3.5 border-b border-zinc-200 font-sans" suppressHydrationWarning>
+                  <Link href={`/author/${authorSlug}`} className="w-11 h-11 rounded-full overflow-hidden bg-[#1E293B] flex-shrink-0 border border-zinc-300 hover:opacity-80 transition-opacity flex items-center justify-center text-white font-bold text-sm" suppressHydrationWarning>
                     {cleanAuth.avatar && cleanAuth.avatar.length > 5 ? (
-                      <img src={cleanAuth.avatar} alt={cleanAuth.name} className="w-full h-full object-cover" />
+                      <img src={cleanAuth.avatar} alt={cleanAuth.name} className="w-full h-full object-cover" suppressHydrationWarning />
                     ) : (
-                      <span>{(cleanAuth.name || "RM").slice(0, 2).toUpperCase()}</span>
+                      <span suppressHydrationWarning>{(cleanAuth.name || "RM").slice(0, 2).toUpperCase()}</span>
                     )}
                   </Link>
                   <div>

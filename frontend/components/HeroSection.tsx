@@ -25,11 +25,13 @@ export default function HeroSection() {
 
     if (typeof window !== "undefined") {
       window.addEventListener("dj_profile_updated", handleProfileSync);
+      window.addEventListener("dj_articles_updated", handleProfileSync);
       window.addEventListener("storage", handleProfileSync);
     }
     return () => {
       if (typeof window !== "undefined") {
         window.removeEventListener("dj_profile_updated", handleProfileSync);
+        window.removeEventListener("dj_articles_updated", handleProfileSync);
         window.removeEventListener("storage", handleProfileSync);
       }
     };
@@ -58,10 +60,12 @@ export default function HeroSection() {
           .replace(/\s+/g, "-");
         
         const rawName = (post.authorName || (post as any).author_name || post.author || "Rushdhi MR").trim();
+        const authorEmail = post.authorEmail || (post as any).author_email;
+        const authorAvatar = post.authorAvatar || (post as any).author_avatar;
         const resolvedAvatar = resolveUserAvatar({
           name: rawName,
-          email: post.authorEmail || (post as any).author_email,
-          avatar: post.authorAvatar
+          email: authorEmail,
+          avatar: authorAvatar
         });
 
         const validImg = post.imageUrl || post.image || (post as any).image_url || "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=1200&h=800&fit=crop";
@@ -72,7 +76,8 @@ export default function HeroSection() {
           title: post.title,
           excerpt: post.summary || post.description || (post.content || "").replace(/<[^>]*>?/gm, "").slice(0, 160) + "...",
           author: rawName,
-          authorAvatar: resolvedAvatar,
+          authorAvatar: authorAvatar || resolvedAvatar,
+          authorEmail: authorEmail,
           date: post.date || "Just now",
           readTime: post.readDuration || "4 MIN READ",
           image: validImg,
@@ -127,7 +132,7 @@ export default function HeroSection() {
     },
     {
       id: 2,
-      category: "TECHNOLOGY",
+      category: "ARTIFICIAL INTELLIGENCE",
       title: "Can space AI data centres solve Earth's computing crisis?",
       excerpt: "Aerospace engineers and cloud providers are designing orbital data hubs powered by solar arrays to alleviate terrestrial power grid strains.",
       author: "Jennifer Friesen",
@@ -275,31 +280,36 @@ export default function HeroSection() {
 
               {/* Author Row */}
               {(() => {
-                const resolvedAvatar = isMounted
-                  ? resolveUserAvatar({
-                      name: activeArticle.author,
-                      email: (activeArticle as any).authorEmail,
-                      avatar: activeArticle.authorAvatar
-                    })
-                  : activeArticle.authorAvatar || "/author_bluesuit.jpg";
+                const authorName = activeArticle.author || "Rushdhi MR";
+                const authorEmail = (activeArticle as any).authorEmail || (activeArticle as any).author_email;
+                const authorAvatar = (activeArticle as any).authorAvatar;
+
+                const liveAvatar = resolveUserAvatar({
+                  name: authorName,
+                  email: authorEmail,
+                  avatar: authorAvatar
+                });
 
                 return (
                   <div className="flex items-center gap-2 mb-3" suppressHydrationWarning>
                     <div className="w-6 h-6 rounded-full overflow-hidden bg-[#1E293B] text-white flex items-center justify-center font-bold text-[10px] flex-shrink-0" suppressHydrationWarning>
-                      {resolvedAvatar && resolvedAvatar.length > 5 ? (
+                      {liveAvatar && liveAvatar.length > 5 ? (
                         <img
-                          src={resolvedAvatar}
-                          alt={activeArticle.author}
+                          src={liveAvatar}
+                          alt={authorName}
                           className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.src = "/author_bluesuit.jpg";
+                          }}
                           suppressHydrationWarning
                         />
                       ) : (
-                        <span>{(activeArticle.author || "RM").slice(0, 2).toUpperCase()}</span>
+                        <span>{(authorName || "RM").slice(0, 2).toUpperCase()}</span>
                       )}
                     </div>
                     <div className="flex items-center gap-1 text-[11px] font-sans flex-wrap" suppressHydrationWarning>
                       <span className="font-bold text-gray-900">
-                        By {activeArticle.author}
+                        By {authorName}
                       </span>
                       <span className="w-3.5 h-3.5 bg-[#D31220] text-white rounded-full inline-flex items-center justify-center flex-shrink-0">
                         <Check size={8} strokeWidth={3} />

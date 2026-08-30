@@ -37,16 +37,40 @@ const FALLBACK_LIFESTYLE_ARTICLES = [
 export default function LifeStyleSection() {
   const { articles: liveArticles = [] } = useLiveArticles();
 
+  const getArticleTimestamp = (item: any): number => {
+    if (!item) return 0;
+    if (item.published_at || item.publishedAt) {
+      const t = new Date(item.published_at || item.publishedAt).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    if (item.createdAt || item.created_at) {
+      const t = new Date(item.createdAt || item.created_at).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    if (item.date && item.date !== "Just now" && item.date !== "Today" && item.date !== "Just published") {
+      const t = new Date(item.date).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    if (typeof item.id === "number") return item.id;
+    if (typeof item.id === "string") {
+      const match = item.id.match(/\d{10,}/);
+      if (match) {
+        const num = parseInt(match[0], 10);
+        if (!isNaN(num) && num > 0) return num;
+      }
+      const num = parseInt(item.id.replace(/[^0-9]/g, ""), 10);
+      if (!isNaN(num) && num > 0) return num;
+    }
+    return 0;
+  };
+
   const lifestyleLive = (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
     if (!art || (art.status || "").toLowerCase() !== "published") return false;
     if (isTopPlacementArticle(art)) return false;
-    return (
-      articleMatchesCategory(art, "lifestyle") ||
-      articleMatchesCategory(art, "life") ||
-      articleMatchesCategory(art, "culture") ||
-      articleMatchesCategory(art, "entertainment")
-    );
+    return articleMatchesCategory(art, "lifestyle");
   });
+
+  lifestyleLive.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
 
   const mappedLive = lifestyleLive.map((a: ArticleItem) => ({
     id: a.id,
