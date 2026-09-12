@@ -174,18 +174,22 @@ export function isHomePageAPlus(post: any): boolean {
   if (!post) return false;
   const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
   if (pl.includes("section 2") || pl.includes("a+ 2") || pl.includes("a+2")) return false;
+  if (pl.includes("trending") || pl.includes("editor") || pl.includes("latest") || pl.includes("category")) return false;
   return (
     pl === "home page a+ section" ||
     pl === "home page a+" ||
     pl === "a+ section" ||
+    pl === "featured story" ||
     pl.includes("home page a+") ||
-    (post.is_featured === true && !pl.includes("trending") && !pl.includes("editor") && !pl.includes("latest") && !pl.includes("section 2"))
+    (post.is_featured === true && (pl === "" || pl === "featured story" || pl === "home page a+ section"))
   );
 }
 
 export function isTrendingNow(post: any): boolean {
   if (!post) return false;
   const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
+  if (pl.includes("section 2") || pl.includes("a+ 2") || pl.includes("a+2") || pl.includes("home page a+")) return false;
+  if (pl.includes("editor") || pl.includes("latest") || pl.includes("category")) return false;
   return (
     pl === "trending now section" ||
     pl === "trending now" ||
@@ -197,6 +201,7 @@ export function isTrendingNow(post: any): boolean {
 export function isEditorsPick(post: any): boolean {
   if (!post) return false;
   const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
+  if (pl.includes("section 2") || pl.includes("a+ 2") || pl.includes("a+2") || pl.includes("home page a+") || pl.includes("trending") || pl.includes("latest") || pl.includes("category")) return false;
   return (
     pl === "editor's picks section" ||
     pl === "editor's pick" ||
@@ -204,13 +209,14 @@ export function isEditorsPick(post: any): boolean {
     pl === "editors pick" ||
     pl === "editors picks" ||
     pl.includes("editor") ||
-    post.is_editors_pick === true
+    (post.is_editors_pick === true && (pl === "" || pl.includes("editor")))
   );
 }
 
 export function isLatestNews(post: any): boolean {
   if (!post) return false;
   const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
+  if (pl.includes("section 2") || pl.includes("a+ 2") || pl.includes("a+2") || pl.includes("home page a+") || pl.includes("trending") || pl.includes("editor") || pl.includes("category")) return false;
   return (
     pl === "latest news section" ||
     pl === "latest news" ||
@@ -222,6 +228,7 @@ export function isLatestNews(post: any): boolean {
 export function isHomePageAPlus2(post: any): boolean {
   if (!post) return false;
   const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
+  if (pl.includes("trending") || pl.includes("editor") || pl.includes("latest") || pl.includes("category")) return false;
   return (
     pl === "home page a+ section 2" ||
     pl === "a+ section 2" ||

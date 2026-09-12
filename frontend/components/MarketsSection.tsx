@@ -39,6 +39,7 @@ export default function MarketsSection() {
 
   const marketsLive = (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
     if (!art || (art.status || "").toLowerCase() !== "published") return false;
+    if (isTopPlacementArticle(art)) return false;
     return articleMatchesMainCategory(art, "markets");
   });
 

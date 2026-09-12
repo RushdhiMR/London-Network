@@ -39,6 +39,7 @@ export default function LifeStyleSection() {
 
   const lifestyleLive = (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
     if (!art || (art.status || "").toLowerCase() !== "published") return false;
+    if (isTopPlacementArticle(art)) return false;
     return articleMatchesMainCategory(art, "lifestyle");
   });
 

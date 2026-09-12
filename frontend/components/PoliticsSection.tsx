@@ -40,6 +40,7 @@ export default function PoliticsSection() {
   // Filter politics articles
   const politicsLive = (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
     if (!art || (art.status || "").toLowerCase() !== "published") return false;
+    if (isTopPlacementArticle(art)) return false;
     return articleMatchesMainCategory(art, "politics");
   });
 

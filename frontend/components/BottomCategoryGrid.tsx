@@ -10,6 +10,7 @@ export default function BottomCategoryGrid() {
   const getCategoryArticles = (keywords: string[]) => {
     return (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
       if (!art || (art.status || "").toLowerCase() !== "published") return false;
+      if (isTopPlacementArticle(art)) return false;
       return keywords.some(k => articleMatchesMainCategory(art, k));
     });
   };
