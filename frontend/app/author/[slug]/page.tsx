@@ -14,120 +14,49 @@ const authorsDatabase: Record<string, {
   bio: string;
 }> = {
   "rushdhi": {
-    name: "Rushdhi",
-    role: "JOURNALIST",
-    avatar: "/author_bluesuit.jpg",
-    bio: "Rushdhi is a journalist for London BigBen covering business strategy, software architecture, emerging technology, and digital transformation."
+    name: "Rushdhi MR",
+    role: "FOUNDER & EDITOR-IN-CHIEF",
+    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_bluesuit.jpg",
+    bio: "Founder and Editor-in-Chief for London BigBen covering business strategy, software architecture, emerging technology, and digital transformation."
   },
   "rushdhi-mr": {
-    name: "Rushdhi",
-    role: "JOURNALIST",
-    avatar: "/author_bluesuit.jpg",
-    bio: "Rushdhi is a journalist for London BigBen covering business strategy, software architecture, emerging technology, and digital transformation."
+    name: "Rushdhi MR",
+    role: "FOUNDER & EDITOR-IN-CHIEF",
+    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_bluesuit.jpg",
+    bio: "Founder and Editor-in-Chief for London BigBen covering business strategy, software architecture, emerging technology, and digital transformation."
   },
   "muba": {
-    name: "Muba",
-    role: "SENIOR WRITER",
-    avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=250&h=250&fit=crop",
-    bio: "Reports on industry disruptions, macroeconomic trends, lifestyle features, and breaking developments."
+    name: "Muba_kity",
+    role: "SENIOR TECH WRITER",
+    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_woman.jpg",
+    bio: "Senior technology reporter specializing in enterprise cloud innovations, generative AI systems, and digital ecosystems."
   },
-  "april-hicke": {
-    name: "April Hicke",
-    role: "TECH ANALYST",
-    avatar: "/author_glasses.jpg",
-    bio: "April Hicke reports on biotechnology, scientific research, open science initiatives, and artificial intelligence adoption across enterprise ecosystems."
+  "muba-kity": {
+    name: "Muba_kity",
+    role: "SENIOR TECH WRITER",
+    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_woman.jpg",
+    bio: "Senior technology reporter specializing in enterprise cloud innovations, generative AI systems, and digital ecosystems."
   },
-  "ronda-b": {
-    name: "Ronda B",
-    role: "WRITER",
-    avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=250&h=250&fit=crop",
-    bio: "A dedicated journalist with a passion for delivering accurate, timely, and impactful news. Committed to ethical reporting and in-depth storytelling, she covers a wide range of topics with professionalism, integrity, and a focus on informing audiences through credible journalism."
+  "roomi": {
+    name: "Roomi",
+    role: "STAFF WRITER & MARKET REPORTER",
+    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_glasses.jpg",
+    bio: "Financial markets and business columnist reporting on corporate developments, macroeconomic indicators, and supply chain telemetry."
   },
-  "jennifer-friesen": {
-    name: "Jennifer Friesen",
-    role: "ASSOCIATE EDITOR",
-    avatar: "/author_woman.jpg",
-    bio: "Jennifer Friesen is London BigBen's associate editor and Calgary Bureau lead. Committed to ethical reporting and in-depth storytelling across energy, technology, and policy."
-  },
-  "pramod-jain": {
-    name: "Pramod Jain",
-    role: "ENERGY COLUMNIST",
-    avatar: "/author_energy.jpg",
-    bio: "Pramod Jain reports on global supply chains, logistics telemetry, enterprise cloud migrations, and emerging technology markets."
-  },
-  "chris-hogg": {
-    name: "Chris Hogg",
-    role: "EXECUTIVE EDITOR",
-    avatar: "/author_beard.jpg",
-    bio: "Chris Hogg is an executive editor specializing in digital transformation, financial technology, and executive leadership strategies."
-  },
-  "dr-andrew-forde": {
-    name: "Dr. Andrew Forde",
-    role: "CHIEF COLUMNIST",
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=250&h=250&fit=crop",
-    bio: "Dr. Andrew Forde writes on technological convergence, machine intelligence, and structural policy frameworks."
-  },
-  "david-potter": {
-    name: "David Potter",
-    role: "SENIOR COLUMNIST",
-    avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=250&h=250&fit=crop",
-    bio: "David Potter focuses on software architecture, DevOps tooling, developer metrics, and infrastructure security."
-  },
-  "jennifer-lussier": {
-    name: "Jennifer Lussier",
-    role: "CONTRIBUTING EDITOR",
-    avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=250&h=250&fit=crop",
-    bio: "Jennifer Lussier covers Canadian innovation ecosystems, youth employment initiatives, and venture capital allocations."
-  },
-  "dr-tim-sandle": {
-    name: "Dr. Tim Sandle",
-    role: "SENIOR EDITOR",
-    avatar: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=250&h=250&fit=crop",
-    bio: "Dr. Tim Sandle is a London-based science journalist covering biotechnology, microbiology, AI in healthcare, and digital transformation."
-  },
-  "frank-morgan": {
-    name: "Frank Morgan",
-    role: "POLITICAL CORRESPONDENT",
-    avatar: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=250&h=250&fit=crop",
-    bio: "Frank Morgan is London BigBen's senior political correspondent covering transatlantic diplomacy, legislative policy, and international affairs."
-  },
-  "sarah-miller": {
-    name: "Sarah Miller",
-    role: "REGULATORY CORRESPONDENT",
-    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=250&h=250&fit=crop",
-    bio: "Sarah Miller covers international data privacy regulations, cross-border compliance, and digital rights."
-  },
-  "david-chen": {
-    name: "David Chen",
-    role: "TECH CORRESPONDENT",
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=250&h=250&fit=crop",
-    bio: "David Chen covers open-source software, cloud infrastructure, and quantum computing preview clusters."
-  },
-  "lisa-chen": {
-    name: "Lisa Chen",
-    role: "DATA INFRASTRUCTURE REPORTER",
-    avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=250&h=250&fit=crop",
-    bio: "Lisa Chen covers next-generation data routing, enterprise AI balance nodes, and telecommunications."
+  "ruzni": {
+    name: "Ruzni",
+    role: "EDITORIAL DIRECTOR",
+    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_beard.jpg",
+    bio: "Editorial director and investigative journalist focused on governance, regulatory compliance, and cross-border innovation."
   }
 };
 
 export async function generateStaticParams() {
   return [
-    { slug: "rushdhi" },
     { slug: "rushdhi-mr" },
-    { slug: "april-hicke" },
-    { slug: "ronda-b" },
-    { slug: "jennifer-friesen" },
-    { slug: "pramod-jain" },
-    { slug: "chris-hogg" },
-    { slug: "dr-andrew-forde" },
-    { slug: "david-potter" },
-    { slug: "jennifer-lussier" },
-    { slug: "dr-tim-sandle" },
-    { slug: "frank-morgan" },
-    { slug: "sarah-miller" },
-    { slug: "david-chen" },
-    { slug: "lisa-chen" }
+    { slug: "muba-kity" },
+    { slug: "roomi" },
+    { slug: "ruzni" }
   ];
 }
 
@@ -163,7 +92,7 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
     },
     {
       category: "BUSINESS",
-      href: "/business/companies/new-exclusive-decoration-design-fit-out-llc-structural-acrylic-pioneers-in-the-uae",
+      href: "/business/new-exclusive-decoration-design-fit-out-llc-structural-acrylic-pioneers-in-the-uae",
       title: "New Exclusive Decoration Design & Fit Out LLC – Structural Acrylic Pioneers in the UAE",
       desc: "Dubai, UAE – New Exclusive Decoration Design & Fit Out LLC, recognized as New Exclusive Structural Acrylic Pioneers, is redefining the future of luxury pool design and architectural transparency...",
       date: `BY ${author.name.toUpperCase()} • JUL 15, 2026`,
@@ -220,7 +149,7 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
   ];
 
   const mostReadSidebar = [
-    { rank: 1, href: "/business/companies/new-exclusive-decoration-design-fit-out-llc-structural-acrylic-pioneers-in-the-uae", title: "New Exclusive Decoration Design & Fit Out LLC – Structural Acrylic Pioneers in the UAE", views: "50 views" },
+    { rank: 1, href: "/business/new-exclusive-decoration-design-fit-out-llc-structural-acrylic-pioneers-in-the-uae", title: "New Exclusive Decoration Design & Fit Out LLC – Structural Acrylic Pioneers in the UAE", views: "50 views" },
     { rank: 2, href: "/news/politics/trump-declares-iran-ceasefire-over-raising-questions-about-the-next-phase-of-the-conflict", title: "Trump Declares Iran Ceasefire 'Over,' Raising Questions About the Next Phase of the Conflict", views: "38 views" },
     { rank: 3, href: "/news/politics/trumps-hormuz-retreat-highlights-struggles-to-end-iran-conflict", title: "Trump's Hormuz Retreat Highlights Struggles to End Iran Conflict", views: "24 views" },
     { rank: 4, href: "/news/markets/crypto-market-overview-bitcoin-stabilizes-zcash-targets-new-highs", title: "Crypto Market Overview: Bitcoin Stabilizes, Zcash Targets New Highs, Pump.fun Extends Recovery", views: "8 views" },

@@ -289,14 +289,14 @@ export function extractPlainText(htmlOrText: string): string {
 }
 
 export function formatArticleHref(post: any): string {
-  if (post.href) return post.href;
-  const cat = (post.category || post.category_name || "news").toLowerCase();
+  if (post.href && !post.href.includes("?id=")) return post.href;
+  const cat = (post.category || post.category_name || "news").toLowerCase().replace(/[^a-z0-9]+/g, "-");
   const slug = (post.slug || post.title || "")
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, "")
     .trim()
     .replace(/\s+/g, "-");
-  return `/${cat}/companies/${slug}?id=${post.id}`;
+  return `/${cat}/${slug}`;
 }
 
 export function getAllSearchableArticles(): SearchableArticle[] {

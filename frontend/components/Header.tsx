@@ -5,7 +5,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Search, ChevronDown, User, Mail, Menu, X, PenTool, LogOut, Settings, BookOpen, ShieldCheck, Bell } from "lucide-react";
-import { saveUserProfile, getUserProfile, resolveUserAvatar } from "@/lib/userProfiles";
+import { saveUserProfile, getUserProfile, resolveUserAvatar, isUploadedAvatar } from "@/lib/userProfiles";
+import { uploadImageToBackblaze } from "@/lib/imageUtils";
 import { useLiveArticles } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
 import { getAllSearchableArticles, searchArticlesByQuery, SearchableArticle } from "@/lib/searchArticles";
@@ -138,13 +139,14 @@ export default function Header() {
       setProfileName(currentUser.name || "rushdhi");
       setProfileBio(currentUser.bio || "Writer User");
       setProfileLinkedin(currentUser.linkedin || "https://www.linkedin.com/in/your-profile");
-      setProfileAvatar(currentUser.avatar || "/author_bluesuit.jpg");
+      setProfileAvatar(currentUser.avatar && isUploadedAvatar(currentUser.avatar) ? currentUser.avatar : "");
     }
   }, [currentUser, isProfileSettingsOpen]);
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // 1. Instant local preview
       const reader = new FileReader();
       reader.onloadend = () => {
         if (typeof reader.result === "string") {
@@ -152,11 +154,35 @@ export default function Header() {
         }
       };
       reader.readAsDataURL(file);
+
+      // 2. Direct upload to Backblaze B2 in "avatars" folder
+      try {
+        const cleanName = (currentUser?.name || currentUser?.email?.split("@")[0] || "user").toLowerCase().replace(/[^a-z0-9]/g, "-");
+        const b2Url = await uploadImageToBackblaze(file, `avatar-${cleanName}-${Date.now()}.webp`, "avatars");
+        if (b2Url && b2Url.startsWith("http")) {
+          setProfileAvatar(b2Url);
+        }
+      } catch (err) {
+        console.warn("Backblaze avatar upload warning:", err);
+      }
     }
   };
 
-  const handleSaveProfileSettings = (e: React.FormEvent) => {
+  const handleSaveProfileSettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    let finalAvatar = profileAvatar && isUploadedAvatar(profileAvatar) ? profileAvatar : "";
+
+    // If avatar is still a data URL, upload to Backblaze B2 before saving
+    if (finalAvatar && finalAvatar.startsWith("data:")) {
+      try {
+        const cleanName = (profileName || "user").toLowerCase().replace(/[^a-z0-9]/g, "-");
+        const b2Url = await uploadImageToBackblaze(finalAvatar, `avatar-${cleanName}-${Date.now()}.webp`, "avatars");
+        if (b2Url && b2Url.startsWith("http")) {
+          finalAvatar = b2Url;
+        }
+      } catch (e) {}
+    }
+
     const updatedUser = {
       ...currentUser,
       name: profileName.trim() || "rushdhi",
@@ -164,7 +190,7 @@ export default function Header() {
       role: currentUser?.role || "Writer",
       bio: profileBio.trim(),
       linkedin: profileLinkedin.trim(),
-      avatar: profileAvatar || "/author_bluesuit.jpg"
+      avatar: finalAvatar
     };
 
     setCurrentUser(updatedUser);
@@ -202,18 +228,19 @@ export default function Header() {
       const savedProfile = getUserProfile(auth.user.email);
       const normalizedRole = (auth.user.role || "").toLowerCase();
       const displayRole = normalizedRole === 'admin' ? 'Admin' : normalizedRole === 'writer' ? 'Writer' : 'Reader';
+      const rawAvatar = savedProfile?.avatar || auth.user.avatar;
       const resolvedAvatar = resolveUserAvatar({
         name: savedProfile?.name || auth.user.name,
         email: auth.user.email,
         role: displayRole,
-        avatar: savedProfile?.avatar,
+        avatar: isUploadedAvatar(rawAvatar) ? rawAvatar : undefined,
       });
 
       setCurrentUser({
         name: savedProfile?.name || auth.user.name,
         email: auth.user.email,
         role: displayRole,
-        avatar: resolvedAvatar,
+        avatar: isUploadedAvatar(resolvedAvatar) ? resolvedAvatar : "",
         bio: savedProfile?.bio,
         linkedin: savedProfile?.linkedin
       });
@@ -350,7 +377,7 @@ export default function Header() {
 
       {/* ================= ROW 1 (FIXED TOP): BRAND LOGO, SEARCH, & ACTION BUTTONS ================= */}
       <div className="fixed top-0 left-0 right-0 z-50 w-full bg-white border-b border-gray-200 shadow-xs">
-        <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 sm:gap-6 relative z-50 w-full">
+        <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-2.5 sm:py-4 flex items-center justify-between gap-2 sm:gap-6 relative z-50 w-full min-w-0">
         
         {/* LOGO & BRAND */}
         <Link href="/" className="flex items-center group shrink-0 py-0.5" aria-label="London BigBen">
@@ -359,7 +386,7 @@ export default function Header() {
             alt="London BigBen Network"
             width={240}
             height={42}
-            className="h-8 sm:h-9 md:h-10 w-auto object-contain transition-transform group-hover:scale-[1.02]"
+            className="h-7 sm:h-9 md:h-10 w-auto max-w-[165px] sm:max-w-none object-contain transition-transform group-hover:scale-[1.02]"
             priority
           />
         </Link>
@@ -545,10 +572,10 @@ export default function Header() {
 
       {/* ================= ROW 2: CATEGORY NAVIGATION BAR ================= */}
       <div className="w-full border-b border-gray-200 bg-white relative z-40 overflow-visible">
-        <div className="max-w-[1400px] mx-auto px-3 sm:px-6 flex items-center justify-between gap-4 w-full overflow-visible">
+        <div className="max-w-[1400px] mx-auto px-3 sm:px-6 flex items-center justify-between gap-4 w-full min-w-0 overflow-visible">
           
           {/* Main Horizontal Category Nav Items */}
-          <nav className="flex items-center space-x-2 sm:space-x-4 md:space-x-5 lg:space-x-6 xl:space-x-7 py-2.5 sm:py-3 text-[12px] sm:text-[13.5px] font-bold overflow-x-auto md:overflow-visible scrollbar-none flex-1">
+          <nav className="flex items-center gap-4 sm:gap-5 md:gap-6 lg:gap-6 xl:gap-7 py-2.5 sm:py-3 text-[12px] sm:text-[13.5px] font-bold overflow-x-auto md:overflow-visible scrollbar-none flex-1 min-w-0 pr-4">
             {navCategories.map((cat) => {
               const isWorld = cat.name === "World";
               const isWorldActive = isWorld && activeMenu === "WORLD";
@@ -557,7 +584,7 @@ export default function Header() {
               return (
                 <div
                   key={cat.name}
-                  className="relative flex items-center group"
+                  className="relative flex items-center group shrink-0"
                   onMouseEnter={() => {
                     if (isWorld) {
                       setActiveMenu("WORLD");
@@ -573,7 +600,7 @@ export default function Header() {
                       setActiveMenu(null);
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`flex items-center gap-1 pb-0.5 px-1.5 transition-colors font-bold whitespace-nowrap ${
+                    className={`flex items-center gap-1 pb-0.5 px-1 sm:px-1.5 transition-colors font-bold whitespace-nowrap ${
                       isActive
                         ? "text-gray-900 border-b-2 border-[#BF1E2D]"
                         : "text-gray-800 hover:text-[#BF1E2D] border-b-2 border-transparent"
@@ -669,17 +696,17 @@ export default function Header() {
 
       {/* ================= ROW 3: TRENDING TOPICS & WEATHER UTILITY BAR ================= */}
       <div className="w-full bg-[#F8F9FA] border-b border-gray-200 py-1.5 text-xs font-medium text-gray-700">
-        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 flex items-center justify-between gap-4">
+        <div className="max-w-[1400px] mx-auto px-3 sm:px-6 flex items-center justify-between gap-4 min-w-0">
           
           {/* LEFT: TRENDING LABEL & TOPICS */}
-          <div className="flex items-center gap-2.5 overflow-x-auto scrollbar-none py-0.5">
-            <span className="bg-[#BF1E2D]/10 text-[#BF1E2D] font-extrabold uppercase text-[10px] sm:text-[11px] px-2 py-0.5 rounded tracking-wider flex-shrink-0">
+          <div className="flex items-center gap-2 sm:gap-2.5 overflow-x-auto scrollbar-none py-0.5 min-w-0 flex-1">
+            <span className="bg-[#BF1E2D]/10 text-[#BF1E2D] font-extrabold uppercase text-[10px] sm:text-[11px] px-2 py-0.5 rounded tracking-wider shrink-0">
               TRENDING
             </span>
 
-            <div className="flex items-center gap-2.5 text-[12px] whitespace-nowrap text-gray-700">
+            <div className="flex items-center gap-2 sm:gap-2.5 text-[12px] whitespace-nowrap text-gray-700 shrink-0">
               {trendingTopics.map((topic, index) => (
-                <div key={topic.name} className="flex items-center gap-2.5">
+                <div key={topic.name} className="flex items-center gap-2 sm:gap-2.5 shrink-0">
                   <Link href={topic.href} className="hover:text-[#BF1E2D] transition-colors font-medium">
                     {topic.name}
                   </Link>
@@ -690,7 +717,7 @@ export default function Header() {
           </div>
 
           {/* RIGHT: DATE, LOCATION & WEATHER WIDGET */}
-          <div className="hidden lg:flex items-center gap-3 text-[11.5px] text-gray-500 font-medium flex-shrink-0">
+          <div className="hidden lg:flex items-center gap-3 text-[11.5px] text-gray-500 font-medium shrink-0">
             <span>Tuesday, July 13, 2026</span>
             <span className="text-gray-300">•</span>
             <span>New York, USA</span>
@@ -709,7 +736,7 @@ export default function Header() {
 
       {/* MOBILE DRAWER */}
       {isMobileMenuOpen && (
-        <div className="md:hidden bg-white text-gray-900 border-t border-gray-200 py-4 px-4 space-y-4 shadow-2xl animate-in slide-in-from-top-2 duration-200">
+        <div className="md:hidden bg-white text-gray-900 border-t border-gray-200 py-4 px-4 space-y-4 shadow-2xl animate-in slide-in-from-top-2 duration-200 max-h-[calc(100vh-65px)] overflow-y-auto">
           
           {/* Mobile Search Button (Instant navigation link to /search, hidden on /search page) */}
           {pathname !== "/search" && (
@@ -749,7 +776,7 @@ export default function Header() {
             <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-200 space-y-3 font-sans">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-[#BF1E2D] text-white font-bold flex items-center justify-center text-sm shadow-xs uppercase overflow-hidden shrink-0">
-                  {currentUser.avatar && (currentUser.avatar.startsWith("/") || currentUser.avatar.startsWith("data:")) ? (
+                  {currentUser.avatar && (currentUser.avatar.startsWith("/") || currentUser.avatar.startsWith("data:") || currentUser.avatar.startsWith("http")) ? (
                     <img src={currentUser.avatar} alt={currentUser.name} className="w-full h-full object-cover" />
                   ) : (
                     <span>{(currentUser.name || "U").charAt(0)}</span>
@@ -927,11 +954,17 @@ export default function Header() {
 
             {/* Avatar & Photo Section */}
             <div className="flex items-center gap-4 px-6 pt-6 pb-2">
-              <img
-                src={profileAvatar || currentUser?.avatar || "/author_bluesuit.jpg"}
-                alt={profileName || "Nesto Super"}
-                className="w-16 h-16 rounded-2xl object-cover border border-slate-200 shadow-2xs flex-shrink-0"
-              />
+              {(profileAvatar && isUploadedAvatar(profileAvatar)) || (currentUser?.avatar && isUploadedAvatar(currentUser.avatar)) ? (
+                <img
+                  src={profileAvatar || currentUser?.avatar}
+                  alt={profileName || "User"}
+                  className="w-16 h-16 rounded-2xl object-cover border border-slate-200 shadow-2xs flex-shrink-0"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-2xl border border-slate-200 bg-slate-100 flex items-center justify-center flex-shrink-0">
+                  <User size={28} className="text-slate-400" />
+                </div>
+              )}
 
               <div>
                 <label className="text-[#005691] font-bold text-xs sm:text-sm hover:underline cursor-pointer block">

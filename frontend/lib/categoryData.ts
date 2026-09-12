@@ -259,22 +259,22 @@ export function getCategoryData(slug: string): CategoryData {
         {
           title: "How central banks use quantitative tightening and overnight reverse repo facilities",
           description: "Dissecting open market operations, balance sheet reduction, and systemic liquidity buffers...",
-          author: "By David Potter • July 15, 2026"
+          author: "By Rushdhi MR • July 15, 2026"
         },
         {
           title: "Understanding consumer price index (CPI) vs personal consumption expenditures (PCE)",
           description: "Comparing weighting formulas, substitution effects, and core inflation calculation models...",
-          author: "By Chris Hogg • July 14, 2026"
+          author: "By Muba_kity • July 14, 2026"
         },
         {
           title: "The yield curve inverted: What bond market spreads signal about economic growth cycles",
           description: "Analyzing the 2-year vs 10-year treasury spread and historical business cycle correlations...",
-          author: "By Jennifer Abbott • July 14, 2026"
+          author: "By Roomi • July 14, 2026"
         },
         {
           title: "Global currency reserve shifts: De-dollarization trends and bilateral currency swaps",
           description: "Evaluating central bank reserve diversification into gold, treasury alternatives, and digital assets...",
-          author: "By Pramod Jain • July 13, 2026"
+          author: "By Ruzni • July 13, 2026"
         }
       ],
       newsTitle: "Economy & Global Trade More News",
@@ -349,22 +349,22 @@ export function getCategoryData(slug: string): CategoryData {
         {
           title: "Institutional equity valuation: Discounted cash flow (DCF) models vs multiple metrics",
           description: "Building robust financial models accounting for terminal growth rates and cost of capital...",
-          author: "By Chris Hogg • July 15, 2026"
+          author: "By Muba_kity • July 15, 2026"
         },
         {
           title: "Options market dynamics: Implied volatility rank, skew, and delta-neutral hedging",
           description: "How institutional desks manage gamma risk around corporate earnings announcements...",
-          author: "By David Potter • July 14, 2026"
+          author: "By Rushdhi MR • July 14, 2026"
         },
         {
           title: "Fixed income portfolio strategies in shifting interest rate environments",
           description: "Duration matching, barbell vs bullet yield curve positioning, and credit spread analysis...",
-          author: "By Jennifer Abbott • July 14, 2026"
+          author: "By Roomi • July 14, 2026"
         },
         {
           title: "The retail investor's guide to index fund liquidity and market-maker bid-ask spreads",
           description: "Understanding ETF creation and redemption baskets, tracking errors, and execution timing...",
-          author: "By Pramod Jain • July 13, 2026"
+          author: "By Ruzni • July 13, 2026"
         }
       ],
       newsTitle: "Markets & Financial Assets More News",
@@ -799,22 +799,22 @@ export function getCategoryData(slug: string): CategoryData {
         {
           title: "Measuring total cost of ownership (TCO) for enterprise cloud infrastructure migration",
           description: "Frameworks for evaluating egress fees, reserved instance pricing, and multi-cloud failover overhead...",
-          author: "By Pramod Jain • July 15, 2026"
+          author: "By Rushdhi MR • July 15, 2026"
         },
         {
           title: "The executive manual to data privacy regulation compliance across global jurisdictions",
           description: "Navigating EU AI Act requirements, California privacy laws, and cross-border data transfer pacts...",
-          author: "By Jennifer Lussier • July 14, 2026"
+          author: "By Ruzni • July 14, 2026"
         },
         {
           title: "Semiconductor supply chain risk assessment: Wafer fabrication and rare earth material dependencies",
           description: "Analyzing single-source bottlenecks in extreme ultraviolet lithography and noble gas reserves...",
-          author: "By Chris Hogg • July 14, 2026"
+          author: "By Muba_kity • July 14, 2026"
         },
         {
           title: "Commercial real estate repricing: Converting vacant office towers into high-density residential hubs",
           description: "Engineering feasibility studies, zoning variances, and tax credit incentives for adaptive reuse...",
-          author: "By David Potter • July 13, 2026"
+          author: "By Roomi • July 13, 2026"
         }
       ],
       newsTitle: "Research & Industry Insights More News",

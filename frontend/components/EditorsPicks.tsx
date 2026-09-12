@@ -49,6 +49,22 @@ export default function EditorsPicks() {
     try {
       const getArticleTimestamp = (item: any): number => {
         if (!item) return 0;
+        if (item.updatedAt) {
+          const t = new Date(item.updatedAt).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+        if (item.updated_at) {
+          const t = new Date(item.updated_at).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+        if (item.publishedAt) {
+          const t = new Date(item.publishedAt).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+        if (item.published_at) {
+          const t = new Date(item.published_at).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
         if (item.createdAt) {
           const t = new Date(item.createdAt).getTime();
           if (!isNaN(t) && t > 0) return t;
@@ -57,29 +73,37 @@ export default function EditorsPicks() {
           const t = new Date(item.created_at).getTime();
           if (!isNaN(t) && t > 0) return t;
         }
-        if (item.publishedAt) {
-          const t = new Date(item.publishedAt).getTime();
-          if (!isNaN(t) && t > 0) return t;
-        }
-        if (item.date) {
+        if (item.date && item.date !== "Just now" && item.date !== "Today" && item.date !== "Just published") {
           const t = new Date(item.date).getTime();
           if (!isNaN(t) && t > 0) return t;
         }
         if (typeof item.id === "number") return item.id;
         if (typeof item.id === "string") {
+          const match = item.id.match(/\d{10,}/);
+          if (match) {
+            const num = parseInt(match[0], 10);
+            if (!isNaN(num) && num > 0) return num;
+          }
           const num = parseInt(item.id.replace(/[^0-9]/g, ""), 10);
           if (!isNaN(num) && num > 0) return num;
         }
         return 0;
       };
 
-      const picks = (Array.isArray(liveArticles) ? liveArticles : []).filter(
+      let picks = (Array.isArray(liveArticles) ? liveArticles : []).filter(
         (a) => {
           if (!a || (a.status || "").toLowerCase() !== "published") return false;
           const pl = (a.placement || "").toLowerCase();
           return pl.includes("editor") || a.is_editors_pick === true;
         }
       );
+
+      if (picks.length < 4) {
+        const otherPublished = (Array.isArray(liveArticles) ? liveArticles : []).filter(
+          (a) => a && (a.status || "").toLowerCase() === "published" && !picks.some(p => String(p.id) === String(a.id))
+        );
+        picks = [...picks, ...otherPublished];
+      }
 
       picks.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
 
@@ -103,9 +127,11 @@ export default function EditorsPicks() {
     } catch (e) {}
   }, [liveArticles]);
 
-  const displayPicks = dynamicEditorsPicks.length > 0 
-    ? [...dynamicEditorsPicks, ...defaultEditorsPicks].slice(0, 4) 
-    : defaultEditorsPicks;
+  const displayPicks = dynamicEditorsPicks.length >= 4 
+    ? dynamicEditorsPicks.slice(0, 4) 
+    : (dynamicEditorsPicks.length > 0
+        ? [...dynamicEditorsPicks, ...defaultEditorsPicks].slice(0, 4)
+        : defaultEditorsPicks);
 
   const marketTabs = {
     indices: [
@@ -151,7 +177,7 @@ export default function EditorsPicks() {
 
           {/* 4 Enclosed White Card Containers */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 flex-1">
-            {displayPicks.map((item) => (
+            {displayPicks.map((item, idx) => (
               <article key={item.id} className="bg-white border border-gray-200 rounded-none p-3.5 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full group cursor-pointer">
                 <div>
                   {/* Image with Bottom-Left White Overlay Category Tag */}
@@ -159,6 +185,18 @@ export default function EditorsPicks() {
                     <img
                       src={item.image}
                       alt={item.title}
+                      onError={(e) => {
+                        const fallbacks = [
+                          "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=500&h=380&fit=crop",
+                          "https://images.unsplash.com/photo-1518770660439-4636190af475?w=500&h=380&fit=crop",
+                          "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=500&h=380&fit=crop",
+                          "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=500&h=380&fit=crop"
+                        ];
+                        const fallback = fallbacks[idx % fallbacks.length];
+                        if (e.currentTarget.src !== fallback) {
+                          e.currentTarget.src = fallback;
+                        }
+                      }}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 rounded-none"
                     />
                     <span className="absolute bottom-2.5 left-2.5 bg-white text-[#D31220] text-[10px] font-black uppercase px-2.5 py-1 rounded-none shadow-sm tracking-wider">

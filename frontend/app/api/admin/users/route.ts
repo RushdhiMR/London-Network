@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireRole } from '@/lib/rbac';
 import { DB } from '@/lib/db';
+import { isB2Configured, uploadToB2 } from '@/lib/backblaze';
 import bcrypt from 'bcryptjs';
 
 // GET /api/admin/users - Admin only
@@ -12,9 +13,13 @@ export async function GET(request: Request) {
 
   try {
     const users = await DB.getAllUsers();
+    const sanitizedUsers = users.map((u: any) => {
+      const { password_hash, password, ...rest } = u;
+      return rest;
+    });
     return NextResponse.json({
       success: true,
-      users,
+      users: sanitizedUsers,
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -68,8 +73,8 @@ export async function POST(request: Request) {
     }
 
     const isDefaultAdmin =
-      rbac.user?.id === 1 ||
-      rbac.user?.email === 'admin@digitaljournal.com' ||
+      rbac.user?.email === 'geethliyanage979@gmail.com' ||
+      rbac.user?.email === 'londonbigben.offical@gmail.com' ||
       rbac.user?.email === 'akramyoonos006@gmail.com' ||
       Boolean((rbac.user as any)?.isDefaultAdmin);
 
@@ -82,6 +87,33 @@ export async function POST(request: Request) {
 
     const passwordHash = bcrypt.hashSync(password && password.trim() ? password.trim() : 'digitaljournal123', 10);
 
+    let finalAvatar = body.avatar || null;
+    if (body.avatar && typeof body.avatar === 'string' && (body.avatar.startsWith('data:image/') || (!body.avatar.startsWith('http') && body.avatar.length > 100))) {
+      if (isB2Configured()) {
+        try {
+          const matches = body.avatar.match(/^data:([^;]+);base64,(.+)$/);
+          let mimeType = 'image/webp';
+          let buffer: Buffer | null = null;
+          if (matches) {
+            mimeType = matches[1] || 'image/webp';
+            buffer = Buffer.from(matches[2], 'base64');
+          } else {
+            buffer = Buffer.from(body.avatar, 'base64');
+          }
+
+          if (buffer) {
+            const ext = mimeType.includes('png') ? '.png' : mimeType.includes('jpeg') || mimeType.includes('jpg') ? '.jpg' : '.webp';
+            const cleanUser = (name || normalizedEmail.split('@')[0] || 'user').toLowerCase().replace(/[^a-z0-9]/g, '-').substring(0, 30);
+            const fileName = `avatar-${cleanUser}-${Date.now()}${ext}`;
+            const b2Res = await uploadToB2(buffer, fileName, mimeType, 'avatars');
+            if (b2Res.success && b2Res.url) {
+              finalAvatar = b2Res.url;
+            }
+          }
+        } catch (e) {}
+      }
+    }
+
     const newUser = await DB.createUser({
       name: name.trim(),
       email: normalizedEmail,
@@ -89,12 +121,15 @@ export async function POST(request: Request) {
       role: normalizedRole as any,
       provider: 'local',
       email_verified: true,
+      avatar: finalAvatar,
     });
+
+    const { password_hash: _ph, password: _p, ...safeNewUser } = newUser as any;
 
     return NextResponse.json({
       success: true,
       message: `User ${newUser.name} created successfully as ${normalizedRole}`,
-      user: newUser,
+      user: safeNewUser,
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -130,6 +165,43 @@ export async function PUT(request: Request) {
       );
     }
 
+    const isSelf = Boolean(
+      rbac.user &&
+      (rbac.user.id === Number(id) ||
+       (rbac.user.email && targetUser.email && rbac.user.email.toLowerCase().trim() === targetUser.email.toLowerCase().trim()))
+    );
+
+    const isDefaultAdmin =
+      rbac.user?.email === 'geethliyanage979@gmail.com' ||
+      rbac.user?.email === 'londonbigben.offical@gmail.com' ||
+      rbac.user?.email === 'akramyoonos006@gmail.com' ||
+      rbac.user?.email === 'rushdhiriyaj2005@gmail.com' ||
+      Boolean((rbac.user as any)?.isDefaultAdmin) ||
+      Boolean((rbac.user as any)?.is_default_admin);
+
+    const isTargetDefaultAdmin = Boolean(
+      targetUser.email === 'geethliyanage979@gmail.com' ||
+      targetUser.email === 'londonbigben.offical@gmail.com' ||
+      targetUser.email === 'akramyoonos006@gmail.com' ||
+      targetUser.email === 'rushdhiriyaj2005@gmail.com' ||
+      Boolean((targetUser as any)?.isDefaultAdmin) ||
+      Boolean((targetUser as any)?.is_default_admin)
+    );
+
+    if (isTargetDefaultAdmin && !isSelf) {
+      return NextResponse.json(
+        { error: 'Permission Denied: Default Administrator accounts cannot be edited by other users.' },
+        { status: 403 }
+      );
+    }
+
+    if (targetUser.role === 'admin' && !isSelf && !isDefaultAdmin) {
+      return NextResponse.json(
+        { error: 'Permission Denied: Only the Default Administrator can edit other administrator accounts.' },
+        { status: 403 }
+      );
+    }
+
     const updates: any = {};
 
     if (name && name.trim()) {
@@ -160,13 +232,13 @@ export async function PUT(request: Request) {
       }
 
       const isDefaultAdmin =
-        rbac.user?.id === 1 ||
-        rbac.user?.email === 'admin@digitaljournal.com' ||
+        rbac.user?.email === 'geethliyanage979@gmail.com' ||
+        rbac.user?.email === 'londonbigben.offical@gmail.com' ||
         rbac.user?.email === 'akramyoonos006@gmail.com' ||
         Boolean((rbac.user as any)?.isDefaultAdmin);
 
       // Protect default admin from losing admin role
-      if ((targetUser.id === 1 || targetUser.email === 'admin@digitaljournal.com') && normalizedRole !== 'admin') {
+      if (Boolean((targetUser as any)?.is_default_admin || targetUser.email === 'geethliyanage979@gmail.com') && normalizedRole !== 'admin') {
         return NextResponse.json(
           { error: 'The Default Administrator account must retain the admin role.' },
           { status: 400 }
@@ -188,12 +260,43 @@ export async function PUT(request: Request) {
       updates.password_hash = bcrypt.hashSync(password.trim(), 10);
     }
 
+    if (body.avatar) {
+      let finalAvatar = body.avatar;
+      if (typeof body.avatar === 'string' && (body.avatar.startsWith('data:image/') || (!body.avatar.startsWith('http') && body.avatar.length > 100))) {
+        if (isB2Configured()) {
+          try {
+            const matches = body.avatar.match(/^data:([^;]+);base64,(.+)$/);
+            let mimeType = 'image/webp';
+            let buffer: Buffer | null = null;
+            if (matches) {
+              mimeType = matches[1] || 'image/webp';
+              buffer = Buffer.from(matches[2], 'base64');
+            } else {
+              buffer = Buffer.from(body.avatar, 'base64');
+            }
+
+            if (buffer) {
+              const ext = mimeType.includes('png') ? '.png' : mimeType.includes('jpeg') || mimeType.includes('jpg') ? '.jpg' : '.webp';
+              const cleanUser = (name || targetUser.name || 'user').toLowerCase().replace(/[^a-z0-9]/g, '-').substring(0, 30);
+              const fileName = `avatar-${cleanUser}-${Date.now()}${ext}`;
+              const b2Res = await uploadToB2(buffer, fileName, mimeType, 'avatars');
+              if (b2Res.success && b2Res.url) {
+                finalAvatar = b2Res.url;
+              }
+            }
+          } catch (e) {}
+        }
+      }
+      updates.avatar = finalAvatar;
+    }
+
     const updatedUser = await DB.updateUser(Number(id), updates);
+    const { password_hash: _uph, password: _up, ...safeUpdatedUser } = (updatedUser || {}) as any;
 
     return NextResponse.json({
       success: true,
       message: `User details updated successfully`,
-      user: updatedUser,
+      user: safeUpdatedUser,
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -232,12 +335,58 @@ export async function DELETE(request: Request) {
       );
     }
 
+    const callerEmail = (rbac.user?.email || '').toLowerCase().trim();
+    const isCallerDefaultAdmin =
+      callerEmail === 'geethliyanage979@gmail.com' ||
+      callerEmail === 'londonbigben.offical@gmail.com' ||
+      callerEmail === 'akramyoonos006@gmail.com' ||
+      callerEmail === 'rushdhiriyaj2005@gmail.com' ||
+      callerEmail === 'admin@digitaljournal.com' ||
+      Boolean((rbac.user as any)?.isDefaultAdmin) ||
+      Boolean((rbac.user as any)?.is_default_admin) ||
+      rbac.user?.id === 1;
+
     const targetUser = id ? await DB.getUserById(id) : (email ? await DB.getUserByEmail(email) : null);
-    if (targetUser && (targetUser.id === 1 || targetUser.email === 'admin@digitaljournal.com' || targetUser.email === 'akramyoonos006@gmail.com')) {
+    const targetEmailLower = (email || targetUser?.email || '').toLowerCase().trim();
+
+    const isSelf = Boolean(
+      rbac.user &&
+      ((targetUser && rbac.user.id === targetUser.id) ||
+       (callerEmail && targetEmailLower && callerEmail === targetEmailLower))
+    );
+
+    if (isSelf) {
+      return NextResponse.json(
+        { error: 'You cannot delete your own account while logged in.' },
+        { status: 400 }
+      );
+    }
+
+    const isTargetDefaultAdmin = Boolean(
+      targetEmailLower === 'geethliyanage979@gmail.com' ||
+      targetEmailLower === 'londonbigben.offical@gmail.com' ||
+      targetEmailLower === 'akramyoonos006@gmail.com' ||
+      targetEmailLower === 'rushdhiriyaj2005@gmail.com' ||
+      targetEmailLower === 'admin@digitaljournal.com' ||
+      Boolean((targetUser as any)?.isDefaultAdmin) ||
+      Boolean((targetUser as any)?.is_default_admin) ||
+      targetUser?.id === 1
+    );
+
+    if (isTargetDefaultAdmin) {
       return NextResponse.json(
         { error: 'System Protection: The Default Administrator account cannot be deleted.' },
         { status: 403 }
       );
+    }
+
+    if (!isCallerDefaultAdmin) {
+      if (targetUser?.role === 'admin') {
+        return NextResponse.json(
+          { error: 'Permission Denied: Only Default Administrators can delete administrator accounts.' },
+          { status: 403 }
+        );
+      }
     }
 
     const targetEmail = email || targetUser?.email || (typeof id === 'string' && id.includes('@') ? id : undefined);

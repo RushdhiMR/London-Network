@@ -1,6 +1,6 @@
 "use client";
 
-import { useLiveAdSlots } from "@/lib/articlesSync";
+import { useLiveAdSlots, formatAdDimensions, isDuplicateAdImage } from "@/lib/articlesSync";
 
 interface AdBannerProps {
   label?: string;
@@ -21,7 +21,15 @@ export default function AdBanner({ label = "ADVERTISEMENT", slotId, className = 
     return false;
   });
 
-  if (matchingSlot && matchingSlot.isActive && matchingSlot.imageUrl) {
+  const dimensionsText = formatAdDimensions(matchingSlot?.dimensions || "728X250");
+  const hasValidImage =
+    matchingSlot &&
+    matchingSlot.isActive &&
+    matchingSlot.imageUrl &&
+    matchingSlot.imageUrl.trim() !== "" &&
+    !isDuplicateAdImage(matchingSlot.imageUrl, matchingSlot.id, adSlots);
+
+  if (hasValidImage && matchingSlot) {
     const isExternal = (matchingSlot.actionType || "").toLowerCase().includes("external") || (matchingSlot.targetUrl || "").startsWith("http");
     return (
       <div className={`w-full max-w-[1400px] mx-auto px-4 md:px-6 my-8 ${className}`}>
@@ -31,7 +39,7 @@ export default function AdBanner({ label = "ADVERTISEMENT", slotId, className = 
           rel={isExternal ? "noopener noreferrer" : undefined}
           className="block group relative overflow-hidden"
         >
-          <div className="relative w-full h-[150px] sm:h-[180px] md:h-[220px] bg-[#111827] border border-gray-800 flex items-center justify-center overflow-hidden">
+          <div className="relative w-full h-[180px] sm:h-[220px] md:h-[260px] bg-[#111827] border border-gray-800 flex items-center justify-center overflow-hidden">
             <img
               src={matchingSlot.imageUrl}
               alt={matchingSlot.title}
@@ -48,13 +56,16 @@ export default function AdBanner({ label = "ADVERTISEMENT", slotId, className = 
 
   return (
     <div className={`w-full max-w-[1400px] mx-auto px-4 md:px-6 my-8 ${className}`}>
-      <div className="w-full bg-[#111827] border border-gray-800 rounded-none py-10 md:py-12 px-6 flex flex-col items-center justify-center text-center shadow-xs">
-        <span className="text-[10px] font-mono tracking-widest uppercase text-[#D31220] font-extrabold mb-1">
+      <div className="w-full h-[180px] sm:h-[220px] md:h-[260px] bg-[#111827] border border-dashed border-gray-700 flex flex-col items-center justify-center text-center px-4">
+        <span className="text-[10px] font-mono tracking-widest uppercase text-[#D31220] font-extrabold mb-1.5">
           {label}
         </span>
-        <p className="text-xs font-mono tracking-widest text-gray-400 uppercase">
-          London BigBen Premium Sponsor Banner
-        </p>
+        <span className="text-base sm:text-lg font-mono font-bold text-gray-200 tracking-wider">
+          {dimensionsText}
+        </span>
+        <span className="text-[11px] font-mono text-gray-400 mt-1">
+          Size: {dimensionsText} px
+        </span>
       </div>
     </div>
   );

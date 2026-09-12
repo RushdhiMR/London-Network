@@ -242,23 +242,6 @@ export default function NewslettersPage() {
                   <p className="text-[12.5px] text-zinc-500 leading-relaxed font-sans font-normal mt-2">
                     {n.description}
                   </p>
-
-                  {/* Dive Deeper bullet points */}
-                  {n.subcategories.length > 0 && (
-                    <div className="mt-4 pt-3 border-t border-zinc-100">
-                      <span className="text-[10.5px] font-bold uppercase tracking-wider text-zinc-400">
-                        Dive Deeper:
-                      </span>
-                      <ul className="mt-2 space-y-1.5 pl-1 text-[12.5px] text-zinc-600 font-sans font-normal">
-                        {n.subcategories.map((sub, idx) => (
-                          <li key={idx} className="flex items-center gap-2">
-                            <span className="w-1 h-1 rounded-full bg-[#BF1E2D] flex-shrink-0"></span>
-                            {sub}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
                 </div>
               </div>
             );

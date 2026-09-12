@@ -156,6 +156,36 @@ export function useLiveAdSlots() {
   return { adSlots, saveAdSlots };
 }
 
+export function formatAdDimensions(dim: string): string {
+  if (!dim) return "";
+  return dim.toUpperCase().replace(/\s+/g, "");
+}
+
+export function isDuplicateAdImage(url: string, currentSlotId?: string, allSlots?: AdSlotItem[] | any): boolean {
+  if (!url || !allSlots || !Array.isArray(allSlots)) return false;
+  const cleanUrl = url.trim().toLowerCase();
+  const duplicate = allSlots.find(
+    (s: any) => s.id !== currentSlotId && s.isActive && (s.imageUrl || "").trim().toLowerCase() === cleanUrl
+  );
+  return Boolean(duplicate);
+}
+
+export function isCategorySectionOnly(post: any): boolean {
+  if (!post) return false;
+  const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
+  return (
+    pl === "standard post" ||
+    pl === "category section only" ||
+    pl === "category_only" ||
+    pl === "category only" ||
+    pl.includes("category section") ||
+    pl.includes("category only") ||
+    pl.includes("section only") ||
+    pl === "standard" ||
+    pl === "none"
+  );
+}
+
 export function isTopPlacementArticle(post: any): boolean {
   if (!post) return false;
   const pl = (post.placement || "").toLowerCase().trim();
@@ -260,6 +290,15 @@ export function articleMatchesCategory(post: any, categoryOrSub: string): boolea
   return articleBelongsToCategory(post, categoryOrSub);
 }
 
+export function articleMatchesMainCategory(post: any, targetCategory: string): boolean {
+  if (!post || !targetCategory) return false;
+  const targetKey = normalizeCategoryKey(targetCategory);
+  if (!targetKey) return false;
+
+  const catKey = normalizeCategoryKey(post.category || post.category_name || "");
+  return catKey === targetKey;
+}
+
 let broadcastChannel: BroadcastChannel | null = null;
 if (typeof window !== "undefined" && "BroadcastChannel" in window) {
   try {
@@ -344,7 +383,8 @@ export async function fetchArticlesFromServer(): Promise<ArticleItem[]> {
             if (!mergedMap.has(String(a.id))) {
               mergedMap.set(String(a.id), a);
             } else {
-              mergedMap.set(String(a.id), { ...mergedMap.get(String(a.id))!, ...a });
+              const serverVersion = mergedMap.get(String(a.id))!;
+              mergedMap.set(String(a.id), { ...a, ...serverVersion });
             }
           });
           const combined = Array.from(mergedMap.values());
@@ -365,30 +405,82 @@ export async function fetchArticlesFromServer(): Promise<ArticleItem[]> {
 }
 
 export async function saveArticleToServer(article: ArticleItem): Promise<ArticleItem[]> {
+  const isPendingOrPublished = article.status === "Pending review" || article.status === "Published";
+  const nowIso = new Date().toISOString();
+  const articleWithTimestamps: ArticleItem = {
+    ...article,
+    rejectionReason: isPendingOrPublished ? undefined : article.rejectionReason,
+    rejection_reason: isPendingOrPublished ? undefined : (article as any).rejection_reason,
+    rejectedAt: isPendingOrPublished ? undefined : (article as any).rejectedAt,
+    updated_at: nowIso,
+    updatedAt: nowIso,
+    ...(article.status === "Published" ? {
+      published_at: nowIso,
+      publishedAt: nowIso,
+      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    } : {})
+  };
+
+  const cleanTitleKey = (t: string) => (t || "")
+    .toLowerCase()
+    .replace(/[\u2018\u2019\u201A\u201B']/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F"]/g, '"')
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/[^\w\s-]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const origTitleKey = cleanTitleKey((article as any).original_title || (article as any).previousTitle || "");
+
   // Always update local cache first so local drafts/pending reviews are preserved
   const cached = getCachedArticles();
-  const idx = cached.findIndex((a) => String(a.id) === String(article.id) || (a.title && article.title && a.title.trim().toLowerCase() === article.title.trim().toLowerCase()));
+  const idx = cached.findIndex((a) => 
+    String(a.id) === String(article.id) || 
+    (cleanTitleKey(a.title) && cleanTitleKey(article.title) && cleanTitleKey(a.title) === cleanTitleKey(article.title)) ||
+    (origTitleKey && cleanTitleKey(a.title) === origTitleKey)
+  );
   let updated: ArticleItem[];
   if (idx >= 0) {
     updated = [...cached];
-    updated[idx] = { ...updated[idx], ...article };
+    updated[idx] = { ...updated[idx], ...articleWithTimestamps };
   } else {
-    updated = [article, ...cached];
+    updated = [articleWithTimestamps, ...cached];
   }
   setCachedArticles(updated, true);
+
+  // Synchronize submitted articles storage immediately
+  if (typeof window !== "undefined") {
+    try {
+      const subsStr = localStorage.getItem(STORAGE_KEY);
+      let subsList: any[] = subsStr ? JSON.parse(subsStr) : [];
+      if (!Array.isArray(subsList)) subsList = [];
+      const sIdx = subsList.findIndex((p: any) => 
+        String(p.id) === String(article.id) || 
+        (cleanTitleKey(p.title) && cleanTitleKey(article.title) && cleanTitleKey(p.title) === cleanTitleKey(article.title)) ||
+        (origTitleKey && cleanTitleKey(p.title) === origTitleKey)
+      );
+      if (sIdx >= 0) {
+        subsList[sIdx] = { ...subsList[sIdx], ...articleWithTimestamps };
+      } else {
+        subsList.unshift(articleWithTimestamps);
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(subsList));
+      window.dispatchEvent(new Event(SYNC_EVENT_NAME));
+      window.dispatchEvent(new Event("dj_articles_updated"));
+    } catch (e) {}
+  }
 
   try {
     const res = await fetch("/api/articles", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(article)
+      body: JSON.stringify(articleWithTimestamps)
     });
     if (res.ok) {
       const data = await res.json();
       if (data.articles && Array.isArray(data.articles)) {
         const serverList = data.articles;
         const mergedMap = new Map<string, ArticleItem>();
-        const cleanTitleKey = (t: string) => (t || "").trim().toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ');
 
         serverList.forEach((item: any) => {
           const titleKey = cleanTitleKey(item.title);
@@ -396,15 +488,22 @@ export async function saveArticleToServer(article: ArticleItem): Promise<Article
           mergedMap.set(String(item.id), item);
         });
 
+        const artIdKey = String(articleWithTimestamps.id);
+        const artTitleKey = cleanTitleKey(articleWithTimestamps.title);
+        if (artIdKey) mergedMap.set(artIdKey, articleWithTimestamps);
+        if (artTitleKey) mergedMap.set(`t_${artTitleKey}`, articleWithTimestamps);
+        if (origTitleKey) mergedMap.set(`t_${origTitleKey}`, articleWithTimestamps);
+
         updated.forEach((item) => {
           const titleKey = cleanTitleKey(item.title);
-          const serverMatch = (titleKey && mergedMap.get(`t_${titleKey}`)) || mergedMap.get(String(item.id));
+          const isCurrentSaved = String(item.id) === artIdKey || (titleKey && titleKey === artTitleKey) || (origTitleKey && titleKey === origTitleKey);
+          const serverMatch = (titleKey && mergedMap.get(`t_${titleKey}`)) || (origTitleKey && mergedMap.get(`t_${origTitleKey}`)) || mergedMap.get(String(item.id));
           if (serverMatch) {
-            const merged = { ...serverMatch, ...item, id: serverMatch.id };
+            const merged = isCurrentSaved ? { ...serverMatch, ...articleWithTimestamps, id: serverMatch.id || articleWithTimestamps.id } : { ...serverMatch, ...item, id: serverMatch.id };
             mergedMap.set(String(serverMatch.id), merged);
             if (titleKey) mergedMap.set(`t_${titleKey}`, merged);
           } else {
-            mergedMap.set(String(item.id), item);
+            mergedMap.set(String(item.id), isCurrentSaved ? articleWithTimestamps : item);
           }
         });
 
@@ -432,11 +531,22 @@ export async function saveArticleToServer(article: ArticleItem): Promise<Article
 }
 
 export async function updateArticleStatusOnServer(id: string | number, status: string): Promise<ArticleItem[]> {
+  const nowIso = new Date().toISOString();
   try {
     const res = await fetch("/api/articles", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, status })
+      body: JSON.stringify({
+        id,
+        status,
+        updated_at: nowIso,
+        updatedAt: nowIso,
+        ...(status === "Published" ? {
+          published_at: nowIso,
+          publishedAt: nowIso,
+          date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+        } : {})
+      })
     });
     if (res.ok) {
       const data = await res.json();
@@ -450,7 +560,17 @@ export async function updateArticleStatusOnServer(id: string | number, status: s
   }
 
   const cached = getCachedArticles();
-  const updated = cached.map((a) => (String(a.id) === String(id) ? { ...a, status } : a));
+  const updated = cached.map((a) => (String(a.id) === String(id) ? {
+    ...a,
+    status,
+    updated_at: nowIso,
+    updatedAt: nowIso,
+    ...(status === "Published" ? {
+      published_at: nowIso,
+      publishedAt: nowIso,
+      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    } : {})
+  } : a));
   setCachedArticles(updated);
   return updated;
 }
@@ -560,9 +680,10 @@ export async function deletePermanentlyOnServer(id: string | number, title?: str
 
 export function useLiveArticles() {
   const [articles, setArticles] = useState<ArticleItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
+    setLoading(true);
     const fresh = await fetchArticlesFromServer();
     setArticles(fresh);
     setLoading(false);
@@ -573,18 +694,25 @@ export function useLiveArticles() {
     const cached = getCachedArticles();
     if (cached.length > 0) {
       setArticles(cached);
+      setLoading(false);
     }
 
-    // Initial fetch from server
+    // Always fetch fresh data from server on mount
     fetchArticlesFromServer().then((fresh) => {
       if (Array.isArray(fresh) && fresh.length > 0) {
         setArticles(fresh);
       }
+      setLoading(false);
+    }).catch(() => {
+      setLoading(false);
     });
 
     // Event listeners for user action updates
     const handleSync = () => {
-      setArticles(getCachedArticles());
+      const current = getCachedArticles();
+      if (current.length > 0) {
+        setArticles(current);
+      }
     };
 
     if (typeof window !== "undefined") {
@@ -596,7 +724,10 @@ export function useLiveArticles() {
     if (broadcastChannel) {
       broadcastChannel.onmessage = (event) => {
         if (event.data?.type === "ARTICLES_UPDATED") {
-          setArticles(getCachedArticles());
+          const current = getCachedArticles();
+          if (current.length > 0) {
+            setArticles(current);
+          }
         }
       };
     }

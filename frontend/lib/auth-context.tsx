@@ -33,8 +33,7 @@ const AuthContext = createContext<AuthContextType>({
 const SESSION_TAB_KEY = "dj_tab_session";
 
 /**
- * Saves the current user to sessionStorage (tab-isolated).
- * This prevents cross-tab contamination while the HTTP-only cookie handles server auth.
+ * Saves user strictly to sessionStorage so each browser tab has its own independent login.
  */
 function saveTabSession(user: User | null) {
   if (typeof window === "undefined") return;
@@ -48,19 +47,22 @@ function saveTabSession(user: User | null) {
 }
 
 /**
- * Reads the cached user from sessionStorage (tab-isolated).
+ * Reads user strictly from this tab's sessionStorage.
  */
 function getTabSession(): User | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = sessionStorage.getItem(SESSION_TAB_KEY);
-    if (raw) return JSON.parse(raw) as User;
+    const rawTab = sessionStorage.getItem(SESSION_TAB_KEY);
+    if (rawTab) {
+      const parsed = JSON.parse(rawTab);
+      if (parsed && (parsed.email || parsed.name)) return parsed as User;
+    }
   } catch (e) {}
   return null;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // Initialise from sessionStorage immediately to avoid flicker on refresh
+  // Initialise strictly from this tab's sessionStorage
   const [user, setUser] = useState<User | null>(() => {
     if (typeof window !== "undefined") {
       return getTabSession();
@@ -68,11 +70,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return null;
   });
   const [loading, setLoading] = useState<boolean>(true);
-  // Track whether we've done the first server fetch for this tab
   const didFetch = useRef(false);
 
   const fetchCurrentUser = useCallback(async (): Promise<User | null> => {
     try {
+      const currentTabUser = getTabSession();
+
       const res = await fetch("/api/auth/me", {
         method: "GET",
         headers: { "Content-Type": "application/json" },
@@ -83,22 +86,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const data = await res.json();
         if (data.authenticated && data.user) {
           const fetchedUser: User = {
-            id: data.user.id,
+            id: data.user.id || 1,
             name: data.user.name,
             email: data.user.email,
             role: (data.user.role || "reader").toLowerCase() as "reader" | "writer" | "admin",
             provider: data.user.provider || "local",
           };
 
-          // If there's already a cached tab session for a DIFFERENT user,
-          // keep the existing tab session rather than overwriting it.
-          // This preserves independent sessions across tabs.
-          const existing = getTabSession();
-          if (existing && existing.id !== fetchedUser.id) {
-            // This tab has its own session — respect it, don't overwrite
-            setUser(existing);
+          // If this tab already has its own active user, keep this tab's user
+          if (currentTabUser && currentTabUser.email !== fetchedUser.email) {
+            setUser(currentTabUser);
             setLoading(false);
-            return existing;
+            return currentTabUser;
           }
 
           setUser(fetchedUser);
@@ -108,19 +107,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
     } catch (err) {
-      console.warn("[AuthContext] Error fetching current user session:", err);
+      console.warn("[AuthContext] Error fetching server session:", err);
     }
 
-    // Only clear if there's no cached tab session
     const existing = getTabSession();
-    if (!existing) {
-      setUser(null);
-      saveTabSession(null);
-    } else {
+    if (existing) {
       setUser(existing);
+      setLoading(false);
+      return existing;
     }
+
+    setUser(null);
+    saveTabSession(null);
     setLoading(false);
-    return getTabSession();
+    return null;
   }, []);
 
   const logout = useCallback(async () => {
@@ -134,66 +134,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     setUser(null);
     saveTabSession(null);
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new Event("dj_auth_change"));
-    }
-  }, []);
-
-  /**
-   * Called after a successful login in this tab.
-   * Updates the tab session with the newly logged-in user.
-   */
-  const loginToTab = useCallback((loggedInUser: User) => {
-    setUser(loggedInUser);
-    saveTabSession(loggedInUser);
   }, []);
 
   useEffect(() => {
-    // On mount: if we already have a tab session, use it and validate in background
     if (!didFetch.current) {
       didFetch.current = true;
       const cached = getTabSession();
       if (cached) {
+        setUser(cached);
         setLoading(false);
-        // Validate with server in background — only update if same user
-        fetch("/api/auth/me", { cache: "no-store" })
-          .then((r) => r.ok ? r.json() : null)
-          .then((data) => {
-            if (data?.authenticated && data?.user) {
-              if (cached.id === data.user.id) {
-                const updated: User = {
-                  id: data.user.id,
-                  name: data.user.name,
-                  email: data.user.email,
-                  role: (data.user.role || "reader").toLowerCase() as User["role"],
-                  provider: data.user.provider || "local",
-                };
-                setUser(updated);
-                saveTabSession(updated);
-              }
-            } else {
-              // Session expired or invalid on server
-              setUser(null);
-              saveTabSession(null);
-            }
-          })
-          .catch(() => {});
       } else {
-        // No active session for this tab - stay signed out
-        setUser(null);
-        setLoading(false);
+        fetchCurrentUser();
       }
     }
 
-    const handleAuthEvent = () => {
-      const cached = getTabSession();
-      if (!cached) {
-        setUser(null);
-        setLoading(false);
-      }
-    };
-
-    // Listen for explicit login events dispatched from the login page
     const handleLoginEvent = (e: Event) => {
       const detail = (e as CustomEvent).detail as User;
       if (detail) {
@@ -203,10 +157,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    window.addEventListener("dj_auth_change", handleAuthEvent);
     window.addEventListener("dj_tab_login", handleLoginEvent);
     return () => {
-      window.removeEventListener("dj_auth_change", handleAuthEvent);
       window.removeEventListener("dj_tab_login", handleLoginEvent);
     };
   }, [fetchCurrentUser]);
@@ -228,12 +180,11 @@ export function useAuth() {
 }
 
 /**
- * Call this after a successful login to bind the user to this tab's session.
- * Dispatches a tab-scoped login event that AuthProvider listens for.
+ * Call this after a successful login to bind the user strictly to this tab.
  */
 export function dispatchTabLogin(user: User) {
   if (typeof window !== "undefined") {
-    sessionStorage.setItem(SESSION_TAB_KEY, JSON.stringify(user));
+    saveTabSession(user);
     window.dispatchEvent(new CustomEvent("dj_tab_login", { detail: user }));
   }
 }

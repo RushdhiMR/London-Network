@@ -8,7 +8,7 @@ import { useAuth } from "@/lib/auth-context";
 import { generateAutoSEO, extractFocusKeyword, extractCardSummary } from "@/lib/seo";
 import { getUserProfile, resolveUserAvatar, getAuthorAvatarByNameOrEmail } from "@/lib/userProfiles";
 import { saveArticleToServer, fetchArticlesFromServer } from "@/lib/articlesSync";
-import { convertToWebP, convertHtmlImagesToWebP } from "@/lib/imageUtils";
+import { convertToWebP, convertHtmlImagesToWebP, uploadImageToBackblaze } from "@/lib/imageUtils";
 import {
   ArrowLeft,
   Eye,
@@ -114,6 +114,36 @@ function isSameOrMatchingCategory(catA: string, catB: string): boolean {
   if ((a === "economyandmarkets" || a === "economymarkets") && (b === "economy" || b === "markets")) return true;
   if ((b === "economyandmarkets" || b === "economymarkets") && (a === "economy" || a === "markets")) return true;
   return false;
+}
+
+function extractCleanTagsList(source: any): string[] {
+  if (!source) return [];
+  const raw = Array.isArray(source)
+    ? source
+    : (source.tags ?? source.hashtags ?? source.hash_tags ?? source.hashTags ?? (source.seo && source.seo.keywords) ?? source.keywords ?? source);
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw
+      .flatMap((t: any) => typeof t === "string" ? t.split(/[\s,]+/) : [])
+      .map((t: string) => t.replace(/^#+/, "").trim())
+      .filter(Boolean);
+  }
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .flatMap((t: any) => typeof t === "string" ? t.split(/[\s,]+/) : [])
+          .map((t: string) => t.replace(/^#+/, "").trim())
+          .filter(Boolean);
+      }
+    } catch (e) {}
+    return raw
+      .split(/[\s,]+/)
+      .map((s: string) => s.replace(/^#+/, "").trim())
+      .filter(Boolean);
+  }
+  return [];
 }
 
 export default function CreatePostPage() {
@@ -229,6 +259,7 @@ export default function CreatePostPage() {
 
   const auth = useAuth();
   const [originalAuthor, setOriginalAuthor] = useState<{ name?: string; email?: string; avatar?: string; bio?: string } | null>(null);
+  const [originalTitle, setOriginalTitle] = useState<string>("");
 
   const userRole = (auth.user?.role || currentUser?.role || "").toLowerCase();
   const isAdmin = mounted && (userRole === "admin" || userRole === "co-admin" || userRole === "editor" || (auth.user?.email || currentUser?.email || "").toLowerCase().includes("admin"));
@@ -266,6 +297,15 @@ export default function CreatePostPage() {
         const searchParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
         const editId = searchParams?.get("edit");
         const modeParam = searchParams?.get("mode");
+
+        if (!editId) {
+          // Creating a brand new post - clear any residual edit state
+          setEditingPostId(null);
+          try {
+            localStorage.removeItem("dj_editing_post");
+          } catch (e) {}
+          return;
+        }
 
         if (modeParam === "review" || (uRole === "admin" && (postToEdit?.status === "Pending review" || postToEdit?.status === "Submitted"))) {
           setIsReviewMode(true);
@@ -306,9 +346,13 @@ export default function CreatePostPage() {
               subcategories: (foundArticle.subcategories && foundArticle.subcategories.length > 0)
                 ? foundArticle.subcategories
                 : (foundArticle.subCategories || postToEdit?.subcategories || postToEdit?.subCategories || []),
-              tags: (foundArticle.tags && foundArticle.tags.length > 0)
-                ? foundArticle.tags
-                : (postToEdit?.tags || []),
+              tags: extractCleanTagsList(
+                (foundArticle.tags && (Array.isArray(foundArticle.tags) ? foundArticle.tags.length > 0 : String(foundArticle.tags).trim().length > 0))
+                  ? foundArticle
+                  : (postToEdit?.tags && (Array.isArray(postToEdit.tags) ? postToEdit.tags.length > 0 : String(postToEdit.tags).trim().length > 0))
+                  ? postToEdit
+                  : (foundArticle || postToEdit)
+              ),
               category: postToEdit?.category || foundArticle.category || foundArticle.category_name
             };
           }
@@ -324,15 +368,17 @@ export default function CreatePostPage() {
             });
           }
           setEditingPostId(String(postToEdit.id));
+          setOriginalTitle(postToEdit.title || "");
           setTitle(postToEdit.title || "");
           setSubheading(postToEdit.summary || postToEdit.subheading || "");
 
-          let mainContent = postToEdit.content || postToEdit.summary || "";
-          const postImg = postToEdit.imageUrl || postToEdit.image || postToEdit.image_url || "";
-          if (postImg && !mainContent.includes("<img")) {
-            const imgTag = `<figure contenteditable="false" style="margin: 1.25rem auto; display: block; max-width: 100%; width: 100%; text-align: left; user-select: none;"><img src="${postImg}" alt="${postToEdit.title || "Article Image"}" draggable="false" style="width: 100%; border-radius: 0; object-fit: cover; display: block; user-select: none;" /></figure><p><br/></p>`;
-            mainContent = imgTag + mainContent;
-          }
+          let mainContent = postToEdit.content || "";
+          // Strip any fake unsplash placeholder images
+          mainContent = mainContent
+            .replace(/<figure[^>]*>.*?photo-(?:1451187580459|1541872703)[^>]*.*?<\/figure>/gi, "")
+            .replace(/<img[^>]*photo-(?:1451187580459|1541872703)[^>]*>/gi, "")
+            .trim();
+
           setContent(mainContent);
           if (editorRef.current) {
             editorRef.current.innerHTML = mainContent;
@@ -362,20 +408,11 @@ export default function CreatePostPage() {
           }
           setSelectedSubcategories(loadedSubs);
 
-          setImageUrl(postToEdit.imageUrl || postToEdit.image || postToEdit.image_url || "");
+          const rawImg = postToEdit.imageUrl || postToEdit.image || postToEdit.image_url || "";
+          const isFakeImg = typeof rawImg === "string" && (rawImg.includes("photo-1451187580459") || rawImg.includes("photo-1541872703"));
+          setImageUrl(isFakeImg ? "" : rawImg);
 
-          let loadedTags: string[] = [];
-          if (Array.isArray(postToEdit.tags)) {
-            loadedTags = postToEdit.tags;
-          } else if (typeof postToEdit.tags === "string") {
-            try {
-              const parsed = JSON.parse(postToEdit.tags);
-              if (Array.isArray(parsed)) loadedTags = parsed;
-              else loadedTags = postToEdit.tags.split(",").map((t: string) => t.trim()).filter(Boolean);
-            } catch (e) {
-              loadedTags = postToEdit.tags.split(",").map((t: string) => t.trim()).filter(Boolean);
-            }
-          }
+          const loadedTags = extractCleanTagsList(postToEdit);
           setTags(loadedTags);
 
           if (postToEdit.readDuration || postToEdit.readTime) {
@@ -841,30 +878,54 @@ export default function CreatePostPage() {
       selectedImg.style.cssText = "width: 100%; display: block; border-radius: 0; object-fit: cover;";
 
       let maxWidthVal = "450px";
-      if (imageSize.includes("Small")) maxWidthVal = "300px";
-      if (imageSize.includes("Full")) maxWidthVal = "100%";
-
-      const fig = selectedImg.closest("figure");
-      if (fig) {
-        let alignStyle = "margin: 1.25rem auto; display: block; max-width: 100%;";
-        if (imageAlignment.includes("Left")) alignStyle = "float: left; margin: 0.25rem 1rem 0.5rem 0; max-width: 45%; display: block;";
-        if (imageAlignment.includes("Right")) alignStyle = "float: right; margin: 0.25rem 0 0.5rem 1rem; max-width: 45%; display: block;";
-        fig.style.cssText = `${alignStyle} text-align: left;`;
-
-        let figcaption = fig.querySelector("figcaption");
-        if (rawCap || rawCred) {
-          if (figcaption) {
-            figcaption.innerHTML = captionInnerHtml;
-          } else {
-            const newCap = document.createElement("figcaption");
-            newCap.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.75rem; color: #64748B; margin-top: 0.35rem; width: 100%; font-family: sans-serif; box-sizing: border-box;";
-            newCap.innerHTML = captionInnerHtml;
-            fig.appendChild(newCap);
-          }
-        } else if (figcaption) {
-          figcaption.remove();
-        }
+      let chosenWidthPx = 450;
+      if (imageSize.includes("Small") || imageSize.includes("300")) {
+        maxWidthVal = "300px";
+        chosenWidthPx = 300;
+      } else if (imageSize.includes("Full") || imageSize.includes("100%")) {
+        maxWidthVal = "100%";
+        chosenWidthPx = 900;
+      } else {
+        maxWidthVal = "450px";
+        chosenWidthPx = 450;
       }
+
+      let chosenAlign: "left" | "center" | "right" = "center";
+      let alignStyle = `float: none; margin: 1.25rem auto; max-width: ${maxWidthVal}; width: 100%; display: block; clear: both;`;
+      if (imageAlignment.includes("Left")) {
+        chosenAlign = "left";
+        const floatMaxWidth = maxWidthVal === "100%" ? "50%" : maxWidthVal;
+        alignStyle = `float: left; margin: 0.5rem 1.25rem 0.5rem 0; max-width: ${floatMaxWidth}; width: 100%; display: block;`;
+      } else if (imageAlignment.includes("Right")) {
+        chosenAlign = "right";
+        const floatMaxWidth = maxWidthVal === "100%" ? "50%" : maxWidthVal;
+        alignStyle = `float: right; margin: 0.5rem 0 0.5rem 1.25rem; max-width: ${floatMaxWidth}; width: 100%; display: block;`;
+      }
+
+      let fig = selectedImg.closest("figure");
+      if (!fig) {
+        fig = document.createElement("figure");
+        fig.setAttribute("contenteditable", "false");
+        selectedImg.parentNode?.insertBefore(fig, selectedImg);
+        fig.appendChild(selectedImg);
+      }
+
+      fig.style.cssText = `${alignStyle} text-align: left; user-select: none;`;
+
+      let figcaption = fig.querySelector("figcaption");
+      if (rawCap || rawCred) {
+        if (!figcaption) {
+          figcaption = document.createElement("figcaption");
+          fig.appendChild(figcaption);
+        }
+        figcaption.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.75rem; color: #64748B; margin-top: 0.4rem; width: 100%; font-family: sans-serif; box-sizing: border-box;";
+        figcaption.innerHTML = captionInnerHtml;
+      } else if (figcaption) {
+        figcaption.remove();
+      }
+
+      setSelectedImgAlign(chosenAlign);
+      setSelectedImgWidth(chosenWidthPx);
 
       if (editorRef.current) {
         setContent(editorRef.current.innerHTML);
@@ -888,9 +949,19 @@ export default function CreatePostPage() {
     }
 
     // INSERT NEW IMAGE
-    let alignStyle = "margin: 1.25rem auto; display: block; max-width: 100%;";
-    if (imageAlignment.includes("Left")) alignStyle = "float: left; margin: 0.25rem 1rem 0.5rem 0; max-width: 45%; display: block;";
-    if (imageAlignment.includes("Right")) alignStyle = "float: right; margin: 0.25rem 0 0.5rem 1rem; max-width: 45%; display: block;";
+    let maxWidthVal = "450px";
+    if (imageSize.includes("Small") || imageSize.includes("300")) maxWidthVal = "300px";
+    else if (imageSize.includes("Full") || imageSize.includes("100%")) maxWidthVal = "100%";
+    else maxWidthVal = "450px";
+
+    let alignStyle = `float: none; margin: 1.25rem auto; max-width: ${maxWidthVal}; width: 100%; display: block; clear: both;`;
+    if (imageAlignment.includes("Left")) {
+      const floatMaxWidth = maxWidthVal === "100%" ? "50%" : maxWidthVal;
+      alignStyle = `float: left; margin: 0.5rem 1.25rem 0.5rem 0; max-width: ${floatMaxWidth}; width: 100%; display: block;`;
+    } else if (imageAlignment.includes("Right")) {
+      const floatMaxWidth = maxWidthVal === "100%" ? "50%" : maxWidthVal;
+      alignStyle = `float: right; margin: 0.5rem 0 0.5rem 1.25rem; max-width: ${floatMaxWidth}; width: 100%; display: block;`;
+    }
 
     const captionHtml = (rawCap || rawCred)
       ? `<figcaption style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.75rem; color: #64748B; margin-top: 0.35rem; width: 100%; font-family: sans-serif; box-sizing: border-box;">
@@ -900,21 +971,54 @@ export default function CreatePostPage() {
 
     const imgTag = `<figure contenteditable="false" style="${alignStyle} text-align: left; user-select: none;"><img src="${imageUrl.trim()}" alt="${
       rawCap || "Article Image"
-    }" draggable="false" style="width: 100%; border-radius: 0; object-fit: cover; display: block; user-select: none;" />${captionHtml}</figure>`;
+    }" draggable="false" style="width: 100%; border-radius: 0; object-fit: cover; display: block; user-select: none;" />${captionHtml}</figure><p><br/></p>`;
 
     if (editorRef.current) {
       editorRef.current.focus();
 
-      // Restore saved cursor selection if available
+      const tempDiv = document.createElement("div");
+      tempDiv.innerHTML = imgTag;
+      const frag = document.createDocumentFragment();
+      let node;
+      while ((node = tempDiv.firstChild)) {
+        frag.appendChild(node);
+      }
+
       const sel = window.getSelection();
-      if (savedSelectionRangeRef.current && sel) {
+      let range: Range | null = null;
+
+      if (savedSelectionRangeRef.current) {
         try {
-          sel.removeAllRanges();
-          sel.addRange(savedSelectionRangeRef.current);
+          if (editorRef.current.contains(savedSelectionRangeRef.current.commonAncestorContainer)) {
+            range = savedSelectionRangeRef.current;
+          }
         } catch (e) {}
       }
 
-      document.execCommand("insertHTML", false, imgTag);
+      if (!range && sel && sel.rangeCount > 0) {
+        try {
+          const currentRange = sel.getRangeAt(0);
+          if (editorRef.current.contains(currentRange.commonAncestorContainer)) {
+            range = currentRange;
+          }
+        } catch (e) {}
+      }
+
+      if (range) {
+        range.deleteContents();
+        range.insertNode(frag);
+        try {
+          range.collapse(false);
+          if (sel) {
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }
+        } catch (e) {}
+      } else {
+        editorRef.current.appendChild(frag);
+      }
+
+      savedSelectionRangeRef.current = null;
       setContent(editorRef.current.innerHTML);
     }
 
@@ -1247,20 +1351,6 @@ function isWorldOrWorldSub(cat: string): boolean {
       return;
     }
 
-    let hasImage = !!imageUrl.trim();
-    if (!hasImage && editorRef.current) {
-      const firstImg = editorRef.current.querySelector("img");
-      if (firstImg && firstImg.src) hasImage = true;
-    }
-    if (!hasImage && currentContent) {
-      hasImage = /<img[^>]+src=["'][^"']+["']/i.test(currentContent);
-    }
-
-    if (!hasImage) {
-      alert("Please insert an image before submitting the article for review.");
-      return;
-    }
-
     setSubmittingAction("publish");
     savePost("Pending review", currentContent);
   };
@@ -1274,21 +1364,6 @@ function isWorldOrWorldSub(cat: string): boolean {
     const finalTitle = title.trim() || "Untitled Article";
     if (!title.trim()) {
       setTitle(finalTitle);
-    }
-
-    if (status === "Pending review" || status === "Published") {
-      let hasImage = !!imageUrl.trim();
-      if (!hasImage && editorRef.current) {
-        const firstImg = editorRef.current.querySelector("img");
-        if (firstImg && firstImg.src) hasImage = true;
-      }
-      if (!hasImage && currentContent) {
-        hasImage = /<img[^>]+src=["'][^"']+["']/i.test(currentContent);
-      }
-      if (!hasImage) {
-        alert("Please insert an image before submitting the article for review.");
-        return;
-      }
     }
 
     setSubmittingAction(status === "Draft" ? "draft" : "publish");
@@ -1306,34 +1381,30 @@ function isWorldOrWorldSub(cat: string): boolean {
       console.warn("WebP body conversion notice:", e);
     }
 
-    let processedImageUrl = imageUrl.trim();
-    if (!processedImageUrl && editorRef.current) {
+    let bodyImgSrc = "";
+    if (editorRef.current) {
       const firstImg = editorRef.current.querySelector("img");
       if (firstImg && firstImg.src) {
-        processedImageUrl = firstImg.src;
+        bodyImgSrc = firstImg.src;
       }
     }
-    if (!processedImageUrl && bodyContent) {
+    if (!bodyImgSrc && bodyContent) {
       const match = bodyContent.match(/<img[^>]+src=["']([^"']+)["']/i);
       if (match) {
-        processedImageUrl = match[1];
+        bodyImgSrc = match[1];
       }
     }
 
-    if (status === "Pending review" || status === "Published") {
-      if (!processedImageUrl) {
-        alert("Please insert an image before submitting the article for review.");
-        setIsSubmitting(false);
-        setSubmittingAction(null);
-        return;
-      }
+    let processedImageUrl = bodyImgSrc || imageUrl.trim();
+    if (!processedImageUrl && (status === "Pending review" || status === "Published")) {
+      processedImageUrl = "/ai_hero.png";
     }
 
-    if (processedImageUrl && !processedImageUrl.startsWith("data:image/webp") && !processedImageUrl.endsWith(".webp") && processedImageUrl.startsWith("data:image/")) {
+    if (processedImageUrl && processedImageUrl.startsWith("data:image/")) {
       try {
-        processedImageUrl = await convertToWebP(processedImageUrl, 0.85);
+        processedImageUrl = await uploadImageToBackblaze(processedImageUrl, imageFileName || "cover.webp", "articles");
       } catch (e) {
-        console.warn("WebP cover conversion notice:", e);
+        console.warn("Backblaze cover upload notice:", e);
       }
     }
 
@@ -1362,16 +1433,18 @@ function isWorldOrWorldSub(cat: string): boolean {
     let finalAuthorAvatar = "";
     let finalAuthorBio = "";
 
-    if (editingPostId && originalAuthor?.name && (isAdmin || !originalAuthor.name.toLowerCase().includes("admin"))) {
+    const activeUserEmail = auth.user?.email || currentUser?.email || activeEmail || "rushdhiriyaj2005@gmail.com";
+    const activeUserName = auth.user?.name || currentUser?.name || activeName || "Rushdhi";
+    const savedProf = getUserProfile(activeUserEmail);
+
+    if (originalAuthor?.name && !originalAuthor.name.toLowerCase().includes("admin") && !isAdmin) {
       finalAuthorName = originalAuthor.name;
-      finalAuthorEmail = originalAuthor.email || auth.user?.email || currentUser?.email || "writer@digitaljournal.com";
+      finalAuthorEmail = originalAuthor.email || activeUserEmail;
       finalAuthorAvatar = originalAuthor.avatar || resolveUserAvatar({ name: finalAuthorName, email: finalAuthorEmail, role: "Writer" });
       finalAuthorBio = originalAuthor.bio || `${finalAuthorName} is a journalist for London BigBen.`;
     } else {
-      const activeUserEmail = auth.user?.email || currentUser?.email || activeEmail || "";
-      const savedProf = getUserProfile(activeUserEmail);
-      finalAuthorName = auth.user?.name || currentUser?.name || savedProf?.name || activeName || "Writer";
-      finalAuthorEmail = activeUserEmail || "writer@digitaljournal.com";
+      finalAuthorName = activeUserName;
+      finalAuthorEmail = activeUserEmail;
       finalAuthorAvatar = resolveUserAvatar({ name: finalAuthorName, email: finalAuthorEmail, role: "Writer", avatar: savedProf?.avatar || auth.user?.avatar || currentUser?.avatar });
       finalAuthorBio = savedProf?.bio || (auth.user as any)?.bio || (currentUser as any)?.bio || activeBio || `${finalAuthorName} is a journalist for London BigBen.`;
     }
@@ -1382,7 +1455,7 @@ function isWorldOrWorldSub(cat: string): boolean {
       content: bodyContent.trim(),
       category: category.toLowerCase(),
       authorName: finalAuthorName,
-      imageUrl: processedImageUrl || "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=600&h=350&fit=crop",
+      imageUrl: processedImageUrl || "",
       metaTitle: metaTitle.trim() || undefined,
       metaDescription: metaDescription.trim() || undefined,
       focusKeyword: focusKeyword.trim() || undefined,
@@ -1403,8 +1476,12 @@ function isWorldOrWorldSub(cat: string): boolean {
       subheading: subheading.trim() || title.trim(),
       summary: subheading.trim() || title.trim(),
       content: bodyContent.trim(),
-      imageUrl: processedImageUrl || "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=600&h=350&fit=crop",
+      imageUrl: processedImageUrl || "",
       status: status,
+      published_at: status === "Published" ? new Date().toISOString() : undefined,
+      publishedAt: status === "Published" ? new Date().toISOString() : undefined,
+      updated_at: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       rejectionReason: status === "Pending review" || status === "Published" ? undefined : undefined,
       rejection_reason: status === "Pending review" || status === "Published" ? undefined : undefined,
       rejectedAt: status === "Pending review" || status === "Published" ? undefined : undefined,
@@ -1422,7 +1499,9 @@ function isWorldOrWorldSub(cat: string): boolean {
       authorName: finalAuthorName,
       authorAvatar: finalAuthorAvatar,
       authorBio: finalAuthorBio,
-      seo: autoSeo
+      seo: autoSeo,
+      original_title: originalTitle || undefined,
+      previousTitle: originalTitle || undefined
     };
 
     try {
@@ -1437,12 +1516,15 @@ function isWorldOrWorldSub(cat: string): boolean {
         const subsStr = localStorage.getItem("dj_writer_submitted_articles");
         const existingList: any[] = subsStr ? JSON.parse(subsStr) : [];
         const targetId = String(postToSave.id);
+        const editId = editingPostId ? String(editingPostId) : "";
         const targetTitle = postToSave.title.trim().toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ');
+        const origTitle = originalTitle ? originalTitle.trim().toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ') : '';
         
         let foundInSubs = false;
         const updatedList = existingList.map((p: any) => {
+          const pId = String(p.id || '');
           const pTitle = (p.title || "").trim().toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ');
-          if (String(p.id) === targetId || (pTitle && pTitle === targetTitle)) {
+          if (pId === targetId || (editId && pId === editId) || (pTitle && pTitle === targetTitle) || (origTitle && pTitle && pTitle === origTitle)) {
             foundInSubs = true;
             const updated = { ...p, ...postToSave, id: p.id || postToSave.id, status };
             if (status === "Pending review" || status === "Published") {
@@ -1480,8 +1562,9 @@ function isWorldOrWorldSub(cat: string): boolean {
         const cached = getCachedArticles();
         let foundInCache = false;
         const updatedCache = cached.map((a: any) => {
+          const aId = String(a.id || '');
           const aTitle = (a.title || "").trim().toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ');
-          if (String(a.id) === targetId || (aTitle && aTitle === targetTitle)) {
+          if (aId === targetId || (editId && aId === editId) || (aTitle && aTitle === targetTitle) || (origTitle && aTitle && aTitle === origTitle)) {
             foundInCache = true;
             const updated = { ...a, ...postToSave, id: a.id || postToSave.id, status };
             if (status === "Pending review" || status === "Published") {
@@ -1499,7 +1582,12 @@ function isWorldOrWorldSub(cat: string): boolean {
         setCachedArticles(updatedCache, true);
       } catch (e) {}
 
-      saveArticleToServer(postToSave).catch(err => console.warn("Background server save:", err));
+      try {
+        const { saveArticleToServer } = await import("@/lib/articlesSync");
+        await saveArticleToServer(postToSave);
+      } catch (err) {
+        console.warn("Error saving post to server store:", err);
+      }
 
       try {
         localStorage.setItem(
@@ -1517,36 +1605,42 @@ function isWorldOrWorldSub(cat: string): boolean {
         window.dispatchEvent(new Event("dj_articles_updated"));
       }
     } catch (err) {
-      console.warn("Error saving post to server store:", err);
+      console.warn("Error saving post:", err);
     }
 
     try {
       localStorage.setItem("dj_active_tab", status === "Published" ? "Published" : status === "Pending review" ? "Pending review" : "Drafts");
     } catch (e) {}
 
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setSubmittingAction(null);
-      const userRole = (currentUser?.role || auth.user?.role || "").toLowerCase();
-      if (status === "Pending review") {
+    setIsSubmitting(false);
+    setSubmittingAction(null);
+    if (status === "Pending review") {
+      if (typeof window !== "undefined") {
+        window.location.href = "/writer?tab=pending";
+      } else {
         router.push("/writer?tab=pending");
+      }
+    } else if (status === "Published") {
+      if (isAdmin) {
         if (typeof window !== "undefined") {
-          setTimeout(() => {
-            if (window.location.pathname.includes("/writer/create")) {
-              window.location.href = "/writer?tab=pending";
-            }
-          }, 300);
-        }
-      } else if (status === "Published") {
-        if (userRole === "admin" || userRole === "co-admin") {
+          window.location.href = "/";
+        } else {
           router.push("/");
+        }
+      } else {
+        if (typeof window !== "undefined") {
+          window.location.href = "/writer?tab=published";
         } else {
           router.push("/writer?tab=published");
         }
+      }
+    } else {
+      if (typeof window !== "undefined") {
+        window.location.href = "/writer?tab=drafts";
       } else {
         router.push("/writer?tab=drafts");
       }
-    }, 200);
+    }
   };
 
   const handleApprovePublish = async () => {
@@ -1563,12 +1657,26 @@ function isWorldOrWorldSub(cat: string): boolean {
         console.warn("WebP body conversion notice during approval:", e);
       }
 
-      let liveImageUrl = imageUrl || "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=1200&h=800&fit=crop";
-      if (liveImageUrl && !liveImageUrl.startsWith("data:image/webp") && !liveImageUrl.endsWith(".webp") && liveImageUrl.startsWith("data:image/")) {
+      let bodyImgSrc = "";
+      if (editorRef.current) {
+        const firstImg = editorRef.current.querySelector("img");
+        if (firstImg && firstImg.src) {
+          bodyImgSrc = firstImg.src;
+        }
+      }
+      if (!bodyImgSrc && liveContent) {
+        const match = liveContent.match(/<img[^>]+src=["']([^"']+)["']/i);
+        if (match) {
+          bodyImgSrc = match[1];
+        }
+      }
+
+      let liveImageUrl = bodyImgSrc || imageUrl || "";
+      if (liveImageUrl && liveImageUrl.startsWith("data:image/")) {
         try {
-          liveImageUrl = await convertToWebP(liveImageUrl, 0.85);
+          liveImageUrl = await uploadImageToBackblaze(liveImageUrl, (liveTitle || "article").substring(0, 30) + ".webp", "articles");
         } catch (e) {
-          console.warn("WebP cover conversion notice during approval:", e);
+          console.warn("Backblaze live image upload notice:", e);
         }
       }
 
@@ -1602,6 +1710,7 @@ function isWorldOrWorldSub(cat: string): boolean {
         finalAuthorEmail = "writer@digitaljournal.com";
       }
 
+      const nowIso = new Date().toISOString();
       const approvedArticle = {
         id: editingPostId ? (isNaN(Number(editingPostId)) ? editingPostId : Number(editingPostId)) : Date.now(),
         title: liveTitle,
@@ -1619,6 +1728,10 @@ function isWorldOrWorldSub(cat: string): boolean {
         readDuration: readDuration,
         imageUrl: liveImageUrl,
         status: "Published",
+        published_at: nowIso,
+        publishedAt: nowIso,
+        updated_at: nowIso,
+        updatedAt: nowIso,
         date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
         authorName: finalAuthorName,
         authorAvatar: finalAuthorAvatar,
@@ -1669,9 +1782,14 @@ function isWorldOrWorldSub(cat: string): boolean {
       const rejectionReason = rejectionReasonInput.trim() || undefined;
       const rejectedAt = new Date().toISOString();
 
-      const targetAuthorEmail = originalAuthor?.email || (currentUser?.role?.toLowerCase() === "admin" ? "rushdhiriyaj2005@gmail.com" : currentUser?.email || "writer@digitaljournal.com");
-      const targetAuthorName = originalAuthor?.name || (currentUser?.role?.toLowerCase() === "admin" ? "Rushdhi MR" : currentUser?.name || "Rushdhi MR");
-      const targetAuthorAvatar = originalAuthor?.avatar || currentUser?.avatar || "/author_bluesuit.jpg";
+      const targetAuthorName = originalAuthor?.name || "Writer";
+      const targetAuthorEmail = originalAuthor?.email || (
+        targetAuthorName.toLowerCase().includes("muba") ? "rura@gmail.com" :
+        targetAuthorName.toLowerCase().includes("roomi") ? "roomiwriter@gmail.com" :
+        targetAuthorName.toLowerCase().includes("rushdhi") ? "rushdhiriyaj2005@gmail.com" :
+        "rura@gmail.com"
+      );
+      const targetAuthorAvatar = originalAuthor?.avatar || "/author_bluesuit.jpg";
 
       const rejectedArticle = {
         id: editingPostId || `art_${Date.now()}`,
@@ -1681,7 +1799,7 @@ function isWorldOrWorldSub(cat: string): boolean {
         tags,
         summary: subheading,
         content: editorRef.current ? editorRef.current.innerHTML : content,
-        imageUrl: imageUrl || "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=150&h=150&fit=crop",
+        imageUrl: imageUrl || "",
         status: "Rejected",
         rejectionReason,
         rejectedAt,
@@ -1689,6 +1807,16 @@ function isWorldOrWorldSub(cat: string): boolean {
         authorName: targetAuthorName,
         authorAvatar: targetAuthorAvatar
       };
+
+      const cleanT = (t: string) =>
+        String(t || "")
+          .toLowerCase()
+          .replace(/[\u2018\u2019\u201A\u201B']/g, "'")
+          .replace(/[\u201C\u201D\u201E\u201F"]/g, '"')
+          .replace(/[\u2013\u2014]/g, "-")
+          .replace(/[^\w\s-]/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
 
       // 1. Update/upsert submissions with status Rejected in localStorage
       const subsStr = localStorage.getItem("dj_writer_submitted_articles");
@@ -1700,7 +1828,7 @@ function isWorldOrWorldSub(cat: string): boolean {
       }
 
       const existingIndex = subsList.findIndex((p: any) =>
-        String(p.id) === String(editingPostId) || (p.title && p.title.trim().toLowerCase() === liveTitle.toLowerCase())
+        String(p.id) === String(editingPostId) || (cleanT(p.title) && cleanT(liveTitle) && cleanT(p.title) === cleanT(liveTitle))
       );
 
       if (existingIndex >= 0) {
@@ -1789,7 +1917,7 @@ function isWorldOrWorldSub(cat: string): boolean {
             <span>PREVIEW</span>
           </button>
 
-          {isReviewMode || (isAdmin && editingPostId) ? (
+          {isReviewMode ? (
             <>
               <button
                 type="button"
@@ -1841,7 +1969,28 @@ function isWorldOrWorldSub(cat: string): boolean {
                 )}
               </button>
 
-              {isAdmin ? (
+              {!isAdmin && (
+                <button
+                  type="button"
+                  onClick={handleSubmitReview}
+                  disabled={isSubmitting}
+                  className="bg-[#F97316] hover:bg-[#EA580C] active:scale-[0.98] text-white font-bold text-[10px] sm:text-xs px-3 sm:px-5 py-1.5 sm:py-2 rounded-xl flex items-center gap-1.5 sm:gap-2 shadow-sm shadow-orange-500/20 transition-all cursor-pointer uppercase tracking-wider disabled:opacity-60 disabled:cursor-not-allowed font-mono"
+                >
+                  {isSubmitting && submittingAction === "publish" ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin text-white" />
+                      <span>SUBMITTING...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send size={14} />
+                      <span>SUBMIT FOR REVIEW</span>
+                    </>
+                  )}
+                </button>
+              )}
+
+              {isAdmin && (
                 <>
                   <button
                     type="button"
@@ -1872,25 +2021,6 @@ function isWorldOrWorldSub(cat: string): boolean {
                     )}
                   </button>
                 </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleSubmitReview}
-                  disabled={isSubmitting}
-                  className="bg-[#F97316] hover:bg-[#EA580C] active:scale-[0.98] text-white font-bold text-[10px] sm:text-xs px-3 sm:px-5 py-1.5 sm:py-2 rounded-xl flex items-center gap-1.5 sm:gap-2 shadow-sm shadow-orange-500/20 transition-all cursor-pointer uppercase tracking-wider disabled:opacity-60 disabled:cursor-not-allowed font-mono"
-                >
-                  {isSubmitting && submittingAction === "publish" ? (
-                    <>
-                      <Loader2 size={14} className="animate-spin text-white" />
-                      <span>SUBMITTING...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send size={14} />
-                      <span>SUBMIT FOR REVIEW</span>
-                    </>
-                  )}
-                </button>
               )}
             </>
           )}
@@ -2666,53 +2796,55 @@ function isWorldOrWorldSub(cat: string): boolean {
                   />
                 </div>
 
-                {/* 5. HOMEPAGE PLACEMENT SECTION */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-[10px] font-extrabold text-[#D31220] uppercase tracking-wider">
-                      HOMEPAGE PLACEMENT
-                    </label>
-                    <span className="text-[9.5px] font-mono text-slate-400">Section Control</span>
-                  </div>
+                {/* 5. HOMEPAGE PLACEMENT SECTION (ADMIN ONLY) */}
+                {isAdmin && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-[10px] font-extrabold text-[#D31220] uppercase tracking-wider">
+                        HOMEPAGE PLACEMENT
+                      </label>
+                      <span className="text-[9.5px] font-mono text-slate-400">Section Control</span>
+                    </div>
 
-                  <div className="space-y-1.5 bg-slate-50/80 border border-slate-200/90 rounded-2xl p-2.5">
-                    {[
-                      { id: "Home Page A+ Section", label: "Home Page A+ Section", desc: "Top Hero Carousel main story" },
-                      { id: "Trending Now", label: "Trending Now Section", desc: "Trending sidebar list beside Hero" },
-                      { id: "Editor's Picks", label: "Editor's Picks Section", desc: "4-Card featured row below Hero" },
-                      { id: "Latest News", label: "Latest News Section", desc: "Latest news feed and featured lead" },
-                      { id: "Home Page A+ Section 2", label: "Home Page A+ Section 2", desc: "Middle dark spotlight banner" },
-                      { id: "Standard Post", label: "Category Section Only", desc: "Default category news feed" },
-                    ].map((item) => {
-                      const isSelected = normalizePlacement(placement) === normalizePlacement(item.id);
-                      return (
-                        <div
-                          key={item.id}
-                          onClick={() => setPlacement(item.id)}
-                          className={`flex items-start gap-2.5 p-2 rounded-xl cursor-pointer transition-all ${
-                            isSelected
-                              ? "bg-white border-2 border-[#D31220] shadow-sm"
-                              : "border border-transparent hover:bg-white/70"
-                          }`}
-                        >
-                          <div className={`w-4 h-4 mt-0.5 rounded-full border flex items-center justify-center shrink-0 ${
-                            isSelected ? "border-[#D31220] bg-[#D31220] text-white" : "border-slate-300 bg-white"
-                          }`}>
-                            {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    <div className="space-y-1.5 bg-slate-50/80 border border-slate-200/90 rounded-2xl p-2.5">
+                      {[
+                        { id: "Home Page A+ Section", label: "Home Page A+ Section", desc: "Top Hero Carousel main story" },
+                        { id: "Trending Now", label: "Trending Now Section", desc: "Trending sidebar list beside Hero" },
+                        { id: "Editor's Picks", label: "Editor's Picks Section", desc: "4-Card featured row below Hero" },
+                        { id: "Latest News", label: "Latest News Section", desc: "Latest news feed and featured lead" },
+                        { id: "Home Page A+ Section 2", label: "Home Page A+ Section 2", desc: "Middle dark spotlight banner" },
+                        { id: "Standard Post", label: "Category Section Only", desc: "Default category news feed" },
+                      ].map((item) => {
+                        const isSelected = normalizePlacement(placement) === normalizePlacement(item.id);
+                        return (
+                          <div
+                            key={item.id}
+                            onClick={() => setPlacement(item.id)}
+                            className={`flex items-start gap-2.5 p-2 rounded-xl cursor-pointer transition-all ${
+                              isSelected
+                                ? "bg-white border-2 border-[#D31220] shadow-sm"
+                                : "border border-transparent hover:bg-white/70"
+                            }`}
+                          >
+                            <div className={`w-4 h-4 mt-0.5 rounded-full border flex items-center justify-center shrink-0 ${
+                              isSelected ? "border-[#D31220] bg-[#D31220] text-white" : "border-slate-300 bg-white"
+                            }`}>
+                              {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className={`text-xs font-bold leading-tight ${isSelected ? "text-[#D31220]" : "text-slate-800"}`}>
+                                {item.label}
+                              </p>
+                              <p className="text-[10px] text-slate-500 font-normal leading-snug mt-0.5">
+                                {item.desc}
+                              </p>
+                            </div>
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <p className={`text-xs font-bold leading-tight ${isSelected ? "text-[#D31220]" : "text-slate-800"}`}>
-                              {item.label}
-                            </p>
-                            <p className="text-[10px] text-slate-500 font-normal leading-snug mt-0.5">
-                              {item.desc}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                )}
 
               </div>
             )}
@@ -2829,18 +2961,20 @@ function isWorldOrWorldSub(cat: string): boolean {
                       if (file) {
                         const baseName = file.name.replace(/\.[^/.]+$/, "");
                         setImageFileName(baseName + ".webp");
-                        try {
-                          const webpUrl = await convertToWebP(file, 0.85);
-                          setImageUrl(webpUrl);
-                        } catch (err) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            if (typeof reader.result === "string") {
-                              setImageUrl(reader.result);
-                            }
-                          };
-                          reader.readAsDataURL(file);
-                        }
+                        const reader = new FileReader();
+                        reader.onload = async () => {
+                          if (typeof reader.result === "string") {
+                            const rawDataUrl = reader.result;
+                            setImageUrl(rawDataUrl);
+                            try {
+                              const b2Url = await uploadImageToBackblaze(rawDataUrl, baseName + ".webp", "articles");
+                              if (b2Url) {
+                                setImageUrl(b2Url);
+                              }
+                            } catch (err) {}
+                          }
+                        };
+                        reader.readAsDataURL(file);
                       }
                     }}
                     className="hidden"
@@ -3058,48 +3192,14 @@ function isWorldOrWorldSub(cat: string): boolean {
                   </div>
                 )}
 
-                {/* ARTICLE BODY & INLINE IMAGES CANVAS WITH MID-ARTICLE NEWSLETTER WIDGET */}
-                <div className="prose prose-slate max-w-none text-slate-800 leading-relaxed font-serif text-base sm:text-lg space-y-4 flow-root [&_a]:text-[#F97316] [&_a]:font-semibold [&_a]:underline hover:[&_a]:text-[#EA580C] [&_b]:font-bold [&_strong]:font-bold [&_blockquote]:border-l-4 [&_blockquote]:border-blue-500 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-slate-600 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6">
+                {/* ARTICLE BODY & INLINE IMAGES CANVAS */}
+                <div className="prose prose-slate max-w-none text-slate-800 leading-relaxed font-serif text-base sm:text-lg space-y-4 flow-root [&_a]:text-[#BF1E2D] [&_a]:underline hover:[&_a]:text-[#901320] [&_a]:font-semibold [&_b]:font-bold [&_strong]:font-bold [&_blockquote]:border-l-4 [&_blockquote]:border-blue-500 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-slate-600 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6">
                   {(() => {
-                    const newsletterWidget = (
-                      <div className="clear-both w-full my-8 bg-amber-50/40 border-t-2 border-b-2 border-[#B45309]/30 p-6 md:p-8 text-left not-prose font-sans" style={{ clear: 'both' }}>
-                        <h3 className="font-serif text-lg sm:text-xl font-bold text-[#B45309] mb-1">
-                          London BigBen Fast Start — Let the best of news come to you
-                        </h3>
-                        <p className="text-xs text-slate-600 mb-4 font-sans">
-                          Sign up and stay up to date with our daily newsletter.
-                        </p>
-
-                        <form onSubmit={(e) => e.preventDefault()} className="flex items-center gap-3 flex-wrap">
-                          <input
-                            type="email"
-                            placeholder="Enter your email."
-                            className="px-4 py-2.5 bg-white border border-slate-300 rounded-md text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#B45309] flex-1 min-w-[220px] max-w-md"
-                          />
-                          <button
-                            type="submit"
-                            className="bg-[#B45309] hover:bg-[#92400E] text-white font-bold text-xs uppercase px-6 py-2.5 rounded-md tracking-wider transition-colors cursor-pointer"
-                          >
-                            SIGN UP NOW
-                          </button>
-                        </form>
-
-                        <p className="text-[9px] text-slate-400 font-sans mt-2.5">
-                          You can unsubscribe at any time. By signing up you are agreeing to our{" "}
-                          <a href="#" className="underline text-slate-500">Terms &amp; Conditions</a> and{" "}
-                          <a href="#" className="underline text-slate-500">Privacy Policy</a>.
-                        </p>
-                      </div>
-                    );
-
                     if (!content.trim()) {
                       return (
-                        <>
-                          <p className="text-slate-400 italic font-sans py-8 border-y border-dashed border-slate-200 my-4 text-center">
-                            No article body content written yet. Start writing in the editor to see your live preview here.
-                          </p>
-                          {newsletterWidget}
-                        </>
+                        <p className="text-slate-400 italic font-sans py-8 border-y border-dashed border-slate-200 my-4 text-center">
+                          No article body content written yet. Start writing in the editor to see your live preview here.
+                        </p>
                       );
                     }
 
@@ -3115,26 +3215,11 @@ function isWorldOrWorldSub(cat: string): boolean {
                     }
                     rawHtml = processContentLinks(rawHtml);
 
-                    const pMatches = rawHtml.split("</p>");
-                    if (pMatches.length >= 3) {
-                      const mid = Math.min(pMatches.length - 1, Math.max(2, Math.floor(pMatches.length * 0.65)));
-                      const firstPart = pMatches.slice(0, mid).join("</p>") + (pMatches[mid - 1]?.includes("</p>") ? "" : "</p>");
-                      const secondPart = pMatches.slice(mid).join("</p>");
-
-                      return (
-                        <>
-                          <div className="flow-root clear-both [&_a]:text-[#BF1E2D] [&_a]:underline [&_a]:font-semibold hover:[&_a]:text-[#901320] transition-colors" dangerouslySetInnerHTML={{ __html: firstPart }} />
-                          {newsletterWidget}
-                          <div className="flow-root clear-both [&_a]:text-[#BF1E2D] [&_a]:underline [&_a]:font-semibold hover:[&_a]:text-[#901320] transition-colors" dangerouslySetInnerHTML={{ __html: secondPart }} />
-                        </>
-                      );
-                    }
-
                     return (
-                      <>
-                        <div className="flow-root clear-both [&_a]:text-[#BF1E2D] [&_a]:underline [&_a]:font-semibold hover:[&_a]:text-[#901320] transition-colors" dangerouslySetInnerHTML={{ __html: rawHtml }} />
-                        {newsletterWidget}
-                      </>
+                      <div
+                        className="flow-root clear-both [&_a]:text-[#BF1E2D] [&_a]:underline [&_a]:font-semibold hover:[&_a]:text-[#901320] transition-colors"
+                        dangerouslySetInnerHTML={{ __html: rawHtml }}
+                      />
                     );
                   })()}
                 </div>

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { DB } from '@/lib/db';
 import { readArticlesStore, writeArticlesStore } from '@/lib/serverArticlesStore';
+import { isB2Configured, uploadToB2 } from '@/lib/backblaze';
 
 export async function GET(request: Request) {
   try {
@@ -20,9 +21,10 @@ export async function GET(request: Request) {
     }
 
     if (matchedUser) {
+      const { password_hash, password, ...safeUser } = matchedUser as any;
       return NextResponse.json({
         success: true,
-        user: matchedUser
+        user: safeUser
       });
     }
 
@@ -44,10 +46,45 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Email is required' }, { status: 400 });
     }
 
+    let finalAvatar = avatar;
+
+    // If avatar is base64 data URL, upload directly to Backblaze B2 in "avatars" folder
+    if (avatar && typeof avatar === 'string' && (avatar.startsWith('data:image/') || (!avatar.startsWith('http') && avatar.length > 100))) {
+      if (isB2Configured()) {
+        try {
+          const matches = avatar.match(/^data:([^;]+);base64,(.+)$/);
+          let mimeType = 'image/webp';
+          let buffer: Buffer | null = null;
+          if (matches) {
+            mimeType = matches[1] || 'image/webp';
+            buffer = Buffer.from(matches[2], 'base64');
+          } else {
+            buffer = Buffer.from(avatar, 'base64');
+          }
+
+          if (buffer) {
+            const ext = mimeType.includes('png') ? '.png' : mimeType.includes('jpeg') || mimeType.includes('jpg') ? '.jpg' : '.webp';
+            const cleanUser = (name || email.split('@')[0] || 'user')
+              .toLowerCase()
+              .replace(/[^a-z0-9]/g, '-')
+              .substring(0, 30);
+            const fileName = `avatar-${cleanUser}-${Date.now()}${ext}`;
+            const b2Res = await uploadToB2(buffer, fileName, mimeType, 'avatars');
+            if (b2Res.success && b2Res.url) {
+              finalAvatar = b2Res.url;
+              console.log('[Backblaze] Successfully uploaded profile avatar to B2:', b2Res.url);
+            }
+          }
+        } catch (uploadErr) {
+          console.warn('[Backblaze] Avatar upload to B2 warning:', uploadErr);
+        }
+      }
+    }
+
     const updated = await DB.updateUserProfile({
       email,
       name,
-      avatar,
+      avatar: finalAvatar,
       bio,
       role,
       linkedin
@@ -72,7 +109,7 @@ export async function POST(request: Request) {
           return {
             ...art,
             ...(name ? { authorName: name, author: name } : {}),
-            ...(avatar ? { authorAvatar: avatar } : {}),
+            ...(finalAvatar ? { authorAvatar: finalAvatar } : {}),
             ...(bio ? { authorBio: bio } : {})
           };
         }
@@ -86,9 +123,10 @@ export async function POST(request: Request) {
       console.warn('Failed to sync articles with updated profile:', e);
     }
 
+    const { password_hash, password: _p, ...safeUpdated } = (updated || {}) as any;
     return NextResponse.json({
       success: true,
-      user: updated,
+      user: safeUpdated,
       message: 'Profile updated in database successfully'
     });
   } catch (err: any) {

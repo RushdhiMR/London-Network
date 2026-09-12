@@ -1,19 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import GoogleAccountChooserModal from "@/components/GoogleAccountChooserModal";
 import { Lock } from "lucide-react";
-import { getUserProfile, saveUserProfile, isEmailAlreadyRegistered } from "@/lib/userProfiles";
 import { triggerGoogleOAuth } from "@/lib/googleAuth";
-import { dispatchTabLogin } from "@/lib/auth-context";
+import { useAuth, dispatchTabLogin } from "@/lib/auth-context";
 
 function LoginFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const auth = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -22,7 +21,6 @@ function LoginFormContent() {
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [googleError, setGoogleError] = useState("");
-  const [showGoogleChooser, setShowGoogleChooser] = useState(false);
 
   const getRedirectDestination = (userRole: string) => {
     const rawRedirect = searchParams
@@ -80,6 +78,78 @@ function LoginFormContent() {
     return "/reader";
   };
 
+  useEffect(() => {
+    if (!auth.loading && auth.authenticated && auth.user) {
+      const dest = getRedirectDestination(auth.user.role);
+      router.replace(dest);
+    }
+  }, [auth.loading, auth.authenticated, auth.user, router]);
+
+  const handleGoogleSuccess = async (result: { credential?: string; accessToken?: string }) => {
+    setIsGoogleLoading(true);
+    setErrorMessage("");
+    setGoogleError("");
+    setSuccessMessage("");
+
+    try {
+      const res = await fetch("/api/auth/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          credential: result.credential,
+          accessToken: result.accessToken,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setGoogleError(data.error || "Google sign-in failed. Please try again.");
+        setIsGoogleLoading(false);
+        return;
+      }
+
+      const authenticatedUser = data.user;
+      const userRole = authenticatedUser.role;
+
+      // Bind this user to this tab's session
+      dispatchTabLogin({
+        id: authenticatedUser.id,
+        name: authenticatedUser.name,
+        email: authenticatedUser.email,
+        role: authenticatedUser.role,
+        provider: authenticatedUser.provider || "google",
+        avatar: authenticatedUser.avatar,
+      });
+
+      const targetDestination = getRedirectDestination(userRole);
+      localStorage.setItem("dj_toast", `Welcome back, ${authenticatedUser.name}! Signed in successfully.`);
+
+      setSuccessMessage(`✓ Authenticated as ${authenticatedUser.name} (${authenticatedUser.email}) with Google! Opening ${targetDestination}...`);
+      setTimeout(() => {
+        window.location.href = targetDestination;
+      }, 300);
+    } catch (err: any) {
+      setGoogleError("Google sign-in could not be completed. Please try again.");
+      setIsGoogleLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = () => {
+    setErrorMessage("");
+    setGoogleError("");
+    setIsGoogleLoading(true);
+    triggerGoogleOAuth(
+      (result) => {
+        handleGoogleSuccess(result);
+      },
+      (err) => {
+        setIsGoogleLoading(false);
+        setGoogleError(err || "Google sign-in could not be completed. Please try again.");
+      }
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
@@ -128,77 +198,6 @@ function LoginFormContent() {
       setErrorMessage("Sign-in process failed. Please try again.");
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const handleGoogleSignIn = () => {
-    setErrorMessage("");
-    setGoogleError("");
-    setIsGoogleLoading(true);
-    triggerGoogleOAuth(
-      async (user) => {
-        handleSelectGoogleAccount({ name: user.name, email: user.email, avatar: user.avatar, googleId: user.googleId });
-      },
-      () => {
-        setIsGoogleLoading(false);
-        setShowGoogleChooser(true);
-      },
-      (err) => {
-        setIsGoogleLoading(false);
-        setGoogleError("Google sign-in could not be completed. Please try again.");
-      }
-    );
-  };
-
-  const handleSelectGoogleAccount = async (acc: { name: string; email: string; avatar?: string; googleId?: string }) => {
-    setShowGoogleChooser(false);
-    setIsGoogleLoading(true);
-    setErrorMessage("");
-    setGoogleError("");
-    setSuccessMessage("");
-
-    try {
-      const res = await fetch("/api/auth/google", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: acc.email,
-          name: acc.name,
-          googleId: acc.googleId,
-          avatar: acc.avatar,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        setGoogleError(data.error || "Google sign-in failed. Please try again.");
-        return;
-      }
-
-      const finalAccount = data.user;
-      const role = finalAccount.role;
-
-      // Bind this Google user to this tab's session (tab-isolated via sessionStorage)
-      dispatchTabLogin({
-        id: finalAccount.id,
-        name: finalAccount.name,
-        email: finalAccount.email,
-        role: finalAccount.role,
-        provider: finalAccount.provider || 'google',
-      });
-
-      const targetDestination = getRedirectDestination(role);
-      localStorage.setItem("dj_toast", `Welcome back, ${finalAccount.name}! Opening ${targetDestination}...`);
-
-      setSuccessMessage(`✓ Authenticated as ${acc.name} (${acc.email}) with Google! Opening ${targetDestination}...`);
-      setTimeout(() => {
-        window.location.href = targetDestination;
-      }, 300);
-    } catch (err: any) {
-      setGoogleError("Google sign-in could not be completed. Please try again.");
-    } finally {
-      setIsGoogleLoading(false);
     }
   };
 
@@ -404,12 +403,6 @@ function LoginFormContent() {
       </main>
 
       <Footer />
-
-      <GoogleAccountChooserModal
-        isOpen={showGoogleChooser}
-        onClose={() => setShowGoogleChooser(false)}
-        onSelectAccount={handleSelectGoogleAccount}
-      />
     </div>
   );
 }

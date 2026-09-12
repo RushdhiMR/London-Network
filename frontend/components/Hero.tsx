@@ -17,11 +17,11 @@ export default function Hero() {
   const heroCategory = featured?.category || (featured as any)?.category_name || "Business & Finance";
   const heroDescription = featured?.summary || featured?.description || "In-depth investigative journalism, economic analysis, and technology developments from across the globe.";
   const heroImage = featured?.imageUrl || featured?.image || "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1200&h=800&fit=crop";
-  const heroAuthor = featured?.authorName || (featured as any)?.author_name || featured?.author || "David Potter";
+  const heroAuthor = featured?.authorName || (featured as any)?.author_name || featured?.author || "Rushdhi MR";
   const heroDate = featured?.date || (featured as any)?.published_at || "July 2026";
   const heroCategorySlug = heroCategory.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
   const heroSlug = featured?.slug || featured?.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || "article";
-  const heroHref = featured ? `/${heroCategorySlug}/${heroSlug}?id=${featured.id}` : "/business";
+  const heroHref = featured ? `/${heroCategorySlug}/${heroSlug}` : "/business";
 
   return (
     <section className="max-w-[1400px] mx-auto px-4 md:px-8 py-8">

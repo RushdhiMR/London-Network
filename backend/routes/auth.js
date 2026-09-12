@@ -40,7 +40,7 @@ router.post('/login', async (req, res) => {
 
     try {
       const [rows] = await db.query(
-        'SELECT id, name, email, password_hash, password, role, provider FROM users WHERE email = ?',
+        'SELECT id, name, email, password_hash, role, provider FROM users WHERE email = ?',
         [normalized]
       );
 
@@ -50,12 +50,6 @@ router.post('/login', async (req, res) => {
 
         if (user.password_hash) {
           isValid = await bcrypt.compare(cleanPassword, user.password_hash);
-        } else if (user.password) {
-          isValid = (cleanPassword === user.password);
-          if (isValid) {
-            const newHash = await bcrypt.hash(cleanPassword, 10);
-            await db.query('UPDATE users SET password_hash = ? WHERE id = ?', [newHash, user.id]);
-          }
         }
 
         if (isValid) {
@@ -170,8 +164,8 @@ router.post('/register', async (req, res) => {
       const userRole = 'reader';
 
       const [result] = await db.query(
-        'INSERT INTO users (name, email, password_hash, password, provider, role, email_verified) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [userName, normalized, passwordHash, password, 'local', userRole, false]
+        'INSERT INTO users (name, email, password_hash, provider, role, email_verified) VALUES (?, ?, ?, ?, ?, ?)',
+        [userName, normalized, passwordHash, 'local', userRole, false]
       );
 
       const userId = result.insertId;
@@ -256,46 +250,73 @@ router.get('/me', async (req, res) => {
 // POST /api/auth/google
 router.post('/google', async (req, res) => {
   try {
-    const { credential, googleId: clientGoogleId, email: clientEmail, name: clientName } = req.body;
-    let verifiedEmail = clientEmail;
-    let verifiedName = clientName;
-    let googleId = clientGoogleId;
+    const { credential, accessToken } = req.body;
+
+    if (!credential && !accessToken) {
+      return res.status(400).json({ error: 'Google ID token credential or access token is required' });
+    }
+
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    let payload = null;
 
     if (credential) {
       try {
         const ticket = await googleClient.verifyIdToken({
           idToken: credential,
-          audience: process.env.GOOGLE_CLIENT_ID,
+          audience: clientId || undefined,
         });
-        const payload = ticket.getPayload();
-        if (payload && payload.email) {
-          verifiedEmail = payload.email;
-          verifiedName = payload.name;
-          googleId = payload.sub;
-        }
+        payload = ticket.getPayload();
       } catch (err) {
-        console.warn('Google Token verification error:', err);
+        console.warn('[Backend Auth] Google verifyIdToken notice, checking tokeninfo:', err.message);
+        try {
+          const fetch = (await import('node-fetch')).default || globalThis.fetch;
+          const resp = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
+          if (resp.ok) {
+            payload = await resp.json();
+          }
+        } catch (tokenInfoErr) {
+          console.warn('[Backend Auth] Tokeninfo fallback failed:', tokenInfoErr);
+        }
       }
     }
 
-    if (!verifiedEmail) {
-      return res.status(400).json({ error: 'Invalid Google authentication payload' });
+    if ((!payload || !payload.email) && accessToken) {
+      try {
+        const fetch = (await import('node-fetch')).default || globalThis.fetch;
+        const resp = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (resp.ok) {
+          payload = await resp.json();
+        }
+      } catch (userinfoErr) {
+        console.warn('[Backend Auth] Google userinfo verification failed:', userinfoErr);
+      }
     }
 
-    const normalized = normalizeEmail(verifiedEmail);
-    const userName = verifiedName || normalized.split('@')[0];
+    if (!payload || !payload.email) {
+      return res.status(401).json({ error: 'Invalid or unverified Google account token.' });
+    }
 
-    const [existingUsers] = await db.query('SELECT id, name, email, role, provider FROM users WHERE email = ?', [normalized]);
+    const verifiedEmail = payload.email;
+    const verifiedName = payload.name || payload.given_name || verifiedEmail.split('@')[0];
+    const googleId = payload.sub;
+    const avatar = payload.picture || null;
+
+    const normalized = normalizeEmail(verifiedEmail);
+    const userName = (verifiedName || normalized.split('@')[0]).trim();
+
+    const [existingUsers] = await db.query('SELECT id, name, email, role, provider, avatar FROM users WHERE email = ?', [normalized]);
     let userPayload = null;
 
     if (existingUsers && existingUsers.length > 0) {
       const existing = existingUsers[0];
-      const updatedProvider = existing.provider === 'local' ? 'google+local' : existing.provider;
-      await db.query('UPDATE users SET google_id = COALESCE(google_id, ?), provider = ?, email_verified = TRUE WHERE id = ?', [googleId || null, updatedProvider, existing.id]);
-      userPayload = { id: existing.id, name: existing.name, email: existing.email, role: existing.role, provider: updatedProvider };
+      const updatedProvider = existing.provider === 'local' ? 'google+local' : (existing.provider || 'google');
+      await db.query('UPDATE users SET google_id = COALESCE(google_id, ?), provider = ?, avatar = COALESCE(avatar, ?), email_verified = TRUE WHERE id = ?', [googleId || null, updatedProvider, avatar || null, existing.id]);
+      userPayload = { id: existing.id, name: existing.name, email: existing.email, role: existing.role, provider: updatedProvider, avatar: existing.avatar || avatar };
     } else {
-      const [result] = await db.query('INSERT INTO users (name, email, provider, google_id, role, email_verified) VALUES (?, ?, ?, ?, ?, TRUE)', [userName, normalized, 'google', googleId || null, 'reader']);
-      userPayload = { id: result.insertId, name: userName, email: normalized, role: 'reader', provider: 'google' };
+      const [result] = await db.query('INSERT INTO users (name, email, provider, google_id, role, avatar, email_verified) VALUES (?, ?, ?, ?, ?, ?, TRUE)', [userName, normalized, 'google', googleId || null, 'reader', avatar || null]);
+      userPayload = { id: result.insertId, name: userName, email: normalized, role: 'reader', provider: 'google', avatar: avatar };
     }
 
     const token = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '7d' });
@@ -303,7 +324,8 @@ router.post('/google', async (req, res) => {
 
     return res.json({ success: true, message: 'Google authentication successful', token, user: userPayload });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    console.error('[Backend Auth] Google error:', err);
+    return res.status(500).json({ error: err.message || 'Internal server error' });
   }
 });
 
@@ -349,7 +371,7 @@ router.post('/reset-password', async (req, res) => {
 
     const user = rows[0];
     const passwordHash = await bcrypt.hash(newPassword, 10);
-    await db.query('UPDATE users SET password_hash = ?, password = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?', [passwordHash, newPassword, user.id]);
+    await db.query('UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?', [passwordHash, user.id]);
 
     return res.json({ success: true, message: 'Your password has been successfully reset.' });
   } catch (err) {

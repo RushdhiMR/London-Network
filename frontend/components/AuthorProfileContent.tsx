@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { useLiveArticles } from "@/lib/articlesSync";
+import { useLiveArticles, useLiveAdSlots, formatAdDimensions, isDuplicateAdImage } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
 import { getUserProfile, getAuthorAvatarByNameOrEmail, getAuthorFullProfileByNameOrEmail, resolveUserAvatar } from "@/lib/userProfiles";
 
@@ -46,10 +46,12 @@ export default function AuthorProfileContent({
 }: AuthorProfileContentProps) {
   const [authorProfile, setAuthorProfile] = useState(author);
   const [articlesList, setArticlesList] = useState<ArticleItem[]>([]);
+  const [mostReadItems, setMostReadItems] = useState<SidebarItem[]>(mostReadSidebar);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoaded, setIsLoaded] = useState(false);
   const [profileVersion, setProfileVersion] = useState(0);
   const { articles: liveArticles } = useLiveArticles();
+  const { adSlots } = useLiveAdSlots();
   const auth = useAuth();
 
   useEffect(() => {
@@ -151,7 +153,7 @@ export default function AuthorProfileContent({
 
           return {
             category: (post.category || "BUSINESS").toUpperCase(),
-            href: `/${cat}/general/${articleSlug}?id=${post.id}`,
+            href: `/${cat}/${articleSlug}`,
             title: post.title,
             desc: post.summary || (post.content || "").replace(/<[^>]*>?/gm, "").slice(0, 160) + "...",
             date: post.date ? post.date.toUpperCase() : "AUG 2026",
@@ -176,6 +178,45 @@ export default function AuthorProfileContent({
       }
 
       setArticlesList(mappedArticles);
+
+      // 4. Compute MOST READ stories for THIS AUTHOR (sorted by views descending, top views at top)
+      const getArticleReads = (a: any): number => {
+        if (!a) return 0;
+        const v = a.reads_count ?? a.views ?? a.reads ?? (typeof a.views === "string" ? parseInt(a.views, 10) : 0) ?? 0;
+        const num = typeof v === "number" ? v : parseInt(String(v).replace(/[^0-9]/g, ""), 10);
+        return isNaN(num) ? 0 : num;
+      };
+
+      const candidateArticles = publishedByAuthor.length > 0 ? [...publishedByAuthor] : [...initialArticles];
+      
+      // Sort in strict descending order of view count: Highest views at top (Rank 1), lowest at bottom
+      candidateArticles.sort((a, b) => getArticleReads(b) - getArticleReads(a));
+
+      const computedMostRead: SidebarItem[] = candidateArticles.slice(0, 5).map((post, idx) => {
+        const cat = (post.category || (post as any).category_name || "news").toLowerCase();
+        const articleSlug = (post.slug || post.title || "")
+          .toLowerCase()
+          .replace(/[^a-z0-9\s-]/g, "")
+          .trim()
+          .replace(/\s+/g, "-");
+        const count = getArticleReads(post);
+        const viewText = `${count.toLocaleString()} ${count === 1 ? 'view' : 'views'}`;
+        const href = post.href || `/${cat}/${articleSlug}${post.id ? `?id=${post.id}` : ''}`;
+
+        return {
+          rank: idx + 1,
+          href,
+          title: post.title,
+          views: viewText
+        };
+      });
+
+      if (computedMostRead.length > 0) {
+        setMostReadItems(computedMostRead);
+      } else {
+        setMostReadItems(mostReadSidebar);
+      }
+
       setIsLoaded(true);
     } catch (e) {
       console.warn("Could not load dynamic author profile and published articles:", e);
@@ -240,8 +281,19 @@ export default function AuthorProfileContent({
         {/* Author / Writer Bio Header Card */}
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 pb-8 mb-8 border-b border-zinc-200 py-2">
           {/* Writer Profile Image */}
-          <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden bg-gray-200 flex-shrink-0 border-2 border-[#BF1E2D] shadow-md">
-            <img src={authorProfile.avatar} alt={authorProfile.name} className="w-full h-full object-cover" />
+          <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden bg-[#1E293B] text-white flex items-center justify-center font-bold text-2xl flex-shrink-0 border-2 border-[#BF1E2D] shadow-md">
+            {authorProfile.avatar && authorProfile.avatar.trim().length > 0 ? (
+              <img
+                src={authorProfile.avatar}
+                alt={authorProfile.name}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.src = "/author_bluesuit.jpg";
+                }}
+              />
+            ) : (
+              <span>{(authorProfile.name || "AU").slice(0, 2).toUpperCase()}</span>
+            )}
           </div>
 
           <div className="flex flex-col text-center sm:text-left flex-1">
@@ -276,9 +328,12 @@ export default function AuthorProfileContent({
                   {/* Thumbnail Image */}
                   <Link href={article.href} className="relative w-full sm:w-[220px] h-[180px] sm:h-[140px] flex-shrink-0 overflow-hidden bg-gray-100 rounded-lg border border-zinc-200 block">
                     <img
-                      src={article.image}
+                      src={article.image && article.image.trim().length > 0 ? article.image : "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=600&h=350&fit=crop"}
                       alt={article.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      onError={(e) => {
+                        e.currentTarget.src = "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=600&h=350&fit=crop";
+                      }}
                     />
                   </Link>
 
@@ -307,12 +362,19 @@ export default function AuthorProfileContent({
                       return (
                         <div className="flex items-center gap-2.5 mt-auto pt-1">
                           {/* Writer Profile Image Thumbnail */}
-                          <div className="w-7 h-7 rounded-full overflow-hidden border border-zinc-300 flex-shrink-0 bg-slate-200 shadow-xs">
-                            <img
-                              src={displayItemAvatar}
-                              alt={cardAuthorName}
-                              className="w-full h-full object-cover"
-                            />
+                          <div className="w-7 h-7 rounded-full overflow-hidden border border-zinc-300 flex-shrink-0 bg-slate-200 shadow-xs flex items-center justify-center text-[9px] font-bold text-slate-700">
+                            {displayItemAvatar && displayItemAvatar.trim().length > 0 ? (
+                              <img
+                                src={displayItemAvatar}
+                                alt={cardAuthorName}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.currentTarget.src = "/author_bluesuit.jpg";
+                                }}
+                              />
+                            ) : (
+                              <span>{(cardAuthorName || "AU").slice(0, 2).toUpperCase()}</span>
+                            )}
                           </div>
                           {/* Writer Name & Publication Date */}
                           <div className="flex items-center gap-1.5 text-[11.5px] font-semibold text-slate-700 font-sans">
@@ -395,10 +457,10 @@ export default function AuthorProfileContent({
               </div>
 
               <div className="space-y-4">
-                {mostReadSidebar.map((item, idx) => (
+                {mostReadItems.map((item, idx) => (
                   <div key={`mostread-${idx}-${item.rank || item.title}`} className="flex gap-3 items-start border-b border-zinc-100 pb-3 last:border-none group cursor-pointer">
                     <span className="text-[20px] font-serif font-bold text-zinc-300 group-hover:text-[#BF1E2D] leading-none pt-0.5">
-                      {item.rank}
+                      {idx + 1}
                     </span>
                     <div className="flex flex-col">
                       <Link href={item.href} className="font-serif text-[12.5px] font-bold text-slate-900 leading-snug hover:text-[#BF1E2D] transition-colors mb-1 block">
@@ -411,24 +473,62 @@ export default function AuthorProfileContent({
               </div>
             </div>
 
-            {/* Sponsored Editorial Ad Card */}
-            <div className="relative w-full aspect-[4/3] bg-zinc-900 rounded-xl overflow-hidden shadow-md flex items-end p-6 cursor-pointer group">
-              <img
-                src="https://images.unsplash.com/photo-1509631179647-0177331693ae?w=600&h=450&fit=crop"
-                alt="Luxury Fashion Editorial"
-                className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-500"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent"></div>
+            {/* Sponsored Editorial Ad Card (Slot 6) */}
+            {(() => {
+              const authorAdSlot = adSlots.find(s => s.id === "slot-6" || s.categoryGroup === "AUTHOR" || s.title.includes("Author Profile"));
+              if (!authorAdSlot || !authorAdSlot.isActive) return null;
+              const authorDimensions = formatAdDimensions(authorAdSlot.dimensions || "300X250");
+              const hasAuthorImage =
+                authorAdSlot.imageUrl &&
+                authorAdSlot.imageUrl.trim() !== "" &&
+                !isDuplicateAdImage(authorAdSlot.imageUrl, authorAdSlot.id, adSlots);
+              const isExternal = (authorAdSlot.actionType || "").toLowerCase().includes("external") || (authorAdSlot.targetUrl || "").startsWith("http");
 
-              <div className="relative z-10 text-white font-serif">
-                <p className="text-[22px] font-bold tracking-[2px] uppercase leading-tight mb-1">
-                  LOUIS VUITTON
-                </p>
-                <p className="text-[10px] uppercase tracking-[1px] text-zinc-300 font-sans">
-                  Le Monogram, Transcending Generations Since 1896
-                </p>
-              </div>
-            </div>
+              if (hasAuthorImage) {
+                return (
+                  <a
+                    href={authorAdSlot.targetUrl || "#"}
+                    target={isExternal ? "_blank" : "_self"}
+                    rel={isExternal ? "noopener noreferrer" : undefined}
+                    className="relative w-full aspect-[4/3] bg-zinc-900 rounded-xl overflow-hidden shadow-md flex items-end p-6 cursor-pointer group block"
+                  >
+                    <img
+                      src={authorAdSlot.imageUrl}
+                      alt={authorAdSlot.title || "Sponsor Ad"}
+                      className="absolute inset-0 w-full h-full object-cover opacity-85 group-hover:scale-105 transition-transform duration-500"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent"></div>
+
+                    <div className="absolute top-3 left-3 bg-black/80 backdrop-blur-xs px-2 py-0.5 text-[9px] font-mono tracking-widest uppercase text-white border border-white/10 rounded-xs">
+                      Advertisement
+                    </div>
+
+                    <div className="relative z-10 text-white font-serif">
+                      <p className="text-[20px] font-bold tracking-[2px] uppercase leading-tight mb-1">
+                        {authorAdSlot.title ? authorAdSlot.title.replace(/^Author Profile Pages —\s*/i, "").replace(/Ad Box/i, "").trim() || "SPONSORED" : "SPONSORED"}
+                      </p>
+                      <p className="text-[10px] uppercase tracking-[1px] text-zinc-300 font-sans">
+                        {authorAdSlot.description || "Official Partner Sponsor"}
+                      </p>
+                    </div>
+                  </a>
+                );
+              }
+
+              return (
+                <div className="relative w-full aspect-[4/3] bg-[#111827] border border-dashed border-gray-700 rounded-xl overflow-hidden shadow-md flex flex-col items-center justify-center p-6 text-center">
+                  <span className="text-[10px] font-mono tracking-widest uppercase text-[#D31220] font-bold mb-2">
+                    ADVERTISEMENT
+                  </span>
+                  <span className="text-white font-mono font-bold text-base tracking-widest">
+                    {authorDimensions}
+                  </span>
+                  <span className="text-[11px] font-mono text-gray-400 mt-2">
+                    Size: {authorDimensions} px
+                  </span>
+                </div>
+              );
+            })()}
 
           </div>
 

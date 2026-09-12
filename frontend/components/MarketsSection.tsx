@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesCategory } from "@/lib/articlesSync";
+import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesMainCategory } from "@/lib/articlesSync";
 
 const FALLBACK_MARKET_ARTICLES = [
   {
@@ -39,6 +39,10 @@ export default function MarketsSection() {
 
   const getArticleTimestamp = (item: any): number => {
     if (!item) return 0;
+    if (item.updatedAt || item.updated_at) {
+      const t = new Date(item.updatedAt || item.updated_at).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
     if (item.published_at || item.publishedAt) {
       const t = new Date(item.published_at || item.publishedAt).getTime();
       if (!isNaN(t) && t > 0) return t;
@@ -66,8 +70,7 @@ export default function MarketsSection() {
 
   const marketsLive = (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
     if (!art || (art.status || "").toLowerCase() !== "published") return false;
-    if (isTopPlacementArticle(art)) return false;
-    return articleMatchesCategory(art, "markets");
+    return articleMatchesMainCategory(art, "markets") || (art.category || "").toLowerCase().includes("market");
   });
 
   marketsLive.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
@@ -77,15 +80,17 @@ export default function MarketsSection() {
     title: a.title,
     description: a.description || a.summary || "",
     image: a.imageUrl || a.image || "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=500&h=350&fit=crop",
-    href: `/${(a.category || "news").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}?id=${a.id}`
+    href: `/${(a.category || "news").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}`
   }));
 
-  const displayArticles = [
-    ...mappedLive,
-    ...FALLBACK_MARKET_ARTICLES.filter(
-      (fb) => !mappedLive.some((m) => m.title.toLowerCase().trim() === fb.title.toLowerCase().trim())
-    )
-  ].slice(0, 4);
+  const displayArticles = mappedLive.length >= 4
+    ? mappedLive.slice(0, 4)
+    : [
+        ...mappedLive,
+        ...FALLBACK_MARKET_ARTICLES.filter(
+          (fb) => !mappedLive.some((m) => m.title.toLowerCase().trim() === fb.title.toLowerCase().trim())
+        )
+      ].slice(0, 4);
 
   return (
     <section className="max-w-[1400px] mx-auto px-4 md:px-6 py-10 border-b border-gray-200 font-sans">

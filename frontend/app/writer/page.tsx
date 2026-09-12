@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { convertToWebP } from "@/lib/imageUtils";
+import { useRouter, useSearchParams } from "next/navigation";
+import { convertToWebP, uploadImageToBackblaze } from "@/lib/imageUtils";
 import {
   ArrowLeft,
   ChevronDown,
@@ -30,9 +30,10 @@ import {
   MessageSquare,
   ArrowRight
 } from "lucide-react";
-import { saveUserProfile, getUserProfile, resolveUserAvatar } from "@/lib/userProfiles";
+import { saveUserProfile, getUserProfile, resolveUserAvatar, isUploadedAvatar } from "@/lib/userProfiles";
 import { useLiveArticles, moveArticleToTrashOnServer, deletePermanentlyOnServer, setCachedArticles } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
+import LogoLoader from "@/components/LogoLoader";
 
 interface ArticlePost {
   id: string;
@@ -61,6 +62,7 @@ interface ArticlePost {
 
 export default function WriterDashboardPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role?: string; avatar?: string } | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -74,10 +76,8 @@ export default function WriterDashboardPage() {
 
   useEffect(() => {
     const handleTabSync = () => {
-      if (typeof window === "undefined") return;
-      const params = new URLSearchParams(window.location.search);
-      const tabParam = params.get("tab")?.toLowerCase();
-      const savedTab = localStorage.getItem("dj_active_tab");
+      const tabParam = (searchParams?.get("tab") || (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null))?.toLowerCase();
+      const savedTab = typeof window !== "undefined" ? localStorage.getItem("dj_active_tab") : null;
       if (tabParam === "pending" || tabParam === "pending review" || tabParam === "review" || savedTab === "Pending review") {
         setActiveTab("Pending review");
         try { localStorage.removeItem("dj_active_tab"); } catch (e) {}
@@ -97,9 +97,11 @@ export default function WriterDashboardPage() {
     };
 
     handleTabSync();
-    window.addEventListener("dj_articles_updated", handleTabSync);
-    return () => window.removeEventListener("dj_articles_updated", handleTabSync);
-  }, []);
+    if (typeof window !== "undefined") {
+      window.addEventListener("dj_articles_updated", handleTabSync);
+      return () => window.removeEventListener("dj_articles_updated", handleTabSync);
+    }
+  }, [searchParams]);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [previewArticle, setPreviewArticle] = useState<ArticlePost | null>(null);
@@ -134,7 +136,7 @@ export default function WriterDashboardPage() {
       setProfileName(currentUser.name || "rushdhi");
       setProfileBio((currentUser as any).bio || "Writer User");
       setProfileLinkedin((currentUser as any).linkedin || "https://www.linkedin.com/in/your-profile");
-      setProfileAvatar(currentUser.avatar || "/author_bluesuit.jpg");
+      setProfileAvatar(currentUser.avatar && isUploadedAvatar(currentUser.avatar) ? currentUser.avatar : "");
     }
   }, [currentUser, isProfileSettingsOpen]);
 
@@ -153,11 +155,34 @@ export default function WriterDashboardPage() {
         };
         reader.readAsDataURL(file);
       }
+
+      // Upload directly to Backblaze B2 in "avatars" folder
+      try {
+        const cleanName = (currentUser?.name || currentUser?.email?.split("@")[0] || "writer").toLowerCase().replace(/[^a-z0-9]/g, "-");
+        const b2Url = await uploadImageToBackblaze(file, `avatar-${cleanName}-${Date.now()}.webp`, "avatars");
+        if (b2Url && b2Url.startsWith("http")) {
+          setProfileAvatar(b2Url);
+        }
+      } catch (err) {
+        console.warn("Backblaze avatar upload warning:", err);
+      }
     }
   };
 
-  const handleSaveWriterProfileSettings = (e: React.FormEvent) => {
+  const handleSaveWriterProfileSettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    let finalAvatar = profileAvatar && isUploadedAvatar(profileAvatar) ? profileAvatar : "";
+
+    if (finalAvatar && finalAvatar.startsWith("data:")) {
+      try {
+        const cleanName = (profileName || "writer").toLowerCase().replace(/[^a-z0-9]/g, "-");
+        const b2Url = await uploadImageToBackblaze(finalAvatar, `avatar-${cleanName}-${Date.now()}.webp`, "avatars");
+        if (b2Url && b2Url.startsWith("http")) {
+          finalAvatar = b2Url;
+        }
+      } catch (e) {}
+    }
+
     const updatedUser = {
       ...currentUser,
       name: profileName.trim() || "rushdhi",
@@ -165,7 +190,7 @@ export default function WriterDashboardPage() {
       role: currentUser?.role || "Writer",
       bio: profileBio.trim(),
       linkedin: profileLinkedin.trim(),
-      avatar: profileAvatar || "/author_bluesuit.jpg"
+      avatar: finalAvatar
     };
 
     setCurrentUser(updatedUser);
@@ -185,19 +210,28 @@ export default function WriterDashboardPage() {
       const liveList: any[] = Array.isArray(liveArticles) ? liveArticles : [];
 
       const cleanKey = (val: any) => String(val || "").trim().toLowerCase();
-      const normalizeTitle = (t: any) => String(t || "").trim().toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ');
+      const normalizeTitle = (t: any) =>
+        String(t || "")
+          .toLowerCase()
+          .replace(/[\u2018\u2019\u201A\u201B']/g, "'")
+          .replace(/[\u201C\u201D\u201E\u201F"]/g, '"')
+          .replace(/[\u2013\u2014]/g, "-")
+          .replace(/[^\w\s-]/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
 
       const mergedMap = new Map<string, any>();
-      // 1. Add server articles
-      liveList.forEach((item) => {
+
+      // 1. Add local submissions first
+      localArticles.forEach((item) => {
         const idKey = cleanKey(item.id);
         const titleKey = normalizeTitle(item.title);
         if (idKey) mergedMap.set(idKey, item);
         if (titleKey) mergedMap.set(`t_${titleKey}`, item);
       });
 
-      // 2. Overlay local articles with 100% priority
-      localArticles.forEach((item) => {
+      // 2. Overlay server database articles with latest status
+      liveList.forEach((item) => {
         const idKey = cleanKey(item.id);
         const titleKey = normalizeTitle(item.title);
         const existing = (idKey && mergedMap.get(idKey)) || (titleKey && mergedMap.get(`t_${titleKey}`)) || {};
@@ -206,42 +240,59 @@ export default function WriterDashboardPage() {
         if (titleKey) mergedMap.set(`t_${titleKey}`, merged);
       });
 
+      // 3. Keep recent local submissions (e.g. newly submitted for review)
+      localArticles.forEach((item) => {
+        const idKey = cleanKey(item.id);
+        const titleKey = normalizeTitle(item.title);
+        if (item.status === "Pending review" || item.status === "Draft") {
+          const existing = (idKey && mergedMap.get(idKey)) || (titleKey && mergedMap.get(`t_${titleKey}`));
+          if (existing && existing.status !== item.status && (!item.updated_at || !existing.updated_at || new Date(item.updated_at) >= new Date(existing.updated_at))) {
+            const merged = { ...existing, ...item };
+            if (idKey) mergedMap.set(idKey, merged);
+            if (titleKey) mergedMap.set(`t_${titleKey}`, merged);
+          }
+        }
+      });
+
       const uniqueList: any[] = [];
-      const seenIds = new Set<string>();
-      const seenTitles = new Set<string>();
+      const seenKeys = new Set<string>();
 
       // Local articles first
       localArticles.forEach((item) => {
         const idKey = cleanKey(item.id);
         const titleKey = normalizeTitle(item.title);
-        const isSeen = (idKey && seenIds.has(idKey)) || (titleKey && seenTitles.has(titleKey));
+        const isSeen = (idKey && seenKeys.has(idKey)) || (titleKey && seenKeys.has(`t_${titleKey}`));
         if (!isSeen) {
-          if (idKey) seenIds.add(idKey);
-          if (titleKey) seenTitles.add(titleKey);
+          if (idKey) seenKeys.add(idKey);
+          if (titleKey) seenKeys.add(`t_${titleKey}`);
           const resolved = (idKey && mergedMap.get(idKey)) || (titleKey && mergedMap.get(`t_${titleKey}`)) || item;
           uniqueList.push(resolved);
         }
       });
 
-      // Remaining live articles
+      // Server articles
       liveList.forEach((item) => {
         const idKey = cleanKey(item.id);
         const titleKey = normalizeTitle(item.title);
-        const isSeen = (idKey && seenIds.has(idKey)) || (titleKey && seenTitles.has(titleKey));
+        const isSeen = (idKey && seenKeys.has(idKey)) || (titleKey && seenKeys.has(`t_${titleKey}`));
         if (!isSeen) {
-          if (idKey) seenIds.add(idKey);
-          if (titleKey) seenTitles.add(titleKey);
+          if (idKey) seenKeys.add(idKey);
+          if (titleKey) seenKeys.add(`t_${titleKey}`);
           const resolved = (idKey && mergedMap.get(idKey)) || (titleKey && mergedMap.get(`t_${titleKey}`)) || item;
           uniqueList.push(resolved);
         }
       });
 
-      setPosts(uniqueList as any);
+      setPosts((prev) => {
+        if (uniqueList.length > 0) return uniqueList as any;
+        if (prev && prev.length > 0) return prev;
+        return [];
+      });
       return;
     } catch (e) {}
 
-    if (Array.isArray(liveArticles)) {
-      setPosts(liveArticles as any);
+    if (Array.isArray(liveArticles) && liveArticles.length > 0) {
+      setPosts((prev) => (liveArticles.length > 0 ? (liveArticles as any) : prev));
     }
   }, [liveArticles]);
 
@@ -365,7 +416,7 @@ export default function WriterDashboardPage() {
       category: category,
       summary: summary.trim() || title.trim(),
       content: content.trim(),
-      imageUrl: imageUrl.trim() || "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=600&h=350&fit=crop",
+      imageUrl: imageUrl.trim() || "",
       status: postStatus,
       date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
       reads: 0,
@@ -438,7 +489,7 @@ export default function WriterDashboardPage() {
     } catch (e) {}
   };
 
-  const handleUpdateWriterPassword = (e: React.FormEvent) => {
+  const handleUpdateWriterPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setProfileMsg("");
     setProfileError("");
@@ -451,15 +502,32 @@ export default function WriterDashboardPage() {
       setProfileError("❌ New password and confirmation do not match!");
       return;
     }
-    if (newPasswordInput.length < 4) {
-      setProfileError("❌ New password must be at least 4 characters long.");
+    if (newPasswordInput.length < 6) {
+      setProfileError("❌ New password must be at least 6 characters long.");
       return;
     }
 
-    setProfileMsg("🎉 Account password updated successfully!");
-    setCurrentPasswordInput("");
-    setNewPasswordInput("");
-    setConfirmPasswordInput("");
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword: currentPasswordInput.trim(),
+          newPassword: newPasswordInput.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setProfileError(data.error || "Failed to update password.");
+        return;
+      }
+      setProfileMsg("🎉 Account password updated successfully!");
+      setCurrentPasswordInput("");
+      setNewPasswordInput("");
+      setConfirmPasswordInput("");
+    } catch (err: any) {
+      setProfileError(err.message || "Network error updating password.");
+    }
   };
 
   const handleLogout = async () => {
@@ -478,8 +546,119 @@ export default function WriterDashboardPage() {
   };
 
   // Helper function to check if post belongs to the currently logged-in writer account
-  const isPostVisibleInStudio = (_post: ArticlePost) => {
-    return true;
+  const isPostVisibleInStudio = (post: ArticlePost) => {
+    if (!post) return false;
+
+    const uRole = (currentUser?.role || auth.user?.role || "").toLowerCase();
+    if (uRole === "admin" || uRole === "co-admin" || uRole === "editor") {
+      return true;
+    }
+
+    let userEmail = (currentUser?.email || auth.user?.email || "").trim().toLowerCase();
+    let userName = (currentUser?.name || auth.user?.name || "").trim().toLowerCase();
+
+    if (!userEmail && !userName && typeof window !== "undefined") {
+      try {
+        const tabSession = sessionStorage.getItem("dj_tab_session");
+        if (tabSession) {
+          const parsed = JSON.parse(tabSession);
+          userEmail = (parsed.email || "").trim().toLowerCase();
+          userName = (parsed.name || "").trim().toLowerCase();
+        }
+      } catch (e) {}
+      if (!userEmail && !userName) {
+        try {
+          const userStr = localStorage.getItem("dj_writer_user") || localStorage.getItem("dj_user");
+          if (userStr) {
+            const parsed = JSON.parse(userStr);
+            userEmail = (parsed.email || "").trim().toLowerCase();
+            userName = (parsed.name || "").trim().toLowerCase();
+          }
+        } catch (e) {}
+      }
+    }
+
+    if (!userEmail && !userName) return false;
+
+    // Check if post was directly submitted or edited in this writer's local queue
+    if (typeof window !== "undefined") {
+      try {
+        const subsStr = localStorage.getItem("dj_writer_submitted_articles");
+        if (subsStr) {
+          const parsed = JSON.parse(subsStr);
+          if (Array.isArray(parsed)) {
+            const pId = String(post.id || "");
+            const pTitle = String(post.title || "").toLowerCase().replace(/[^\w\s-]/g, '').trim();
+            const pSlug = String(post.slug || "").toLowerCase().trim();
+            const foundInLocal = parsed.some(
+              (p: any) =>
+                (pId && String(p.id) === pId) ||
+                (pTitle && String(p.title || "").toLowerCase().replace(/[^\w\s-]/g, '').trim() === pTitle) ||
+                (pSlug && String(p.slug || "").toLowerCase().trim() === pSlug) ||
+                (p.original_title && String(p.original_title).toLowerCase().replace(/[^\w\s-]/g, '').trim() === pTitle)
+            );
+            if (foundInLocal) return true;
+          }
+        }
+      } catch (e) {}
+    }
+
+    const postEmail = (post.authorEmail || (post as any).author_email || "").trim().toLowerCase();
+    const postName = (post.authorName || (post as any).author_name || (post as any).author || "").trim().toLowerCase();
+
+    // 1. Match by Email
+    if (userEmail && postEmail && userEmail === postEmail) {
+      return true;
+    }
+
+    // 2. Match by Name (exact or normalized alphanumeric)
+    if (userName && postName) {
+      if (userName === postName) return true;
+      const cleanU = userName.replace(/[^a-z0-9]/g, "");
+      const cleanP = postName.replace(/[^a-z0-9]/g, "");
+      if (cleanU && cleanP && cleanU === cleanP) return true;
+    }
+
+    // 3. Match by email username prefix
+    if (userEmail && postEmail) {
+      const uPrefix = userEmail.split("@")[0].replace(/[^a-z0-9]/g, "");
+      const pPrefix = postEmail.split("@")[0].replace(/[^a-z0-9]/g, "");
+      if (uPrefix && pPrefix && uPrefix === pPrefix) return true;
+    }
+
+    // 4. Match if user name corresponds to author email prefix
+    if (userName && postEmail) {
+      const pPrefix = postEmail.split("@")[0].replace(/[^a-z0-9]/g, "");
+      const cleanU = userName.replace(/[^a-z0-9]/g, "");
+      if (cleanU && pPrefix && cleanU === pPrefix) return true;
+    }
+
+    // 5. Match by known author alias groups
+    const isMubaUser = userEmail === "rura@gmail.com" || userName.includes("muba");
+    const isMubaPost = postEmail === "rura@gmail.com" || postName.includes("muba");
+    if (isMubaUser && isMubaPost) return true;
+
+    const isRoomiUser = userEmail.includes("roomi") || userName.includes("roomi");
+    const isRoomiPost = postEmail.includes("roomi") || postName.includes("roomi");
+    if (isRoomiUser && isRoomiPost) return true;
+
+    const isRushdhiUser = userEmail.includes("rushdhi") || userName.includes("rushdhi");
+    const isRushdhiPost = postEmail.includes("rushdhi") || postName.includes("rushdhi");
+    if (isRushdhiUser && isRushdhiPost) return true;
+
+    // 6. Generic/default writer fallback matching
+    if (
+      postEmail === "writer@digitaljournal.com" ||
+      postEmail === "writer@londonbigben.com" ||
+      postName === "writer" ||
+      postName === "staff journalist" ||
+      postName === "london bigben writer" ||
+      postName === "digital journal writer"
+    ) {
+      return true;
+    }
+
+    return false;
   };
 
   // Filter posts based on active tab, search query, and writer account ownership
@@ -502,8 +681,12 @@ export default function WriterDashboardPage() {
     return matchesTab && matchesSearch;
   });
 
+  if (isLoading) {
+    return <LogoLoader text="Verifying Writer Access..." theme="dark" fullScreen={true} />;
+  }
+
   // Security Lock Screen
-  if (!isLoading && !isAuthenticated) {
+  if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 font-sans text-white">
         <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl text-center">
@@ -591,12 +774,16 @@ export default function WriterDashboardPage() {
             onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
             className="flex items-center gap-2.5 border border-gray-200/90 rounded-full pl-1.5 pr-3 py-1 bg-white hover:bg-gray-50 transition-colors cursor-pointer shadow-xs"
           >
-            <div className="w-7 h-7 rounded-full overflow-hidden border border-gray-200 shrink-0">
-              <img
-                src={currentUser?.avatar || "/author_bluesuit.jpg"}
-                alt={currentUser?.name || "rushdhi"}
-                className="w-full h-full object-cover rounded-full"
-              />
+            <div className="w-7 h-7 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center">
+              {currentUser?.avatar && isUploadedAvatar(currentUser.avatar) ? (
+                <img
+                  src={currentUser.avatar}
+                  alt={currentUser?.name || "rushdhi"}
+                  className="w-full h-full object-cover rounded-full"
+                />
+              ) : (
+                <User className="w-4 h-4 text-gray-400" />
+              )}
             </div>
             <span className="text-xs font-semibold text-gray-800">
               {currentUser?.name || "rushdhi"}
@@ -902,14 +1089,16 @@ export default function WriterDashboardPage() {
                                   </button>
                                 )}
 
-                                <button
-                                  onClick={() => handleEditPost(post)}
-                                  className="px-2.5 py-1 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
-                                  title="Edit post"
-                                >
-                                  <PenTool size={13} />
-                                  Edit
-                                </button>
+                                {post.status !== "Trash" && post.status?.toLowerCase() !== "trash" && (
+                                  <button
+                                    onClick={() => handleEditPost(post)}
+                                    className="px-2.5 py-1 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
+                                    title="Edit post"
+                                  >
+                                    <PenTool size={13} />
+                                    Edit
+                                  </button>
+                                )}
 
                                 {post.status === "Trash" ? (
                                   <>
@@ -1237,11 +1426,17 @@ export default function WriterDashboardPage() {
 
             {/* Avatar & Photo Section */}
             <div className="flex items-center gap-4 px-6 pt-6 pb-2">
-              <img
-                src={profileAvatar || currentUser?.avatar || "/author_bluesuit.jpg"}
-                alt={profileName || "rushdhi"}
-                className="w-16 h-16 rounded-2xl object-cover border border-gray-200 shadow-xs flex-shrink-0"
-              />
+              {(profileAvatar && isUploadedAvatar(profileAvatar)) || (currentUser?.avatar && isUploadedAvatar(currentUser.avatar)) ? (
+                <img
+                  src={profileAvatar || currentUser?.avatar}
+                  alt={profileName || "rushdhi"}
+                  className="w-16 h-16 rounded-2xl object-cover border border-gray-200 shadow-xs flex-shrink-0"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-2xl border border-gray-200 bg-gray-100 flex items-center justify-center flex-shrink-0">
+                  <User className="w-7 h-7 text-gray-400" />
+                </div>
+              )}
 
               <div>
                 <label className="text-blue-600 font-semibold text-xs sm:text-sm hover:underline cursor-pointer block">

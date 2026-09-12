@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useLiveArticles, useLiveAdSlots, ArticleItem, isTopPlacementArticle, articleMatchesCategory } from "@/lib/articlesSync";
+import { useLiveArticles, useLiveAdSlots, ArticleItem, isTopPlacementArticle, articleMatchesMainCategory, formatAdDimensions, isDuplicateAdImage } from "@/lib/articlesSync";
 
 const FALLBACK_BUSINESS_BOTTOM = [
   {
@@ -43,6 +43,10 @@ export default function BusinessGrid() {
 
   const getArticleTimestamp = (item: any): number => {
     if (!item) return 0;
+    if (item.updatedAt || item.updated_at) {
+      const t = new Date(item.updatedAt || item.updated_at).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
     if (item.published_at || item.publishedAt) {
       const t = new Date(item.published_at || item.publishedAt).getTime();
       if (!isNaN(t) && t > 0) return t;
@@ -70,8 +74,7 @@ export default function BusinessGrid() {
 
   const businessLive = (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
     if (!art || (art.status || "").toLowerCase() !== "published") return false;
-    if (isTopPlacementArticle(art)) return false;
-    return articleMatchesCategory(art, "business");
+    return articleMatchesMainCategory(art, "business") || (art.category || "").toLowerCase().includes("biz") || (art.category || "").toLowerCase().includes("business");
   });
 
   // Sort chronological descending: Newest article first
@@ -100,10 +103,19 @@ export default function BusinessGrid() {
     href: `/business/${a.slug || String(a.id)}`
   }));
 
-  const bottomCards = [...userBottomArticles, ...FALLBACK_BUSINESS_BOTTOM].slice(0, 4);
+  const bottomCards = userBottomArticles.length >= 4
+    ? userBottomArticles.slice(0, 4)
+    : [...userBottomArticles, ...FALLBACK_BUSINESS_BOTTOM].slice(0, 4);
 
   const { adSlots } = useLiveAdSlots();
   const businessAdSlot = adSlots.find(s => s.id === "slot-3" || s.title.includes("Business Section Top-Right") || s.title.includes("Business Section"));
+  const businessDimensions = formatAdDimensions(businessAdSlot?.dimensions || "300X250");
+  const hasBusinessImage =
+    businessAdSlot &&
+    businessAdSlot.isActive &&
+    businessAdSlot.imageUrl &&
+    businessAdSlot.imageUrl.trim() !== "" &&
+    !isDuplicateAdImage(businessAdSlot.imageUrl, businessAdSlot.id, adSlots);
 
   return (
     <section className="max-w-[1400px] mx-auto px-4 md:px-6 py-8 font-sans">
@@ -156,7 +168,7 @@ export default function BusinessGrid() {
 
         {/* TOP-RIGHT ADVERTISEMENT BOX (1 Column) */}
         <div className="lg:col-span-1 flex flex-col h-full">
-          {businessAdSlot && businessAdSlot.isActive && businessAdSlot.imageUrl ? (
+          {hasBusinessImage && businessAdSlot ? (
             <a
               href={businessAdSlot.targetUrl || "#"}
               target="_blank"
@@ -173,9 +185,15 @@ export default function BusinessGrid() {
               </div>
             </a>
           ) : (
-            <div className="w-full h-full min-h-[220px] aspect-[16/10] lg:aspect-auto bg-black flex items-center justify-center cursor-pointer group hover:bg-neutral-900 transition-colors">
-              <span className="text-white font-bold text-sm tracking-wide">
-                Ad
+            <div className="w-full h-full min-h-[220px] aspect-[16/10] lg:aspect-auto bg-[#111827] border border-dashed border-gray-700 flex flex-col items-center justify-center p-4 text-center">
+              <span className="text-[10px] font-mono tracking-widest uppercase text-[#D31220] font-bold mb-1">
+                ADVERTISEMENT
+              </span>
+              <span className="text-white font-mono font-bold text-sm tracking-widest">
+                {businessDimensions}
+              </span>
+              <span className="text-[10px] font-mono text-gray-400 mt-1">
+                Size: {businessDimensions} px
               </span>
             </div>
           )}

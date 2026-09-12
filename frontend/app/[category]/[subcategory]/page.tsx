@@ -6,12 +6,23 @@ import NewsletterFormCard from '@/components/NewsletterFormCard';
 import FastStartNewsletterBanner from '@/components/FastStartNewsletterBanner';
 import ArticlePageContent from '@/components/ArticlePageContent';
 import Link from 'next/link';
+import { Metadata } from 'next';
+import { generateSocialMetadata } from '@/lib/seoHelper';
 
 interface PageProps {
   params: Promise<{
     category: string;
     subcategory: string;
   }>;
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const resolved = await params;
+  return generateSocialMetadata({
+    category: resolved.category,
+    subcategory: resolved.subcategory,
+    articleSlug: resolved.subcategory,
+  });
 }
 
 const parentConfig: Record<string, { name: string; color: string; desc: string }> = {
@@ -1200,33 +1211,21 @@ const customNewsDatabase: Record<string, {
 };
 
 const authorAvatarMap: Record<string, { avatar: string; bio: string }> = {
-  "April Hicke": {
-    avatar: "/author_glasses.jpg",
-    bio: "April Hicke reports on biotechnology, scientific research, open science initiatives, and artificial intelligence adoption."
+  "Rushdhi MR": {
+    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_bluesuit.jpg",
+    bio: "Founder and Editor-in-Chief for London BigBen covering business strategy, software architecture, emerging technology, and digital transformation."
   },
-  "Pramod Jain": {
-    avatar: "/author_bluesuit.jpg",
-    bio: "Pramod Jain reports on global supply chains, logistics telemetry, enterprise cloud migrations, and emerging technology markets."
+  "Muba_kity": {
+    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_woman.jpg",
+    bio: "Senior technology reporter specializing in enterprise cloud innovations, generative AI systems, and digital ecosystems."
   },
-  "Chris Hogg": {
-    avatar: "/author_beard.jpg",
-    bio: "Chris Hogg is an executive editor specializing in digital transformation, financial technology, and executive leadership strategies."
+  "Roomi": {
+    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_glasses.jpg",
+    bio: "Financial markets and business columnist reporting on corporate developments, macroeconomic indicators, and supply chain telemetry."
   },
-  "Jennifer Friesen": {
-    avatar: "/author_woman.jpg",
-    bio: "Jennifer Friesen is London BigBen's associate editor and Calgary Bureau lead."
-  },
-  "Ronda B": {
-    avatar: "/author_woman.jpg",
-    bio: "Ronda B is a dedicated journalist with a passion for delivering accurate, timely, and impactful news."
-  },
-  "Dr. Andrew Forde": {
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=250&h=250&fit=crop",
-    bio: "Dr. Andrew Forde writes on technological convergence, machine intelligence, and structural policy frameworks."
-  },
-  "David Potter": {
-    avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=250&h=250&fit=crop",
-    bio: "David Potter focuses on software architecture, DevOps tooling, developer metrics, and infrastructure security."
+  "Ruzni": {
+    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_beard.jpg",
+    bio: "Editorial director and investigative journalist focused on governance, regulatory compliance, and cross-border innovation."
   }
 };
 
@@ -1353,14 +1352,14 @@ function getNewsContent(slug: string) {
     : customNewsDatabase[slug];
 
   const title = existing ? existing.title : formatTitleFromSlug(slug);
-  const authorName = existing ? existing.authorName : "Jennifer Friesen";
+  const authorName = existing ? existing.authorName : "Rushdhi MR";
   
   const mappedAuthor = authorAvatarMap[authorName];
   const authorAvatar = existing?.authorAvatar || mappedAuthor?.avatar || (
-    authorName.toLowerCase().includes('hicke') ? "/author_glasses.jpg" :
-    authorName.toLowerCase().includes('jain') ? "/author_bluesuit.jpg" :
-    authorName.toLowerCase().includes('hogg') ? "/author_beard.jpg" :
-    "/author_woman.jpg"
+    authorName.toLowerCase().includes('roomi') ? "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_glasses.jpg" :
+    authorName.toLowerCase().includes('muba') ? "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_woman.jpg" :
+    authorName.toLowerCase().includes('ruzni') ? "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_beard.jpg" :
+    "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_bluesuit.jpg"
   );
   const authorBio = existing?.authorBio || mappedAuthor?.bio || `${authorName} is a dedicated journalist for London BigBen covering breaking news, enterprise technology, and policy developments.`;
 
@@ -1527,7 +1526,7 @@ export default async function SubcategoryPage({ params }: PageProps) {
         title: "Autonomous Fleet Operating Networks Expand Regional Commercial Routes",
         date: "July 20, 2026",
         image: "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=150&h=150&fit=crop",
-        href: "/business/companies/new-exclusive-decoration-design-fit-out-llc-structural-acrylic-pioneers-in-the-uae"
+        href: "/business/new-exclusive-decoration-design-fit-out-llc-structural-acrylic-pioneers-in-the-uae"
       },
       {
         title: "European Tech Ecosystem Accelerates Sovereign Cloud & Quantum Infrastructure",
@@ -1568,7 +1567,7 @@ export default async function SubcategoryPage({ params }: PageProps) {
         desc: "The plane maker plans to increase narrowbody production volumes as it seeks to rebuild trust and address safety audits.",
         date: "By AFP • July 18, 2026",
         image: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=400&h=250&fit=crop",
-        href: "/business/companies/new-exclusive-decoration-design-fit-out-llc-structural-acrylic-pioneers-in-the-uae"
+        href: "/business/new-exclusive-decoration-design-fit-out-llc-structural-acrylic-pioneers-in-the-uae"
       },
       {
         title: "US jury finds Boeing guilty in 737 MAX grounding lawsuit",

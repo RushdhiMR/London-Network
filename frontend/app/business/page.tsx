@@ -1,4 +1,10 @@
 import CategoryPageLayout from '@/components/CategoryPageLayout';
+import { Metadata } from 'next';
+import { generateSocialMetadata } from '@/lib/seoHelper';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return generateSocialMetadata({ category: "business" });
+}
 
 export default function BusinessPage() {
   const featured = {

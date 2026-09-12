@@ -1,5 +1,8 @@
 import CategoryPageLayout from "@/components/CategoryPageLayout";
 import { getCategoryData } from "@/lib/categoryData";
+import SubcategoryPage from "@/app/[category]/[subcategory]/page";
+import { Metadata } from "next";
+import { generateSocialMetadata } from "@/lib/seoHelper";
 
 interface NewsSubcategoryPageProps {
   params: Promise<{
@@ -7,30 +10,37 @@ interface NewsSubcategoryPageProps {
   }>;
 }
 
+export async function generateMetadata({ params }: NewsSubcategoryPageProps): Promise<Metadata> {
+  const resolved = await params;
+  return generateSocialMetadata({
+    category: "news",
+    subcategory: resolved.subcategory,
+    articleSlug: resolved.subcategory,
+  });
+}
+
+const knownNewsSubcategories = [
+  "world", "politics", "economy", "markets", "lifestyle", "sports", "entertainment", "health", "research", "china", "europe", "united-states", "britain", "middle-east", "africa", "asia"
+];
+
 export async function generateStaticParams() {
-  return [
-    { subcategory: "world" },
-    { subcategory: "politics" },
-    { subcategory: "economy" },
-    { subcategory: "markets" },
-    { subcategory: "lifestyle" },
-    { subcategory: "sports" },
-    { subcategory: "entertainment" },
-    { subcategory: "health" },
-    { subcategory: "research" },
-    { subcategory: "china" },
-    { subcategory: "europe" },
-    { subcategory: "united-states" },
-    { subcategory: "britain" },
-    { subcategory: "middle-east" },
-    { subcategory: "africa" },
-    { subcategory: "asia" },
-  ];
+  return knownNewsSubcategories.map((sub) => ({ subcategory: sub }));
 }
 
 export default async function NewsSubcategoryPage({ params }: NewsSubcategoryPageProps) {
   const resolvedParams = await params;
   const subcategorySlug = resolvedParams?.subcategory || "world";
+
+  if (!knownNewsSubcategories.includes(subcategorySlug.toLowerCase())) {
+    // Article page under /news/[article-slug]
+    return SubcategoryPage({
+      params: Promise.resolve({
+        category: "news",
+        subcategory: subcategorySlug
+      })
+    });
+  }
+
   const data = getCategoryData(subcategorySlug);
 
   return (

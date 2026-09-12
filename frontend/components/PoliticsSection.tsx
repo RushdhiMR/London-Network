@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesCategory } from "@/lib/articlesSync";
+import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesMainCategory } from "@/lib/articlesSync";
 
 const FALLBACK_POLITICS_ARTICLES = [
   {
@@ -25,6 +25,10 @@ export default function PoliticsSection() {
 
   const getArticleTimestamp = (item: any): number => {
     if (!item) return 0;
+    if (item.updatedAt || item.updated_at) {
+      const t = new Date(item.updatedAt || item.updated_at).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
     if (item.published_at || item.publishedAt) {
       const t = new Date(item.published_at || item.publishedAt).getTime();
       if (!isNaN(t) && t > 0) return t;
@@ -50,11 +54,10 @@ export default function PoliticsSection() {
     return 0;
   };
 
-  // Filter politics articles (Exclude top placement articles to prevent duplicate news)
+  // Filter politics articles
   const politicsLive = (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
     if (!art || (art.status || "").toLowerCase() !== "published") return false;
-    if (isTopPlacementArticle(art)) return false;
-    return articleMatchesCategory(art, "politics");
+    return articleMatchesMainCategory(art, "politics") || (art.category || "").toLowerCase().includes("politic");
   });
 
   politicsLive.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
@@ -64,7 +67,7 @@ export default function PoliticsSection() {
     title: a.title,
     description: a.description || a.summary || "",
     image: a.imageUrl || a.image || "https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?w=800&h=480&fit=crop",
-    href: `/${(a.category || "news").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}?id=${a.id}`
+    href: `/${(a.category || "news").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}`
   }));
 
   const displayArticles = mappedLive.length >= 2

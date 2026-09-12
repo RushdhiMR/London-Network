@@ -3,9 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import JSZip from "jszip";
 import { useAuth } from "@/lib/auth-context";
 import SEOAssistantPanel from "@/components/SEOAssistantPanel";
+import LogoLoader from "@/components/LogoLoader";
 import { extractFocusKeyword, analyzeSEOScore, generateAutoSEO, extractCardSummary } from "@/lib/seo";
+import { uploadImageToBackblaze } from "@/lib/imageUtils";
 import {
   LayoutDashboard,
   FileText,
@@ -40,6 +43,7 @@ import {
   Radio,
   Edit3,
   X,
+  Menu,
   Check,
   Clock,
   Bell,
@@ -85,6 +89,7 @@ interface WorkspaceUser {
   email: string;
   role: "ADMIN" | "WRITER" | "READER";
   isDefaultAdmin?: boolean;
+  is_default_admin?: boolean | number;
   joinedDate?: string;
   status?: string;
 }
@@ -164,6 +169,8 @@ interface BackupFileItem {
   filename: string;
   date: string;
   fileSize: string;
+  url?: string;
+  storage?: string;
 }
 
 interface Stats {
@@ -233,18 +240,53 @@ function isWorldOrWorldSub(cat: string): boolean {
   return WORLD_SUBCATEGORIES.some((w) => w.toLowerCase().trim() === clean);
 }
 
+function extractCleanTagsList(source: any): string[] {
+  if (!source) return [];
+  const raw = Array.isArray(source)
+    ? source
+    : (source.tags ?? source.hashtags ?? source.hash_tags ?? source.hashTags ?? (source.seo && source.seo.keywords) ?? source.keywords ?? source);
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw
+      .flatMap((t: any) => typeof t === "string" ? t.split(/[\s,]+/) : [])
+      .map((t: string) => t.replace(/^#+/, "").trim())
+      .filter(Boolean);
+  }
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .flatMap((t: any) => typeof t === "string" ? t.split(/[\s,]+/) : [])
+          .map((t: string) => t.replace(/^#+/, "").trim())
+          .filter(Boolean);
+      }
+    } catch (e) {}
+    return raw
+      .split(/[\s,]+/)
+      .map((s: string) => s.replace(/^#+/, "").trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
 export default function AdminDashboardPage() {
   const router = useRouter();
   const auth = useAuth();
-  const [adminUser, setAdminUser] = useState<{ name: string; email: string; role: string } | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [adminUser, setAdminUser] = useState<{ name: string; email: string; role: string } | null>({
+    name: "rushdi admin",
+    email: "admin@digitaljournal.com",
+    role: "Admin"
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(true);
   const [lockPasscode, setLockPasscode] = useState("");
   const [lockError, setLockError] = useState("");
 
   const [activeTab, setActiveTab] = useState<
     "overview" | "newsletter" | "articles" | "users" | "ads" | "contact_submissions" | "advertise_leads" | "backups"
   >("overview");
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const [userSubTab, setUserSubTab] = useState<"ALL" | "ADMINS" | "WRITERS" | "READERS">("ALL");
   const [postSubTab, setPostSubTab] = useState<"published" | "drafts" | "pending" | "rejected" | "trash">("published");
@@ -339,18 +381,7 @@ export default function AdminDashboardPage() {
     setReviewContent(sub.content || "");
     setReviewImageUrl(sub.imageUrl || "https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?w=500&h=300&fit=crop");
 
-    let loadedTags: string[] = [];
-    if (Array.isArray((sub as any).tags)) {
-      loadedTags = (sub as any).tags;
-    } else if (typeof (sub as any).tags === "string") {
-      try {
-        const parsed = JSON.parse((sub as any).tags);
-        if (Array.isArray(parsed)) loadedTags = parsed;
-        else loadedTags = (sub as any).tags.split(",").map((t: string) => t.trim()).filter(Boolean);
-      } catch (e) {
-        loadedTags = (sub as any).tags.split(",").map((t: string) => t.trim()).filter(Boolean);
-      }
-    }
+    const loadedTags = extractCleanTagsList(sub);
     setReviewTags(loadedTags);
     setReviewReadTime(sub.readTime || (sub as any).readDuration || "5 min read");
     setReviewPlacement((sub as any).placement || "None");
@@ -447,6 +478,10 @@ export default function AdminDashboardPage() {
       is_featured: newArt.is_featured,
       is_editors_pick: newArt.is_editors_pick,
       status: "Published",
+      published_at: new Date().toISOString(),
+      publishedAt: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
       seo: {
         metaTitle: reviewSeoTitle,
@@ -502,7 +537,7 @@ export default function AdminDashboardPage() {
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editCategory, setEditCategory] = useState("BUSINESS");
-  const [editAuthor, setEditAuthor] = useState("Jennifer Friesen");
+  const [editAuthor, setEditAuthor] = useState("Rushdhi MR");
   const [editDescription, setEditDescription] = useState("");
 
   // Add & Edit User Modal State
@@ -518,6 +553,7 @@ export default function AdminDashboardPage() {
 
   const [editUserName, setEditUserName] = useState("");
   const [editUserEmail, setEditUserEmail] = useState("");
+  const [editUserPassword, setEditUserPassword] = useState("");
   const [editUserRole, setEditUserRole] = useState<"ADMIN" | "WRITER" | "READER">("WRITER");
 
   // Subscriber Checkboxes state
@@ -564,7 +600,7 @@ export default function AdminDashboardPage() {
       status: "Submitted",
       date: "Aug 11, 2026",
       reads: 0,
-      authorName: "Jennifer Friesen",
+      authorName: "Rushdhi MR",
       readTime: "4 min read"
     },
     {
@@ -577,7 +613,7 @@ export default function AdminDashboardPage() {
       status: "Submitted",
       date: "Aug 10, 2026",
       reads: 0,
-      authorName: "Pramod Jain",
+      authorName: "Muba_kity",
       readTime: "6 min read"
     },
     {
@@ -590,7 +626,7 @@ export default function AdminDashboardPage() {
       status: "Submitted",
       date: "Aug 09, 2026",
       reads: 0,
-      authorName: "David Potter",
+      authorName: "Roomi",
       readTime: "5 min read"
     }
   ];
@@ -601,6 +637,7 @@ export default function AdminDashboardPage() {
     try {
       const nonPendingIds = new Set<string>();
       const nonPendingTitles = new Set<string>();
+      const cleanT = (t: string) => String(t || "").toLowerCase().replace(/[\u2018\u2019\u201A\u201B']/g, "'").replace(/[\u201C\u201D\u201E\u201F"]/g, '"').replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ').trim();
       const subsStr = localStorage.getItem("dj_writer_submitted_articles");
       if (subsStr) {
         const parsed = JSON.parse(subsStr);
@@ -609,25 +646,19 @@ export default function AdminDashboardPage() {
             const st = (p.status || "").toLowerCase().trim();
             if (st === "rejected" || st === "published" || st === "trash" || st === "approved") {
               if (p.id) nonPendingIds.add(String(p.id));
-              if (p.title) nonPendingTitles.add(p.title.trim().toLowerCase());
+              if (p.title) nonPendingTitles.add(cleanT(p.title));
             }
           });
         }
       }
-      return DEFAULT_MOCK_SUBMISSIONS.filter(m => !nonPendingIds.has(String(m.id)) && !nonPendingTitles.has(m.title.trim().toLowerCase()));
+      return DEFAULT_MOCK_SUBMISSIONS.filter(m => !nonPendingIds.has(String(m.id)) && !nonPendingTitles.has(cleanT(m.title)));
     } catch (e) {
       return DEFAULT_MOCK_SUBMISSIONS;
     }
   });
 
   // London BigBen Newsletter Subscribers Roster
-  const [newsletterSubscribers, setNewsletterSubscribers] = useState<SubscriberItem[]>([
-    { id: 1001, email: "reader@digitaljournal.com", topics: ["TECHNOLOGY", "BUSINESS", "MARKETS"], date: "Aug 01, 2026", status: "Active" },
-    { id: 1002, email: "sarah.j@example.com", topics: ["US", "POLITICS", "SPORTS"], date: "Jul 28, 2026", status: "Active" },
-    { id: 1003, email: "mchang@globalfirm.org", topics: ["ECONOMY & MARKETS", "BUSINESS", "CRYPTO"], date: "Jul 20, 2026", status: "Active" },
-    { id: 1004, email: "rtaylor@apex.io", topics: ["TECHNOLOGY", "INNOVATION"], date: "Jul 15, 2026", status: "Active" },
-    { id: 1005, email: "athorne@mit.edu", topics: ["US", "WORLD", "SCIENCE"], date: "Jul 10, 2026", status: "Active" }
-  ]);
+  const [newsletterSubscribers, setNewsletterSubscribers] = useState<SubscriberItem[]>([]);
 
   // London BigBen Published Articles Catalog
   const [articles, setArticles] = useState<Article[]>([
@@ -653,7 +684,7 @@ export default function AdminDashboardPage() {
       slug: "exclusive-saudi-arabia-opens-talks-to-purchase-westinghouse-ap1000-nuclear-reactors",
       description: "Riyadh advances civil nuclear ambitions with high-capacity American reactor tech for clean power generation and desalination.",
       category_name: "BUSINESS",
-      author_name: "Jennifer Friesen",
+      author_name: "Rushdhi MR",
       readTime: "4 min read",
       imageUrl: "https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?w=500&h=300&fit=crop",
       views: 1280,
@@ -669,7 +700,7 @@ export default function AdminDashboardPage() {
       slug: "us-stocks-end-higher-as-sk-hynixs-wall-street-debut-and-metas-ai-momentum-lift-markets",
       description: "Tech rally pushes S&P 500 near record highs as semiconductor demand remains robust across global trading hubs.",
       category_name: "NEWS",
-      author_name: "Pramod Jain",
+      author_name: "Muba_kity",
       readTime: "5 min read",
       imageUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&h=300&fit=crop",
       views: 3890,
@@ -685,7 +716,7 @@ export default function AdminDashboardPage() {
       slug: "tesla-earnings-call-key-focus-robotaxi-progress-low-cost-ev-platform-fsd-v13",
       description: "Investors await updates on autonomous fleet expansion and next-generation vehicle architecture.",
       category_name: "INNOVATION",
-      author_name: "David Potter",
+      author_name: "Roomi",
       readTime: "5 min read",
       imageUrl: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=500&h=300&fit=crop",
       views: 1940,
@@ -701,7 +732,7 @@ export default function AdminDashboardPage() {
       slug: "can-ai-give-reliable-mortgage-advice-we-tested-4-top-ai-bots",
       description: "Evaluating financial accuracy and regulatory compliance of leading generative models.",
       category_name: "INNOVATION",
-      author_name: "April Hicke",
+      author_name: "Rushdhi MR",
       readTime: "4 min read",
       imageUrl: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=500&h=300&fit=crop",
       views: 1120,
@@ -717,7 +748,7 @@ export default function AdminDashboardPage() {
       slug: "global-solar-powered-mobile-medical-units-deployed-in-emergency-response-zones",
       description: "Clean energy mobile clinics deliver off-grid medical care to remote disaster regions.",
       category_name: "INDUSTRY INSIGHTS",
-      author_name: "Chris Hogg",
+      author_name: "Roomi",
       readTime: "5 min read",
       imageUrl: "https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=500&h=300&fit=crop",
       views: 850,
@@ -729,22 +760,28 @@ export default function AdminDashboardPage() {
     }
   ]);
 
-  // London BigBen Workspace Users
+  // London BigBen Workspace Users (Strictly Real Registered Users)
   const [workspaceUsers, setWorkspaceUsers] = useState<WorkspaceUser[]>([
-    { id: 1, name: "System Administrator", email: "admin@digitaljournal.com", role: "ADMIN", isDefaultAdmin: true, joinedDate: "Aug 01, 2026", status: "Active" },
-    { id: 15, name: "Rushdhi", email: "rushdhiwriter@gmail.com", role: "WRITER", joinedDate: "Aug 26, 2026", status: "Active" },
-    { id: 2, name: "Jennifer Friesen", email: "writer@digitaljournal.com", role: "WRITER", joinedDate: "Aug 01, 2026", status: "Active" },
-    { id: 3, name: "Alex Reader", email: "reader@digitaljournal.com", role: "READER", joinedDate: "Aug 01, 2026", status: "Active" },
-    { id: 4, name: "Operations Co-Admin", email: "coadmin@digitaljournal.com", role: "ADMIN", joinedDate: "Aug 01, 2026", status: "Active" },
-    { id: 1786652463802, name: "Roomi", email: "roomi@gmail.com", role: "READER", joinedDate: "Aug 13, 2026", status: "Active" }
+    { id: 2, name: "Rushdhi MR", email: "rushdhiriyaj2005@gmail.com", role: "ADMIN", isDefaultAdmin: true, joinedDate: "Aug 01, 2026", status: "Active" },
+    { id: 9, name: "Rushdhi MR", email: "rushdhiwriter@gmail.com", role: "WRITER", joinedDate: "Aug 26, 2026", status: "Active" },
+    { id: 12, name: "Muba_kity", email: "rura@gmail.com", role: "WRITER", joinedDate: "Aug 31, 2026", status: "Active" },
+    { id: 13, name: "Roomi", email: "roomiwriter@gmail.com", role: "WRITER", joinedDate: "Sep 01, 2026", status: "Active" },
+    { id: 5, name: "Ruzni", email: "ruzni@gmail.com", role: "ADMIN", joinedDate: "Aug 31, 2026", status: "Active" },
+    { id: 7, name: "Roomi", email: "roomi@gmail.com", role: "READER", joinedDate: "Aug 13, 2026", status: "Active" }
   ]);
 
   const isCurrentAdminDefault = Boolean(
-    adminUser?.email === "admin@digitaljournal.com" ||
+    adminUser?.email === "geethliyanage979@gmail.com" ||
+    adminUser?.email === "londonbigben.offical@gmail.com" ||
     adminUser?.email === "akramyoonos006@gmail.com" ||
-    (adminUser as any)?.id === 1 ||
+    adminUser?.email === "rushdhiriyaj2005@gmail.com" ||
     (adminUser as any)?.isDefaultAdmin ||
-    workspaceUsers.find(u => u.email.toLowerCase() === (adminUser?.email || "").toLowerCase())?.isDefaultAdmin
+    (adminUser as any)?.is_default_admin ||
+    workspaceUsers.find(u => u.email.toLowerCase() === (adminUser?.email || auth.user?.email || "").toLowerCase())?.isDefaultAdmin ||
+    workspaceUsers.find(u => u.email.toLowerCase() === (adminUser?.email || auth.user?.email || "").toLowerCase())?.is_default_admin ||
+    (typeof window !== "undefined" && (localStorage.getItem("dj_is_default_admin") === "true" || localStorage.getItem("dj_user_role") === "admin")) ||
+    (auth.user && ((auth.user as any).is_default_admin || (auth.user as any).isDefaultAdmin)) ||
+    (auth.user?.email && ["rushdhiriyaj2005@gmail.com", "geethliyanage979@gmail.com", "londonbigben.offical@gmail.com", "akramyoonos006@gmail.com"].includes(auth.user.email.toLowerCase().trim()))
   );
 
   // Contact Us Submissions State & Interactive Filters
@@ -803,14 +840,34 @@ export default function AdminDashboardPage() {
     }
   ]);
 
-  const handleUpdateContactStatus = (id: string | number, newStatus: any) => {
-    setContactSubmissions(contactSubmissions.map(c => c.id === id ? { ...c, status: newStatus } : c));
+  const handleUpdateContactStatus = async (id: string | number, newStatus: any) => {
+    const updated = contactSubmissions.map(c => c.id === id ? { ...c, status: newStatus } : c);
+    setContactSubmissions(updated);
+    try {
+      localStorage.setItem("dj_contact_submissions", JSON.stringify(updated));
+      await fetch("/api/contact", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status: newStatus })
+      });
+    } catch (e) {
+      console.warn("Update contact status error:", e);
+    }
     showNotification("✓ Contact submission status updated!");
   };
 
-  const handleDeleteContactSubmission = (id: string | number, name: string) => {
+  const handleDeleteContactSubmission = async (id: string | number, name: string) => {
     if (confirm(`Are you sure you want to delete submission from "${name}"?`)) {
-      setContactSubmissions(contactSubmissions.filter(c => c.id !== id));
+      const updated = contactSubmissions.filter(c => c.id !== id);
+      setContactSubmissions(updated);
+      try {
+        localStorage.setItem("dj_contact_submissions", JSON.stringify(updated));
+        await fetch(`/api/contact?id=${encodeURIComponent(id)}`, {
+          method: "DELETE"
+        });
+      } catch (e) {
+        console.warn("Delete contact submission error:", e);
+      }
       showNotification(`Submission from "${name}" deleted.`);
     }
   };
@@ -875,57 +932,126 @@ export default function AdminDashboardPage() {
     }
   ]);
 
-  const handleUpdateLeadStatus = (id: string | number, newStatus: any) => {
-    setAdvertiseLeads(advertiseLeads.map(l => l.id === id ? { ...l, status: newStatus } : l));
+  const handleUpdateLeadStatus = async (id: string | number, newStatus: any) => {
+    const updated = advertiseLeads.map(l => l.id === id ? { ...l, status: newStatus } : l);
+    setAdvertiseLeads(updated);
+    try {
+      localStorage.setItem("dj_advertise_leads", JSON.stringify(updated));
+      await fetch("/api/advertise", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status: newStatus })
+      });
+    } catch (e) {
+      console.warn("Update lead status error:", e);
+    }
     showNotification("✓ Lead status updated!");
   };
 
-  const handleDeleteLead = (id: string | number, name: string) => {
+  const handleDeleteLead = async (id: string | number, name: string) => {
     if (confirm(`Are you sure you want to delete lead from "${name}"?`)) {
-      setAdvertiseLeads(advertiseLeads.filter(l => l.id !== id));
+      const updated = advertiseLeads.filter(l => l.id !== id);
+      setAdvertiseLeads(updated);
+      try {
+        localStorage.setItem("dj_advertise_leads", JSON.stringify(updated));
+        await fetch(`/api/advertise?id=${encodeURIComponent(id)}`, {
+          method: "DELETE"
+        });
+      } catch (e) {
+        console.warn("Delete lead error:", e);
+      }
       showNotification(`Lead from "${name}" removed.`);
     }
   };
 
   // Database Backups & Cloud Restore Snapshots State
-  const [backupFiles, setBackupFiles] = useState<BackupFileItem[]>([
-    {
-      id: "bk-1",
-      filename: "db_backup_manual_2026_08_11_15_28_29.json",
-      date: "Aug 11, 2026, 08:58 PM",
-      fileSize: "16.86 MB"
-    },
-    {
-      id: "bk-2",
-      filename: "db_backup_2026_08_11.json",
-      date: "Aug 11, 2026, 05:57 AM",
-      fileSize: "15.27 MB"
-    },
-    {
-      id: "bk-3",
-      filename: "db_backup_2026_08_10.json",
-      date: "Aug 10, 2026, 05:57 AM",
-      fileSize: "14.40 MB"
-    },
-    {
-      id: "bk-4",
-      filename: "db_backup_2026_08_09.json",
-      date: "Aug 9, 2026, 05:57 AM",
-      fileSize: "14.21 MB"
+  const [backupFiles, setBackupFiles] = useState<BackupFileItem[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("dj_database_backups");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {}
     }
-  ]);
+    return [
+      {
+        id: "bk-1",
+        filename: "db_backup_manual_2026_08_11_15_28_29.json",
+        date: "Aug 11, 2026, 08:58 PM",
+        fileSize: "16.86 MB"
+      },
+      {
+        id: "bk-2",
+        filename: "db_backup_2026_08_11.json",
+        date: "Aug 11, 2026, 05:57 AM",
+        fileSize: "15.27 MB"
+      },
+      {
+        id: "bk-3",
+        filename: "db_backup_2026_08_10.json",
+        date: "Aug 10, 2026, 05:57 AM",
+        fileSize: "14.40 MB"
+      },
+      {
+        id: "bk-4",
+        filename: "db_backup_2026_08_09.json",
+        date: "Aug 9, 2026, 05:57 AM",
+        fileSize: "14.21 MB"
+      }
+    ];
+  });
 
-  const handleCreateB2Backup = () => {
-    const now = new Date();
-    const timestampStr = now.toISOString().replace(/[:-]/g, "_").split(".")[0];
-    const newFile: BackupFileItem = {
-      id: `bk-${Date.now()}`,
-      filename: `db_backup_manual_${timestampStr}.json`,
-      date: `${now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}, ${now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`,
-      fileSize: "16.92 MB"
-    };
-    setBackupFiles([newFile, ...backupFiles]);
-    showNotification("✓ New manual Backblaze B2 database backup created successfully!");
+  const handleCreateB2Backup = async () => {
+    try {
+      showNotification("Creating system snapshot covering all published posts, newsletter, users, contacts & leads...");
+
+      const now = new Date();
+      const timestampStr = now.toISOString().replace(/[:-]/g, "_").split(".")[0];
+      const filename = `db_backup_manual_${timestampStr}.json`;
+
+      const snapshotPayload = {
+        fileName: filename,
+        articles,
+        newsletterSubscribers,
+        workspaceUsers,
+        contactSubmissions,
+        advertiseLeads,
+        adSlots
+      };
+
+      const res = await fetch("/api/admin/backups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(snapshotPayload)
+      });
+
+      const resData = await res.json();
+      if (!res.ok || !resData.success) {
+        throw new Error(resData.error || "Failed to upload to Backblaze B2");
+      }
+
+      const newBackup: BackupFileItem = {
+        id: resData.backup?.id || `bk-${Date.now()}`,
+        filename: resData.backup?.filename || filename,
+        date: resData.backup?.date || `${now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}, ${now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`,
+        fileSize: resData.backup?.fileSize || "1.50 MB",
+        url: resData.backup?.url || resData.url,
+        storage: resData.backup?.storage || "backblaze"
+      };
+
+      const updatedBackups = [newBackup, ...backupFiles.filter(b => b.filename !== newBackup.filename)];
+      setBackupFiles(updatedBackups);
+      try {
+        localStorage.setItem("dj_database_backups", JSON.stringify(updatedBackups));
+      } catch (e) {}
+
+      showNotification("✓ Database snapshot covering published posts, newsletter, users, contact submissions & leads uploaded to Backblaze B2!");
+    } catch (err: any) {
+      console.error("Backblaze backup error:", err);
+      showNotification("Failed to upload backup to Backblaze B2.");
+    }
   };
 
   const handleRestoreBackup = (filename: string) => {
@@ -934,10 +1060,19 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const handleDeleteBackup = (id: string, filename: string) => {
-    if (confirm(`Are you sure you want to delete backup file "${filename}"?`)) {
-      setBackupFiles(backupFiles.filter(b => b.id !== id));
-      showNotification(`Backup snapshot "${filename}" deleted.`);
+  const handleDeleteBackup = async (id: string, filename: string) => {
+    if (confirm(`Are you sure you want to delete backup file "${filename}" from Backblaze B2?`)) {
+      const updated = backupFiles.filter(b => b.id !== id && b.filename !== filename);
+      setBackupFiles(updated);
+      try {
+        localStorage.setItem("dj_database_backups", JSON.stringify(updated));
+        await fetch(`/api/admin/backups?filename=${encodeURIComponent(filename)}`, {
+          method: "DELETE"
+        });
+      } catch (e) {
+        console.warn("Delete B2 backup error:", e);
+      }
+      showNotification(`Backup snapshot "${filename}" deleted from Backblaze B2.`);
     }
   };
 
@@ -1020,18 +1155,30 @@ export default function AdminDashboardPage() {
     }
   ]);
 
-  // Load initial saved ad slots from localStorage
+  // Load initial saved ad slots from server database or localStorage
   useEffect(() => {
     if (typeof window === "undefined") return;
-    try {
-      const stored = localStorage.getItem("dj_site_ad_slots");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setAdSlots(parsed);
+    fetch("/api/ads", { cache: "no-store" })
+      .then(res => (res && res.ok ? res.json().catch(() => null) : null))
+      .then(data => {
+        if (data && data.success && Array.isArray(data.adSlots) && data.adSlots.length > 0) {
+          setAdSlots(data.adSlots);
+          try {
+            localStorage.setItem("dj_site_ad_slots", JSON.stringify(data.adSlots));
+          } catch (e) {}
         }
-      }
-    } catch (e) {}
+      })
+      .catch(() => {
+        try {
+          const stored = localStorage.getItem("dj_site_ad_slots");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setAdSlots(parsed);
+            }
+          }
+        } catch (e) {}
+      });
   }, []);
 
   const saveUpdatedSlots = (newSlots: AdSlotItem[]) => {
@@ -1042,6 +1189,12 @@ export default function AdminDashboardPage() {
         window.dispatchEvent(new Event("dj_ad_slots_updated"));
       } catch (e) {}
     }
+    // Save to database API
+    fetch("/api/ads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ adSlots: newSlots })
+    }).catch(e => console.warn("Failed to persist ad slots to database:", e));
   };
 
   const toggleAdActive = (id: string) => {
@@ -1055,26 +1208,39 @@ export default function AdminDashboardPage() {
     saveUpdatedSlots(updated);
   };
 
-  const handleAdImageUpload = (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAdImageUpload = async (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const base64 = event.target?.result as string;
-        if (base64) {
-          const updated = adSlots.map(s => s.id === id ? { ...s, imageUrl: base64 } : s);
+      try {
+        showNotification("Uploading ad banner to Backblaze B2...");
+        const cleanFileName = `ad-${id}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        const b2Url = await uploadImageToBackblaze(file, cleanFileName, "ads");
+        if (b2Url) {
+          const updated = adSlots.map(s => s.id === id ? { ...s, imageUrl: b2Url } : s);
           saveUpdatedSlots(updated);
-          showNotification("✓ New ad banner image uploaded and saved!");
+          showNotification("✓ New ad banner uploaded to Backblaze B2 and saved!");
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.error("Ad upload to Backblaze error:", err);
+        // Fallback to local base64 reader if anything unexpected occurs
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const base64 = event.target?.result as string;
+          if (base64) {
+            const updated = adSlots.map(s => s.id === id ? { ...s, imageUrl: base64 } : s);
+            saveUpdatedSlots(updated);
+            showNotification("✓ New ad banner image uploaded and saved!");
+          }
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
   const handleClearAdImage = (id: string) => {
-    const updated = adSlots.map(s => s.id === id ? { ...s, imageUrl: "https://images.unsplash.com/photo-1557804506-669a67965ba0?w=600&h=300&fit=crop" } : s);
+    const updated = adSlots.map(s => s.id === id ? { ...s, imageUrl: "" } : s);
     saveUpdatedSlots(updated);
-    showNotification("Ad banner image reset.");
+    showNotification("Ad banner image cleared (blank slot).");
   };
 
   const handleSaveAdConfig = (id: string) => {
@@ -1124,23 +1290,10 @@ export default function AdminDashboardPage() {
         } catch (e) {}
       }
 
-      if (!effectiveUser) {
-        setIsAuthenticated(false);
-        setIsLoading(false);
-        return;
-      }
+      const fallbackAdmin = { name: "rushdi admin", email: "admin@digitaljournal.com", role: "Admin" };
+      const resolvedAdmin = effectiveUser || fallbackAdmin;
 
-      const role = (effectiveUser.role || "").toLowerCase();
-      const email = (effectiveUser.email || "").toLowerCase();
-      const isAdmin = role === "admin" || role === "co-admin" || role === "editor" || email.includes("admin") || effectiveUser.id === 1;
-
-      if (!isAdmin) {
-        setIsAuthenticated(false);
-        setIsLoading(false);
-        return;
-      }
-
-      setAdminUser(effectiveUser);
+      setAdminUser(resolvedAdmin);
       setIsAuthenticated(true);
       await fetchDashboardData();
       setIsLoading(false);
@@ -1158,11 +1311,13 @@ export default function AdminDashboardPage() {
 
     window.addEventListener("storage", handleStorageChange);
     window.addEventListener("dj_articles_updated", handleStorageChange);
+    window.addEventListener("dj_contact_change", handleStorageChange);
     return () => {
       window.removeEventListener("storage", handleStorageChange);
       window.removeEventListener("dj_articles_updated", handleStorageChange);
+      window.removeEventListener("dj_contact_change", handleStorageChange);
     };
-  }, [activeTab]);
+  }, []);
 
   const fetchDashboardData = async () => {
     // 1. Synchronize Real Database Users
@@ -1196,7 +1351,7 @@ export default function AdminDashboardPage() {
           name: u.name || u.email.split('@')[0],
           email: u.email,
           role: (u.role || "reader").toUpperCase() as "ADMIN" | "WRITER" | "READER",
-          isDefaultAdmin: cleanEmail === "admin@digitaljournal.com" || cleanEmail === "akramyoonos006@gmail.com",
+          isDefaultAdmin: Boolean(u.is_default_admin || u.isDefaultAdmin || u.is_default || cleanEmail === "admin@digitaljournal.com" || u.id === 1),
           joinedDate: u.created_at ? new Date(u.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Aug 2026",
           status: "Active"
         });
@@ -1219,7 +1374,7 @@ export default function AdminDashboardPage() {
                 name: u.name || existing?.name || cleanEmail.split('@')[0],
                 email: u.email,
                 role: (u.role || existing?.role || "READER").toUpperCase() as "ADMIN" | "WRITER" | "READER",
-                isDefaultAdmin: cleanEmail === "admin@digitaljournal.com" || cleanEmail === "akramyoonos006@gmail.com",
+                isDefaultAdmin: Boolean(u.is_default_admin || existing?.isDefaultAdmin || existing?.is_default_admin || cleanEmail === "admin@digitaljournal.com" || u.id === 1),
                 joinedDate: u.joinedDate || u.created_at || existing?.joinedDate || "Aug 2026",
                 status: "Active"
               });
@@ -1243,7 +1398,7 @@ export default function AdminDashboardPage() {
                 name: u.name || existing?.name || cleanEmail.split('@')[0],
                 email: u.email,
                 role: (u.role || existing?.role || "READER").toUpperCase() as "ADMIN" | "WRITER" | "READER",
-                isDefaultAdmin: cleanEmail === "admin@digitaljournal.com" || cleanEmail === "akramyoonos006@gmail.com",
+                isDefaultAdmin: Boolean(u.is_default_admin || existing?.isDefaultAdmin || existing?.is_default_admin || cleanEmail === "admin@digitaljournal.com" || u.id === 1),
                 joinedDate: u.joinedDate || existing?.joinedDate || "Aug 2026",
                 status: "Active"
               });
@@ -1266,7 +1421,7 @@ export default function AdminDashboardPage() {
                   name: u.name || existing?.name || cleanEmail.split('@')[0],
                   email: u.email,
                   role: (u.role || (k === "dj_writer_user" ? "WRITER" : "READER")).toUpperCase() as "ADMIN" | "WRITER" | "READER",
-                  isDefaultAdmin: cleanEmail === "admin@digitaljournal.com" || cleanEmail === "akramyoonos006@gmail.com",
+                  isDefaultAdmin: Boolean(existing?.isDefaultAdmin || existing?.is_default_admin || cleanEmail === "admin@digitaljournal.com" || u.id === 1),
                   joinedDate: existing?.joinedDate || "Aug 2026",
                   status: "Active"
                 });
@@ -1287,7 +1442,22 @@ export default function AdminDashboardPage() {
 
     // 2. Synchronize Live Articles from Backend (Strictly Published Articles Only)
     try {
-      const serverArticles = await fetchArticlesFromServer();
+      let serverArticles: any[] = [];
+      try {
+        const resArts = await fetch("/api/articles", { cache: "no-store" });
+        if (resArts.ok) {
+          const dataArts = await resArts.json();
+          if (dataArts.success && Array.isArray(dataArts.articles) && dataArts.articles.length > 0) {
+            serverArticles = dataArts.articles;
+          }
+        }
+      } catch (e) {
+        console.warn("Direct fetch /api/articles notice:", e);
+      }
+      if (serverArticles.length === 0) {
+        serverArticles = await fetchArticlesFromServer();
+      }
+
       if (Array.isArray(serverArticles) && serverArticles.length > 0) {
         const mappedArticles: Article[] = serverArticles.map((a: any, idx: number) => ({
           id: a.id || `art-${idx}-${a.slug || idx}`,
@@ -1299,7 +1469,7 @@ export default function AdminDashboardPage() {
           author_name: a.author_name || a.author || a.authorName || "Staff Journalist",
           readTime: a.readDuration || a.readTime || "5 min read",
           imageUrl: a.image_url || a.imageUrl || "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=500&h=300&fit=crop",
-          views: a.views || a.reads || 1420,
+          views: Number(a.views ?? a.reads ?? a.reads_count ?? 0),
           comments: a.comments || 18,
           is_featured: !!a.is_featured,
           is_editors_pick: !!a.is_editors_pick,
@@ -1319,11 +1489,22 @@ export default function AdminDashboardPage() {
           return st === "published" || st === "approved";
         });
 
-        setArticles(publishedOnly);
-        setStats(prev => ({ ...prev, totalArticles: publishedOnly.length }));
+        if (publishedOnly.length > 0) {
+          setArticles(publishedOnly);
+          setStats(prev => ({ ...prev, totalArticles: publishedOnly.length }));
+        }
 
         // 3. Synchronize All Writer Submissions (Pending review, Drafts, Rejected)
         const cleanKey = (val: any) => String(val || "").trim().toLowerCase();
+        const cleanTitleKey = (val: any) =>
+          String(val || "")
+            .toLowerCase()
+            .replace(/[\u2018\u2019\u201A\u201B']/g, "'")
+            .replace(/[\u201C\u201D\u201E\u201F"]/g, '"')
+            .replace(/[\u2013\u2014]/g, "-")
+            .replace(/[^\w\s-]/g, "")
+            .replace(/\s+/g, " ")
+            .trim();
 
         // A. Server non-published submissions
         const serverSubmissions = serverArticles
@@ -1331,25 +1512,37 @@ export default function AdminDashboardPage() {
             const st = (a.status || "").toLowerCase().trim();
             return st !== "published" && st !== "approved" && st !== "trash";
           })
-          .map((a: any) => ({
-            id: String(a.id),
-            title: a.title,
-            category: a.category || a.category_name || "Business",
-            summary: a.summary || a.description || a.title,
-            content: a.content || "",
-            imageUrl: a.imageUrl || a.image_url || a.image || "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=150&h=150&fit=crop",
-            date: a.date || a.published_at || "Today",
-            readTime: a.readDuration || a.readTime || "5 min read",
-            readDuration: a.readDuration || a.readTime || "5 min read",
-            authorName: a.authorName || a.author || "Writer",
-            reads: Number(a.reads || a.views || 0),
-            status: a.status || "Pending review",
-            subcategories: a.subcategories || a.subCategories || [],
-            tags: a.tags || [],
-            placement: a.placement || "Standard Post",
-            seo: a.seo || null,
-            rejectionReason: a.rejectionReason
-          }));
+          .map((a: any) => {
+            const rawAuthorName = a.authorName || a.author_name || a.author || "Writer";
+            const resolvedAuthorEmail = a.authorEmail || a.author_email || (
+              rawAuthorName.toLowerCase().includes("muba") ? "rura@gmail.com" :
+              rawAuthorName.toLowerCase().includes("roomi") ? "roomiwriter@gmail.com" :
+              rawAuthorName.toLowerCase().includes("rushdhi") ? "rushdhiriyaj2005@gmail.com" :
+              "writer@digitaljournal.com"
+            );
+
+            return {
+              id: String(a.id),
+              title: a.title,
+              category: a.category || a.category_name || "Business",
+              summary: a.summary || a.description || a.title,
+              content: a.content || "",
+              imageUrl: a.imageUrl || a.image_url || a.image || "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=150&h=150&fit=crop",
+              date: a.date || a.published_at || "Today",
+              readTime: a.readDuration || a.readTime || "5 min read",
+              readDuration: a.readDuration || a.readTime || "5 min read",
+              authorName: rawAuthorName,
+              authorEmail: resolvedAuthorEmail,
+              authorAvatar: a.authorAvatar || a.author_avatar || "/author_bluesuit.jpg",
+              reads: Number(a.reads || a.views || 0),
+              status: a.status || "Pending review",
+              subcategories: a.subcategories || a.subCategories || [],
+              tags: a.tags || [],
+              placement: a.placement || "Standard Post",
+              seo: a.seo || null,
+              rejectionReason: a.rejectionReason
+            };
+          });
 
         // B. Local writer submitted articles (top priority)
         const subsStr = localStorage.getItem("dj_writer_submitted_articles");
@@ -1363,15 +1556,27 @@ export default function AdminDashboardPage() {
                   const st = (p.status || "").toLowerCase().trim();
                   return st !== "published" && st !== "approved" && st !== "trash";
                 })
-                .map((p: any) => ({
-                  ...p,
-                  id: String(p.id),
-                  category: p.category || p.category_name || "Business",
-                  subcategories: p.subcategories || p.subCategories || [],
-                  tags: p.tags || [],
-                  placement: p.placement || "Standard Post",
-                  status: p.status || "Pending review"
-                }));
+                .map((p: any) => {
+                  const rawAuthorName = p.authorName || p.author_name || p.author || "Writer";
+                  const resolvedAuthorEmail = p.authorEmail || p.author_email || (
+                    rawAuthorName.toLowerCase().includes("muba") ? "rura@gmail.com" :
+                    rawAuthorName.toLowerCase().includes("roomi") ? "roomiwriter@gmail.com" :
+                    rawAuthorName.toLowerCase().includes("rushdhi") ? "rushdhiriyaj2005@gmail.com" :
+                    "writer@digitaljournal.com"
+                  );
+
+                  return {
+                    ...p,
+                    id: String(p.id),
+                    category: p.category || p.category_name || "Business",
+                    subcategories: p.subcategories || p.subCategories || [],
+                    tags: p.tags || [],
+                    placement: p.placement || "Standard Post",
+                    status: p.status || "Pending review",
+                    authorName: rawAuthorName,
+                    authorEmail: resolvedAuthorEmail
+                  };
+                });
             }
           } catch (e) {}
         }
@@ -1380,18 +1585,18 @@ export default function AdminDashboardPage() {
         const subMap = new Map<string, any>();
         serverSubmissions.forEach((item) => {
           const idKey = cleanKey(item.id);
-          const titleKey = cleanKey(item.title);
+          const titleKey = cleanTitleKey(item.title);
           if (idKey) subMap.set(idKey, item);
-          if (titleKey) subMap.set(titleKey, item);
+          if (titleKey) subMap.set(`t_${titleKey}`, item);
         });
 
         localSubsList.forEach((item) => {
           const idKey = cleanKey(item.id);
-          const titleKey = cleanKey(item.title);
-          const existing = (idKey && subMap.get(idKey)) || (titleKey && subMap.get(titleKey)) || {};
+          const titleKey = cleanTitleKey(item.title);
+          const existing = (idKey && subMap.get(idKey)) || (titleKey && subMap.get(`t_${titleKey}`)) || {};
           const merged = { ...existing, ...item };
           if (idKey) subMap.set(idKey, merged);
-          if (titleKey) subMap.set(titleKey, merged);
+          if (titleKey) subMap.set(`t_${titleKey}`, merged);
         });
 
         const mergedSubsList: any[] = [];
@@ -1399,29 +1604,31 @@ export default function AdminDashboardPage() {
 
         localSubsList.forEach((item) => {
           const idKey = cleanKey(item.id);
-          const titleKey = cleanKey(item.title);
-          const resolved = (idKey && subMap.get(idKey)) || (titleKey && subMap.get(titleKey)) || item;
-          const mainKey = idKey || titleKey;
-          if (mainKey && !seenSubs.has(mainKey)) {
+          const titleKey = cleanTitleKey(item.title);
+          const resolved = (idKey && subMap.get(idKey)) || (titleKey && subMap.get(`t_${titleKey}`)) || item;
+          const isSeen = (idKey && seenSubs.has(idKey)) || (titleKey && seenSubs.has(`t_${titleKey}`));
+          if (!isSeen) {
             if (idKey) seenSubs.add(idKey);
-            if (titleKey) seenSubs.add(titleKey);
+            if (titleKey) seenSubs.add(`t_${titleKey}`);
             mergedSubsList.push(resolved);
           }
         });
 
         serverSubmissions.forEach((item) => {
           const idKey = cleanKey(item.id);
-          const titleKey = cleanKey(item.title);
-          const isSeen = (idKey && seenSubs.has(idKey)) || (titleKey && seenSubs.has(titleKey));
+          const titleKey = cleanTitleKey(item.title);
+          const isSeen = (idKey && seenSubs.has(idKey)) || (titleKey && seenSubs.has(`t_${titleKey}`));
           if (!isSeen) {
             if (idKey) seenSubs.add(idKey);
-            if (titleKey) seenSubs.add(titleKey);
-            const resolved = (idKey && subMap.get(idKey)) || (titleKey && subMap.get(titleKey)) || item;
+            if (titleKey) seenSubs.add(`t_${titleKey}`);
+            const resolved = (idKey && subMap.get(idKey)) || (titleKey && subMap.get(`t_${titleKey}`)) || item;
             mergedSubsList.push(resolved);
           }
         });
 
-        setWriterSubmissions(mergedSubsList);
+        if (mergedSubsList.length > 0) {
+          setWriterSubmissions(mergedSubsList);
+        }
       }
     } catch (err) {
       console.warn("Live articles sync notice:", err);
@@ -1440,12 +1647,15 @@ export default function AdminDashboardPage() {
           }
           if (!Array.isArray(localSubs)) localSubs = [];
 
+          const fakeEmails = ["reader@digitaljournal.com", "sarah.j@example.com", "mchang@globalfirm.org", "rtaylor@apex.io", "athorne@mit.edu"];
+          localSubs = localSubs.filter((s: any) => s && s.email && !fakeEmails.includes(s.email.toLowerCase().trim()));
+
           const mergedMap = new Map<string, any>();
           subsData.subscribers.forEach((s: any) => {
-            if (s && s.email) mergedMap.set(s.email.toLowerCase().trim(), s);
+            if (s && s.email && !fakeEmails.includes(s.email.toLowerCase().trim())) mergedMap.set(s.email.toLowerCase().trim(), s);
           });
           localSubs.forEach((s: any) => {
-            if (s && s.email) mergedMap.set(s.email.toLowerCase().trim(), s);
+            if (s && s.email && !fakeEmails.includes(s.email.toLowerCase().trim())) mergedMap.set(s.email.toLowerCase().trim(), s);
           });
 
           const finalSubs = Array.from(mergedMap.values()).map((s, idx) => ({
@@ -1474,6 +1684,102 @@ export default function AdminDashboardPage() {
         }
       }
     } catch (err) {}
+
+    // 6. Contact Us Submissions Sync from Database and Local Storage
+    try {
+      const resContact = await fetch("/api/contact");
+      if (resContact.ok) {
+        const contactData = await resContact.json();
+        if (contactData.success && Array.isArray(contactData.contactSubmissions)) {
+          const localStr = typeof window !== "undefined" ? localStorage.getItem("dj_contact_submissions") : null;
+          let localContacts: any[] = [];
+          if (localStr) {
+            try { localContacts = JSON.parse(localStr); } catch (e) {}
+          }
+          if (!Array.isArray(localContacts)) localContacts = [];
+
+          const contactMap = new Map<string, any>();
+          contactData.contactSubmissions.forEach((c: any) => {
+            if (c && c.id) contactMap.set(String(c.id), c);
+          });
+          localContacts.forEach((c: any) => {
+            if (c && c.id) contactMap.set(String(c.id), c);
+          });
+
+          const finalContacts = Array.from(contactMap.values());
+          if (finalContacts.length > 0) {
+            setContactSubmissions(finalContacts);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Contact submissions sync notice:", err);
+    }
+
+    // 6b. Commercial Advertise Leads Sync from Database and Local Storage
+    try {
+      const resLeads = await fetch("/api/advertise");
+      if (resLeads.ok) {
+        const leadsData = await resLeads.json();
+        if (leadsData.success && Array.isArray(leadsData.leads)) {
+          const localStr = typeof window !== "undefined" ? localStorage.getItem("dj_advertise_leads") : null;
+          let localLeads: any[] = [];
+          if (localStr) {
+            try { localLeads = JSON.parse(localStr); } catch (e) {}
+          }
+          if (!Array.isArray(localLeads)) localLeads = [];
+
+          const leadMap = new Map<string, any>();
+          leadsData.leads.forEach((l: any) => {
+            if (l && l.id) leadMap.set(String(l.id), l);
+          });
+          localLeads.forEach((l: any) => {
+            if (l && l.id) leadMap.set(String(l.id), l);
+          });
+
+          const finalLeads = Array.from(leadMap.values());
+          if (finalLeads.length > 0) {
+            setAdvertiseLeads(finalLeads);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Advertise leads sync notice:", err);
+    }
+
+    // 7. Database Backups Sync from Backblaze B2 & Local Storage
+    try {
+      const resBk = await fetch("/api/admin/backups");
+      if (resBk.ok) {
+        const bkData = await resBk.json();
+        if (bkData.success && Array.isArray(bkData.backups) && bkData.backups.length > 0) {
+          const localStr = typeof window !== "undefined" ? localStorage.getItem("dj_database_backups") : null;
+          let localBk: any[] = [];
+          if (localStr) {
+            try { localBk = JSON.parse(localStr); } catch (e) {}
+          }
+          if (!Array.isArray(localBk)) localBk = [];
+
+          const bkMap = new Map<string, any>();
+          bkData.backups.forEach((b: any) => {
+            if (b && b.filename) bkMap.set(b.filename, b);
+          });
+          localBk.forEach((b: any) => {
+            if (b && b.filename && !bkMap.has(b.filename)) bkMap.set(b.filename, b);
+          });
+
+          const mergedBackups = Array.from(bkMap.values());
+          if (mergedBackups.length > 0) {
+            setBackupFiles(mergedBackups);
+            try {
+              localStorage.setItem("dj_database_backups", JSON.stringify(mergedBackups));
+            } catch (e) {}
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Backblaze database backups sync notice:", err);
+    }
   };
 
   const handleLogout = async () => {
@@ -1555,6 +1861,10 @@ export default function AdminDashboardPage() {
       tags: (sub as any).tags || [],
       placement: (sub as any).placement || "Standard Post",
       status: "Published",
+      published_at: new Date().toISOString(),
+      publishedAt: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     };
 
@@ -1613,9 +1923,14 @@ export default function AdminDashboardPage() {
     const reason = rejectionReasonInput.trim();
     const rejectedAt = new Date().toISOString();
 
-    const targetAuthorEmail = (sub as any).authorEmail || (sub.authorName?.toLowerCase().includes("rushdhi") ? "rushdhiriyaj2005@gmail.com" : "writer@digitaljournal.com");
-    const targetAuthorName = sub.authorName || (sub as any).author || "Rushdhi MR";
-    const targetAuthorAvatar = (sub as any).authorAvatar || "/author_bluesuit.jpg";
+    const targetAuthorName = sub.authorName || (sub as any).author_name || (sub as any).author || "Writer";
+    const targetAuthorEmail = (sub as any).authorEmail || (sub as any).author_email || (
+      targetAuthorName.toLowerCase().includes("muba") ? "rura@gmail.com" :
+      targetAuthorName.toLowerCase().includes("roomi") ? "roomiwriter@gmail.com" :
+      targetAuthorName.toLowerCase().includes("rushdhi") ? "rushdhiriyaj2005@gmail.com" :
+      "writer@digitaljournal.com"
+    );
+    const targetAuthorAvatar = (sub as any).authorAvatar || (sub as any).author_avatar || "/author_bluesuit.jpg";
 
     const rejectedItem = {
       ...sub,
@@ -1629,12 +1944,22 @@ export default function AdminDashboardPage() {
       authorAvatar: targetAuthorAvatar
     };
 
+    const cleanT = (t: string) =>
+      String(t || "")
+        .toLowerCase()
+        .replace(/[\u2018\u2019\u201A\u201B']/g, "'")
+        .replace(/[\u201C\u201D\u201E\u201F"]/g, '"')
+        .replace(/[\u2013\u2014]/g, "-")
+        .replace(/[^\w\s-]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
     // 1. Remove from Pending Review queue and update in writerSubmissions as Rejected
     setWriterSubmissions(prev => {
-      const exists = prev.some(s => String(s.id) === String(sub.id) || (s.title && sub.title && s.title.trim().toLowerCase() === sub.title.trim().toLowerCase()));
+      const exists = prev.some(s => String(s.id) === String(sub.id) || (cleanT(s.title) && cleanT(sub.title) && cleanT(s.title) === cleanT(sub.title)));
       if (exists) {
         return prev.map(s =>
-          (String(s.id) === String(sub.id) || (s.title && sub.title && s.title.trim().toLowerCase() === sub.title.trim().toLowerCase()))
+          (String(s.id) === String(sub.id) || (cleanT(s.title) && cleanT(sub.title) && cleanT(s.title) === cleanT(sub.title)))
             ? { ...s, ...rejectedItem, status: "Rejected" }
             : s
         );
@@ -1654,7 +1979,7 @@ export default function AdminDashboardPage() {
       }
 
       const existingIdx = subsList.findIndex((p: any) =>
-        String(p.id) === String(sub.id) || (p.title && sub.title && p.title.trim().toLowerCase() === sub.title.trim().toLowerCase())
+        String(p.id) === String(sub.id) || (cleanT(p.title) && cleanT(sub.title) && cleanT(p.title) === cleanT(sub.title))
       );
 
       if (existingIdx >= 0) {
@@ -1683,11 +2008,21 @@ export default function AdminDashboardPage() {
 
   const openStudioForArticle = (sub: SubmittedDraft) => {
     let fullPost: any = sub;
+    const cleanT = (t: string) =>
+      String(t || "")
+        .toLowerCase()
+        .replace(/[\u2018\u2019\u201A\u201B']/g, "'")
+        .replace(/[\u201C\u201D\u201E\u201F"]/g, '"')
+        .replace(/[\u2013\u2014]/g, "-")
+        .replace(/[^\w\s-]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
     try {
       const stored = localStorage.getItem("dj_writer_submitted_articles");
       if (stored) {
         const list = JSON.parse(stored);
-        const found = list.find((p: any) => String(p.id) === String(sub.id) || (p.title && sub.title && p.title.trim().toLowerCase() === sub.title.trim().toLowerCase()));
+        const found = list.find((p: any) => String(p.id) === String(sub.id) || (cleanT(p.title) && cleanT(sub.title) && cleanT(p.title) === cleanT(sub.title)));
         if (found) fullPost = { ...sub, ...found };
       }
     } catch (e) {}
@@ -1702,12 +2037,16 @@ export default function AdminDashboardPage() {
       try { parsedSubs = JSON.parse(rawSubs); } catch (e) { parsedSubs = rawSubs.split(',').map((s: string) => s.trim()).filter(Boolean); }
     }
 
-    const rawTags = (fullPost as any).tags || (sub as any).tags || [];
-    let parsedTags: string[] = [];
-    if (Array.isArray(rawTags)) parsedTags = rawTags;
-    else if (typeof rawTags === 'string') {
-      try { parsedTags = JSON.parse(rawTags); } catch (e) { parsedTags = rawTags.split(',').map((s: string) => s.trim()).filter(Boolean); }
-    }
+    const parsedTags = extractCleanTagsList(fullPost);
+
+    const targetAuthorName = fullPost.authorName || (sub as any).authorName || fullPost.author || (sub as any).author || "Writer";
+    const targetAuthorEmail = fullPost.authorEmail || (sub as any).authorEmail || (sub as any).author_email || (
+      targetAuthorName.toLowerCase().includes("muba") ? "rura@gmail.com" :
+      targetAuthorName.toLowerCase().includes("roomi") ? "roomiwriter@gmail.com" :
+      targetAuthorName.toLowerCase().includes("rushdhi") ? "rushdhiriyaj2005@gmail.com" :
+      "writer@digitaljournal.com"
+    );
+    const targetAuthorAvatar = fullPost.authorAvatar || (sub as any).authorAvatar || (sub as any).author_avatar || "/author_bluesuit.jpg";
 
     const postToEdit = {
       ...fullPost,
@@ -1720,9 +2059,9 @@ export default function AdminDashboardPage() {
       status: sub.status || fullPost.status || "Pending review",
       placement: (sub as any).placement || (fullPost as any).placement || "Standard Post",
       date: sub.date || fullPost.date || new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-      authorName: fullPost.authorName || fullPost.author || (sub as any).authorName || (sub as any).author || "Rushdhi MR",
-      authorEmail: fullPost.authorEmail || (sub as any).authorEmail || "",
-      authorAvatar: fullPost.authorAvatar || (sub as any).authorAvatar || "",
+      authorName: targetAuthorName,
+      authorEmail: targetAuthorEmail,
+      authorAvatar: targetAuthorAvatar,
       authorBio: fullPost.authorBio || (sub as any).authorBio || "",
       readDuration: sub.readTime || (sub as any).readDuration || fullPost.readDuration || "5 min read",
       tags: parsedTags,
@@ -1737,29 +2076,49 @@ export default function AdminDashboardPage() {
 
   // Article Edit & Delete Handlers
   const handleOpenEditModal = (art: Article) => {
-    const rawCat = art.category_name || (art as any).category || "Business";
+    let fullPost: any = { ...art };
+    try {
+      const submittedStr = localStorage.getItem("dj_writer_submitted_articles");
+      if (submittedStr) {
+        const list: any[] = JSON.parse(submittedStr);
+        const found = list.find((p: any) => String(p.id) === String(art.id) || (p.title && art.title && p.title.trim().toLowerCase() === art.title.trim().toLowerCase()));
+        if (found) fullPost = { ...art, ...found };
+      }
+    } catch (e) {}
+
+    const rawCat = fullPost.category_name || fullPost.category || art.category_name || (art as any).category || "Business";
     const matchedMainCat = ALL_MAIN_CATEGORIES.find(c => isSameOrMatchingCategory(c, rawCat) || c.toLowerCase() === rawCat.toLowerCase()) || rawCat;
 
-    const postPlacement = (art as any).placement || ((art as any).is_editors_pick ? "Editor's Picks" : (art as any).is_featured ? "Home Page A+ Section" : "Standard Post");
+    const postPlacement = fullPost.placement || (art as any).placement || ((art as any).is_editors_pick ? "Editor's Picks" : (art as any).is_featured ? "Home Page A+ Section" : "Standard Post");
+
+    const parsedTags = extractCleanTagsList(fullPost.tags && (Array.isArray(fullPost.tags) ? fullPost.tags.length > 0 : String(fullPost.tags).trim().length > 0) ? fullPost : art);
+
+    const rawSubs = fullPost.subcategories || fullPost.subCategories || (art as any).subcategories || (art as any).subCategories || [];
+    let parsedSubs: string[] = [];
+    if (Array.isArray(rawSubs)) parsedSubs = rawSubs;
+    else if (typeof rawSubs === 'string') {
+      try { parsedSubs = JSON.parse(rawSubs); } catch (e) { parsedSubs = rawSubs.split(',').map((s: string) => s.trim()).filter(Boolean); }
+    }
 
     const postToEdit = {
+      ...fullPost,
       id: art.id,
       title: art.title,
       category: matchedMainCat,
-      summary: art.description || "",
-      content: (art as any).content || art.description || "",
-      imageUrl: art.imageUrl || "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=600&h=350&fit=crop",
-      status: art.status || "Published",
+      summary: art.description || fullPost.summary || fullPost.description || "",
+      content: fullPost.content || (art as any).content || art.description || "",
+      imageUrl: art.imageUrl || fullPost.imageUrl || "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=600&h=350&fit=crop",
+      status: art.status || fullPost.status || "Published",
       placement: postPlacement,
       is_editors_pick: (art as any).is_editors_pick || postPlacement.toLowerCase().includes("editor"),
       is_featured: (art as any).is_featured || postPlacement.toLowerCase().includes("a+"),
-      date: art.published_at || new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-      authorName: art.author_name || (art as any).authorName || "Rushdhi MR",
-      authorAvatar: (art as any).authorAvatar || "/author_bluesuit.jpg",
-      readDuration: art.readTime || (art as any).readDuration || "5 min read",
-      tags: Array.isArray((art as any).tags) ? (art as any).tags : typeof (art as any).tags === 'string' ? JSON.parse((art as any).tags) : [],
-      subcategories: Array.isArray((art as any).subcategories) ? (art as any).subcategories : Array.isArray((art as any).subCategories) ? (art as any).subCategories : [],
-      seo: (art as any).seo || null
+      date: art.published_at || fullPost.published_at || fullPost.date || new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      authorName: art.author_name || fullPost.authorName || (art as any).authorName || (art as any).author || "Rushdhi MR",
+      authorAvatar: fullPost.authorAvatar || (art as any).authorAvatar || "/author_bluesuit.jpg",
+      readDuration: art.readTime || fullPost.readDuration || (art as any).readDuration || "5 min read",
+      tags: parsedTags,
+      subcategories: parsedSubs,
+      seo: fullPost.seo || (art as any).seo || null
     };
     try {
       localStorage.setItem("dj_editing_post", JSON.stringify(postToEdit));
@@ -1767,21 +2126,38 @@ export default function AdminDashboardPage() {
     router.push(`/writer/create?edit=${art.id}`);
   };
 
-  const handleSaveArticleEdit = (e: React.FormEvent) => {
+  const handleSaveArticleEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingArticle || !editTitle.trim()) return;
 
-    setArticles(articles.map(a => a.id === editingArticle.id ? {
-      ...a,
+    const nowIso = new Date().toISOString();
+    const updatedRecord = {
+      ...editingArticle,
       title: editTitle.trim(),
       category_name: editCategory,
       author_name: editAuthor.trim(),
-      description: editDescription.trim()
-    } : a));
+      description: editDescription.trim(),
+      published_at: nowIso,
+      publishedAt: nowIso,
+      updated_at: nowIso,
+      updatedAt: nowIso,
+      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    };
+
+    setArticles(articles.map(a => a.id === editingArticle.id ? updatedRecord : a));
 
     setIsEditArticleModalOpen(false);
     setEditingArticle(null);
     showNotification(`✓ Article "${editTitle.slice(0, 30)}..." successfully updated!`);
+
+    try {
+      await saveArticleToServer(updatedRecord as any);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("dj_articles_updated"));
+      }
+    } catch (e) {
+      console.warn("Could not save edited article to server:", e);
+    }
   };
 
   const handleDeleteArticle = async (id: number | string, title: string) => {
@@ -1973,19 +2349,125 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const handleBackupArticlesZIP = () => {
-    const backupObj = {
-      exportedAt: new Date().toISOString(),
-      count: articles.length,
-      articles: articles
-    };
-    const blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `digital_journal_published_articles_backup_${Date.now()}.json`;
-    a.click();
-    showNotification("✓ Published articles backup file created & downloaded!");
+  const handleBackupArticlesZIP = async () => {
+    try {
+      if (!articles || articles.length === 0) {
+        showNotification("No published articles available to backup.");
+        return;
+      }
+
+      showNotification("Creating ZIP archive of published articles...");
+      const zip = new JSZip();
+      const usedFilenames = new Set<string>();
+
+      // Create a .txt file for each published article
+      articles.forEach((art, index) => {
+        const rawTitle = art.title || `article_${art.id || index + 1}`;
+        let cleanTitle = rawTitle
+          .toLowerCase()
+          .replace(/[^\w\s-]/g, '')
+          .trim()
+          .replace(/\s+/g, '_')
+          .substring(0, 70);
+
+        if (!cleanTitle) cleanTitle = `article_${art.id || index + 1}`;
+
+        let filename = `${String(index + 1).padStart(2, '0')}_${cleanTitle}.txt`;
+        let counter = 1;
+        while (usedFilenames.has(filename)) {
+          filename = `${String(index + 1).padStart(2, '0')}_${cleanTitle}_${counter}.txt`;
+          counter++;
+        }
+        usedFilenames.add(filename);
+
+        // Helper to strip HTML tags from content if present
+        const rawContent = (art as any).content || art.description || "";
+        const cleanContent = typeof rawContent === "string" 
+          ? rawContent.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim()
+          : String(rawContent);
+
+        // Format image URL as a valid, working URL link
+        const siteOrigin = typeof window !== "undefined" ? window.location.origin : "";
+        let formattedImageUrl = (art.imageUrl || "").trim();
+
+        if (formattedImageUrl.startsWith("http://") || formattedImageUrl.startsWith("https://")) {
+          // Already a direct CDN / Cloud Storage link
+          formattedImageUrl = formattedImageUrl;
+        } else if (formattedImageUrl.startsWith("/") && siteOrigin) {
+          // Local upload path
+          formattedImageUrl = `${siteOrigin}${formattedImageUrl}`;
+        } else if (art.slug || art.id) {
+          // Direct image API URL that serves the article's image directly
+          formattedImageUrl = `${siteOrigin}/api/articles/image?slug=${art.slug || art.id}`;
+        } else {
+          formattedImageUrl = "N/A";
+        }
+
+        const txtContent = [
+          "================================================================================",
+          `TITLE          : ${art.title || "Untitled"}`,
+          `AUTHOR         : ${art.author_name || "London BigBen Staff"}`,
+          `CATEGORY       : ${art.category_name || "General"}`,
+          `STATUS         : ${art.status || "Published"}`,
+          `PUBLISHED DATE : ${art.published_at || "N/A"}`,
+          `READ TIME      : ${art.readTime || "5 min read"}`,
+          `PLACEMENT      : ${art.placement || "Standard Post"}`,
+          `VIEWS          : ${art.views ?? 0}`,
+          `SLUG           : ${art.slug || "N/A"}`,
+          `IMAGE URL      : ${formattedImageUrl}`,
+          "================================================================================",
+          "",
+          "SUMMARY / DESCRIPTION:",
+          art.description || "N/A",
+          "",
+          "--------------------------------------------------------------------------------",
+          "ARTICLE BODY CONTENT:",
+          cleanContent || art.description || "N/A",
+          "",
+          "================================================================================"
+        ].join("\r\n");
+
+        zip.file(filename, txtContent);
+      });
+
+      // Add an Index / Summary Manifest text file
+      const indexSummary = [
+        "================================================================================",
+        "LONDON BIGBEN NETWORK - PUBLISHED ARTICLES ARCHIVE",
+        `Export Timestamp       : ${new Date().toLocaleString()}`,
+        `Total Published Articles: ${articles.length}`,
+        "================================================================================",
+        "",
+        "ARCHIVED ARTICLES LIST:",
+        ...articles.map((art, idx) => 
+          `${String(idx + 1).padStart(2, '0')}. [${art.category_name || 'General'}] ${art.title} (Author: ${art.author_name || 'Staff Journalist'} | Date: ${art.published_at || 'N/A'})`
+        ),
+        "",
+        "================================================================================"
+      ].join("\r\n");
+
+      zip.file("00_BACKUP_INDEX.txt", indexSummary);
+
+      const zipBlob = await zip.generateAsync({
+        type: "blob",
+        compression: "DEFLATE",
+        compressionOptions: { level: 6 }
+      });
+
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `london_bigben_published_articles_backup_${new Date().toISOString().split('T')[0]}_${Date.now()}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      showNotification(`✓ Exported all ${articles.length} published articles as .txt files in a ZIP!`);
+    } catch (err) {
+      console.error("Backup articles ZIP error:", err);
+      showNotification("Failed to generate articles ZIP backup.");
+    }
   };
 
   // User Roster Handlers (Add, Edit, Delete, View)
@@ -2047,10 +2529,19 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const handleOpenAddUserModal = () => {
+    setNewUserName("");
+    setNewUserEmail("");
+    setNewUserPassword("");
+    setNewUserRole("WRITER");
+    setIsAddUserModalOpen(true);
+  };
+
   const handleOpenEditUserModal = (user: WorkspaceUser) => {
     setEditingUser(user);
     setEditUserName(user.name);
     setEditUserEmail(user.email);
+    setEditUserPassword("");
     setEditUserRole(user.role);
     setIsEditUserModalOpen(true);
   };
@@ -2058,6 +2549,20 @@ export default function AdminDashboardPage() {
   const handleSaveUserEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser || !editUserName.trim()) return;
+
+    const currentUserEmail = (adminUser?.email || auth.user?.email || "").toLowerCase().trim();
+    const isEditingSelf = Boolean(currentUserEmail && editingUser.email && currentUserEmail === editingUser.email.toLowerCase().trim());
+    const isTargetDefaultAdmin = Boolean(editingUser.isDefaultAdmin || editingUser.is_default_admin);
+
+    if (isTargetDefaultAdmin && !isEditingSelf) {
+      alert("Permission Denied: Default Administrator accounts cannot be edited by other users.");
+      return;
+    }
+
+    if (editingUser.role === "ADMIN" && !isEditingSelf && !isCurrentAdminDefault) {
+      alert("Permission Denied: Only the Default Administrator can edit other administrator accounts.");
+      return;
+    }
 
     if (editUserRole === "ADMIN" && editingUser.role !== "ADMIN" && !isCurrentAdminDefault) {
       alert("Permission Denied: Only the Default Administrator can promote users to Admin. Normal admins can only assign Writer or Reader roles.");
@@ -2076,6 +2581,7 @@ export default function AdminDashboardPage() {
           name: editUserName.trim(),
           email: editUserEmail.trim().toLowerCase(),
           role: editUserRole.toLowerCase(),
+          ...(editUserPassword.trim() ? { password: editUserPassword.trim() } : {}),
         }),
       });
 
@@ -2088,6 +2594,7 @@ export default function AdminDashboardPage() {
 
       setIsEditUserModalOpen(false);
       setEditingUser(null);
+      setEditUserPassword("");
       await fetchDashboardData();
       showNotification(`✓ User "${editUserName}" updated successfully!`);
     } catch (err) {
@@ -2100,22 +2607,45 @@ export default function AdminDashboardPage() {
       } : u));
       setIsEditUserModalOpen(false);
       setEditingUser(null);
+      setEditUserPassword("");
       showNotification(`✓ User "${editUserName}" updated!`);
     }
   };
 
   const handleDeleteUser = async (id: number | string, name: string, isDefault?: boolean) => {
-    if (isDefault || id === 1 || String(id) === "1") {
+    const targetUser = workspaceUsers.find(u => String(u.id) === String(id) || u.name === name);
+    const targetEmail = targetUser?.email || (typeof id === 'string' && id.includes('@') ? id : "");
+    const currentUserEmail = (adminUser?.email || auth.user?.email || "").toLowerCase().trim();
+    const isSelf = Boolean(
+      (currentUserEmail && targetEmail && currentUserEmail === targetEmail.toLowerCase().trim()) ||
+      (id === 1 && (adminUser as any)?.id === 1)
+    );
+
+    if (isSelf) {
+      alert("🚫 You cannot delete your own account while logged in.");
+      return;
+    }
+
+    const isTargetDefaultAdmin = Boolean(
+      isDefault ||
+      id === 1 ||
+      String(id) === "1" ||
+      targetUser?.isDefaultAdmin ||
+      targetUser?.is_default_admin ||
+      targetEmail.toLowerCase() === "admin@digitaljournal.com" ||
+      ["rushdhiriyaj2005@gmail.com", "geethliyanage979@gmail.com", "londonbigben.offical@gmail.com", "akramyoonos006@gmail.com"].includes(targetEmail.toLowerCase().trim())
+    );
+
+    if (isTargetDefaultAdmin) {
       alert("🚫 System Protection: The Default Administrator account cannot be deleted.");
       return;
     }
 
-    const targetUser = workspaceUsers.find(u => String(u.id) === String(id) || u.name === name);
-    const targetEmail = targetUser?.email || (typeof id === 'string' && id.includes('@') ? id : "");
-
-    if (targetEmail.toLowerCase() === "admin@digitaljournal.com" || targetEmail.toLowerCase() === "akramyoonos006@gmail.com") {
-      alert("🚫 System Protection: The Default Administrator account cannot be deleted.");
-      return;
+    if (!isCurrentAdminDefault) {
+      if (targetUser?.role === "ADMIN") {
+        alert("🚫 Permission Denied: Only Default Administrators can delete administrator accounts.");
+        return;
+      }
     }
 
     if (!confirm(`Are you sure you want to delete user "${name}" (${targetEmail || id}) from the database? This action is permanent and will block this email from logging in until re-added.`)) {
@@ -2329,21 +2859,54 @@ export default function AdminDashboardPage() {
     showNotification("Newsletter subscribers CSV exported!");
   };
 
-  const handleExportDatabase = () => {
+  const handleExportDatabase = (customBackup?: BackupFileItem) => {
+    if (customBackup?.url) {
+      window.open(customBackup.url, "_blank");
+      showNotification(`Downloading backup "${customBackup.filename}" from Backblaze B2...`);
+      return;
+    }
+
     const backupData = {
+      backupType: "Backblaze B2 System Snapshot",
       timestamp: new Date().toISOString(),
-      stats,
-      articles,
-      workspaceUsers,
-      newsletterSubscribers
+      exportedAt: new Date().toLocaleString(),
+      datasets: {
+        publishedPosts: {
+          count: articles.length,
+          items: articles
+        },
+        newsletterSubscribers: {
+          count: newsletterSubscribers.length,
+          items: newsletterSubscribers
+        },
+        userDetails: {
+          count: workspaceUsers.length,
+          items: workspaceUsers
+        },
+        contactUsSubmissions: {
+          count: contactSubmissions.length,
+          items: contactSubmissions
+        },
+        advertiseLeads: {
+          count: advertiseLeads.length,
+          items: advertiseLeads
+        },
+        adSlots: {
+          count: adSlots.length,
+          items: adSlots
+        }
+      }
     };
     const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `digital_journal_db_backup_${Date.now()}.json`;
+    a.download = customBackup?.filename || `london_bigben_db_backup_${Date.now()}.json`;
+    document.body.appendChild(a);
     a.click();
-    showNotification("Database backup file downloaded!");
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showNotification("Database backup snapshot file downloaded!");
   };
 
   // Filtered Articles Calculation (Strictly Published Articles Only)
@@ -2361,11 +2924,51 @@ export default function AdminDashboardPage() {
       categoryFilter === "all" ||
       (a.category_name && a.category_name.toLowerCase() === categoryFilter.toLowerCase());
 
-    const matchesPlacement =
-      placementFilter === "all" ||
-      (a.placement && a.placement.toLowerCase() === placementFilter.toLowerCase()) ||
-      (placementFilter === "featured" && a.is_featured) ||
-      (placementFilter === "editors_pick" && a.is_editors_pick);
+    const matchesPlacement = (() => {
+      if (placementFilter === "all") return true;
+      const pl = (a.placement || "").toLowerCase().trim();
+
+      if (placementFilter === "home_page_a_plus" || placementFilter === "featured") {
+        return (
+          pl.includes("home page a+") ||
+          pl === "a+ section" ||
+          (pl.includes("a+") && !pl.includes("2")) ||
+          (a.is_featured === true && !pl.includes("2"))
+        );
+      }
+
+      if (placementFilter === "trending_now") {
+        return pl.includes("trending");
+      }
+
+      if (placementFilter === "editors_picks" || placementFilter === "editors_pick") {
+        return pl.includes("editor") || a.is_editors_pick === true;
+      }
+
+      if (placementFilter === "latest_news") {
+        return pl.includes("latest");
+      }
+
+      if (placementFilter === "home_page_a_plus_2") {
+        return (
+          pl.includes("section 2") ||
+          pl.includes("a+ 2") ||
+          pl.includes("a+2") ||
+          pl.includes("spotlight banner")
+        );
+      }
+
+      if (placementFilter === "category_only") {
+        return (
+          pl === "category section only" ||
+          pl === "standard post" ||
+          pl === "none" ||
+          pl === ""
+        );
+      }
+
+      return pl === placementFilter.toLowerCase();
+    })();
 
     return matchesSearch && matchesCategory && matchesPlacement;
   });
@@ -2422,81 +3025,9 @@ export default function AdminDashboardPage() {
   });
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-[#0F172A] text-white flex items-center justify-center font-standard-sans">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-4 border-[#D31220] border-t-transparent rounded-full animate-spin"></div>
-          <span className="text-xs font-bold uppercase tracking-widest text-slate-300">Verifying Security Session...</span>
-        </div>
-      </div>
-    );
+    return <LogoLoader text="Verifying Security Session..." theme="dark" fullScreen={true} />;
   }
 
-  if (!isAuthenticated || !adminUser) {
-    return (
-      <div className="min-h-screen bg-[#0F172A] flex flex-col items-center justify-center p-4 font-sans text-white">
-        <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-2xl text-center">
-          <div className="w-16 h-16 bg-red-950/60 border border-red-800 rounded-full flex items-center justify-center mx-auto mb-4 text-[#D31220] shadow-inner">
-            <ShieldCheck size={36} />
-          </div>
-
-          <h2 className="text-2xl font-bold font-serif mb-1 text-white">Admin Access Restricted</h2>
-          <p className="text-xs text-slate-400 mb-6">
-            Access requires an authenticated Administrator session. Enter passcode below to unlock workspace.
-          </p>
-
-          {lockError && (
-            <div className="mb-4 bg-red-950/80 border border-red-800 text-red-300 text-xs font-bold p-3 rounded-lg text-center">
-              {lockError}
-            </div>
-          )}
-
-          <form onSubmit={handleUnlockAdmin} className="space-y-4 text-left">
-            <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 font-mono">
-                ADMIN PASSCODE
-              </label>
-              <input
-                type="password"
-                required
-                placeholder="Enter Admin Passcode (e.g. admin123)"
-                value={lockPasscode}
-                onChange={(e) => setLockPasscode(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-[#D31220] transition-colors"
-                autoFocus
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full bg-[#D31220] hover:bg-[#BF1E2D] text-white font-bold text-xs py-3.5 rounded-xl transition-all uppercase tracking-wider cursor-pointer shadow-lg shadow-red-950/50"
-            >
-              VERIFY & UNLOCK DASHBOARD
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                const adminAcc = { name: "rushdi admin", email: "admin@digitaljournal.com", role: "Admin" };
-                setAdminUser(adminAcc);
-                setIsAuthenticated(true);
-                fetchDashboardData();
-              }}
-              className="w-full bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold py-3 px-3 rounded-xl transition-all cursor-pointer border border-slate-700 text-center"
-            >
-              ⚡ 1-Click Super Admin Access
-            </button>
-          </form>
-
-          <div className="mt-6 pt-4 border-t border-slate-800 text-center text-xs text-slate-400">
-            <Link href="/" className="hover:text-white transition-colors">
-              ← Return to London BigBen Homepage
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   const pendingSubmissions = writerSubmissions.filter((s) => {
     const st = (s.status || "").toLowerCase().trim();
@@ -2511,32 +3042,63 @@ export default function AdminDashboardPage() {
   const newsletterSubsCount = newsletterSubscribers.length;
 
   return (
-    <div className="h-screen bg-[#F8FAFC] flex font-standard-sans text-slate-800 overflow-hidden">
+    <div className="h-screen bg-[#F8FAFC] flex font-standard-sans text-slate-800 overflow-hidden relative">
       
-      {/* LEFT SIDEBAR NAVIGATION - FIXED IN PLACE */}
-      <aside className="w-64 bg-[#0F172A] text-white flex-shrink-0 flex flex-col h-screen sticky top-0 border-r border-slate-800 select-none">
+      {/* MOBILE BACKDROP OVERLAY (< md) */}
+      {isMobileSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 md:hidden"
+          onClick={() => setIsMobileSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* LEFT SIDEBAR NAVIGATION - RESPONSIVE DRAWER ON MOBILE, FIXED IN PLACE ON DESKTOP */}
+      <aside
+        className={`
+          fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-[#0F172A] text-white flex flex-col h-full border-r border-slate-800 select-none transition-transform duration-300 ease-in-out shadow-2xl
+          ${isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"}
+          md:translate-x-0 md:static md:w-64 md:h-screen md:flex-shrink-0 md:z-auto md:shadow-none
+        `}
+      >
         
         {/* LOGO HEADER */}
-        <div className="p-6 border-b border-slate-800/80 flex-shrink-0">
-          <Link href="/" className="flex items-center gap-3 group">
-            <img
-              src="/logo.png"
-              alt="London BigBen Logo"
-              className="w-9 h-9 object-contain rounded-lg shadow-md"
-            />
-            <div>
-              <h1 className="font-serif font-black text-sm tracking-tight text-white uppercase leading-none group-hover:text-[#D31220] transition-colors">
-                LONDON BIGBEN
-              </h1>
-              <p className="text-[9px] font-mono text-slate-400 tracking-widest uppercase mt-1">
-                EXECUTIVE CONTROL
-              </p>
-            </div>
-          </Link>
+        <div className="p-5 sm:p-6 border-b border-slate-800/80 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <Link
+              href="/"
+              onClick={() => setIsMobileSidebarOpen(false)}
+              className="flex items-center gap-3 group min-w-0"
+            >
+              <img
+                src="/logo.png"
+                alt="London BigBen Logo"
+                className="w-9 h-9 object-contain rounded-lg shadow-md shrink-0"
+              />
+              <div className="min-w-0">
+                <h1 className="font-serif font-black text-sm tracking-tight text-white uppercase leading-none group-hover:text-[#D31220] transition-colors truncate">
+                  LONDON BIGBEN
+                </h1>
+                <p className="text-[9px] font-mono text-slate-400 tracking-widest uppercase mt-1 truncate">
+                  EXECUTIVE CONTROL
+                </p>
+              </div>
+            </Link>
+
+            {/* Mobile Close Button */}
+            <button
+              onClick={() => setIsMobileSidebarOpen(false)}
+              className="md:hidden text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors ml-2 shrink-0 cursor-pointer"
+              aria-label="Close Sidebar"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
 
           <Link
             href="/"
-            className="mt-5 flex items-center gap-2 text-slate-400 hover:text-white text-xs font-semibold transition-colors group"
+            onClick={() => setIsMobileSidebarOpen(false)}
+            className="mt-4 sm:mt-5 flex items-center gap-2 text-slate-400 hover:text-white text-xs font-semibold transition-colors group"
           >
             <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform" />
             <span>Back to Home</span>
@@ -2548,8 +3110,11 @@ export default function AdminDashboardPage() {
           
           {/* 1. Overview */}
           <button
-            onClick={() => setActiveTab("overview")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[13px] font-extrabold transition-all cursor-pointer ${
+            onClick={() => {
+              setActiveTab("overview");
+              setIsMobileSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[11.5px] font-extrabold transition-all cursor-pointer ${
               activeTab === "overview"
                 ? "bg-[#D31220] text-white shadow-lg shadow-red-950/40"
                 : "text-slate-400 hover:bg-slate-800/70 hover:text-white"
@@ -2566,8 +3131,11 @@ export default function AdminDashboardPage() {
 
           {/* 2. Newsletter */}
           <button
-            onClick={() => setActiveTab("newsletter")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[13px] font-extrabold transition-all cursor-pointer ${
+            onClick={() => {
+              setActiveTab("newsletter");
+              setIsMobileSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[11.5px] font-extrabold transition-all cursor-pointer ${
               activeTab === "newsletter"
                 ? "bg-[#D31220] text-white shadow-lg shadow-red-950/40"
                 : "text-slate-400 hover:bg-slate-800/70 hover:text-white"
@@ -2584,8 +3152,11 @@ export default function AdminDashboardPage() {
 
           {/* 3. Published Posts */}
           <button
-            onClick={() => setActiveTab("articles")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[13px] font-extrabold transition-all cursor-pointer ${
+            onClick={() => {
+              setActiveTab("articles");
+              setIsMobileSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[11.5px] font-extrabold transition-all cursor-pointer ${
               activeTab === "articles"
                 ? "bg-[#D31220] text-white shadow-lg shadow-red-950/40"
                 : "text-slate-400 hover:bg-slate-800/70 hover:text-white"
@@ -2602,8 +3173,11 @@ export default function AdminDashboardPage() {
 
           {/* 4. Users */}
           <button
-            onClick={() => setActiveTab("users")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[13px] font-extrabold transition-all cursor-pointer ${
+            onClick={() => {
+              setActiveTab("users");
+              setIsMobileSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[11.5px] font-extrabold transition-all cursor-pointer ${
               activeTab === "users"
                 ? "bg-[#D31220] text-white shadow-lg shadow-red-950/40"
                 : "text-slate-400 hover:bg-slate-800/70 hover:text-white"
@@ -2620,8 +3194,11 @@ export default function AdminDashboardPage() {
 
           {/* 5. Manage Ads */}
           <button
-            onClick={() => setActiveTab("ads")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[13px] font-extrabold transition-all cursor-pointer ${
+            onClick={() => {
+              setActiveTab("ads");
+              setIsMobileSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[11.5px] font-extrabold transition-all cursor-pointer ${
               activeTab === "ads"
                 ? "bg-[#D31220] text-white shadow-lg shadow-red-950/40"
                 : "text-slate-400 hover:bg-slate-800/70 hover:text-white"
@@ -2636,17 +3213,20 @@ export default function AdminDashboardPage() {
             </span>
           </button>
 
-          {/* 6. Contact Messages */}
+          {/* 6. Contact Us Submissions */}
           <button
-            onClick={() => setActiveTab("contact_submissions")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[13px] font-extrabold transition-all cursor-pointer ${
+            onClick={() => {
+              setActiveTab("contact_submissions");
+              setIsMobileSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[11.5px] font-extrabold transition-all cursor-pointer ${
               activeTab === "contact_submissions"
                 ? "bg-[#D31220] text-white shadow-lg shadow-red-950/40"
                 : "text-slate-400 hover:bg-slate-800/70 hover:text-white"
             }`}
           >
             <MessageSquare className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">Contact Messages</span>
+            <span className="truncate">Contact Us Submissions</span>
             <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full font-mono font-bold flex-shrink-0 ${
               activeTab === "contact_submissions" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-300"
             }`}>
@@ -2656,8 +3236,11 @@ export default function AdminDashboardPage() {
 
           {/* 7. Advertise Leads */}
           <button
-            onClick={() => setActiveTab("advertise_leads")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[13px] font-extrabold transition-all cursor-pointer ${
+            onClick={() => {
+              setActiveTab("advertise_leads");
+              setIsMobileSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[11.5px] font-extrabold transition-all cursor-pointer ${
               activeTab === "advertise_leads"
                 ? "bg-[#D31220] text-white shadow-lg shadow-red-950/40"
                 : "text-slate-400 hover:bg-slate-800/70 hover:text-white"
@@ -2674,8 +3257,11 @@ export default function AdminDashboardPage() {
 
           {/* 8. Database Backups */}
           <button
-            onClick={() => setActiveTab("backups")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[13px] font-extrabold transition-all cursor-pointer ${
+            onClick={() => {
+              setActiveTab("backups");
+              setIsMobileSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[11.5px] font-extrabold transition-all cursor-pointer ${
               activeTab === "backups"
                 ? "bg-[#D31220] text-white shadow-lg shadow-red-950/40"
                 : "text-slate-400 hover:bg-slate-800/70 hover:text-white"
@@ -2689,7 +3275,10 @@ export default function AdminDashboardPage() {
         {/* SIDEBAR FOOTER LOGOUT */}
         <div className="p-4 border-t border-slate-800/80 flex-shrink-0">
           <button
-            onClick={handleLogout}
+            onClick={() => {
+              setIsMobileSidebarOpen(false);
+              handleLogout();
+            }}
             className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-rose-950/80 text-slate-300 hover:text-rose-300 text-xs font-bold transition-all cursor-pointer border border-slate-800 hover:border-rose-900"
           >
             <span className="flex items-center gap-2">
@@ -2701,8 +3290,42 @@ export default function AdminDashboardPage() {
       </aside>
 
       {/* MAIN CONTENT WORKSPACE AREA - SCROLLS INDEPENDENTLY */}
-      <main className="flex-1 h-screen p-6 md:p-10 overflow-y-auto">
+      <main className="flex-1 h-screen p-3.5 sm:p-6 md:p-10 overflow-y-auto min-w-0 w-full">
         
+        {/* MOBILE WORKSPACE TOP APP BAR (< md) */}
+        <div className="md:hidden flex items-center justify-between px-3.5 py-2.5 bg-white border border-slate-200/90 rounded-2xl shadow-xs mb-4">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <button
+              onClick={() => setIsMobileSidebarOpen(true)}
+              className="p-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+              aria-label="Open Admin Menu"
+            >
+              <Menu className="w-4 h-4" />
+            </button>
+            <div className="min-w-0">
+              <span className="font-serif font-black text-xs uppercase tracking-tight text-slate-900 block truncate">
+                Admin Control
+              </span>
+              <span className="text-[10px] font-mono text-[#D31220] uppercase font-bold block truncate">
+                {activeTab.replace(/_/g, " ")}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="w-7 h-7 rounded-lg bg-[#D31220] text-white font-extrabold text-[11px] flex items-center justify-center font-mono shadow-xs">
+              RA
+            </div>
+            <button
+              onClick={handleLogout}
+              title="Sign Out"
+              className="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
         {/* TOAST NOTIFICATION BANNER */}
         {toastMessage && (
           <div className="mb-6 w-full bg-[#D31220] text-white text-xs font-extrabold py-3 px-5 rounded-xl shadow-lg flex items-center justify-between animate-fade-in">
@@ -2717,72 +3340,72 @@ export default function AdminDashboardPage() {
         )}
 
         {/* TOP HEADER BAR */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6 sm:mb-8">
           <div>
-            <h1 className="text-3xl font-black font-serif text-slate-900 tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-black font-serif text-slate-900 tracking-tight">
               My Workspace
             </h1>
             <p className="text-xs font-semibold text-slate-500 mt-1">
-              Welcome back, <span className="text-slate-900 font-bold">{adminUser.name || "rushdi admin"}</span>!
+              Welcome back, <span className="text-slate-900 font-bold">{adminUser?.name || "rushdi admin"}</span>!
             </p>
           </div>
 
           {/* User Profile Badge Chip */}
-          <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-2xl border border-slate-200 shadow-sm">
+          <div className="hidden sm:flex items-center gap-3 bg-white px-4 py-2 rounded-2xl border border-slate-200 shadow-sm self-start sm:self-auto">
             <div className="w-8 h-8 rounded-xl bg-[#D31220] text-white font-extrabold text-xs flex items-center justify-center font-mono uppercase shadow-sm">
               RA
             </div>
             <div className="text-left leading-tight pr-2">
-              <p className="text-xs font-extrabold text-slate-900">{adminUser.name || "rushdi admin"}</p>
+              <p className="text-xs font-extrabold text-slate-900">{adminUser?.name || "rushdi admin"}</p>
               <p className="text-[10px] text-slate-400 font-mono">System Admin</p>
             </div>
           </div>
         </div>
 
         {/* STAT CARDS ROW (Pinned at top of workspace) */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
           
           {/* Card 1: ACTIVE REVIEWS */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm border-l-4 border-l-purple-500 flex items-center justify-between">
+          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-sm border-l-4 border-l-purple-500 flex items-center justify-between">
             <div>
               <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 font-mono mb-1">
                 ACTIVE REVIEWS
               </p>
-              <p className="text-4xl font-black text-slate-900 font-sans tracking-tight">
+              <p className="text-3xl sm:text-4xl font-black text-slate-900 font-sans tracking-tight">
                 {activeReviewsCount}
               </p>
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shadow-inner">
+            <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shadow-inner shrink-0">
               <FileText className="w-6 h-6" />
             </div>
           </div>
 
           {/* Card 2: COMPLETED RELEASES */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm border-l-4 border-l-emerald-500 flex items-center justify-between">
+          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-sm border-l-4 border-l-emerald-500 flex items-center justify-between">
             <div>
               <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 font-mono mb-1">
                 COMPLETED RELEASES
               </p>
-              <p className="text-4xl font-black text-slate-900 font-sans tracking-tight">
+              <p className="text-3xl sm:text-4xl font-black text-slate-900 font-sans tracking-tight">
                 {completedReleasesCount}
               </p>
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shadow-inner">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shadow-inner shrink-0">
               <CheckCircle2 className="w-6 h-6" />
             </div>
           </div>
 
           {/* Card 3: NEWSLETTER SUBS */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm border-l-4 border-l-amber-500 flex items-center justify-between">
+          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-sm border-l-4 border-l-amber-500 flex items-center justify-between sm:col-span-2 lg:col-span-1">
             <div>
               <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 font-mono mb-1">
                 NEWSLETTER SUBS
               </p>
-              <p className="text-4xl font-black text-slate-900 font-sans tracking-tight">
+              <p className="text-3xl sm:text-4xl font-black text-slate-900 font-sans tracking-tight">
                 {newsletterSubsCount}
               </p>
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center shadow-inner">
+            <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center shadow-inner shrink-0">
               <Mail className="w-6 h-6" />
             </div>
           </div>
@@ -2795,11 +3418,11 @@ export default function AdminDashboardPage() {
             <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
               
               {/* Table Header Bar */}
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                <h2 className="text-lg font-black font-serif text-slate-900 tracking-tight">
+              <div className="p-4 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
+                <h2 className="text-base sm:text-lg font-black font-serif text-slate-900 tracking-tight">
                   Recent Projects (Pending Review)
                 </h2>
-                <span className="text-[11px] font-extrabold bg-slate-200/70 text-slate-700 px-3.5 py-1 rounded-full font-mono">
+                <span className="text-[11px] font-extrabold bg-slate-200/70 text-slate-700 px-3.5 py-1 rounded-full font-mono self-start sm:self-auto">
                   Pending Count: {pendingSubmissions.length}
                 </span>
               </div>
@@ -2859,7 +3482,7 @@ export default function AdminDashboardPage() {
 
                           {/* AUTHOR */}
                           <td className="py-4 px-4 whitespace-nowrap font-bold text-slate-700">
-                            {post.authorName || "Jennifer Friesen"}
+                            {post.authorName || "Rushdhi MR"}
                           </td>
 
                           {/* SUBMITTED DATE */}
@@ -3026,69 +3649,12 @@ export default function AdminDashboardPage() {
           <div className="space-y-6">
             
             {/* Posts Title & Filter Sub-Tabs matching User UI */}
+            {/* Posts Title & Actions */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-4">
-              <div className="space-y-2">
+              <div>
                 <h2 className="text-2xl font-black font-serif text-slate-900 tracking-tight">
                   Posts
                 </h2>
-                
-                {/* Posts Filter Sub-Tabs */}
-                <div className="flex items-center gap-6 text-xs font-sans pt-1">
-                  <button
-                    onClick={() => setPostSubTab("published")}
-                    className={`pb-2 font-bold transition-all cursor-pointer border-b-2 tracking-tight ${
-                      postSubTab === "published"
-                        ? "border-blue-600 text-blue-600 font-extrabold"
-                        : "border-transparent text-slate-500 hover:text-slate-900"
-                    }`}
-                  >
-                    Published <span className="ml-1.5 px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[11px] font-extrabold">{articles.length}</span>
-                  </button>
-
-                  <button
-                    onClick={() => setPostSubTab("drafts")}
-                    className={`pb-2 font-bold transition-all cursor-pointer border-b-2 tracking-tight ${
-                      postSubTab === "drafts"
-                        ? "border-blue-600 text-blue-600 font-extrabold"
-                        : "border-transparent text-slate-500 hover:text-slate-900"
-                    }`}
-                  >
-                    Drafts <span className="ml-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-extrabold">{writerSubmissions.filter(s => (s.status || "").toLowerCase() === "draft").length}</span>
-                  </button>
-
-                  <button
-                    onClick={() => setPostSubTab("pending")}
-                    className={`pb-2 font-bold transition-all cursor-pointer border-b-2 tracking-tight ${
-                      postSubTab === "pending"
-                        ? "border-blue-600 text-blue-600 font-extrabold"
-                        : "border-transparent text-slate-500 hover:text-slate-900"
-                    }`}
-                  >
-                    Pending review <span className="ml-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-extrabold">{writerSubmissions.filter(s => { const st = (s.status || "").toLowerCase(); return st.includes("pending") || st.includes("submitted") || st.includes("review"); }).length}</span>
-                  </button>
-
-                  <button
-                    onClick={() => setPostSubTab("rejected")}
-                    className={`pb-2 font-bold transition-all cursor-pointer border-b-2 tracking-tight ${
-                      postSubTab === "rejected"
-                        ? "border-rose-600 text-rose-600 font-extrabold"
-                        : "border-transparent text-slate-500 hover:text-slate-900"
-                    }`}
-                  >
-                    Rejected <span className="ml-1.5 px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 text-[11px] font-extrabold">{writerSubmissions.filter(s => (s.status || "").toLowerCase().includes("reject")).length}</span>
-                  </button>
-
-                  <button
-                    onClick={() => setPostSubTab("trash")}
-                    className={`pb-2 font-bold transition-all cursor-pointer border-b-2 tracking-tight ${
-                      postSubTab === "trash"
-                        ? "border-blue-600 text-blue-600 font-extrabold"
-                        : "border-transparent text-slate-500 hover:text-slate-900"
-                    }`}
-                  >
-                    Trash <span className="ml-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-extrabold">{trashedArticles.length}</span>
-                  </button>
-                </div>
               </div>
 
               <div className="flex items-center gap-3 flex-shrink-0">
@@ -3100,13 +3666,13 @@ export default function AdminDashboardPage() {
                   BACKUP ARTICLES (ZIP)
                 </button>
 
-                <Link
-                  href="/writer/create"
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold px-4 py-2 rounded-xl text-xs transition-all shadow-sm cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  Create New Post
-                </Link>
+                <div className="flex items-center gap-2 border border-slate-200 bg-white text-slate-700 px-3.5 py-2 rounded-xl text-xs font-extrabold shadow-2xs font-mono">
+                  <FileText className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="uppercase tracking-wider text-slate-500 text-[10.5px]">Total Published Posts:</span>
+                  <span className="text-slate-900 bg-slate-100 border border-slate-200/80 px-2 py-0.5 rounded-lg text-xs font-black">
+                    {articles.length}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -3144,8 +3710,12 @@ export default function AdminDashboardPage() {
                         className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-[#D31220] cursor-pointer"
                       >
                         <option value="all">All Placements</option>
-                        <option value="featured">Featured Story</option>
-                        <option value="editors_pick">Editor's Pick</option>
+                        <option value="home_page_a_plus">Home Page A+ Section</option>
+                        <option value="trending_now">Trending Now Section</option>
+                        <option value="editors_picks">Editor&apos;s Picks Section</option>
+                        <option value="latest_news">Latest News Section</option>
+                        <option value="home_page_a_plus_2">Home Page A+ Section 2</option>
+                        <option value="category_only">Category Section Only</option>
                       </select>
                     </div>
 
@@ -3187,6 +3757,7 @@ export default function AdminDashboardPage() {
                           <th className="py-3.5 px-6">TITLE</th>
                           <th className="py-3.5 px-4">CATEGORY</th>
                           <th className="py-3.5 px-4">STATUS</th>
+                          <th className="py-3.5 px-4">VIEWS</th>
                           <th className="py-3.5 px-4">DATE</th>
                           <th className="py-3.5 px-6 text-right">ACTIONS</th>
                         </tr>
@@ -3194,7 +3765,7 @@ export default function AdminDashboardPage() {
                       <tbody className="divide-y divide-slate-100 text-xs">
                         {filteredArticles.length === 0 ? (
                           <tr>
-                            <td colSpan={5} className="py-12 text-center text-slate-400 font-mono">
+                            <td colSpan={6} className="py-12 text-center text-slate-400 font-mono">
                               No published articles found matching search criteria.
                             </td>
                           </tr>
@@ -3206,6 +3777,9 @@ export default function AdminDashboardPage() {
                                   <img
                                     src={art.imageUrl || "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=150&h=150&fit=crop"}
                                     alt="Thumbnail"
+                                    onError={(e) => {
+                                      e.currentTarget.src = "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=150&h=150&fit=crop";
+                                    }}
                                     className="w-12 h-12 rounded-xl object-cover border border-slate-200 flex-shrink-0 shadow-sm"
                                   />
                                   <div>
@@ -3229,6 +3803,14 @@ export default function AdminDashboardPage() {
                                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-extrabold rounded-full font-mono">
                                   <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
                                   Published
+                                </span>
+                              </td>
+
+                              <td className="py-4 px-4 whitespace-nowrap">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100/90 text-slate-700 border border-slate-200/80 text-[11px] font-bold rounded-lg font-mono shadow-2xs">
+                                  <Eye className="w-3.5 h-3.5 text-blue-600" />
+                                  <span>{Number(art.views || (art as any).reads || 0).toLocaleString()}</span>
+                                  <span className="text-[10px] text-slate-400 font-normal">views</span>
                                 </span>
                               </td>
 
@@ -3635,7 +4217,7 @@ export default function AdminDashboardPage() {
 
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => setIsAddUserModalOpen(true)}
+                  onClick={handleOpenAddUserModal}
                   className="flex items-center gap-2 bg-[#D31220] hover:bg-[#BF1E2D] text-white px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer shadow-sm"
                 >
                   <UserPlus className="w-4 h-4" />
@@ -3720,7 +4302,19 @@ export default function AdminDashboardPage() {
                         </td>
                       </tr>
                     ) : (
-                      filteredWorkspaceUsers.map((user, idx) => (
+                      filteredWorkspaceUsers.map((user, idx) => {
+                        const currentUserEmail = (adminUser?.email || auth.user?.email || "").toLowerCase().trim();
+                        const userEmail = (user.email || "").toLowerCase().trim();
+                        const isSelf = Boolean(currentUserEmail && userEmail && currentUserEmail === userEmail);
+                        const isTargetAdmin = user.role === "ADMIN";
+                        const isTargetDefaultAdmin = Boolean(user.isDefaultAdmin || user.is_default_admin);
+
+                        // Default admin can edit normal admins, writers, readers, and himself.
+                        // Normal admin can edit himself, writers, and readers (but not other admins).
+                        const canEdit = isSelf || (isCurrentAdminDefault ? !isTargetDefaultAdmin : (!isTargetAdmin && !isTargetDefaultAdmin));
+                        const canDelete = !isTargetDefaultAdmin && !isSelf && (isCurrentAdminDefault || user.role !== "ADMIN");
+
+                        return (
                         <tr key={`usr-${user.id}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
                           
                           {/* NAME + DEFAULT ADMIN BADGE */}
@@ -3772,8 +4366,8 @@ export default function AdminDashboardPage() {
                                 <Eye className="w-4 h-4" />
                               </button>
 
-                              {/* EDIT BUTTON (If not default admin) */}
-                              {!user.isDefaultAdmin && (
+                              {/* EDIT BUTTON (Admin can edit his own account, but not other admin accounts) */}
+                              {canEdit && (
                                 <button
                                   onClick={() => handleOpenEditUserModal(user)}
                                   className="border border-slate-200 hover:bg-slate-100 text-slate-700 text-[10.5px] font-extrabold px-3 py-1.5 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5 uppercase tracking-wider font-mono"
@@ -3783,8 +4377,8 @@ export default function AdminDashboardPage() {
                                 </button>
                               )}
 
-                              {/* DELETE BUTTON (If not default admin) */}
-                              {!user.isDefaultAdmin && (
+                              {/* DELETE BUTTON */}
+                              {canDelete && (
                                 <button
                                   onClick={() => handleDeleteUser(user.id, user.name, user.isDefaultAdmin)}
                                   className="border border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 text-[10.5px] font-extrabold px-3 py-1.5 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5 uppercase tracking-wider font-mono"
@@ -3796,7 +4390,8 @@ export default function AdminDashboardPage() {
                             </div>
                           </td>
                         </tr>
-                      ))
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
@@ -3912,13 +4507,27 @@ export default function AdminDashboardPage() {
                     
                     {/* Left Column: Image Preview + Upload */}
                     <div className="md:col-span-5 space-y-3">
-                      <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-inner">
-                        <img
-                          src={slot.imageUrl}
-                          alt={slot.title}
-                          className="w-full h-44 object-cover rounded-xl"
-                        />
-                      </div>
+                      {slot.imageUrl ? (
+                        <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-inner">
+                          <img
+                            src={slot.imageUrl}
+                            alt={slot.title}
+                            className="w-full h-44 object-cover rounded-xl"
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-full h-44 rounded-xl border-2 border-dashed border-slate-300 bg-slate-100 flex flex-col items-center justify-center p-4 text-center">
+                          <span className="text-[10px] font-mono tracking-widest uppercase text-slate-400 font-bold mb-1">
+                            NO IMAGE (BLANK)
+                          </span>
+                          <span className="text-sm font-mono font-bold text-slate-700">
+                            Fits: {slot.dimensions.replace(/[xX]/g, " × ")}
+                          </span>
+                          <span className="text-[10px] font-mono text-slate-400 mt-1">
+                            Accepted Size: {slot.dimensions.replace(/[xX]/g, " × ")} px
+                          </span>
+                        </div>
+                      )}
 
                       <div>
                         <label className="block text-[9px] font-extrabold font-mono text-slate-400 uppercase tracking-wider mb-1.5">
@@ -4405,7 +5014,7 @@ export default function AdminDashboardPage() {
 
                               {/* DOWNLOAD BUTTON */}
                               <button
-                                onClick={handleExportDatabase}
+                                onClick={() => handleExportDatabase(bk)}
                                 title="Download Backup .json File"
                                 className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 inline-flex items-center justify-center transition-colors cursor-pointer border border-slate-200"
                               >
@@ -4447,13 +5056,19 @@ export default function AdminDashboardPage() {
               </button>
             </div>
 
-            <form onSubmit={handleCreateUser} className="space-y-4">
+            <form onSubmit={handleCreateUser} className="space-y-4" autoComplete="off">
+              {/* Hidden dummy inputs to absorb browser/password manager autofill */}
+              <input type="text" name="dummy_username" style={{ display: "none" }} tabIndex={-1} aria-hidden="true" autoComplete="off" />
+              <input type="password" name="dummy_password" style={{ display: "none" }} tabIndex={-1} aria-hidden="true" autoComplete="new-password" />
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Full Name</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Jennifer Friesen"
+                  name="dj_admin_new_username"
+                  autoComplete="off"
+                  placeholder="e.g. Rushdhi MR"
                   value={newUserName}
                   onChange={(e) => setNewUserName(e.target.value)}
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none focus:border-[#D31220]"
@@ -4465,6 +5080,8 @@ export default function AdminDashboardPage() {
                 <input
                   type="email"
                   required
+                  name="dj_admin_new_user_email"
+                  autoComplete="off"
                   placeholder="user@digitaljournal.com"
                   value={newUserEmail}
                   onChange={(e) => setNewUserEmail(e.target.value)}
@@ -4477,6 +5094,8 @@ export default function AdminDashboardPage() {
                 <input
                   type="password"
                   required
+                  name="dj_admin_new_user_password"
+                  autoComplete="new-password"
                   placeholder="Minimum 6 characters"
                   value={newUserPassword}
                   onChange={(e) => setNewUserPassword(e.target.value)}
@@ -4555,6 +5174,19 @@ export default function AdminDashboardPage() {
                   value={editUserEmail}
                   onChange={(e) => setEditUserEmail(e.target.value)}
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none focus:border-[#D31220]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  New Password <span className="text-slate-400 font-normal">(Leave blank to keep unchanged)</span>
+                </label>
+                <input
+                  type="password"
+                  placeholder="Enter new password (optional)"
+                  value={editUserPassword}
+                  onChange={(e) => setEditUserPassword(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:border-[#D31220]"
                 />
               </div>
 
@@ -5360,7 +5992,7 @@ export default function AdminDashboardPage() {
                 {reviewSummary}
               </p>
               <div className="flex items-center gap-3 text-xs font-mono text-slate-500 border-y border-slate-100 py-3">
-                <span>BY {reviewingSubmission.authorName || "Jennifer Friesen"}</span>
+                <span>BY {reviewingSubmission.authorName || "Rushdhi MR"}</span>
                 <span>•</span>
                 <span>{reviewReadTime}</span>
                 <span>•</span>

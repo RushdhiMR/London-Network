@@ -185,7 +185,6 @@ export default function GoogleAccountChooserModal({
       const newUser = {
         name: pendingAccount.name,
         email: pendingAccount.email.toLowerCase().trim(),
-        password: newPassword.trim(),
         role: "Reader",
         registeredAt: new Date().toISOString(),
       };

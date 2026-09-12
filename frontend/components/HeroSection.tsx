@@ -39,6 +39,44 @@ export default function HeroSection() {
 
   useEffect(() => {
     try {
+      const getArticleTimestamp = (item: any): number => {
+        if (!item) return 0;
+        if (item.updatedAt) {
+          const t = new Date(item.updatedAt).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+        if (item.updated_at) {
+          const t = new Date(item.updated_at).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+        if (item.publishedAt) {
+          const t = new Date(item.publishedAt).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+        if (item.published_at) {
+          const t = new Date(item.published_at).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+        if (item.createdAt) {
+          const t = new Date(item.createdAt).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+        if (item.created_at) {
+          const t = new Date(item.created_at).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+        if (item.date) {
+          const t = new Date(item.date).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+        if (typeof item.id === "number") return item.id;
+        if (typeof item.id === "string") {
+          const num = parseInt(item.id.replace(/[^0-9]/g, ""), 10);
+          if (!isNaN(num) && num > 0) return num;
+        }
+        return 0;
+      };
+
       // 1. Home Page A+ Section (Carousel Main Story)
       let aPlusPublished = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
         if (!p || (p.status || "").toLowerCase() !== "published") return false;
@@ -50,6 +88,14 @@ export default function HeroSection() {
           p.is_featured === true
         ) && !pl.includes("section 2");
       });
+
+      if (aPlusPublished.length === 0) {
+        aPlusPublished = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
+          return p && (p.status || "").toLowerCase() === "published";
+        });
+      }
+
+      aPlusPublished.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
 
       const formattedAPlus = aPlusPublished.map((post, index) => {
         const cat = (post.category || "BUSINESS").toUpperCase();
@@ -93,6 +139,14 @@ export default function HeroSection() {
         return pl.includes("trending") || pl === "trending now" || pl === "trending now section";
       });
 
+      if (trendingPublished.length === 0) {
+        trendingPublished = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
+          return p && (p.status || "").toLowerCase() === "published";
+        }).slice(4, 10);
+      }
+
+      trendingPublished.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
+
       const formattedTrending = trendingPublished.map((post, index) => {
         const cat = (post.category || "NEWS").toUpperCase();
         const postSlug = (post.title || "")
@@ -101,12 +155,14 @@ export default function HeroSection() {
           .trim()
           .replace(/\s+/g, "-");
 
+        const displayDate = post.date || (post.updated_at ? new Date(post.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : (post.published_at ? new Date(post.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Just now"));
+
         return {
           number: `0${index + 1}`.slice(-2),
           category: cat,
           title: post.title,
-          time: post.date || "Just now",
-          image: post.imageUrl || post.image || "https://images.unsplash.com/photo-1563206767-5b18f218e8de?w=200&h=140&fit=crop",
+          time: displayDate,
+          image: post.imageUrl || post.image || (post as any).image_url || "https://images.unsplash.com/photo-1563206767-5b18f218e8de?w=200&h=140&fit=crop",
           hasVideo: false,
           href: `/${cat.toLowerCase()}/news/${postSlug}?id=${post.id}`
         };
@@ -177,6 +233,18 @@ export default function HeroSection() {
       readTime: "4 MIN READ",
       image: "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=1200&h=800&fit=crop",
       href: "/business/startups/startups-bet-on-autonomous-ai-agents"
+    },
+    {
+      id: 6,
+      category: "TECHNOLOGY",
+      title: "Next-generation quantum networks achieve milestone in long-distance entanglement",
+      excerpt: "Researchers demonstrate stable quantum communication across terrestrial fiber networks, marking a major leap toward unhackable global infrastructure.",
+      author: "Jennifer Friesen",
+      authorAvatar: "/author_woman.jpg",
+      date: "July 24, 2026",
+      readTime: "5 MIN READ",
+      image: "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=1200&h=800&fit=crop",
+      href: "/technology/innovations/next-generation-quantum-networks-milestone"
     }
   ];
 
@@ -219,7 +287,13 @@ export default function HeroSection() {
     }
   ];
 
-  const allCarouselArticles = userPublishedArticles.length > 0 ? [...userPublishedArticles, ...carouselArticles] : carouselArticles;
+  const allCarouselArticles = (
+    userPublishedArticles.length >= 6
+      ? userPublishedArticles
+      : (userPublishedArticles.length > 0 
+          ? [...userPublishedArticles, ...carouselArticles] 
+          : carouselArticles)
+  ).slice(0, 6);
 
   const handlePrevSlide = () => {
     setCurrentSlide((prev) => (prev === 0 ? allCarouselArticles.length - 1 : prev - 1));
@@ -396,6 +470,18 @@ export default function HeroSection() {
                     <img 
                       src={item.image} 
                       alt={item.title}
+                      onError={(e) => {
+                        const fallbacks = [
+                          "https://images.unsplash.com/photo-1563206767-5b18f218e8de?w=200&h=140&fit=crop",
+                          "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=200&h=140&fit=crop",
+                          "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&h=140&fit=crop",
+                          "https://images.unsplash.com/photo-1547683905-f686c993aae5?w=200&h=140&fit=crop"
+                        ];
+                        const fallback = fallbacks[idx % fallbacks.length];
+                        if (e.currentTarget.src !== fallback) {
+                          e.currentTarget.src = fallback;
+                        }
+                      }}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
                     />
                   </div>

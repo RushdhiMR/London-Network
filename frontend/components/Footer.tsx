@@ -37,7 +37,8 @@ export default function Footer() {
               <li><Link href="#" className="hover:opacity-80 transition-opacity">Editorial advisory committee</Link></li>
               <li><Link href="#" className="hover:opacity-80 transition-opacity">Privacy policy</Link></li>
               <li><Link href="#" className="hover:opacity-80 transition-opacity">Terms of use</Link></li>
-              <li><Link href="#" className="hover:opacity-80 transition-opacity">Contact us</Link></li>
+              <li><Link href="/contact" className="hover:opacity-80 transition-opacity">Contact us</Link></li>
+              <li><Link href="/advertise" className="hover:opacity-80 transition-opacity">Advertise with us</Link></li>
             </ul>
           </div>
 

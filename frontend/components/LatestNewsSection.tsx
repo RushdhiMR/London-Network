@@ -18,46 +18,62 @@ export default function LatestNewsSection() {
     try {
       const getArticleTimestamp = (item: any): number => {
         if (!item) return 0;
-        if (item.createdAt) {
-          const t = new Date(item.createdAt).getTime();
+        if (item.updatedAt || item.updated_at) {
+          const t = new Date(item.updatedAt || item.updated_at).getTime();
           if (!isNaN(t) && t > 0) return t;
         }
-        if (item.created_at) {
-          const t = new Date(item.created_at).getTime();
+        if (item.published_at || item.publishedAt) {
+          const t = new Date(item.published_at || item.publishedAt).getTime();
           if (!isNaN(t) && t > 0) return t;
         }
-        if (item.publishedAt) {
-          const t = new Date(item.publishedAt).getTime();
+        if (item.createdAt || item.created_at) {
+          const t = new Date(item.createdAt || item.created_at).getTime();
           if (!isNaN(t) && t > 0) return t;
         }
-        if (item.date) {
+        if (item.date && item.date !== "Just now" && item.date !== "Today" && item.date !== "Just published") {
           const t = new Date(item.date).getTime();
           if (!isNaN(t) && t > 0) return t;
         }
         if (typeof item.id === "number") return item.id;
         if (typeof item.id === "string") {
+          const match = item.id.match(/\d{10,}/);
+          if (match) {
+            const num = parseInt(match[0], 10);
+            if (!isNaN(num) && num > 0) return num;
+          }
           const num = parseInt(item.id.replace(/[^0-9]/g, ""), 10);
           if (!isNaN(num) && num > 0) return num;
         }
         return 0;
       };
 
-      const approved = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
+      let approved = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
         if (!p || (p.status || "").toLowerCase() !== "published") return false;
         const pl = (p.placement || "").toLowerCase();
         return pl.includes("latest") || pl === "latest news" || pl === "latest news section";
       });
 
+      if (approved.length < 4) {
+        const otherPublished = (Array.isArray(liveArticles) ? liveArticles : []).filter(
+          (a) => a && (a.status || "").toLowerCase() === "published" && !approved.some(p => String(p.id) === String(a.id))
+        );
+        approved = [...approved, ...otherPublished];
+      }
+
       approved.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
-      const formatted = approved.map((post, idx) => ({
-        id: post.id || `pub-latest-${idx}`,
-        category: (post.category || "WORLD").toUpperCase(),
-        title: post.title,
-        time: post.date || "Just published",
-        image: post.imageUrl || post.image || "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=300&h=200&fit=crop",
-        href: `/${(post.category || "news").toLowerCase()}/${(post.title || "").toLowerCase().replace(/[^a-z0-9]+/g, "-")}?id=${post.id}`,
-        summary: post.summary || post.content?.replace(/<[^>]+>/g, "").slice(0, 140) + "..."
-      }));
+      const formatted = approved.map((post, idx) => {
+        const displayDate = post.date || (post.updated_at ? new Date(post.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : (post.published_at ? new Date(post.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Just published"));
+
+        return {
+          id: post.id || `pub-latest-${idx}`,
+          category: (post.category || "WORLD").toUpperCase(),
+          title: post.title,
+          time: displayDate,
+          image: post.imageUrl || post.image || (post as any).image_url || "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=300&h=200&fit=crop",
+          href: `/${(post.category || "news").toLowerCase()}/${(post.title || "").toLowerCase().replace(/[^a-z0-9]+/g, "-")}?id=${post.id}`,
+          summary: post.summary || post.content?.replace(/<[^>]+>/g, "").slice(0, 140) + "..."
+        };
+      });
       setPublishedNews(formatted);
     } catch (e) {
       console.warn("Could not read published articles for LatestNews:", e);
@@ -110,8 +126,8 @@ export default function LatestNewsSection() {
   };
 
   const displayStacked = publishedNews.length > 1 
-    ? [...publishedNews.slice(1), ...stackedArticles].slice(0, 3) 
-    : (publishedNews.length === 1 ? stackedArticles : stackedArticles);
+    ? publishedNews.slice(1, 4) 
+    : (publishedNews.length === 1 ? [...publishedNews.slice(1), ...stackedArticles].slice(0, 3) : stackedArticles);
 
   return (
     <section className="max-w-[1400px] mx-auto px-4 md:px-6 py-10 border-b border-gray-200 font-sans">
@@ -137,6 +153,11 @@ export default function LatestNewsSection() {
             <img
               src={mainFeatured.image}
               alt={mainFeatured.title}
+              onError={(e) => {
+                if (e.currentTarget.src !== "https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=700&h=525&fit=crop") {
+                  e.currentTarget.src = "https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=700&h=525&fit=crop";
+                }
+              }}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             />
           </Link>
@@ -207,6 +228,17 @@ export default function LatestNewsSection() {
                 <img
                   src={item.image}
                   alt={item.title}
+                  onError={(e) => {
+                    const fallbacks = [
+                      "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=300&h=200&fit=crop",
+                      "https://images.unsplash.com/photo-1518770660439-4636190af475?w=300&h=200&fit=crop",
+                      "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=300&h=200&fit=crop"
+                    ];
+                    const fallback = fallbacks[idx % fallbacks.length];
+                    if (e.currentTarget.src !== fallback) {
+                      e.currentTarget.src = fallback;
+                    }
+                  }}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                 />
               </Link>

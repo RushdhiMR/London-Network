@@ -32,18 +32,14 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // If no cookie, allow client-side auth context to verify localStorage/sessionStorage
   if (!sessionCookie) {
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('redirect', pathname);
-    return NextResponse.redirect(loginUrl);
+    return NextResponse.next();
   }
 
   const payload = decodeJWTPayload(sessionCookie);
-
-  if (!payload || (!payload.role && !payload.email)) {
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('redirect', pathname);
-    return NextResponse.redirect(loginUrl);
+  if (!payload) {
+    return NextResponse.next();
   }
 
   const role = (payload.role || '').toLowerCase().trim();
@@ -51,8 +47,8 @@ export function middleware(request: NextRequest) {
   const isAdmin = role === 'admin' || role === 'co-admin' || role === 'editor' || email.includes('admin') || payload.id === 1;
   const isWriter = isAdmin || role === 'writer' || role === 'editor' || email.includes('writer');
 
-  // Writer route protection
-  if (isWriterRoute && !isWriter) {
+  // Writer route protection if signed in as reader only
+  if (isWriterRoute && !isWriter && role === 'reader') {
     return NextResponse.redirect(new URL('/reader', request.url));
   }
 

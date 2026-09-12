@@ -19,7 +19,8 @@ import {
   Lock,
   ExternalLink
 } from "lucide-react";
-import { getUserProfile, saveUserProfile, resolveUserAvatar } from "@/lib/userProfiles";
+import { getUserProfile, saveUserProfile, resolveUserAvatar, isUploadedAvatar } from "@/lib/userProfiles";
+import { uploadImageToBackblaze } from "@/lib/imageUtils";
 
 export default function ReaderDashboardPage() {
   const [currentUser, setCurrentUser] = useState<{
@@ -44,7 +45,7 @@ export default function ReaderDashboardPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
@@ -52,6 +53,17 @@ export default function ReaderDashboardPage() {
         setProfileAvatar(reader.result as string);
       };
       reader.readAsDataURL(file);
+
+      // Direct upload to Backblaze B2 in "avatars" folder
+      try {
+        const cleanName = (currentUser?.name || currentUser?.email?.split("@")[0] || "reader").toLowerCase().replace(/[^a-z0-9]/g, "-");
+        const b2Url = await uploadImageToBackblaze(file, `avatar-${cleanName}-${Date.now()}.webp`, "avatars");
+        if (b2Url && b2Url.startsWith("http")) {
+          setProfileAvatar(b2Url);
+        }
+      } catch (err) {
+        console.warn("Backblaze avatar upload warning:", err);
+      }
     }
   };
 
@@ -89,17 +101,18 @@ export default function ReaderDashboardPage() {
       const savedProfile = getUserProfile(activeEmail);
       const displayRole = auth.user.role === "admin" ? "Admin" : auth.user.role === "writer" ? "Writer" : "Reader";
 
+      const rawAvatar = savedProfile?.avatar || auth.user.avatar;
       const resolvedAvatar = resolveUserAvatar({
         name: savedProfile?.name || auth.user.name,
         email: activeEmail,
         role: displayRole,
-        avatar: savedProfile?.avatar,
+        avatar: isUploadedAvatar(rawAvatar) ? rawAvatar : undefined,
       });
 
       const finalUser = {
         name: savedProfile?.name || auth.user.name,
         email: activeEmail,
-        avatar: resolvedAvatar,
+        avatar: isUploadedAvatar(resolvedAvatar) ? resolvedAvatar : "",
         role: displayRole,
         bio: savedProfile?.bio || "Avid reader of global economics and technology innovation."
       };
@@ -156,7 +169,7 @@ export default function ReaderDashboardPage() {
     window.location.href = "/";
   };
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profileName.trim() || !profileEmail.trim()) {
       showToast("❌ Name and Email cannot be empty.");
@@ -168,6 +181,18 @@ export default function ReaderDashboardPage() {
       return;
     }
 
+    let finalAvatar = profileAvatar && isUploadedAvatar(profileAvatar) ? profileAvatar : "";
+
+    if (finalAvatar && finalAvatar.startsWith("data:")) {
+      try {
+        const cleanName = (profileName || "reader").toLowerCase().replace(/[^a-z0-9]/g, "-");
+        const b2Url = await uploadImageToBackblaze(finalAvatar, `avatar-${cleanName}-${Date.now()}.webp`, "avatars");
+        if (b2Url && b2Url.startsWith("http")) {
+          finalAvatar = b2Url;
+        }
+      } catch (e) {}
+    }
+
     const updatedUser = {
       ...currentUser,
       name: profileName.trim(),
@@ -175,7 +200,7 @@ export default function ReaderDashboardPage() {
       bio: profileBio.trim(),
       linkedin: profileLinkedin.trim(),
       role: currentUser?.role || "Reader",
-      avatar: profileAvatar || currentUser?.avatar || "/author_bluesuit.jpg"
+      avatar: finalAvatar
     };
 
     saveUserProfile(updatedUser);
@@ -220,15 +245,19 @@ export default function ReaderDashboardPage() {
             aria-label="User Account Menu"
           >
             {/* Avatar image */}
-            <div className="w-7 h-7 rounded-full overflow-hidden bg-slate-200 flex-shrink-0 border border-slate-300/80">
-              <img
-                src={currentUser?.avatar || "/author_bluesuit.jpg"}
-                alt={currentUser?.name || "Nesto Super"}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = "none";
-                }}
-              />
+            <div className="w-7 h-7 rounded-full overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-300/80 flex items-center justify-center">
+              {currentUser?.avatar && isUploadedAvatar(currentUser.avatar) ? (
+                <img
+                  src={currentUser.avatar}
+                  alt={currentUser?.name || "Nesto Super"}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = "none";
+                  }}
+                />
+              ) : (
+                <User size={15} className="text-slate-400" />
+              )}
             </div>
             
             {/* User Name */}
@@ -437,11 +466,17 @@ export default function ReaderDashboardPage() {
 
             {/* Avatar & Photo Section */}
             <div className="flex items-center gap-4 px-6 pt-6 pb-2">
-              <img
-                src={profileAvatar || currentUser?.avatar || "/author_bluesuit.jpg"}
-                alt={profileName || "Nesto Super"}
-                className="w-16 h-16 rounded-2xl object-cover border border-slate-200 shadow-2xs flex-shrink-0"
-              />
+              {(profileAvatar && isUploadedAvatar(profileAvatar)) || (currentUser?.avatar && isUploadedAvatar(currentUser.avatar)) ? (
+                <img
+                  src={profileAvatar || currentUser?.avatar}
+                  alt={profileName || "Nesto Super"}
+                  className="w-16 h-16 rounded-2xl object-cover border border-slate-200 shadow-2xs flex-shrink-0"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-2xl border border-slate-200 bg-slate-100 flex items-center justify-center flex-shrink-0">
+                  <User size={28} className="text-slate-400" />
+                </div>
+              )}
 
               <div>
                 <label className="text-[#005691] font-bold text-xs sm:text-sm hover:underline cursor-pointer block">

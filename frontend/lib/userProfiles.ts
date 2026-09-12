@@ -116,13 +116,42 @@ export function saveUserProfile(user: UserProfileData) {
       });
     }
 
-    // 7. Sync with database via API
+    // 7. Sync with database via API (which uploads base64 to Backblaze B2)
     if (typeof window !== "undefined") {
       fetch("/api/auth/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updatedProfile)
-      }).catch((err) => console.warn("Database profile sync warning:", err));
+      })
+        .then((res) => {
+          if (!res.ok) return null;
+          return res.json().catch(() => null);
+        })
+        .then((data) => {
+          if (!data) return;
+          if (data && data.success && data.user && data.user.avatar && data.user.avatar !== updatedProfile.avatar) {
+            const b2Profile = { ...updatedProfile, avatar: data.user.avatar };
+            try {
+              const existingDb = localStorage.getItem("dj_user_profiles_db");
+              const dbObj = existingDb ? JSON.parse(existingDb) : {};
+              dbObj[emailKey] = b2Profile;
+              safeSetItem("dj_user_profiles_db", JSON.stringify(dbObj));
+              safeSetItem("dj_user_profile", JSON.stringify(b2Profile));
+              ["dj_user", "dj_writer_user"].forEach((k) => {
+                const s = localStorage.getItem(k);
+                if (s) {
+                  const o = JSON.parse(s);
+                  if (o?.email && o.email.toLowerCase().trim() === emailKey) {
+                    o.avatar = data.user.avatar;
+                    safeSetItem(k, JSON.stringify(o));
+                  }
+                }
+              });
+              window.dispatchEvent(new CustomEvent("dj_profile_updated", { detail: b2Profile }));
+            } catch (e) {}
+          }
+        })
+        .catch(() => {});
     }
 
     // 8. Dispatch custom profile update event for instant component re-rendering
@@ -359,45 +388,49 @@ export function getAuthorFullProfileByNameOrEmail(name?: string, email?: string)
   return null;
 }
 
+export function isUploadedAvatar(url?: string | null): boolean {
+  if (!url || typeof url !== "string") return false;
+  const trimmed = url.trim();
+  if (trimmed.length <= 5) return false;
+  if (
+    trimmed.includes("author_bluesuit") ||
+    trimmed.includes("author_woman") ||
+    trimmed.includes("author_glasses") ||
+    trimmed.includes("author_beard") ||
+    trimmed.includes("cart") ||
+    trimmed.includes("admin_profile")
+  ) {
+    return false;
+  }
+  return true;
+}
+
 /**
  * Universally resolves the consistent, synchronized avatar for any user across Homepage, Writer, Reader, and Admin portals.
+ * Returns empty string if the user did not upload a custom avatar.
  */
 export function resolveUserAvatar(user?: { name?: string; role?: string; email?: string; avatar?: string } | null): string {
-  if (!user) return "/author_bluesuit.jpg";
+  if (!user) return "";
 
   // 1. Check saved user profile in database/localStorage by email or name FIRST
   // If this author has an active account or saved profile image, that ALWAYS takes priority!
   if (user.email || user.name) {
     const saved = getUserProfile(user.email);
-    if (saved?.avatar && saved.avatar.length > 5 && !saved.avatar.includes("cart") && !saved.avatar.includes("admin_profile")) {
+    if (saved?.avatar && isUploadedAvatar(saved.avatar)) {
       return saved.avatar;
     }
     const resolved = getAuthorAvatarByNameOrEmail(user.name, user.email);
-    if (resolved && resolved.length > 5 && !resolved.includes("cart") && !resolved.includes("admin_profile")) {
+    if (resolved && isUploadedAvatar(resolved)) {
       return resolved;
     }
   }
 
-  // 2. Direct valid avatar on user object if not generic
-  if (user.avatar && user.avatar.length > 5 && !user.avatar.includes("cart") && !user.avatar.includes("admin_profile")) {
+  // 2. Direct valid avatar on user object if user uploaded one
+  if (user.avatar && isUploadedAvatar(user.avatar)) {
     return user.avatar;
   }
 
-  // 3. Fallbacks for default demo authors
-  const name = (user.name || "").toLowerCase().trim();
-  const role = (user.role || "").toLowerCase().trim();
-
-  if (name.includes("jennifer") || name.includes("friesen") || name.includes("sarah")) {
-    return "/author_woman.jpg";
-  }
-  if (name.includes("april") || name.includes("hicke")) {
-    return "/author_glasses.jpg";
-  }
-  if (name.includes("chris") || name.includes("hogg") || role === "admin") {
-    return "/author_beard.jpg";
-  }
-
-  return "/author_bluesuit.jpg";
+  return "";
 }
 
 /**

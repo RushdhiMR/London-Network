@@ -1,20 +1,33 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { useAuth } from "@/lib/auth-context";
 import { ShieldCheck, Lock, Mail, Eye, EyeOff, ArrowRight } from "lucide-react";
 
 export default function AdminLoginPage() {
   const router = useRouter();
+  const auth = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+
+  useEffect(() => {
+    if (!auth.loading && auth.authenticated && auth.user) {
+      const role = (auth.user.role || "").toLowerCase();
+      if (role === "admin" || role === "co-admin" || auth.user.email.includes("admin")) {
+        router.replace("/admin");
+      } else {
+        router.replace(role === "writer" ? "/writer" : "/reader");
+      }
+    }
+  }, [auth.loading, auth.authenticated, auth.user, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

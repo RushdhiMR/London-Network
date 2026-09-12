@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { normalizeEmail } from '@/lib/auth';
 import { sendPasswordResetEmail } from '@/lib/email';
+import { DB } from '@/lib/db';
 import crypto from 'crypto';
 
 export async function POST(request: Request) {
@@ -18,13 +19,29 @@ export async function POST(request: Request) {
     const normalized = normalizeEmail(email);
 
     try {
-      const token = crypto.randomBytes(32).toString('hex');
-      const host = request.headers.get('host') || 'localhost:3000';
-      const protocol = host.includes('localhost') ? 'http' : 'https';
-      const origin = process.env.FRONTEND_URL || `${protocol}://${host}`;
-      const resetUrl = `${origin}/reset-password?token=${token}`;
+      const existingUser = await DB.getUserByEmail(normalized);
+      if (existingUser) {
+        const token = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-      await sendPasswordResetEmail(normalized, resetUrl);
+        // Update in MySQL / JSON DB
+        try {
+          const pool = (await import('@/lib/db')).getDbPool();
+          await pool.query('UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE id = ?', [token, expiresAt, existingUser.id]);
+        } catch (dbErr) {}
+
+        await DB.updateUser(existingUser.id, {
+          reset_token: token,
+          reset_token_expires: expiresAt.toISOString(),
+        });
+
+        const host = request.headers.get('host') || 'localhost:3000';
+        const protocol = host.includes('localhost') ? 'http' : 'https';
+        const origin = process.env.FRONTEND_URL || `${protocol}://${host}`;
+        const resetUrl = `${origin}/reset-password?token=${token}`;
+
+        await sendPasswordResetEmail(normalized, resetUrl);
+      }
     } catch (e) {
       console.warn('Password reset email trigger skipped:', e);
     }

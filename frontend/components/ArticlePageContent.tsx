@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { CheckCircle2, Bookmark, Share2, ArrowLeft, Send, Trash2, MessageSquare, ThumbsUp, Heart, Reply, CornerDownRight, Smile, Plus, X, Image as ImageIcon, Edit3 } from "lucide-react";
 import { generateAutoSEO } from "@/lib/seo";
 import { getUserProfile, getAuthorAvatarByNameOrEmail, getAuthorFullProfileByNameOrEmail, resolveUserAvatar } from "@/lib/userProfiles";
-import { useLiveArticles } from "@/lib/articlesSync";
+import { useLiveArticles, useLiveAdSlots, formatAdDimensions, isDuplicateAdImage } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
 
 interface ArticleReply {
@@ -183,13 +183,16 @@ function ArticlePageContentInner({
   sidebarPicks,
 }: ArticlePageContentProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const loginHref = pathname ? `/login?redirect=${encodeURIComponent(pathname)}` : "/login";
+  const registerHref = pathname ? `/register?redirect=${encodeURIComponent(pathname)}` : "/register";
 
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const { adSlots } = useLiveAdSlots();
 
   useEffect(() => {
     setIsMounted(true);
@@ -266,7 +269,7 @@ function ArticlePageContentInner({
         const cleanCurrentTitle = clean(currentTitle);
 
         const matched = liveArticles.find((p) => {
-          if (!p || (p.status || "").toLowerCase() !== "published") return false;
+          if (!p) return false;
           // 1. Direct ID match from URL param
           if (searchId && (String(p.id) === String(searchId) || p.slug === searchId)) return true;
 
@@ -285,6 +288,15 @@ function ArticlePageContentInner({
 
           // 4. Exact title matching
           if (cleanCurrentTitle && pCleanTitle && (pCleanTitle === cleanCurrentTitle || (cleanCurrentTitle.length > 15 && pCleanTitle.includes(cleanCurrentTitle)))) {
+            return true;
+          }
+
+          // 5. Slug prefix or inclusion matching
+          if (cleanLastSegment && pCleanSlug && (pCleanSlug.includes(cleanLastSegment) || cleanLastSegment.includes(pCleanSlug))) {
+            return true;
+          }
+
+          if (cleanLastSegment && pCleanTitle && (pCleanTitle.includes(cleanLastSegment) || cleanLastSegment.includes(pCleanTitle))) {
             return true;
           }
 
@@ -337,6 +349,14 @@ function ArticlePageContentInner({
     }
   }, [liveArticles, newsData, searchParams]);
 
+  // Clean address bar: strip unnecessary query strings (?id=50, ?sub=...) for a clear, readable route path
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.search) {
+      const cleanPath = window.location.pathname;
+      window.history.replaceState(null, "", cleanPath);
+    }
+  }, []);
+
   useEffect(() => {
     const handleProfileUpdate = (e: any) => {
       try {
@@ -371,10 +391,80 @@ function ArticlePageContentInner({
 
   const auth = useAuth();
 
+  // Track article view in real time:
+  // - Unregistered person: Every visit increments view count by 1.
+  // - Registered account: Exactly 1 view per account for this article.
+  const didRecordView = useRef<string | null>(null);
+  useEffect(() => {
+    // Wait until auth has completed loading to avoid false guest tracking on logged-in users
+    if (auth.loading) return;
+    if (!activeNewsData?.title || typeof window === "undefined") return;
+
+    const articleIdentifier = String((activeNewsData as any).id || (activeNewsData as any).slug || activeNewsData.title).trim();
+    const activeEmail = auth.user?.email ? auth.user.email.trim().toLowerCase() : null;
+    const viewSessionKey = `${articleIdentifier}_${activeEmail || "guest"}`;
+
+    if (didRecordView.current === viewSessionKey) return;
+    didRecordView.current = viewSessionKey;
+
+    fetch("/api/articles/views", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: activeNewsData.title,
+        slug: (activeNewsData as any).slug,
+        articleId: (activeNewsData as any).id,
+        userIdentifier: activeEmail,
+      }),
+    })
+      .then((res) => (res.ok ? res.json().catch(() => null) : null))
+      .then(async (data) => {
+        if (data && data.success && typeof data.reads === "number") {
+          try {
+            const { getCachedArticles, setCachedArticles } = await import("@/lib/articlesSync");
+            const cached = getCachedArticles();
+            if (Array.isArray(cached) && cached.length > 0) {
+              const updatedCache = cached.map((a: any) => {
+                if (
+                  ((activeNewsData as any).id && String(a.id) === String((activeNewsData as any).id)) ||
+                  (a.title && a.title.trim().toLowerCase() === activeNewsData.title.trim().toLowerCase()) ||
+                  ((activeNewsData as any).slug && a.slug === (activeNewsData as any).slug)
+                ) {
+                  return { ...a, reads: data.reads, views: data.reads, reads_count: data.reads };
+                }
+                return a;
+              });
+              setCachedArticles(updatedCache, false);
+            }
+
+            const raw = localStorage.getItem("dj_writer_submitted_articles");
+            if (raw) {
+              const list = JSON.parse(raw);
+              if (Array.isArray(list)) {
+                const updated = list.map((a: any) => {
+                  if (
+                    ((activeNewsData as any).id && String(a.id) === String((activeNewsData as any).id)) ||
+                    (a.title && a.title.trim().toLowerCase() === activeNewsData.title.trim().toLowerCase()) ||
+                    ((activeNewsData as any).slug && a.slug === (activeNewsData as any).slug)
+                  ) {
+                    return { ...a, reads: data.reads, views: data.reads, reads_count: data.reads };
+                  }
+                  return a;
+                });
+                localStorage.setItem("dj_writer_submitted_articles", JSON.stringify(updated));
+              }
+            }
+            window.dispatchEvent(new Event("dj_articles_updated"));
+          } catch (e) {}
+        }
+      })
+      .catch(() => {});
+  }, [activeNewsData?.title, (activeNewsData as any)?.id, auth.loading, auth.user?.email]);
+
   const isAdmin = Boolean(
     isMounted && (
       auth.role === "admin" ||
-      (auth.user && (auth.user.role === "admin" || auth.user.email === "admin@digitaljournal.com" || auth.user.email === "akramyoonos006@gmail.com")) ||
+      (auth.user && auth.user.role === "admin") ||
       (typeof window !== "undefined" && (
         localStorage.getItem("dj_admin_portal_authenticated") === "true" ||
         localStorage.getItem("dj_user_role") === "admin"
@@ -461,13 +551,17 @@ function ArticlePageContentInner({
 
   const handlePostComment = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!auth.user) {
+      router.push(loginHref);
+      return;
+    }
     if (!newCommentText.trim() && !commentImage) return;
 
     setIsPostingComment(true);
-    const authorName = auth.user?.name || guestName.trim() || "Reader";
-    const authorAvatar = auth.user?.avatar || "";
-    const authorEmail = auth.user?.email || "";
-    const authorRole = auth.user?.role || (isAdmin ? "admin" : "reader");
+    const authorName = auth.user.name || "Reader";
+    const authorAvatar = auth.user.avatar || "";
+    const authorEmail = auth.user.email || "";
+    const authorRole = auth.user.role || (isAdmin ? "admin" : "reader");
     const isAuthor = isUserArticleAuthor(authorEmail, authorName);
     const visitorId = typeof window !== "undefined" ? (localStorage.getItem("dj_visitor_id") || `vis_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`) : undefined;
     if (typeof window !== "undefined" && visitorId) {
@@ -506,12 +600,16 @@ function ArticlePageContentInner({
   };
 
   const handlePostReply = (parentCommentId: string) => {
+    if (!auth.user) {
+      router.push(loginHref);
+      return;
+    }
     if (!replyText.trim() && !replyImage) return;
 
-    const authorName = auth.user?.name || replyGuestName.trim() || "Reader";
-    const authorAvatar = auth.user?.avatar || "";
-    const authorEmail = auth.user?.email || "";
-    const authorRole = auth.user?.role || (isAdmin ? "admin" : "reader");
+    const authorName = auth.user.name || "Reader";
+    const authorAvatar = auth.user.avatar || "";
+    const authorEmail = auth.user.email || "";
+    const authorRole = auth.user.role || (isAdmin ? "admin" : "reader");
     const isAuthor = isUserArticleAuthor(authorEmail, authorName);
     const visitorId = typeof window !== "undefined" ? (localStorage.getItem("dj_visitor_id") || `vis_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`) : undefined;
     if (typeof window !== "undefined" && visitorId) {
@@ -987,10 +1085,25 @@ function ArticlePageContentInner({
             );
           });
 
-          const trueMainCategory = matchedArticle?.category || matchedArticle?.category_name || (activeNewsData.category && activeNewsData.category !== parent?.name ? activeNewsData.category : null) || newsData.category || parent?.name || "Business";
+          const isInvalidCategory = (name?: string | null) => !name || name.trim().toLowerCase() === "news" || name.trim().toLowerCase() === "undefined";
+          const resolveDisplayCategory = () => {
+            if (matchedArticle?.category && !isInvalidCategory(matchedArticle.category)) return matchedArticle.category;
+            if (matchedArticle?.category_name && !isInvalidCategory(matchedArticle.category_name)) return matchedArticle.category_name;
+            if (activeNewsData.category && !isInvalidCategory(activeNewsData.category)) return activeNewsData.category;
+            if (newsData.category && !isInvalidCategory(newsData.category)) return newsData.category;
+            if (parent?.name && !isInvalidCategory(parent.name)) return parent.name;
+            if (subName && !isInvalidCategory(subName)) return subName;
+            if (subcategory && !isInvalidCategory(subcategory)) return subcategory.charAt(0).toUpperCase() + subcategory.slice(1);
+            return "World";
+          };
+
+          const trueMainCategory = resolveDisplayCategory();
           const formatCategorySlug = (cat: string) => cat.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
           const mainCategorySlug = formatCategorySlug(trueMainCategory);
-          const mainCategoryHref = `/${mainCategorySlug}`;
+          const newsPrefixedCategories = ["world", "politics", "economy", "markets", "lifestyle", "sports", "entertainment", "health"];
+          const mainCategoryHref = newsPrefixedCategories.includes(mainCategorySlug)
+            ? `/news/${mainCategorySlug}`
+            : `/${mainCategorySlug}`;
 
           return (
             <div className="flex items-center justify-between py-2.5 mb-4 text-[12px] font-sans text-zinc-500 border-b border-zinc-100">
@@ -1067,9 +1180,24 @@ function ArticlePageContentInner({
                 );
               });
 
-              const mainCategoryName = (matchedArticle?.category || matchedArticle?.category_name || (activeNewsData.category && activeNewsData.category !== parent?.name ? activeNewsData.category : null) || newsData.category || parent?.name || "Business").trim();
+              const isInvalidCategory = (name?: string | null) => !name || name.trim().toLowerCase() === "news" || name.trim().toLowerCase() === "undefined";
+              const resolveDisplayCategory = () => {
+                if (matchedArticle?.category && !isInvalidCategory(matchedArticle.category)) return matchedArticle.category;
+                if (matchedArticle?.category_name && !isInvalidCategory(matchedArticle.category_name)) return matchedArticle.category_name;
+                if (activeNewsData.category && !isInvalidCategory(activeNewsData.category)) return activeNewsData.category;
+                if (newsData.category && !isInvalidCategory(newsData.category)) return newsData.category;
+                if (parent?.name && !isInvalidCategory(parent.name)) return parent.name;
+                if (subName && !isInvalidCategory(subName)) return subName;
+                if (subcategory && !isInvalidCategory(subcategory)) return subcategory.charAt(0).toUpperCase() + subcategory.slice(1);
+                return "World";
+              };
+
+              const mainCategoryName = resolveDisplayCategory().trim();
               const mainCategorySlug = formatCategorySlug(mainCategoryName);
-              const mainCategoryHref = `/${mainCategorySlug}`;
+              const newsPrefixedCategories = ["world", "politics", "economy", "markets", "lifestyle", "sports", "entertainment", "health"];
+              const mainCategoryHref = newsPrefixedCategories.includes(mainCategorySlug)
+                ? `/news/${mainCategorySlug}`
+                : `/${mainCategorySlug}`;
 
               return (
                 <div className="flex items-center gap-2 mb-3 font-standard-sans">
@@ -1139,8 +1267,8 @@ function ArticlePageContentInner({
               );
             })()}
 
-            {/* Featured Image - only displayed if not already inside the article content */}
-            {activeNewsData.image && (!activeNewsData.rawContent || (!activeNewsData.rawContent.includes(activeNewsData.image) && !activeNewsData.rawContent.includes("<img"))) && (
+            {/* Featured Hero Thumbnail Image - only show above content if content doesn't already have inline image(s) */}
+            {activeNewsData.image && !(/<img\b/i.test(activeNewsData.rawContent || "")) && (
               <div className="w-full max-h-[520px] rounded-2xl overflow-hidden mb-5 border border-slate-200 shadow-sm flex items-center justify-center bg-transparent">
                 <img
                   src={activeNewsData.image}
@@ -1152,7 +1280,7 @@ function ArticlePageContentInner({
 
             {/* News Body Content */}
             {activeNewsData.rawContent ? (
-              <div className="prose prose-slate max-w-none text-zinc-900 leading-[1.8] font-serif text-[17px] md:text-[18px] space-y-4 flow-root [&_a]:text-[#BF1E2D] [&_a]:font-semibold [&_a]:underline hover:[&_a]:text-[#901320] [&_b]:font-bold [&_strong]:font-bold [&_blockquote]:border-l-4 [&_blockquote]:border-[#F97316] [&_blockquote]:pl-4 [&_blockquote]:py-2.5 [&_blockquote]:my-4 [&_blockquote]:italic [&_blockquote]:text-slate-700 [&_blockquote]:bg-slate-50/80 [&_blockquote]:rounded-r-xl [&_pre]:bg-slate-100/90 [&_pre]:p-3.5 [&_pre]:my-4 [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-slate-200/80 [&_pre]:overflow-x-auto [&_pre]:font-mono [&_pre]:text-sm [&_pre]:text-slate-800 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6">
+              <div className="prose prose-slate max-w-none text-zinc-900 leading-[1.8] font-serif text-[17px] md:text-[18px] space-y-4 flow-root [&_figure]:my-5 [&_figure]:max-w-full [&_figcaption]:flex [&_figcaption]:items-center [&_figcaption]:justify-between [&_figcaption]:gap-3 [&_figcaption]:text-xs [&_figcaption]:text-slate-500 [&_figcaption]:mt-1.5 [&_a]:text-[#BF1E2D] [&_a]:font-semibold [&_a]:underline hover:[&_a]:text-[#901320] [&_b]:font-bold [&_strong]:font-bold [&_blockquote]:border-l-4 [&_blockquote]:border-[#F97316] [&_blockquote]:pl-4 [&_blockquote]:py-2.5 [&_blockquote]:my-4 [&_blockquote]:italic [&_blockquote]:text-slate-700 [&_blockquote]:bg-slate-50/80 [&_blockquote]:rounded-r-xl [&_pre]:bg-slate-100/90 [&_pre]:p-3.5 [&_pre]:my-4 [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-slate-200/80 [&_pre]:overflow-x-auto [&_pre]:font-mono [&_pre]:text-sm [&_pre]:text-slate-800 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6">
                 {(() => {
                   let rawHtml = activeNewsData.rawContent;
                   if (rawHtml.startsWith("<") && rawHtml.includes("&lt;")) {
@@ -1248,52 +1376,71 @@ function ArticlePageContentInner({
                     </div>
 
                     {/* Write Opinion / Comment Box */}
-                    <form onSubmit={handlePostComment} className="bg-slate-50/80 border border-slate-200 rounded-2xl p-4 sm:p-5 mb-8 shadow-2xs">
-                      {/* Hidden Image File Input */}
-                      <input
-                        type="file"
-                        ref={commentFileInputRef}
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => handleImageFileChange(e, false)}
-                      />
-
-                      <div className="mb-3">
-                        <textarea
-                          value={newCommentText}
-                          onChange={(e) => setNewCommentText(e.target.value)}
-                          placeholder="Share your thoughts or opinion on this article..."
-                          rows={3}
-                          className="w-full p-3.5 text-xs sm:text-sm bg-white border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all resize-y"
+                    {!isMounted || !auth.user ? (
+                      <div className="bg-slate-50/90 border border-slate-200 rounded-2xl p-6 sm:p-7 mb-8 text-center shadow-2xs">
+                        <div className="w-11 h-11 rounded-full bg-red-50 text-[#BF1E2D] flex items-center justify-center mx-auto mb-3 border border-red-100 shadow-2xs">
+                          <MessageSquare size={20} />
+                        </div>
+                        <h4 className="text-sm font-bold text-slate-900 mb-1 font-standard-sans">
+                          Sign in to Join the Conversation
+                        </h4>
+                        <p className="text-xs text-slate-500 max-w-md mx-auto mb-4 leading-relaxed font-sans">
+                          Only verified London BigBen members can post opinions and join discussions. Sign in to your account or register to share your thoughts on this story.
+                        </p>
+                        <div className="flex items-center justify-center gap-3 flex-wrap">
+                          <Link
+                            href={loginHref}
+                            className="bg-[#BF1E2D] hover:bg-[#901320] text-white font-bold text-xs px-5 py-2.5 rounded-xl uppercase tracking-wider transition-all shadow-xs inline-flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Send size={12} />
+                            <span>Sign In to Comment</span>
+                          </Link>
+                          <Link
+                            href={registerHref}
+                            className="text-xs font-bold text-slate-700 hover:text-[#BF1E2D] px-4 py-2.5 rounded-xl border border-slate-200 hover:border-slate-300 bg-white transition-all shadow-2xs cursor-pointer"
+                          >
+                            Create Free Account
+                          </Link>
+                        </div>
+                      </div>
+                    ) : (
+                      <form onSubmit={handlePostComment} className="bg-slate-50/80 border border-slate-200 rounded-2xl p-4 sm:p-5 mb-8 shadow-2xs">
+                        {/* Hidden Image File Input */}
+                        <input
+                          type="file"
+                          ref={commentFileInputRef}
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleImageFileChange(e, false)}
                         />
 
-                        {/* Image Preview if selected */}
-                        {commentImage && (
-                          <div className="relative inline-block mt-2.5 rounded-xl overflow-hidden border border-slate-200 shadow-2xs group">
-                            <img src={commentImage} alt="Attachment preview" className="h-20 w-auto max-w-[200px] object-cover rounded-xl" />
-                            <button
-                              type="button"
-                              onClick={() => setCommentImage("")}
-                              className="absolute top-1 right-1 bg-black/75 hover:bg-black text-white p-1 rounded-full cursor-pointer transition-colors shadow-xs"
-                              title="Remove image"
-                            >
-                              <X size={12} />
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                        <div className="mb-3">
+                          <textarea
+                            value={newCommentText}
+                            onChange={(e) => setNewCommentText(e.target.value)}
+                            placeholder="Share your thoughts or opinion on this article..."
+                            rows={3}
+                            className="w-full p-3.5 text-xs sm:text-sm bg-white border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all resize-y"
+                          />
 
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {!isMounted || !auth.user ? (
-                            <input
-                              type="text"
-                              value={guestName}
-                              onChange={(e) => setGuestName(e.target.value)}
-                              placeholder="Your Name (Optional)"
-                              className="px-3.5 py-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] sm:max-w-[180px]"
-                            />
-                          ) : (
+                          {/* Image Preview if selected */}
+                          {commentImage && (
+                            <div className="relative inline-block mt-2.5 rounded-xl overflow-hidden border border-slate-200 shadow-2xs group">
+                              <img src={commentImage} alt="Attachment preview" className="h-20 w-auto max-w-[200px] object-cover rounded-xl" />
+                              <button
+                                type="button"
+                                onClick={() => setCommentImage("")}
+                                className="absolute top-1 right-1 bg-black/75 hover:bg-black text-white p-1 rounded-full cursor-pointer transition-colors shadow-xs"
+                                title="Remove image"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
                               <div className="w-6 h-6 rounded-full bg-[#BF1E2D] text-white flex items-center justify-center text-[10px] font-bold overflow-hidden">
                                 {auth.user.avatar ? (
@@ -1311,37 +1458,37 @@ function ArticlePageContentInner({
                                 )}
                               </span>
                             </div>
-                          )}
 
-                          {/* + Add Image Button */}
-                          <button
-                            type="button"
-                            onClick={() => commentFileInputRef.current?.click()}
-                            className="p-1.5 px-2.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 flex items-center gap-1 text-xs font-semibold transition-all cursor-pointer shadow-2xs"
-                            title="Attach an image"
-                          >
-                            <Plus size={14} className="text-[#BF1E2D]" />
-                            <span>Image</span>
-                          </button>
-                        </div>
+                            {/* + Add Image Button */}
+                            <button
+                              type="button"
+                              onClick={() => commentFileInputRef.current?.click()}
+                              className="p-1.5 px-2.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 flex items-center gap-1 text-xs font-semibold transition-all cursor-pointer shadow-2xs"
+                              title="Attach an image"
+                            >
+                              <Plus size={14} className="text-[#BF1E2D]" />
+                              <span>Image</span>
+                            </button>
+                          </div>
 
-                        <div className="flex items-center gap-3 self-end sm:self-auto">
-                          {commentSuccess && (
-                            <span className="text-xs font-bold text-emerald-600 animate-in fade-in">
-                              ✓ Opinion posted!
-                            </span>
-                          )}
-                          <button
-                            type="submit"
-                            disabled={(!newCommentText.trim() && !commentImage) || isPostingComment}
-                            className="bg-[#BF1E2D] hover:bg-red-800 active:scale-95 text-white font-bold text-xs px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl uppercase tracking-wider transition-all cursor-pointer shadow-xs disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
-                          >
-                            <Send size={13} />
-                            <span>Post Opinion</span>
-                          </button>
+                          <div className="flex items-center gap-3 self-end sm:self-auto">
+                            {commentSuccess && (
+                              <span className="text-xs font-bold text-emerald-600 animate-in fade-in">
+                                ✓ Opinion posted!
+                              </span>
+                            )}
+                            <button
+                              type="submit"
+                              disabled={(!newCommentText.trim() && !commentImage) || isPostingComment}
+                              className="bg-[#BF1E2D] hover:bg-red-800 active:scale-95 text-white font-bold text-xs px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl uppercase tracking-wider transition-all cursor-pointer shadow-xs disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+                            >
+                              <Send size={13} />
+                              <span>Post Opinion</span>
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    </form>
+                      </form>
+                    )}
 
                     {/* Comments Feed List */}
                     <div className="space-y-4">
@@ -1928,6 +2075,105 @@ function ArticlePageContentInner({
                 </Link>
               ))}
             </div>
+
+            {/* Category Pages — Sidebar Top Ad Box (Slot 4) */}
+            {(() => {
+              const adSlot4 = adSlots.find(s => s.id === "slot-4" || (s.categoryGroup === "CATEGORY" && s.dimensions.includes("250")) || s.title.includes("Sidebar Top"));
+              if (!adSlot4 || !adSlot4.isActive) return null;
+              const slot4Dimensions = formatAdDimensions(adSlot4.dimensions || "300X250");
+              const hasSlot4Image =
+                adSlot4.imageUrl &&
+                adSlot4.imageUrl.trim() !== "" &&
+                !isDuplicateAdImage(adSlot4.imageUrl, adSlot4.id, adSlots);
+              const isExternal = (adSlot4.actionType || "").toLowerCase().includes("external") || (adSlot4.targetUrl || "").startsWith("http");
+              return (
+                <div className="pt-6 border-t border-zinc-200 mt-6 w-full flex flex-col items-center">
+                  <span className="text-[9px] font-mono tracking-widest uppercase text-zinc-400 mb-2 font-bold self-start">
+                    SPONSORED
+                  </span>
+                  {hasSlot4Image ? (
+                    <a
+                      href={adSlot4.targetUrl || "#"}
+                      target={isExternal ? "_blank" : "_self"}
+                      rel={isExternal ? "noopener noreferrer" : undefined}
+                      className="block group relative overflow-hidden rounded-xs border border-zinc-200 bg-black w-full max-w-[300px] aspect-[300/250]"
+                    >
+                      <img
+                        src={adSlot4.imageUrl}
+                        alt={adSlot4.title || "Advertisement"}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-xs px-2 py-0.5 text-[9px] font-mono tracking-widest uppercase text-white border border-white/10">
+                        Ad
+                      </div>
+                    </a>
+                  ) : (
+                    <div className="w-full max-w-[300px] aspect-[300/250] bg-[#111827] border border-dashed border-gray-700 rounded-xs flex flex-col items-center justify-center p-4 text-center">
+                      <span className="text-[10px] font-mono tracking-widest uppercase text-[#D31220] font-bold mb-1">
+                        ADVERTISEMENT
+                      </span>
+                      <span className="text-white font-mono font-bold text-sm tracking-widest">
+                        {slot4Dimensions}
+                      </span>
+                      <span className="text-[10px] font-mono text-gray-400 mt-1">
+                        Size: {slot4Dimensions} px
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Category Pages — Sidebar Bottom Tall Ad Box (Slot 5: 300x600 skyscraper) */}
+            {(() => {
+              const adSlot5 = adSlots.find(s => s.id === "slot-5" || (s.categoryGroup === "CATEGORY" && s.dimensions.includes("600")) || s.title.includes("Tall Ad"));
+              if (!adSlot5 || !adSlot5.isActive) return null;
+              const slot5Dimensions = formatAdDimensions(adSlot5.dimensions || "300X600");
+              const hasSlot5Image =
+                adSlot5.imageUrl &&
+                adSlot5.imageUrl.trim() !== "" &&
+                !isDuplicateAdImage(adSlot5.imageUrl, adSlot5.id, adSlots);
+              const isExternal = (adSlot5.actionType || "").toLowerCase().includes("external") || (adSlot5.targetUrl || "").startsWith("http");
+              return (
+                <div className="pt-8 border-t border-zinc-200 mt-8 flex flex-col items-center w-full sticky top-24">
+                  <span className="text-[9px] font-mono tracking-widest uppercase text-zinc-400 mb-2 font-bold self-start">
+                    ADVERTISEMENT
+                  </span>
+                  {hasSlot5Image ? (
+                    <a
+                      href={adSlot5.targetUrl || "#"}
+                      target={isExternal ? "_blank" : "_self"}
+                      rel={isExternal ? "noopener noreferrer" : undefined}
+                      className="block group relative overflow-hidden rounded-xs border border-zinc-200 bg-black w-full max-w-[300px] h-[550px]"
+                    >
+                      <img
+                        src={adSlot5.imageUrl}
+                        alt={adSlot5.title || "Advertisement"}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                      <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-xs px-2 py-0.5 text-[9px] font-mono tracking-widest uppercase text-white border border-white/10">
+                        Ad
+                      </div>
+                    </a>
+                  ) : (
+                    <div className="w-full max-w-[300px] h-[550px] bg-[#111827] border border-dashed border-gray-700 rounded-xs flex flex-col items-center justify-center p-6 text-center">
+                      <span className="text-[10px] font-mono tracking-widest uppercase text-[#D31220] font-bold mb-2">
+                        ADVERTISEMENT
+                      </span>
+                      <span className="text-white font-mono font-bold text-base tracking-widest">
+                        {slot5Dimensions}
+                      </span>
+                      <span className="text-[11px] font-mono text-gray-400 mt-2">
+                        Size: {slot5Dimensions} px
+                      </span>
+                      <span className="text-[10px] font-mono text-gray-500 mt-1">
+                        Tall Skyscraper Ad
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
         </div>

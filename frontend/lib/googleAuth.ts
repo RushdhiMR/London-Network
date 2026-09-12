@@ -1,96 +1,126 @@
 /**
- * Official Google OAuth 2.0 & Identity Services Authentication Handler
+ * Official Google Identity Services (GIS) / OAuth 2.0 Client Authentication Handler
  */
 
-export interface GoogleUserCredential {
-  name: string;
-  email: string;
-  avatar?: string;
-  googleId?: string;
+export interface GoogleAuthResult {
+  credential?: string;
+  accessToken?: string;
 }
 
-export function triggerGoogleOAuth(
-  onSuccess: (user: GoogleUserCredential) => void,
-  onFallbackModal: () => void,
-  onError?: (errMessage: string) => void
-) {
-  if (typeof window === "undefined") return;
+let gsiScriptLoadingPromise: Promise<void> | null = null;
 
-  const realClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+export function loadGoogleIdentityScript(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
 
-  // If no real Google Client ID is set in environment, open Google Account Chooser Modal
-  if (!realClientId || realClientId.includes("demo") || realClientId.length < 10) {
-    onFallbackModal();
-    return;
+  if ((window as any).google?.accounts?.oauth2 || (window as any).google?.accounts?.id) {
+    return Promise.resolve();
   }
 
-  const handleCredentialResponse = (response: any) => {
-    if (response && response.credential) {
-      try {
-        const base64Url = response.credential.split(".")[1];
-        const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-        const jsonPayload = decodeURIComponent(
-          atob(base64)
-            .split("")
-            .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-            .join("")
-        );
-        const payload = JSON.parse(jsonPayload);
-        if (payload && payload.email) {
-          onSuccess({
-            name: payload.name || payload.email.split("@")[0],
-            email: payload.email,
-            avatar: payload.picture,
-            googleId: payload.sub,
-          });
-          return;
-        }
-      } catch (err) {
-        console.warn("Could not parse Google OAuth credential payload:", err);
-      }
-    }
-    onFallbackModal();
-  };
+  if (gsiScriptLoadingPromise) {
+    return gsiScriptLoadingPromise;
+  }
 
-  if ((window as any).google?.accounts?.id) {
-    try {
-      (window as any).google.accounts.id.initialize({
-        client_id: realClientId,
-        callback: handleCredentialResponse,
-        auto_select: false,
-      });
-      (window as any).google.accounts.id.prompt((notification: any) => {
-        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-          onFallbackModal();
-        }
-      });
-    } catch (e) {
-      onFallbackModal();
+  gsiScriptLoadingPromise = new Promise((resolve, reject) => {
+    const existingScript = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve());
+      existingScript.addEventListener("error", () => reject(new Error("Failed to load Google Identity script")));
+      return;
     }
-  } else {
-    // Inject official Google Identity Services Client Script
+
     const script = document.createElement("script");
     script.src = "https://accounts.google.com/gsi/client";
     script.async = true;
     script.defer = true;
-    script.onload = () => {
-      if ((window as any).google?.accounts?.id) {
-        try {
-          (window as any).google.accounts.id.initialize({
-            client_id: realClientId,
-            callback: handleCredentialResponse,
-          });
-          (window as any).google.accounts.id.prompt();
-        } catch (e) {
-          onFallbackModal();
-        }
-      } else {
-        onFallbackModal();
-      }
-    };
+    script.onload = () => resolve();
     script.onerror = () => {
-      onFallbackModal();
+      gsiScriptLoadingPromise = null;
+      reject(new Error("Failed to load Google Identity Services SDK from Google"));
     };
     document.head.appendChild(script);
+  });
+
+  return gsiScriptLoadingPromise;
+}
+
+export async function triggerGoogleOAuth(
+  onSuccess: (result: GoogleAuthResult) => void,
+  onError: (errMessage: string) => void
+) {
+  if (typeof window === "undefined") return;
+
+  const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+  if (!clientId || clientId.trim() === "") {
+    onError("Google Client ID is not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID in your .env.local file.");
+    return;
+  }
+
+  try {
+    await loadGoogleIdentityScript();
+
+    if (!(window as any).google?.accounts) {
+      onError("Google Identity Services failed to load. Please check your internet connection.");
+      return;
+    }
+
+    // Official Google Identity Services OAuth 2.0 Token Client (Popup flow for custom buttons)
+    if ((window as any).google?.accounts?.oauth2) {
+      const tokenClient = (window as any).google.accounts.oauth2.initTokenClient({
+        client_id: clientId.trim(),
+        scope: "openid email profile",
+        callback: (tokenResponse: any) => {
+          if (tokenResponse.error) {
+            if (tokenResponse.error === "popup_closed_by_user" || tokenResponse.error === "access_denied") {
+              onError("Google sign-in was cancelled.");
+            } else {
+              onError(tokenResponse.error_description || tokenResponse.error || "Google sign-in failed.");
+            }
+            return;
+          }
+
+          if (tokenResponse.access_token) {
+            onSuccess({
+              accessToken: tokenResponse.access_token,
+              credential: tokenResponse.id_token,
+            });
+          } else {
+            onError("Google sign-in did not return an authorization token.");
+          }
+        },
+        error_callback: (err: any) => {
+          onError(err?.message || "Google sign-in popup encountered an error.");
+        },
+      });
+
+      tokenClient.requestAccessToken({ prompt: "select_account" });
+      return;
+    }
+
+    // Fallback: Google Identity Services ID Token flow
+    if ((window as any).google?.accounts?.id) {
+      (window as any).google.accounts.id.initialize({
+        client_id: clientId.trim(),
+        callback: (response: any) => {
+          if (response && response.credential) {
+            onSuccess({ credential: response.credential });
+          } else {
+            onError("Google sign-in did not return a valid credential.");
+          }
+        },
+        auto_select: false,
+      });
+
+      (window as any).google.accounts.id.prompt((notification: any) => {
+        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+          onError("Google Sign-In prompt was suppressed by browser. Please allow popups or cookies for Google.");
+        }
+      });
+      return;
+    }
+
+    onError("Google Identity Services is not available.");
+  } catch (err: any) {
+    console.error("[Google Auth] Error triggering Google OAuth:", err);
+    onError(err?.message || "An unexpected error occurred during Google sign-in.");
   }
 }

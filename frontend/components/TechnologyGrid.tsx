@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesCategory } from "@/lib/articlesSync";
+import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesMainCategory } from "@/lib/articlesSync";
 
 const FALLBACK_TECH_ARTICLES = [
   {
@@ -25,6 +25,10 @@ export default function TechnologyGrid() {
 
   const getArticleTimestamp = (item: any): number => {
     if (!item) return 0;
+    if (item.updatedAt || item.updated_at) {
+      const t = new Date(item.updatedAt || item.updated_at).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
     if (item.published_at || item.publishedAt) {
       const t = new Date(item.published_at || item.publishedAt).getTime();
       if (!isNaN(t) && t > 0) return t;
@@ -52,8 +56,7 @@ export default function TechnologyGrid() {
 
   const techLive = (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
     if (!art || (art.status || "").toLowerCase() !== "published") return false;
-    if (isTopPlacementArticle(art)) return false;
-    return articleMatchesCategory(art, "technology");
+    return articleMatchesMainCategory(art, "technology") || (art.category || "").toLowerCase().includes("tech");
   });
 
   // Sort strictly by timestamp descending (newest first)
@@ -64,10 +67,12 @@ export default function TechnologyGrid() {
     title: a.title,
     description: a.description || a.summary || "",
     image: a.imageUrl || a.image || "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&h=480&fit=crop",
-    href: `/${(a.category || "technology").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}?id=${a.id}`
+    href: `/${(a.category || "technology").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}`
   }));
 
-  const displayArticles = [...mappedLive, ...FALLBACK_TECH_ARTICLES].slice(0, 2);
+  const displayArticles = mappedLive.length >= 2
+    ? mappedLive.slice(0, 2)
+    : (mappedLive.length > 0 ? [...mappedLive, ...FALLBACK_TECH_ARTICLES].slice(0, 2) : FALLBACK_TECH_ARTICLES);
 
   return (
     <section className="max-w-[1400px] mx-auto px-4 md:px-6 py-10 border-b border-gray-200 font-sans">

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesCategory } from "@/lib/articlesSync";
+import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesMainCategory } from "@/lib/articlesSync";
 
 export default function BottomCategoryGrid() {
   const { articles: liveArticles = [] } = useLiveArticles();
@@ -11,7 +11,7 @@ export default function BottomCategoryGrid() {
     return (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
       if (!art || (art.status || "").toLowerCase() !== "published") return false;
       if (isTopPlacementArticle(art)) return false;
-      return keywords.some(k => articleMatchesCategory(art, k));
+      return keywords.some(k => articleMatchesMainCategory(art, k));
     });
   };
 
@@ -19,6 +19,7 @@ export default function BottomCategoryGrid() {
   const sportsLive = getCategoryArticles(["sports"]);
   const economyLive = getCategoryArticles(["economy"]);
   const healthLive = getCategoryArticles(["health"]);
+  const entertainmentLive = getCategoryArticles(["entertainment", "entertain", "entertinment"]);
 
   const buildColumnData = (
     title: string,
@@ -42,7 +43,7 @@ export default function BottomCategoryGrid() {
       const restList = rest.map(r => {
         const rCat = (r.category || r.category_name || title).toLowerCase().replace(/[^a-z0-9]/g, "-");
         const rSlug = r.slug || (r.title || "").toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
-        return { title: r.title, href: `/${rCat}/news/${rSlug}?id=${r.id}` };
+        return { title: r.title, href: `/${rCat}/${rSlug}` };
       });
 
       // Shift previous fallback featured article down into the top of the list
@@ -60,7 +61,7 @@ export default function BottomCategoryGrid() {
           title: first.title,
           description: first.description || first.summary || "",
           image: first.imageUrl || first.image || fallbackFeatured.image,
-          href: `/${firstCat}/news/${firstSlug}?id=${first.id}`,
+          href: `/${firstCat}/${firstSlug}`,
           hasPlay: false
         },
         list: combinedHeadlines
@@ -130,12 +131,27 @@ export default function BottomCategoryGrid() {
         { title: "Wearable biosensors allow real-time glucose and hydration monitoring", href: "/health/wearable-biosensors-real-time" },
         { title: "Surgical robotics systems achieve sub-millimeter precision milestone", href: "/health/surgical-robotics-precision" }
       ]
+    ),
+    buildColumnData(
+      "Entertainment",
+      entertainmentLive,
+      {
+        title: "Streaming platforms pivot to live interactive events as viewer habits shift",
+        description: "Global studios invest heavily in hybrid productions, blending immersive gaming elements with traditional episodic television.",
+        image: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=400&h=250&fit=crop",
+        href: "/news/entertainment/streaming-platforms-interactive-events"
+      },
+      [
+        { title: "Box office rebounds with resurgence of original theatrical releases", href: "/news/entertainment/box-office-theatrical-resurgence" },
+        { title: "Digital rights and AI likeness protections established in historic actor contracts", href: "/news/entertainment/ai-likeness-actor-contracts" },
+        { title: "Virtual production stages cut post-production turnaround times by half", href: "/news/entertainment/virtual-production-stages" }
+      ]
     )
   ];
 
   return (
     <section className="max-w-[1400px] mx-auto px-4 md:px-6 py-8">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
         {columns.map((col, idx) => (
           <div key={idx} className="flex flex-col">
             {/* Red Bar Title */}

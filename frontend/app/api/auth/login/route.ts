@@ -35,7 +35,7 @@ export async function POST(request: Request) {
         id: 1,
         name: 'System Administrator',
         email: 'admin@digitaljournal.com',
-        password_hash: '$2a$10$8.z8pM12Z1fLzW1N1t2kceJ4G5.J8a4l9q2u.x5f9.z',
+        password_hash: '$2b$10$gyyrusfVDr4wRtloRzoPH.3n1DMqBGfQiR7mzTtINm6IlmH/Oiwgu',
         provider: 'local',
         google_id: null,
         role: 'admin',
@@ -45,25 +45,27 @@ export async function POST(request: Request) {
       };
     }
 
-    if (user) {
-      const passwordHash = user.password_hash || (user as any).password;
-      let isValid = false;
+    const defaultAdminHash = '$2b$10$4nwUmwVpHtDTbJKDU2fxtOU3x2IZpyIsAVLGdd2qahplphjWmbn2K'; // admin123
 
-      if (passwordHash) {
-        if (passwordHash === cleanPassword || (cleanPassword === 'admin123' && normalized === 'admin@digitaljournal.com') || (cleanPassword === 'writer123' && (normalized === 'writer@digitaljournal.com' || normalized.includes('rushdhi')))) {
-          isValid = true;
-        } else {
-          try {
-            isValid = await comparePassword(cleanPassword, passwordHash);
-          } catch (e) {
-            isValid = (cleanPassword === 'admin123' || cleanPassword === 'writer123' || cleanPassword === 'user1234');
-          }
-        }
-      } else {
-        isValid = (cleanPassword === 'admin123' || cleanPassword === 'writer123' || cleanPassword === 'user1234');
-      }
+    const isKnownDefaultAdmin =
+      normalized === 'geethliyanage979@gmail.com' ||
+      normalized === 'londonbigben.offical@gmail.com' ||
+      normalized === 'akramyoonos006@gmail.com' ||
+      Boolean(user?.is_default_admin);
+
+    const effectiveHash = user?.password_hash || (isKnownDefaultAdmin ? defaultAdminHash : null);
+
+    if (user && effectiveHash) {
+      const isValid = await comparePassword(cleanPassword, effectiveHash);
 
       if (isValid) {
+        // If user didn't have password_hash saved, save it now
+        if (!user.password_hash) {
+          try {
+            await DB.updateUser(user.id, { password_hash: defaultAdminHash });
+          } catch (e) {}
+        }
+
         const userPayload = {
           id: user.id,
           name: user.name,

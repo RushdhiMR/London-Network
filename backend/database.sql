@@ -36,7 +36,6 @@ CREATE TABLE `users` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `name` VARCHAR(100) NOT NULL,
   `email` VARCHAR(150) NOT NULL UNIQUE,
-  `password` VARCHAR(255) NULL,
   `password_hash` VARCHAR(255) NULL,
   `provider` VARCHAR(50) NOT NULL DEFAULT 'local',
   `google_id` VARCHAR(255) NULL,
@@ -131,9 +130,9 @@ INSERT INTO `authors` (`id`, `name`, `avatar`, `bio`, `role`) VALUES
 (5, 'David Potter', '/author_bluesuit.jpg', 'David Potter focuses on software architecture, DevOps tooling, and developer metrics.', 'Senior Columnist');
 
 -- Seed Users
-INSERT INTO `users` (`id`, `name`, `email`, `password`, `role`) VALUES
-(1, 'Admin User', 'admin@digitaljournal.com', 'admin123', 'admin'),
-(2, 'Rushdhi Riyaj', 'rushdhiriyaj2005@gmail.com', 'user1234', 'user');
+INSERT INTO `users` (`id`, `name`, `email`, `password_hash`, `provider`, `role`, `email_verified`) VALUES
+(1, 'Admin User', 'admin@digitaljournal.com', '$2b$10$gyyrusfVDr4wRtloRzoPH.3n1DMqBGfQiR7mzTtINm6IlmH/Oiwgu', 'local', 'admin', 1),
+(2, 'Rushdhi Riyaj', 'rushdhiriyaj2005@gmail.com', '$2b$10$gyyrusfVDr4wRtloRzoPH.3n1DMqBGfQiR7mzTtINm6IlmH/Oiwgu', 'local', 'admin', 1);
 
 -- Seed Categories
 INSERT INTO `categories` (`id`, `name`, `slug`) VALUES

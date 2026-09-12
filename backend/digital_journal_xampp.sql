@@ -32,7 +32,6 @@ CREATE TABLE `users` (
   `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
   `name` VARCHAR(255) NOT NULL,
   `email` VARCHAR(255) NOT NULL UNIQUE,
-  `password` VARCHAR(255) NULL,
   `password_hash` VARCHAR(255) NULL,
   `provider` VARCHAR(50) NOT NULL DEFAULT 'local',
   `google_id` VARCHAR(255) NULL,
@@ -173,12 +172,12 @@ CREATE TABLE `ad_slots` (
 -- ============================================================
 
 -- 1. Users (Admins, Writers, Readers)
--- Password for all seed users is: admin123 / writer123 / reader123
-INSERT INTO `users` (`id`, `name`, `email`, `password`, `password_hash`, `provider`, `role`, `email_verified`) VALUES
-(1, 'Admin User', 'admin@digitaljournal.com', 'admin123', '$2a$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW', 'local', 'admin', 1),
-(2, 'Rushdhi MR', 'rushdhiriyaj2005@gmail.com', 'admin123', '$2a$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW', 'local', 'admin', 1),
-(3, 'Staff Writer', 'writer@digitaljournal.com', 'writer123', '$2a$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW', 'local', 'writer', 1),
-(4, 'Alex Reader', 'reader@digitaljournal.com', 'reader123', '$2a$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW', 'local', 'reader', 1);
+-- Passwords for seed users: admin123 (Admin) / writer123 (Writer) / reader123 (Reader)
+INSERT INTO `users` (`id`, `name`, `email`, `password_hash`, `provider`, `role`, `email_verified`) VALUES
+(1, 'Admin User', 'admin@digitaljournal.com', '$2b$10$gyyrusfVDr4wRtloRzoPH.3n1DMqBGfQiR7mzTtINm6IlmH/Oiwgu', 'local', 'admin', 1),
+(2, 'Rushdhi MR', 'rushdhiriyaj2005@gmail.com', '$2b$10$gyyrusfVDr4wRtloRzoPH.3n1DMqBGfQiR7mzTtINm6IlmH/Oiwgu', 'local', 'admin', 1),
+(3, 'Staff Writer', 'writer@digitaljournal.com', '$2b$10$dkrirLKY5h3BnVy917SgwuTjOvmbzoN5m0.v3uqCJJTnLjz0X7ks2', 'local', 'writer', 1),
+(4, 'Alex Reader', 'reader@digitaljournal.com', '$2b$10$1Flzxia.PWNbYTF9265/h.jlnZMSXRJyMOQb1TgK0ERKl6e3gMOPO', 'local', 'reader', 1);
 
 -- 2. Authors
 INSERT INTO `authors` (`id`, `name`, `avatar`, `bio`, `role`) VALUES

@@ -1,17 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import GoogleAccountChooserModal from "@/components/GoogleAccountChooserModal";
-import { getUserProfile, saveUserProfile } from "@/lib/userProfiles";
 import { triggerGoogleOAuth } from "@/lib/googleAuth";
+import { useAuth, dispatchTabLogin } from "@/lib/auth-context";
 import { UserPlus } from "lucide-react";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const auth = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -25,7 +25,80 @@ export default function RegisterPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [googleError, setGoogleError] = useState("");
-  const [showGoogleChooser, setShowGoogleChooser] = useState(false);
+
+  useEffect(() => {
+    if (!auth.loading && auth.authenticated && auth.user) {
+      const role = (auth.user.role || "").toLowerCase();
+      if (role === "admin" || role === "co-admin") {
+        router.replace("/admin");
+      } else if (role === "writer" || role === "editor") {
+        router.replace("/writer");
+      } else {
+        router.replace("/reader");
+      }
+    }
+  }, [auth.loading, auth.authenticated, auth.user, router]);
+
+  const handleGoogleSuccess = async (result: { credential?: string; accessToken?: string }) => {
+    setIsGoogleLoading(true);
+    setErrorMessage("");
+    setGoogleError("");
+    setSuccessMessage("");
+
+    try {
+      const res = await fetch("/api/auth/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          credential: result.credential,
+          accessToken: result.accessToken,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setGoogleError(data.error || "Google registration failed. Please try again.");
+        setIsGoogleLoading(false);
+        return;
+      }
+
+      const userObj = data.user;
+      dispatchTabLogin({
+        id: userObj.id,
+        name: userObj.name,
+        email: userObj.email,
+        role: userObj.role,
+        provider: userObj.provider || "google",
+        avatar: userObj.avatar,
+      });
+
+      localStorage.setItem("dj_toast", `Welcome to London BigBen, ${userObj.name}! Your account is ready.`);
+
+      setSuccessMessage(`✓ Authenticated as ${userObj.name} (${userObj.email}) with Google! Setting up Reader Hub...`);
+      setTimeout(() => {
+        window.location.href = "/reader";
+      }, 500);
+    } catch (err: any) {
+      setGoogleError("Google registration failed. Please try again.");
+      setIsGoogleLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = () => {
+    setErrorMessage("");
+    setGoogleError("");
+    setIsGoogleLoading(true);
+    triggerGoogleOAuth(
+      (result) => {
+        handleGoogleSuccess(result);
+      },
+      (err) => {
+        setIsGoogleLoading(false);
+        setGoogleError(err || "Google sign-in could not be completed. Please try again.");
+      }
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,13 +106,7 @@ export default function RegisterPage() {
     setSuccessMessage("");
 
     if (!fullName || !email || !password || !confirmPassword) {
-      setErrorMessage("Please complete all required fields.");
-      return;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      setErrorMessage("Please enter a valid real email address (e.g. yourname@gmail.com).");
+      setErrorMessage("Please fill in all registration fields.");
       return;
     }
 
@@ -49,7 +116,7 @@ export default function RegisterPage() {
     }
 
     if (password !== confirmPassword) {
-      setErrorMessage("Passwords do not match. Please verify your passwords.");
+      setErrorMessage("Passwords do not match. Please re-enter.");
       return;
     }
 
@@ -69,88 +136,29 @@ export default function RegisterPage() {
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        setErrorMessage(data.error || "Registration failed. Please try again.");
+        setErrorMessage(data.error || "Registration failed. Please check your information.");
         return;
       }
 
-      const userObj = data.user;
-      localStorage.setItem("dj_toast", `Welcome to London BigBen, ${userObj.name}! Your account has been created.`);
+      const registeredUser = data.user;
+      dispatchTabLogin({
+        id: registeredUser.id,
+        name: registeredUser.name,
+        email: registeredUser.email,
+        role: registeredUser.role,
+        provider: registeredUser.provider || 'local',
+      });
 
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("dj_auth_change"));
-      }
+      localStorage.setItem("dj_toast", `Welcome to London BigBen, ${registeredUser.name}! Account created.`);
 
-      setSuccessMessage("✓ Registration successful! Setting up your Reader Hub...");
+      setSuccessMessage(`✓ Account successfully created for ${registeredUser.name}! Opening Reader Hub...`);
       setTimeout(() => {
         window.location.href = "/reader";
-      }, 1000);
+      }, 500);
     } catch (err: any) {
       setErrorMessage("Registration process failed. Please try again.");
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const handleGoogleSignIn = () => {
-    setErrorMessage("");
-    setGoogleError("");
-    setIsGoogleLoading(true);
-    triggerGoogleOAuth(
-      async (user) => {
-        handleSelectGoogleAccount({ name: user.name, email: user.email, avatar: user.avatar, googleId: user.googleId });
-      },
-      () => {
-        setIsGoogleLoading(false);
-        setShowGoogleChooser(true);
-      },
-      (err) => {
-        setIsGoogleLoading(false);
-        setGoogleError("Google sign-in could not be completed. Please try again.");
-      }
-    );
-  };
-
-  const handleSelectGoogleAccount = async (acc: { name: string; email: string; avatar?: string; googleId?: string }) => {
-    setShowGoogleChooser(false);
-    setIsGoogleLoading(true);
-    setErrorMessage("");
-    setGoogleError("");
-    setSuccessMessage("");
-
-    try {
-      const res = await fetch("/api/auth/google", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: acc.email,
-          name: acc.name,
-          googleId: acc.googleId,
-          avatar: acc.avatar,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        setGoogleError(data.error || "Google registration failed. Please try again.");
-        return;
-      }
-
-      const userObj = data.user;
-      localStorage.setItem("dj_toast", `Welcome to London BigBen, ${userObj.name}! Your account has been created.`);
-
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("dj_auth_change"));
-      }
-
-      setSuccessMessage(`Authenticated as ${acc.name} (${acc.email}) with Google! Setting up Reader Hub...`);
-      setTimeout(() => {
-        window.location.href = "/reader";
-      }, 1000);
-    } catch (err: any) {
-      setGoogleError("Google registration failed. Please try again.");
-    } finally {
-      setIsGoogleLoading(false);
     }
   };
 
@@ -398,13 +406,6 @@ export default function RegisterPage() {
       </main>
 
       <Footer />
-
-      <GoogleAccountChooserModal
-        isOpen={showGoogleChooser}
-        onClose={() => setShowGoogleChooser(false)}
-        onSelectAccount={handleSelectGoogleAccount}
-        requirePasswordSetup={true}
-      />
     </div>
   );
 }

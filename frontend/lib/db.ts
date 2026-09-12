@@ -6,12 +6,15 @@ export interface UserRow {
   id: number;
   name: string;
   email: string;
-  password?: string | null;
   password_hash?: string | null;
   provider: string;
   google_id?: string | null;
   role: 'reader' | 'writer' | 'admin';
+  avatar?: string | null;
+  bio?: string | null;
+  linkedin?: string | null;
   email_verified: boolean | number;
+  is_default_admin?: boolean | number;
   reset_token?: string | null;
   reset_token_expires?: string | Date | null;
   created_at?: string | Date;
@@ -31,25 +34,168 @@ export interface SubscriberRow {
   created_at?: string;
 }
 
-function readJsonDb(): { users: UserRow[]; articles: any[]; deleted_emails: string[]; subscribers: SubscriberRow[] } {
+export interface ContactSubmissionRow {
+  id: string | number;
+  date: string;
+  name: string;
+  company?: string;
+  email: string;
+  phone?: string;
+  whatsapp?: string;
+  type: "Editorial" | "Advertising" | "General Inquiry" | "Feedback" | "Press Release";
+  message: string;
+  status: "New" | "In Review" | "Resolved" | "Archived";
+  created_at?: string;
+}
+
+export interface AdvertiseLeadRow {
+  id: string | number;
+  date: string;
+  submitterName: string;
+  company: string;
+  email: string;
+  phone?: string;
+  whatsapp?: string;
+  serviceOption: string;
+  requirements: string;
+  budget?: string;
+  status: "New" | "In Discussion" | "Qualified" | "Closed";
+  created_at?: string;
+}
+
+const DEFAULT_ADVERTISE_LEADS: AdvertiseLeadRow[] = [
+  {
+    id: "lead-5001",
+    date: "Aug 11, 11:30 AM",
+    submitterName: "Rachel Vance",
+    company: "NVIDIA Enterprise",
+    email: "rvance@nvidia.com",
+    phone: "P: +1 (408) 486-2000",
+    whatsapp: "W: +1 (408) 486-2000",
+    serviceOption: "Banner Ads",
+    requirements: "Requesting Header Top Leaderboard placement for Q4 Enterprise AI launch campaign...",
+    budget: "$25,000 / mo",
+    status: "In Discussion"
+  },
+  {
+    id: "lead-5002",
+    date: "Aug 09, 03:45 PM",
+    submitterName: "David Miller",
+    company: "Palantir Tech",
+    email: "dmiller@palantir.com",
+    phone: "P: +1 (650) 841-4000",
+    whatsapp: "W: N/A",
+    serviceOption: "Sponsored Articles",
+    requirements: "Sponsorship slot for multi-part editorial series on Foundry data infrastructure.",
+    budget: "$15,000 / mo",
+    status: "Qualified"
+  },
+  {
+    id: "lead-5003",
+    date: "Aug 07, 09:20 AM",
+    submitterName: "Marcus Vance",
+    company: "AWS Cloud Solutions",
+    email: "mvance@amazon.com",
+    phone: "P: +1 (206) 266-1000",
+    whatsapp: "W: +1 (206) 266-1000",
+    serviceOption: "Newsletter Takeover",
+    requirements: "Exclusive newsletter banner placement for re:Invent conference announcements.",
+    budget: "$18,500 / mo",
+    status: "New"
+  },
+  {
+    id: "lead-5004",
+    date: "Aug 04, 01:10 PM",
+    submitterName: "Elena Rostova",
+    company: "Bloomberg Media",
+    email: "erostova@bloomberg.net",
+    phone: "P: +1 (212) 318-2000",
+    whatsapp: "W: +1 (212) 318-2000",
+    serviceOption: "Brand Partnership",
+    requirements: "Joint content syndication and co-branded webinar sponsorship package.",
+    budget: "$30,000 / mo",
+    status: "Closed"
+  }
+];
+
+const DEFAULT_CONTACT_SUBMISSIONS: ContactSubmissionRow[] = [
+  {
+    id: "cs-101",
+    date: "Jul 27, 09:07 PM",
+    name: "SORORIA",
+    company: "N/A",
+    email: "rij102008sororia@outlook.com",
+    phone: "P: 000 000 0000",
+    whatsapp: "W: 000 000 0000",
+    type: "Editorial",
+    message: "Policy and structure Although our publication standards require verified sources, we would like to inquire about publishing syndication arrangements...",
+    status: "New"
+  },
+  {
+    id: "cs-102",
+    date: "Aug 11, 10:14 AM",
+    name: "Robert Taylor",
+    company: "Apex Media Partners",
+    email: "rtaylor@apex.io",
+    phone: "P: +1 (555) 234-5678",
+    whatsapp: "W: +1 (555) 234-5678",
+    type: "Advertising",
+    message: "We are interested in booking the Header Top Leaderboard slot for Q4 enterprise campaign targeting AI startups.",
+    status: "In Review"
+  },
+  {
+    id: "cs-103",
+    date: "Aug 10, 04:30 PM",
+    name: "Dr. Aris Thorne",
+    company: "MIT Media Lab",
+    email: "athorne@mit.edu",
+    phone: "P: +1 (617) 253-1000",
+    whatsapp: "W: N/A",
+    type: "Editorial",
+    message: "Submitting a research breakthrough paper on quantum semiconductor nodes for review by your technology editorial desk.",
+    status: "New"
+  },
+  {
+    id: "cs-104",
+    date: "Aug 08, 02:15 PM",
+    name: "Sarah Jenkins",
+    company: "Global Tech Foundation",
+    email: "sjenkins@globaltech.org",
+    phone: "P: +44 20 7946 0912",
+    whatsapp: "W: +44 20 7946 0912",
+    type: "General Inquiry",
+    message: "Inquiry regarding press accreditation for the upcoming International Digital Journalism Conference in London.",
+    status: "Resolved"
+  }
+];
+
+function readJsonDb(): { users: UserRow[]; articles: any[]; deleted_emails: string[]; subscribers: SubscriberRow[]; contact_submissions: ContactSubmissionRow[]; advertise_leads: AdvertiseLeadRow[] } {
   try {
     if (fs.existsSync(DB_JSON_PATH)) {
       const raw = fs.readFileSync(DB_JSON_PATH, 'utf-8');
-      const parsed = JSON.parse(raw);
-      return {
-        users: Array.isArray(parsed.users) ? parsed.users : [],
-        articles: Array.isArray(parsed.articles) ? parsed.articles : [],
-        deleted_emails: Array.isArray(parsed.deleted_emails) ? parsed.deleted_emails : [],
-        subscribers: Array.isArray(parsed.subscribers) ? parsed.subscribers : []
-      };
+      if (raw && raw.trim()) {
+        const parsed = JSON.parse(raw);
+        return {
+          users: Array.isArray(parsed.users) ? parsed.users : [],
+          articles: Array.isArray(parsed.articles) ? parsed.articles : [],
+          deleted_emails: Array.isArray(parsed.deleted_emails) ? parsed.deleted_emails : [],
+          subscribers: Array.isArray(parsed.subscribers) ? parsed.subscribers : [],
+          contact_submissions: Array.isArray(parsed.contact_submissions) && parsed.contact_submissions.length > 0 
+            ? parsed.contact_submissions 
+            : DEFAULT_CONTACT_SUBMISSIONS,
+          advertise_leads: Array.isArray(parsed.advertise_leads) && parsed.advertise_leads.length > 0
+            ? parsed.advertise_leads
+            : DEFAULT_ADVERTISE_LEADS
+        };
+      }
     }
   } catch (err) {
     console.warn('[DB] JSON fallback read warning:', err);
   }
-  return { users: [], articles: [], deleted_emails: [], subscribers: [] };
+  return { users: [], articles: [], deleted_emails: [], subscribers: [], contact_submissions: DEFAULT_CONTACT_SUBMISSIONS, advertise_leads: DEFAULT_ADVERTISE_LEADS };
 }
 
-function writeJsonDb(data: { users: UserRow[]; articles: any[]; deleted_emails?: string[]; subscribers?: SubscriberRow[] }) {
+function writeJsonDb(data: { users: UserRow[]; articles: any[]; deleted_emails?: string[]; subscribers?: SubscriberRow[]; contact_submissions?: ContactSubmissionRow[]; advertise_leads?: AdvertiseLeadRow[] }) {
   try {
     const dir = path.dirname(DB_JSON_PATH);
     if (!fs.existsSync(dir)) {
@@ -71,11 +217,11 @@ async function ensureMysqlTable(db: mysql.Pool) {
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         email VARCHAR(255) NOT NULL UNIQUE,
-        password VARCHAR(255) NULL,
         password_hash VARCHAR(255) NULL,
         provider VARCHAR(50) DEFAULT 'local',
         google_id VARCHAR(255) NULL,
         role ENUM('reader', 'writer', 'admin') DEFAULT 'reader',
+        is_default_admin TINYINT(1) DEFAULT 0,
         email_verified TINYINT(1) DEFAULT 1,
         reset_token VARCHAR(255) NULL,
         reset_token_expires DATETIME NULL,
@@ -98,10 +244,12 @@ async function ensureMysqlTable(db: mysql.Pool) {
   }
 }
 
+const globalForDb = globalThis as unknown as { mysqlPool: mysql.Pool | undefined };
+
 export function getDbPool(): mysql.Pool {
-  if (!pool) {
-    pool = mysql.createPool({
-      host: process.env.DB_HOST || 'localhost',
+  if (!globalForDb.mysqlPool) {
+    globalForDb.mysqlPool = mysql.createPool({
+      host: process.env.DB_HOST || '127.0.0.1',
       port: Number(process.env.DB_PORT) || 3306,
       user: process.env.DB_USER || 'root',
       password: process.env.DB_PASSWORD || '',
@@ -109,11 +257,11 @@ export function getDbPool(): mysql.Pool {
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
-      connectTimeout: 2000,
+      connectTimeout: 5000,
     });
-    ensureMysqlTable(pool);
+    ensureMysqlTable(globalForDb.mysqlPool);
   }
-  return pool;
+  return globalForDb.mysqlPool;
 }
 
 export const DB = {
@@ -180,7 +328,7 @@ export const DB = {
     try {
       const db = getDbPool();
       const [rows]: any = await db.query(
-        'SELECT id, name, email, role, provider, email_verified, created_at, updated_at FROM users ORDER BY id ASC'
+        'SELECT id, name, email, role, provider, email_verified, is_default_admin, created_at, updated_at FROM users ORDER BY id ASC'
       );
       if (Array.isArray(rows)) {
         mysqlUsers = rows;
@@ -244,6 +392,7 @@ export const DB = {
     provider?: string;
     google_id?: string | null;
     email_verified?: boolean | number;
+    avatar?: string | null;
   }): Promise<UserRow> {
     const norm = (userData.email || '').trim().toLowerCase();
     const role = userData.role || 'reader';
@@ -257,8 +406,8 @@ export const DB = {
     try {
       const db = getDbPool();
       const [result]: any = await db.query(
-        `INSERT INTO users (name, email, password_hash, role, provider, google_id, email_verified)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO users (name, email, password_hash, role, provider, google_id, email_verified, avatar)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           userData.name.trim(),
           norm,
@@ -267,6 +416,7 @@ export const DB = {
           provider,
           userData.google_id || null,
           verified,
+          userData.avatar || null,
         ]
       );
       if (result && result.insertId) {
@@ -285,6 +435,7 @@ export const DB = {
       provider,
       google_id: userData.google_id || null,
       email_verified: verified,
+      avatar: userData.avatar || null,
       created_at: now,
       updated_at: now,
     };
@@ -405,9 +556,25 @@ export const DB = {
           fields.push('provider = ?');
           values.push(updates.provider);
         }
+        if (updates.google_id !== undefined) {
+          fields.push('google_id = ?');
+          values.push(updates.google_id);
+        }
+        if (updates.avatar !== undefined) {
+          fields.push('avatar = ?');
+          values.push(updates.avatar);
+        }
         if (updates.email_verified !== undefined) {
           fields.push('email_verified = ?');
           values.push(updates.email_verified ? 1 : 0);
+        }
+        if (updates.reset_token !== undefined) {
+          fields.push('reset_token = ?');
+          values.push(updates.reset_token);
+        }
+        if (updates.reset_token_expires !== undefined) {
+          fields.push('reset_token_expires = ?');
+          values.push(updates.reset_token_expires);
         }
 
         if (fields.length > 0) {
@@ -492,24 +659,9 @@ export const DB = {
   },
 
   async getAllSubscribers(): Promise<SubscriberRow[]> {
-    const defaultSubs: SubscriberRow[] = [
-      { id: 1001, email: "reader@digitaljournal.com", topics: ["TECHNOLOGY", "BUSINESS", "MARKETS"], date: "Aug 01, 2026", status: "Active" },
-      { id: 1002, email: "sarah.j@example.com", topics: ["US", "POLITICS", "SPORTS"], date: "Jul 28, 2026", status: "Active" },
-      { id: 1003, email: "mchang@globalfirm.org", topics: ["ECONOMY & MARKETS", "BUSINESS", "CRYPTO"], date: "Jul 20, 2026", status: "Active" },
-      { id: 1004, email: "rtaylor@apex.io", topics: ["TECHNOLOGY", "INNOVATION"], date: "Jul 15, 2026", status: "Active" },
-      { id: 1005, email: "athorne@mit.edu", topics: ["US", "WORLD", "SCIENCE"], date: "Jul 10, 2026", status: "Active" }
-    ];
-
     const jsonDb = readJsonDb();
     const jsonSubs = Array.isArray(jsonDb.subscribers) ? jsonDb.subscribers : [];
-    
-    const all = [...jsonSubs];
-    for (const d of defaultSubs) {
-      if (!all.some(s => s.email.toLowerCase() === d.email.toLowerCase())) {
-        all.push(d);
-      }
-    }
-    return all;
+    return jsonSubs;
   },
 
   async addSubscriber(email: string, topics: string[] = ["ALL NEWS"]): Promise<SubscriberRow> {
@@ -519,12 +671,14 @@ export const DB = {
 
     const existingIdx = jsonDb.subscribers.findIndex(s => s.email.toLowerCase() === cleanEmail);
     const dateFormatted = new Date().toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
-    const formattedTopics = Array.isArray(topics) && topics.length > 0 ? topics.map(t => t.toUpperCase()) : ["ALL NEWS"];
+    const formattedTopics = Array.isArray(topics) && topics.length > 0
+      ? topics.filter(t => t && String(t).trim().length > 0).map(t => String(t).toUpperCase())
+      : ["ALL NEWS"];
 
     if (existingIdx >= 0) {
       jsonDb.subscribers[existingIdx] = {
         ...jsonDb.subscribers[existingIdx],
-        topics: Array.from(new Set([...(jsonDb.subscribers[existingIdx].topics || []), ...formattedTopics])),
+        topics: formattedTopics,
         date: dateFormatted,
         status: "Active"
       };
@@ -603,13 +757,160 @@ export const DB = {
     // Also update in MySQL if pool is available
     try {
       const db = getDbPool();
+      const sqlUpdates: string[] = [];
+      const sqlValues: any[] = [];
       if (data.name) {
-        await db.query('UPDATE users SET name = ? WHERE LOWER(email) = LOWER(?)', [data.name, cleanEmail]);
+        sqlUpdates.push('name = ?');
+        sqlValues.push(data.name);
+      }
+      if (data.avatar) {
+        sqlUpdates.push('avatar = ?');
+        sqlValues.push(data.avatar);
+      }
+      if (data.role) {
+        sqlUpdates.push('role = ?');
+        sqlValues.push(data.role);
+      }
+      if (sqlUpdates.length > 0) {
+        sqlValues.push(cleanEmail);
+        await db.query(`UPDATE users SET ${sqlUpdates.join(', ')} WHERE LOWER(email) = LOWER(?)`, sqlValues);
       }
     } catch (e) {}
 
     return updatedUser;
   },
+
+  async getAllContactSubmissions(): Promise<ContactSubmissionRow[]> {
+    const jsonDb = readJsonDb();
+    return Array.isArray(jsonDb.contact_submissions) ? jsonDb.contact_submissions : DEFAULT_CONTACT_SUBMISSIONS;
+  },
+
+  async addContactSubmission(data: {
+    name: string;
+    company?: string;
+    email: string;
+    phone?: string;
+    whatsapp?: string;
+    type?: "Editorial" | "Advertising" | "General Inquiry" | "Feedback" | "Press Release";
+    message: string;
+  }): Promise<ContactSubmissionRow> {
+    const jsonDb = readJsonDb();
+    if (!Array.isArray(jsonDb.contact_submissions)) {
+      jsonDb.contact_submissions = [...DEFAULT_CONTACT_SUBMISSIONS];
+    }
+
+    const now = new Date();
+    const formattedDate = now.toLocaleDateString("en-US", { month: "short", day: "2-digit" }) + 
+      ", " + now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+
+    const newSubmission: ContactSubmissionRow = {
+      id: `cs-${Date.now()}`,
+      date: formattedDate,
+      name: (data.name || "").trim(),
+      company: (data.company || "N/A").trim(),
+      email: (data.email || "").trim(),
+      phone: data.phone ? (data.phone.startsWith("P:") ? data.phone : `P: ${data.phone.trim()}`) : "P: 000 000 0000",
+      whatsapp: data.whatsapp ? (data.whatsapp.startsWith("W:") ? data.whatsapp : `W: ${data.whatsapp.trim()}`) : "W: N/A",
+      type: data.type || "General Inquiry",
+      message: (data.message || "").trim(),
+      status: "New",
+      created_at: now.toISOString()
+    };
+
+    jsonDb.contact_submissions.unshift(newSubmission);
+    writeJsonDb(jsonDb);
+    return newSubmission;
+  },
+
+  async updateContactSubmissionStatus(id: string | number, status: "New" | "In Review" | "Resolved" | "Archived"): Promise<boolean> {
+    const jsonDb = readJsonDb();
+    if (!Array.isArray(jsonDb.contact_submissions)) return false;
+    const strId = String(id);
+    const idx = jsonDb.contact_submissions.findIndex(c => String(c.id) === strId);
+    if (idx >= 0) {
+      jsonDb.contact_submissions[idx].status = status;
+      writeJsonDb(jsonDb);
+      return true;
+    }
+    return false;
+  },
+
+  async deleteContactSubmission(id: string | number): Promise<boolean> {
+    const jsonDb = readJsonDb();
+    if (!Array.isArray(jsonDb.contact_submissions)) return false;
+    const initialLen = jsonDb.contact_submissions.length;
+    const strId = String(id);
+    jsonDb.contact_submissions = jsonDb.contact_submissions.filter(c => String(c.id) !== strId);
+    writeJsonDb(jsonDb);
+    return jsonDb.contact_submissions.length < initialLen;
+  },
+
+  async getAllAdvertiseLeads(): Promise<AdvertiseLeadRow[]> {
+    const jsonDb = readJsonDb();
+    return Array.isArray(jsonDb.advertise_leads) ? jsonDb.advertise_leads : DEFAULT_ADVERTISE_LEADS;
+  },
+
+  async addAdvertiseLead(data: {
+    submitterName: string;
+    company: string;
+    email: string;
+    phone?: string;
+    whatsapp?: string;
+    serviceOption?: string;
+    requirements: string;
+    budget?: string;
+  }): Promise<AdvertiseLeadRow> {
+    const jsonDb = readJsonDb();
+    if (!Array.isArray(jsonDb.advertise_leads)) {
+      jsonDb.advertise_leads = [...DEFAULT_ADVERTISE_LEADS];
+    }
+
+    const now = new Date();
+    const formattedDate = now.toLocaleDateString("en-US", { month: "short", day: "2-digit" }) + 
+      ", " + now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+
+    const newLead: AdvertiseLeadRow = {
+      id: `lead-${Date.now()}`,
+      date: formattedDate,
+      submitterName: (data.submitterName || "").trim(),
+      company: (data.company || "N/A").trim(),
+      email: (data.email || "").trim(),
+      phone: data.phone ? (data.phone.startsWith("P:") ? data.phone : `P: ${data.phone.trim()}`) : "P: 000 000 0000",
+      whatsapp: data.whatsapp ? (data.whatsapp.startsWith("W:") ? data.whatsapp : `W: ${data.whatsapp.trim()}`) : "W: N/A",
+      serviceOption: data.serviceOption || "Publish Company Article",
+      requirements: (data.requirements || "").trim(),
+      budget: data.budget || "Standard",
+      status: "New",
+      created_at: now.toISOString()
+    };
+
+    jsonDb.advertise_leads.unshift(newLead);
+    writeJsonDb(jsonDb);
+    return newLead;
+  },
+
+  async updateAdvertiseLeadStatus(id: string | number, status: "New" | "In Discussion" | "Qualified" | "Closed"): Promise<boolean> {
+    const jsonDb = readJsonDb();
+    if (!Array.isArray(jsonDb.advertise_leads)) return false;
+    const strId = String(id);
+    const idx = jsonDb.advertise_leads.findIndex(l => String(l.id) === strId);
+    if (idx >= 0) {
+      jsonDb.advertise_leads[idx].status = status;
+      writeJsonDb(jsonDb);
+      return true;
+    }
+    return false;
+  },
+
+  async deleteAdvertiseLead(id: string | number): Promise<boolean> {
+    const jsonDb = readJsonDb();
+    if (!Array.isArray(jsonDb.advertise_leads)) return false;
+    const initialLen = jsonDb.advertise_leads.length;
+    const strId = String(id);
+    jsonDb.advertise_leads = jsonDb.advertise_leads.filter(l => String(l.id) !== strId);
+    writeJsonDb(jsonDb);
+    return jsonDb.advertise_leads.length < initialLen;
+  }
 };
 
 export default getDbPool;

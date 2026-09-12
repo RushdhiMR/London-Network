@@ -46,6 +46,23 @@ next-image-wrapper {
   border-radius: 0px !important;
 }
 
+/* RESPONSIVE MEDIA & FLUID CONTAINER SAFEGUARDS */
+img, 
+video, 
+canvas, 
+audio, 
+iframe, 
+embed, 
+object {
+  max-width: 100%;
+}
+
+pre, 
+table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 /* DROP CAP (PARAGRAPH FIRST LETTER) STYLING */
 .has-drop-cap::first-letter,
 .drop-cap::first-letter,
@@ -109,5 +126,44 @@ figure[style*="float: right"] {
 .prose p {
   overflow-wrap: break-word;
   word-break: normal;
+}
+
+/* LOGO LOADER ANIMATIONS */
+@keyframes logoPulseAnimation {
+  0% {
+    opacity: 0.88;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0.88;
+    transform: scale(0.98);
+  }
+}
+
+@keyframes loadingBarAnimation {
+  0% {
+    left: -40%;
+    width: 30%;
+  }
+  50% {
+    left: 30%;
+    width: 50%;
+  }
+  100% {
+    left: 100%;
+    width: 30%;
+  }
+}
+
+.animate-logo-pulse {
+  animation: logoPulseAnimation 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-loading-bar {
+  animation: loadingBarAnimation 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 

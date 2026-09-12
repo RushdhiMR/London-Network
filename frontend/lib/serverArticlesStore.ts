@@ -1,4 +1,45 @@
 import { getDbPool } from '@/lib/db';
+import fs from 'fs';
+import path from 'path';
+
+const DB_JSON_PATH = path.join(process.cwd(), 'data', 'digital_journal_db.json');
+
+function readJsonArticles(): ArticleRecord[] {
+  try {
+    if (fs.existsSync(DB_JSON_PATH)) {
+      const raw = fs.readFileSync(DB_JSON_PATH, 'utf-8');
+      if (raw && raw.trim()) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed.articles)) {
+          return parsed.articles;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[serverArticlesStore] JSON fallback read warning:', err);
+  }
+  return [];
+}
+
+function writeJsonArticles(articles: ArticleRecord[]) {
+  try {
+    let fullDb: any = {};
+    if (fs.existsSync(DB_JSON_PATH)) {
+      const raw = fs.readFileSync(DB_JSON_PATH, 'utf-8');
+      if (raw && raw.trim()) {
+        fullDb = JSON.parse(raw);
+      }
+    }
+    fullDb.articles = articles;
+    const dir = path.dirname(DB_JSON_PATH);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(DB_JSON_PATH, JSON.stringify(fullDb, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('[serverArticlesStore] JSON fallback write warning:', err);
+  }
+}
 
 export interface ArticleRecord {
   id: string | number;
@@ -55,7 +96,7 @@ export async function readArticlesStore(): Promise<ArticleRecord[]> {
       ORDER BY a.published_at DESC, a.id DESC
     `);
 
-    if (Array.isArray(rows)) {
+    if (Array.isArray(rows) && rows.length > 0) {
       return rows.map((r: any) => {
         let parsedSubcategories: string[] = [];
         if (r.subcategories) {
@@ -95,6 +136,9 @@ export async function readArticlesStore(): Promise<ArticleRecord[]> {
 
         const pubDate = r.published_at ? new Date(r.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Jul 2026';
 
+        const rawImg = (r.image_url || '').trim();
+        const safeImg = (rawImg && !rawImg.includes('backblazeb2.com')) ? rawImg : 'https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=800&h=600&fit=crop';
+
         return {
           id: r.id,
           title: r.title,
@@ -108,18 +152,26 @@ export async function readArticlesStore(): Promise<ArticleRecord[]> {
           category_slug: r.category_slug || (cat ? cat.toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'news'),
           subcategories: parsedSubcategories,
           tags: parsedTags,
-          imageUrl: r.image_url || '/ai_hero.png',
-          image: r.image_url || '/ai_hero.png',
-          image_url: r.image_url || '/ai_hero.png',
+          imageUrl: safeImg,
+          image: safeImg,
+          image_url: safeImg,
           caption: r.image_caption || `${r.title}.`,
           image_caption: r.image_caption || `${r.title}.`,
           is_featured: Boolean(r.is_featured),
           is_editors_pick: Boolean(r.is_editors_pick),
           status: r.status || 'Published',
+          rejectionReason: r.rejection_reason || r.rejectionReason || parsedSeo?.rejectionReason || undefined,
           date: pubDate,
           published_at: r.published_at,
+          publishedAt: r.published_at,
+          updated_at: r.updated_at,
+          updatedAt: r.updated_at,
+          created_at: r.created_at,
+          createdAt: r.created_at,
           readDuration: r.read_duration || '4 MIN READ',
-          reads: r.reads_count || 0,
+          reads: Number(r.reads_count || 0),
+          views: Number(r.reads_count || 0),
+          reads_count: Number(r.reads_count || 0),
           placement: r.placement || 'Standard Post',
           authorName,
           author: authorName,
@@ -131,33 +183,81 @@ export async function readArticlesStore(): Promise<ArticleRecord[]> {
       });
     }
   } catch (err) {
-    console.error('[serverArticlesStore] MySQL read error:', err);
+    console.warn('[serverArticlesStore] MySQL read notice, checking JSON fallback:', err);
   }
-  return [];
+
+  // Fallback to JSON Database
+  return readJsonArticles();
 }
 
 export async function writeArticlesStore(articles: ArticleRecord[]): Promise<void> {
-  // Sync each article to MySQL
+  writeJsonArticles(articles);
   for (const article of articles) {
-    await upsertArticleStore(article);
+    try {
+      await upsertArticleStore(article);
+    } catch (e) {}
   }
 }
 
 export async function upsertArticleStore(article: ArticleRecord): Promise<ArticleRecord[]> {
+  const isPendingOrPublished = article.status === "Pending review" || article.status === "Published";
+  const sanitizedArticle: ArticleRecord = {
+    ...article,
+    rejectionReason: isPendingOrPublished ? undefined : article.rejectionReason,
+    rejection_reason: isPendingOrPublished ? undefined : article.rejection_reason,
+    rejectedAt: isPendingOrPublished ? undefined : article.rejectedAt,
+  };
+
+  // Sync to JSON DB first for robust local persistence
+  try {
+    const jsonArticles = readJsonArticles();
+    const cleanT = (t: any) => String(t || '').trim().toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ');
+    const targetTitleKey = cleanT(sanitizedArticle.title);
+    const origTitleKey = cleanT(sanitizedArticle.original_title || sanitizedArticle.previousTitle);
+    const targetIdKey = String(sanitizedArticle.id || '');
+
+    let foundInJson = false;
+    const updatedJsonList = jsonArticles.map((a: any) => {
+      const aTitleKey = cleanT(a.title);
+      const aIdKey = String(a.id || '');
+      if (
+        (targetIdKey && aIdKey === targetIdKey) ||
+        (targetTitleKey && aTitleKey === targetTitleKey) ||
+        (origTitleKey && aTitleKey === origTitleKey)
+      ) {
+        foundInJson = true;
+        const merged = { ...a, ...sanitizedArticle, id: a.id || sanitizedArticle.id };
+        if (isPendingOrPublished) {
+          delete merged.rejectionReason;
+          delete merged.rejection_reason;
+          delete merged.rejectedAt;
+        }
+        return merged;
+      }
+      return a;
+    });
+
+    if (!foundInJson) {
+      updatedJsonList.unshift(sanitizedArticle);
+    }
+    writeJsonArticles(updatedJsonList);
+  } catch (jErr) {
+    console.warn('[serverArticlesStore] JSON upsert warning:', jErr);
+  }
+
   try {
     const db = getDbPool();
-    const slug = article.slug || (article.title ? article.title.toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-') : `article-${Date.now()}`);
+    const slug = sanitizedArticle.slug || (sanitizedArticle.title ? sanitizedArticle.title.toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-') : `article-${Date.now()}`);
     
     // Find category ID if category name provided; auto-create if missing
-    let categoryId = article.category_id || null;
-    if (!categoryId && (article.category || article.category_name)) {
-      const catName = (article.category || article.category_name || '').trim();
+    let categoryId = sanitizedArticle.category_id || null;
+    if (!categoryId && (sanitizedArticle.category || sanitizedArticle.category_name)) {
+      const catName = (sanitizedArticle.category || sanitizedArticle.category_name || '').trim();
       const catSlug = catName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
       const [cats]: any = await db.query('SELECT id FROM categories WHERE LOWER(name) = LOWER(?) OR LOWER(slug) = LOWER(?) LIMIT 1', [catName, catSlug]);
       if (cats && cats.length > 0) {
         categoryId = cats[0].id;
       } else if (catName) {
-        // Auto-create the category so future reads return the correct name
         try {
           const [ins]: any = await db.query(
             'INSERT IGNORE INTO categories (name, slug) VALUES (?, ?)',
@@ -166,7 +266,6 @@ export async function upsertArticleStore(article: ArticleRecord): Promise<Articl
           if (ins && ins.insertId) {
             categoryId = ins.insertId;
           } else {
-            // Re-query in case INSERT IGNORE hit a duplicate
             const [recats]: any = await db.query('SELECT id FROM categories WHERE LOWER(name) = LOWER(?) LIMIT 1', [catName]);
             if (recats && recats.length > 0) categoryId = recats[0].id;
           }
@@ -176,25 +275,36 @@ export async function upsertArticleStore(article: ArticleRecord): Promise<Articl
       }
     }
 
-    const subcategoriesJson = JSON.stringify(Array.isArray(article.subcategories) ? article.subcategories : (Array.isArray(article.subCategories) ? article.subCategories : []));
-    const tagsJson = JSON.stringify(Array.isArray(article.tags) ? article.tags : []);
-    const seoJson = article.seo ? JSON.stringify(article.seo) : null;
-    const authorName = article.authorName || article.author || 'Staff Journalist';
-    const authorAvatar = article.authorAvatar || '/author_bluesuit.jpg';
-    const authorBio = article.authorBio || `${authorName} is a journalist for Digital Journal.`;
-    const authorEmail = article.authorEmail || 'writer@digitaljournal.com';
-    const imageUrl = article.imageUrl || article.image || article.image_url || '/ai_hero.png';
-    const description = article.summary || article.description || article.subheading || '';
-    const content = article.content || '';
-    const status = article.status || 'Published';
-    const placement = article.placement || 'Standard Post';
-    const readDuration = article.readDuration || '4 MIN READ';
-    const isFeatured = article.is_featured ? 1 : 0;
-    const isEditorsPick = article.is_editors_pick ? 1 : 0;
+    const subcategoriesJson = JSON.stringify(Array.isArray(sanitizedArticle.subcategories) ? sanitizedArticle.subcategories : (Array.isArray(sanitizedArticle.subCategories) ? sanitizedArticle.subCategories : []));
+    const tagsJson = JSON.stringify(Array.isArray(sanitizedArticle.tags) ? sanitizedArticle.tags : []);
+    
+    let finalSeo = sanitizedArticle.seo || {};
+    if (typeof finalSeo === 'string') {
+      try { finalSeo = JSON.parse(finalSeo); } catch (e) { finalSeo = {}; }
+    }
+    if (sanitizedArticle.rejectionReason && !isPendingOrPublished) {
+      finalSeo = { ...finalSeo, rejectionReason: sanitizedArticle.rejectionReason };
+    } else {
+      delete finalSeo.rejectionReason;
+    }
+    const seoJson = Object.keys(finalSeo).length > 0 ? JSON.stringify(finalSeo) : (sanitizedArticle.seo ? JSON.stringify(sanitizedArticle.seo) : null);
 
-    // Check if article with this id or slug already exists in MySQL
+    const authorName = sanitizedArticle.authorName || sanitizedArticle.author || 'Staff Journalist';
+    const authorAvatar = sanitizedArticle.authorAvatar || '/author_bluesuit.jpg';
+    const authorBio = sanitizedArticle.authorBio || `${authorName} is a journalist for Digital Journal.`;
+    const authorEmail = sanitizedArticle.authorEmail || 'writer@digitaljournal.com';
+    const imageUrl = sanitizedArticle.imageUrl || sanitizedArticle.image || sanitizedArticle.image_url || '/ai_hero.png';
+    const description = sanitizedArticle.summary || sanitizedArticle.description || sanitizedArticle.subheading || '';
+    const content = sanitizedArticle.content || '';
+    const status = sanitizedArticle.status || 'Published';
+    const placement = sanitizedArticle.placement || 'Standard Post';
+    const readDuration = sanitizedArticle.readDuration || '4 MIN READ';
+    const isFeatured = sanitizedArticle.is_featured ? 1 : 0;
+    const isEditorsPick = sanitizedArticle.is_editors_pick ? 1 : 0;
+
+    // Check if article with this id, slug, or title already exists in MySQL
     let isExisting = false;
-    let targetId = article.id;
+    let targetId = sanitizedArticle.id;
     if (targetId && !isNaN(Number(targetId))) {
       const [chk]: any = await db.query('SELECT id FROM articles WHERE id = ? LIMIT 1', [Number(targetId)]);
       if (chk && chk.length > 0) isExisting = true;
@@ -204,6 +314,30 @@ export async function upsertArticleStore(article: ArticleRecord): Promise<Articl
       if (chkSlug && chkSlug.length > 0) {
         isExisting = true;
         targetId = chkSlug[0].id;
+      }
+    }
+    if (!isExisting && sanitizedArticle.title) {
+      const cleanTitle = sanitizedArticle.title.trim();
+      const normTitle = cleanTitle.replace(/[\u2018\u2019\u201A\u201B']/g, "'").replace(/[\u201C\u201D\u201E\u201F"]/g, '"');
+      const [chkTitle]: any = await db.query(
+        'SELECT id FROM articles WHERE LOWER(TRIM(title)) = LOWER(TRIM(?)) OR LOWER(TRIM(title)) = LOWER(TRIM(?)) LIMIT 1',
+        [cleanTitle, normTitle]
+      );
+      if (chkTitle && chkTitle.length > 0) {
+        isExisting = true;
+        targetId = chkTitle[0].id;
+      }
+    }
+    if (!isExisting && (sanitizedArticle.original_title || sanitizedArticle.previousTitle)) {
+      const origT = String(sanitizedArticle.original_title || sanitizedArticle.previousTitle).trim();
+      const normOrigT = origT.replace(/[\u2018\u2019\u201A\u201B']/g, "'").replace(/[\u201C\u201D\u201E\u201F"]/g, '"');
+      const [chkOrig]: any = await db.query(
+        'SELECT id FROM articles WHERE LOWER(TRIM(title)) = LOWER(TRIM(?)) OR LOWER(TRIM(title)) = LOWER(TRIM(?)) LIMIT 1',
+        [origT, normOrigT]
+      );
+      if (chkOrig && chkOrig.length > 0) {
+        isExisting = true;
+        targetId = chkOrig[0].id;
       }
     }
 
@@ -228,11 +362,13 @@ export async function upsertArticleStore(article: ArticleRecord): Promise<Articl
           author_bio = ?,
           seo = ?,
           is_featured = ?,
-          is_editors_pick = ?
+          is_editors_pick = ?,
+          published_at = IF(? = 'Published', NOW(), published_at),
+          updated_at = NOW()
         WHERE id = ?
       `, [
         categoryId,
-        article.title,
+        sanitizedArticle.title,
         slug,
         description,
         description,
@@ -250,6 +386,7 @@ export async function upsertArticleStore(article: ArticleRecord): Promise<Articl
         seoJson,
         isFeatured,
         isEditorsPick,
+        status,
         targetId
       ]);
     } else {
@@ -279,13 +416,13 @@ export async function upsertArticleStore(article: ArticleRecord): Promise<Articl
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
       `, [
         categoryId,
-        article.title,
+        sanitizedArticle.title,
         slug,
         description,
         description,
         content,
         imageUrl,
-        article.caption || `${article.title}.`,
+        sanitizedArticle.caption || `${sanitizedArticle.title}.`,
         status,
         placement,
         subcategoriesJson,
@@ -301,7 +438,7 @@ export async function upsertArticleStore(article: ArticleRecord): Promise<Articl
       ]);
     }
   } catch (err) {
-    console.error('[serverArticlesStore] MySQL upsert error:', err);
+    console.warn('[serverArticlesStore] MySQL upsert notice:', err);
   }
 
   return readArticlesStore();
@@ -309,20 +446,144 @@ export async function upsertArticleStore(article: ArticleRecord): Promise<Articl
 
 export async function updateArticleStatusStore(id: string | number, status: string): Promise<ArticleRecord[]> {
   try {
+    const jsonArticles = readJsonArticles();
+    const updatedJson = jsonArticles.map((a: any) => {
+      if (String(a.id) === String(id) || String(a.slug) === String(id)) {
+        const up: any = { ...a, status, updated_at: new Date().toISOString() };
+        if (status === "Pending review" || status === "Published") {
+          delete up.rejectionReason;
+          delete up.rejection_reason;
+          delete up.rejectedAt;
+        }
+        return up;
+      }
+      return a;
+    });
+    writeJsonArticles(updatedJson);
+  } catch (e) {}
+
+  try {
     const db = getDbPool();
-    await db.query('UPDATE articles SET status = ? WHERE id = ? OR slug = ?', [status, id, String(id)]);
+    if (status.toLowerCase() === 'published') {
+      await db.query('UPDATE articles SET status = ?, published_at = NOW(), updated_at = NOW() WHERE id = ? OR slug = ?', [status, id, String(id)]);
+    } else {
+      await db.query('UPDATE articles SET status = ?, updated_at = NOW() WHERE id = ? OR slug = ?', [status, id, String(id)]);
+    }
   } catch (err) {
-    console.error('[serverArticlesStore] MySQL update status error:', err);
+    console.warn('[serverArticlesStore] MySQL update status notice:', err);
   }
   return readArticlesStore();
 }
 
 export async function deleteArticleStore(id: string | number): Promise<ArticleRecord[]> {
   try {
+    const jsonArticles = readJsonArticles();
+    const filtered = jsonArticles.filter(a => String(a.id) !== String(id) && String(a.slug) !== String(id));
+    writeJsonArticles(filtered);
+  } catch (e) {}
+
+  try {
     const db = getDbPool();
     await db.query('DELETE FROM articles WHERE id = ? OR slug = ?', [id, String(id)]);
   } catch (err) {
-    console.error('[serverArticlesStore] MySQL delete error:', err);
+    console.warn('[serverArticlesStore] MySQL delete notice:', err);
   }
   return readArticlesStore();
+}
+
+export async function recordArticleViewStore(
+  articleIdOrSlug: string | number,
+  userIdentifier?: string | null,
+  extraMeta?: { articleId?: string | number; slug?: string; title?: string }
+): Promise<{ success: boolean; reads: number; incremented: boolean }> {
+  try {
+    const db = getDbPool();
+
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS article_views (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          article_id BIGINT NOT NULL,
+          user_identifier VARCHAR(255) NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uniq_user_article (article_id, user_identifier)
+        )
+      `);
+    } catch (e) {}
+
+    const searchTarget = String(articleIdOrSlug || "").trim();
+    let numId = !isNaN(Number(searchTarget)) && Number(searchTarget) > 0 ? Number(searchTarget) : -1;
+    if (numId <= 0 && extraMeta?.articleId && !isNaN(Number(extraMeta.articleId)) && Number(extraMeta.articleId) > 0) {
+      numId = Number(extraMeta.articleId);
+    }
+    const candidateSlug = String(extraMeta?.slug || searchTarget || "").trim();
+    const candidateTitle = String(extraMeta?.title || searchTarget || "").trim();
+
+    let [rows]: any = await db.query(
+      'SELECT id, reads_count FROM articles WHERE id = ? OR slug = ? OR title = ? OR LOWER(slug) = LOWER(?) OR LOWER(title) = LOWER(?) LIMIT 1',
+      [numId, candidateSlug, candidateTitle, candidateSlug, candidateTitle]
+    );
+
+    if (!rows || rows.length === 0) {
+      // Fuzzy search by clean alphanumeric title
+      const cleanSearch = candidateTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (cleanSearch.length > 5) {
+        const [allArticles]: any = await db.query('SELECT id, title, slug, reads_count FROM articles');
+        if (Array.isArray(allArticles)) {
+          const match = allArticles.find((a: any) => {
+            const aTitle = (a.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const aSlug = (a.slug || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            return (aTitle && aTitle === cleanSearch) || (aSlug && aSlug === cleanSearch);
+          });
+          if (match) rows = [match];
+        }
+      }
+    }
+
+    if (Array.isArray(rows) && rows.length > 0) {
+      const art = rows[0];
+      const realId = art.id;
+      let currentReads = Number(art.reads_count || 0);
+
+      const cleanUser = userIdentifier && typeof userIdentifier === "string" ? userIdentifier.trim().toLowerCase() : null;
+      const isRegisteredAccount = Boolean(
+        cleanUser &&
+        cleanUser !== "guest" &&
+        cleanUser !== "null" &&
+        cleanUser !== "undefined" &&
+        cleanUser !== "none" &&
+        cleanUser.includes("@")
+      );
+
+      if (isRegisteredAccount && cleanUser) {
+        // Registered User: Exactly 1 view per registered account for this article
+        try {
+          const [ins]: any = await db.query(
+            'INSERT IGNORE INTO article_views (article_id, user_identifier) VALUES (?, ?)',
+            [realId, cleanUser]
+          );
+
+          if (ins && ins.affectedRows > 0) {
+            currentReads += 1;
+            await db.query('UPDATE articles SET reads_count = reads_count + 1 WHERE id = ?', [realId]);
+            return { success: true, reads: currentReads, incremented: true };
+          } else {
+            // Already viewed by this registered account -> do not increment
+            return { success: true, reads: currentReads, incremented: false };
+          }
+        } catch (e) {
+          console.warn('[recordArticleViewStore] Registered user tracking error:', e);
+        }
+      } else {
+        // Unregistered Visitor (Guest): Every visit increments the view count by 1
+        currentReads += 1;
+        await db.query('UPDATE articles SET reads_count = reads_count + 1 WHERE id = ?', [realId]);
+        return { success: true, reads: currentReads, incremented: true };
+      }
+    }
+  } catch (err) {
+    console.error('[serverArticlesStore] recordArticleViewStore error:', err);
+  }
+
+  return { success: false, reads: 0, incremented: false };
 }

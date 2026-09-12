@@ -77,12 +77,20 @@ export async function POST(request: Request) {
     const slug = body.slug || (body.title ? body.title.toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-') : `article-${Date.now()}`);
     const articleId = body.id || `art_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
 
+    const nowIso = new Date().toISOString();
     const articleRecord: ArticleRecord = {
       ...body,
       id: articleId,
       slug,
       status: body.status || 'Pending review',
-      seo: body.seo || autoSEO
+      seo: body.seo || autoSEO,
+      updated_at: nowIso,
+      updatedAt: nowIso,
+      ...(body.status === 'Published' || !body.status ? {
+        published_at: body.published_at || body.publishedAt || nowIso,
+        publishedAt: body.published_at || body.publishedAt || nowIso,
+        date: body.date || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      } : {})
     };
 
     const updatedList = await upsertArticleStore(articleRecord);
@@ -117,11 +125,20 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Article not found' }, { status: 404 });
     }
 
+    const nowIso = new Date().toISOString();
+    const targetStatus = status !== undefined ? status : existing?.status || 'Published';
     const updatedRecord: ArticleRecord = {
       ...(existing || {}),
       ...updates,
       id,
-      status: status !== undefined ? status : existing?.status || 'Published'
+      status: targetStatus,
+      updated_at: nowIso,
+      updatedAt: nowIso,
+      ...(targetStatus === 'Published' ? {
+        published_at: nowIso,
+        publishedAt: nowIso,
+        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      } : {})
     };
 
     const updatedList = await upsertArticleStore(updatedRecord);

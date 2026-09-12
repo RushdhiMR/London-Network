@@ -1,10 +1,19 @@
 import CategoryPageLayout from "@/components/CategoryPageLayout";
 import { getCategoryData } from "@/lib/categoryData";
+import { Metadata } from "next";
+import { generateSocialMetadata } from "@/lib/seoHelper";
 
 interface DynamicCategoryPageProps {
   params: Promise<{
     category: string;
   }>;
+}
+
+export async function generateMetadata({ params }: DynamicCategoryPageProps): Promise<Metadata> {
+  const resolved = await params;
+  return generateSocialMetadata({
+    category: resolved.category,
+  });
 }
 
 export async function generateStaticParams() {

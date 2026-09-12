@@ -46,56 +46,36 @@ interface AuthorMatch {
   articleCount: number;
 }
 
-const KNOWN_AUTHORS: Record<string, { role: string; bio: string; avatar?: string }> = {
+const KNOWN_AUTHORS: Record<string, { role: string; bio: string; avatar: string }> = {
+  "Rushdhi MR": {
+    role: "FOUNDER & EDITOR-IN-CHIEF",
+    bio: "Founder and Editor-in-Chief for London BigBen covering business strategy, software architecture, emerging technology, and digital transformation.",
+    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_bluesuit.jpg"
+  },
   "Rushdhi": {
-    role: "WRITER",
-    bio: "Rushdhi is a journalist for London BigBen covering business strategy, software architecture, emerging technology, and digital transformation.",
-    avatar: "/author_bluesuit.jpg"
+    role: "FOUNDER & EDITOR-IN-CHIEF",
+    bio: "Founder and Editor-in-Chief for London BigBen covering business strategy, software architecture, emerging technology, and digital transformation.",
+    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_bluesuit.jpg"
+  },
+  "Muba_kity": {
+    role: "SENIOR TECH WRITER",
+    bio: "Senior technology reporter specializing in enterprise cloud innovations, generative AI systems, and digital ecosystems.",
+    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_woman.jpg"
   },
   "Muba": {
-    role: "SENIOR WRITER",
-    bio: "Reports on industry disruptions, macroeconomic trends, lifestyle features, and breaking developments.",
-    avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=250&h=250&fit=crop"
+    role: "SENIOR TECH WRITER",
+    bio: "Senior technology reporter specializing in enterprise cloud innovations, generative AI systems, and digital ecosystems.",
+    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_woman.jpg"
   },
-  "April Hicke": {
-    role: "TECH ANALYST",
-    bio: "Reports on biotechnology, scientific research, open science initiatives, and artificial intelligence adoption.",
-    avatar: "/author_glasses.jpg"
+  "Roomi": {
+    role: "STAFF WRITER & MARKET REPORTER",
+    bio: "Financial markets and business columnist reporting on corporate developments, macroeconomic indicators, and supply chain telemetry.",
+    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_glasses.jpg"
   },
-  "Jennifer Friesen": {
-    role: "ASSOCIATE EDITOR",
-    bio: "London BigBen's associate editor and Calgary Bureau lead covering energy, technology, and policy.",
-    avatar: "/author_woman.jpg"
-  },
-  "Pramod Jain": {
-    role: "ENERGY COLUMNIST",
-    bio: "Covers clean technology, energy transition initiatives, and infrastructure projects across North America.",
-    avatar: "/author_energy.jpg"
-  },
-  "Chris Hogg": {
-    role: "EXECUTIVE EDITOR",
-    bio: "Specializing in digital transformation, financial technology, and executive leadership strategies.",
-    avatar: "/author_beard.jpg"
-  },
-  "Dr. Tim Sandle": {
-    role: "SENIOR EDITOR",
-    bio: "London-based science journalist covering biotechnology, microbiology, AI in healthcare, and digital transformation.",
-    avatar: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=250&h=250&fit=crop"
-  },
-  "Sarah Miller": {
-    role: "REGULATORY CORRESPONDENT",
-    bio: "Covers international data privacy regulations, cross-border compliance, and digital rights.",
-    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=250&h=250&fit=crop"
-  },
-  "David Chen": {
-    role: "TECH CORRESPONDENT",
-    bio: "Covers open-source software, cloud infrastructure, and quantum computing preview clusters.",
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=250&h=250&fit=crop"
-  },
-  "Lisa Chen": {
-    role: "DATA INFRASTRUCTURE REPORTER",
-    bio: "Covers next-generation data routing, enterprise AI balance nodes, and telecommunications.",
-    avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=250&h=250&fit=crop"
+  "Ruzni": {
+    role: "EDITORIAL DIRECTOR",
+    bio: "Editorial director and investigative journalist focused on governance, regulatory compliance, and cross-border innovation.",
+    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_beard.jpg"
   }
 };
 

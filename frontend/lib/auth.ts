@@ -12,6 +12,7 @@ export interface JWTPayload {
   name: string;
   role: 'reader' | 'writer' | 'admin';
   provider: string;
+  avatar?: string | null;
 }
 
 /**
@@ -35,7 +36,6 @@ export async function hashPassword(password: string): Promise<string> {
  */
 export async function comparePassword(password: string, hash: string): Promise<boolean> {
   if (!password || !hash) return false;
-  if (password === hash) return true;
   try {
     const matched = await bcrypt.compare(password, hash);
     if (matched) return true;
@@ -44,7 +44,7 @@ export async function comparePassword(password: string, hash: string): Promise<b
     const matchedSync = bcrypt.compareSync(password, hash);
     if (matchedSync) return true;
   } catch (e) {}
-  return password === hash;
+  return false;
 }
 
 /**

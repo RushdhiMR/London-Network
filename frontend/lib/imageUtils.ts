@@ -14,28 +14,40 @@ export async function convertToWebP(
 ): Promise<string> {
   if (!input) return "";
 
+  // Helper to read File/Blob as Data URL
+  const readBlobAsDataUrl = (b: Blob | File): Promise<string> => {
+    return new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => res(typeof fr.result === "string" ? fr.result : "");
+      fr.onerror = rej;
+      fr.readAsDataURL(b);
+    });
+  };
+
+  let baseDataUrl = "";
+  if (typeof input !== "string") {
+    try {
+      baseDataUrl = await readBlobAsDataUrl(input);
+    } catch (e) {
+      console.warn("FileReader error on input blob:", e);
+      return "";
+    }
+  } else {
+    baseDataUrl = input;
+  }
+
+  if (!baseDataUrl) return "";
+
   // If already a webp data URL or an external .webp URL, return as-is
-  if (typeof input === "string") {
-    if (input.startsWith("data:image/webp")) {
-      return input;
-    }
-    if (input.endsWith(".webp") && !input.startsWith("data:")) {
-      return input;
-    }
+  if (baseDataUrl.startsWith("data:image/webp") || (baseDataUrl.endsWith(".webp") && !baseDataUrl.startsWith("data:"))) {
+    return baseDataUrl;
   }
 
   return new Promise((resolve) => {
-    let sourceUrl = "";
-    let shouldRevoke = false;
-    if (typeof input !== "string") {
-      sourceUrl = URL.createObjectURL(input);
-      shouldRevoke = true;
-    } else {
-      sourceUrl = input;
-    }
-
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    if (!baseDataUrl.startsWith("data:") && !baseDataUrl.startsWith("blob:")) {
+      img.crossOrigin = "anonymous";
+    }
 
     img.onload = () => {
       try {
@@ -45,8 +57,7 @@ export async function convertToWebP(
 
         const ctx = canvas.getContext("2d");
         if (!ctx) {
-          if (shouldRevoke) URL.revokeObjectURL(sourceUrl);
-          resolve(typeof input === "string" ? input : sourceUrl);
+          resolve(baseDataUrl);
           return;
         }
 
@@ -56,28 +67,23 @@ export async function convertToWebP(
         // Convert to WebP format
         const webpDataUrl = canvas.toDataURL("image/webp", quality);
 
-        if (shouldRevoke) URL.revokeObjectURL(sourceUrl);
-
-        // Verify webp output was generated (some older engines might fallback to png if webp not supported)
-        if (webpDataUrl.startsWith("data:image/webp")) {
+        if (webpDataUrl && webpDataUrl.startsWith("data:image/webp")) {
           resolve(webpDataUrl);
         } else {
-          resolve(webpDataUrl);
+          resolve(baseDataUrl);
         }
       } catch (err) {
-        console.warn("Canvas WebP conversion error, keeping source:", err);
-        if (shouldRevoke) URL.revokeObjectURL(sourceUrl);
-        resolve(typeof input === "string" ? input : "");
+        console.warn("Canvas WebP conversion error, keeping original data URL:", err);
+        resolve(baseDataUrl);
       }
     };
 
     img.onerror = () => {
-      console.warn("Image load failed during WebP conversion:", sourceUrl.slice(0, 50));
-      if (shouldRevoke) URL.revokeObjectURL(sourceUrl);
-      resolve(typeof input === "string" ? input : "");
+      console.warn("Image load failed during WebP conversion, keeping original data URL");
+      resolve(baseDataUrl);
     };
 
-    img.src = sourceUrl;
+    img.src = baseDataUrl;
   });
 }
 
@@ -123,5 +129,63 @@ export async function convertHtmlImagesToWebP(
   } catch (err) {
     console.warn("Error processing HTML images for WebP conversion:", err);
     return html;
+  }
+}
+
+/**
+ * Uploads an image File, Blob, or DataURL to Backblaze B2 Cloud Storage via /api/upload.
+ * If Backblaze B2 is not configured or upload fails, seamlessly returns the WebP data URL fallback.
+ *
+ * @param input Image File, Blob, or base64 data URL string
+ * @param fileName Preferred file name
+ * @param folder Destination folder prefix in Backblaze B2 ("articles", "avatars", "ads", "backups")
+ * @returns Promise<string> Public Backblaze B2 URL or data URL fallback
+ */
+export async function uploadImageToBackblaze(
+  input: File | Blob | string,
+  fileName: string = "image.webp",
+  folder: string = "articles"
+): Promise<string> {
+  if (!input) return "";
+
+  try {
+    const webpDataUrl = await convertToWebP(input);
+    if (!webpDataUrl) return "";
+
+    if (webpDataUrl.startsWith("http://") || webpDataUrl.startsWith("https://")) {
+      return webpDataUrl;
+    }
+
+    const res = await fetch("/api/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dataUrl: webpDataUrl,
+        fileName,
+        folder,
+        mimeType: "image/webp",
+      }),
+    });
+
+    if (!res.ok) {
+      return webpDataUrl;
+    }
+
+    let data: any = null;
+    try {
+      data = await res.json();
+    } catch {
+      return webpDataUrl;
+    }
+
+    if (data && data.success && data.url) {
+      return data.url;
+    }
+
+    return webpDataUrl;
+  } catch (err) {
+    console.warn("Backblaze upload helper error, using fallback:", err);
+    if (typeof input === "string") return input;
+    return await convertToWebP(input);
   }
 }

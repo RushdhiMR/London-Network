@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Link from 'next/link';
-import { useLiveArticles, articleMatchesCategory } from '@/lib/articlesSync';
+import { useLiveArticles, useLiveAdSlots, articleMatchesCategory, formatAdDimensions, isDuplicateAdImage } from '@/lib/articlesSync';
 
 interface Article {
   title: string;
@@ -60,6 +60,7 @@ export default function CategoryPageLayout({
   const totalPages = 27;
 
   const { articles: liveArticles = [] } = useLiveArticles();
+  const { adSlots } = useLiveAdSlots();
 
   // Find all published live articles that match this category or subcategory
   const cleanTarget = (categoryName || "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -224,20 +225,7 @@ export default function CategoryPageLayout({
       .trim()
       .replace(/[^a-z0-9]+/g, '-');
 
-    const params = new URLSearchParams();
-    // If this category page is NOT the article's main category, it means the user
-    // is viewing this article via a subcategory match — pass current page as ?sub
-    if (categoryName && categoryName.toLowerCase().replace(/[^a-z0-9]/g, '') !== mainCat.replace(/[^a-z0-9]/g, '')) {
-      params.set('sub', categoryName.trim());
-    } else if (liveMatch?.subcategories?.[0]) {
-      params.set('sub', liveMatch.subcategories[0]);
-    }
-    if (liveMatch?.id) {
-      params.set('id', String(liveMatch.id));
-    }
-
-    const queryStr = params.toString();
-    return `/${mainCat}/${artSlug}${queryStr ? `?${queryStr}` : ''}`;
+    return `/${mainCat}/${artSlug}`;
   };
 
   return (
@@ -311,6 +299,51 @@ export default function CategoryPageLayout({
                   </Link>
                 ))}
               </div>
+
+              {/* Category Pages — Sidebar Top Ad Box (Slot 4) */}
+              {(() => {
+                const adSlot4 = adSlots.find(s => s.id === "slot-4" || (s.categoryGroup === "CATEGORY" && s.dimensions.includes("250")) || s.title.includes("Sidebar Top"));
+                if (!adSlot4 || !adSlot4.isActive) return null;
+                const slot4Dimensions = formatAdDimensions(adSlot4.dimensions || "300X250");
+                const hasSlot4Image =
+                  adSlot4.imageUrl &&
+                  adSlot4.imageUrl.trim() !== "" &&
+                  !isDuplicateAdImage(adSlot4.imageUrl, adSlot4.id, adSlots);
+                const isExternal = (adSlot4.actionType || "").toLowerCase().includes("external") || (adSlot4.targetUrl || "").startsWith("http");
+                return (
+                  <div className="pt-6 border-t border-zinc-200 mt-6 w-full flex flex-col items-center">
+                    {hasSlot4Image ? (
+                      <a
+                        href={adSlot4.targetUrl || "#"}
+                        target={isExternal ? "_blank" : "_self"}
+                        rel={isExternal ? "noopener noreferrer" : undefined}
+                        className="block group relative overflow-hidden rounded-xs border border-zinc-200 bg-black w-full max-w-[300px] aspect-[300/250]"
+                      >
+                        <img
+                          src={adSlot4.imageUrl}
+                          alt={adSlot4.title || "Advertisement"}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                        <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-xs px-2 py-0.5 text-[9px] font-mono tracking-widest uppercase text-white border border-white/10">
+                          Ad
+                        </div>
+                      </a>
+                    ) : (
+                      <div className="w-full max-w-[300px] aspect-[300/250] bg-[#111827] border border-dashed border-gray-700 rounded-xs flex flex-col items-center justify-center p-4 text-center">
+                        <span className="text-[10px] font-mono tracking-widest uppercase text-[#D31220] font-bold mb-1">
+                          ADVERTISEMENT
+                        </span>
+                        <span className="text-white font-mono font-bold text-sm tracking-widest">
+                          {slot4Dimensions}
+                        </span>
+                        <span className="text-[10px] font-mono text-gray-400 mt-1">
+                          Size: {slot4Dimensions} px
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -331,50 +364,105 @@ export default function CategoryPageLayout({
             <div className="absolute top-0 left-0 w-[70px] h-[3.5px] bg-black" />
           </div>
 
-          <div className="space-y-8 max-w-[1000px]">
-            {displayedNewsArticles.map((article, index) => {
-              // Extract author and date if combined in string e.g. "By Sarah Miller • 8 hours ago"
-              let authorName = "London BigBen Staff";
-              let dateStr = article.date;
-              
-              if (article.date.startsWith("By ")) {
-                const parts = article.date.replace(/^By\s+/, '').split('•');
-                authorName = parts[0].trim();
-                dateStr = parts.slice(1).join('•').trim() || "";
-              }
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            <div className="lg:col-span-8 space-y-8">
+              {displayedNewsArticles.map((article, index) => {
+                // Extract author and date if combined in string e.g. "By Sarah Miller • 8 hours ago"
+                let authorName = "London BigBen Staff";
+                let dateStr = article.date;
+                
+                if (article.date.startsWith("By ")) {
+                  const parts = article.date.replace(/^By\s+/, '').split('•');
+                  authorName = parts[0].trim();
+                  dateStr = parts.slice(1).join('•').trim() || "";
+                }
 
-              const articleHref = getArticleHref(article.title);
+                const articleHref = getArticleHref(article.title);
 
-              return (
-                <article key={index} className="flex flex-col sm:flex-row gap-5 sm:gap-6 items-start pb-8 border-b border-zinc-100 last:border-b-0 last:pb-0 group">
-                  <Link href={articleHref} className="relative w-full sm:w-[220px] md:w-[240px] aspect-[16/10] flex-shrink-0 overflow-hidden bg-gray-100 block">
-                    <img
-                      src={article.image}
-                      alt={article.title}
-                      onError={(e) => { e.currentTarget.src = "/ai_hero.png"; }}
-                      className="w-full h-full object-cover group-hover:opacity-90 transition-opacity"
-                    />
-                  </Link>
-                  <div className="flex flex-col flex-grow">
-                    <Link href={articleHref} className="block">
-                      <h3 className="text-[17px] md:text-[18px] font-bold leading-[1.25] text-black group-hover:text-[#BF1E2D] transition-colors mb-2">
-                        {article.title}
-                      </h3>
+                return (
+                  <article key={index} className="flex flex-col sm:flex-row gap-5 sm:gap-6 items-start pb-8 border-b border-zinc-100 last:border-b-0 last:pb-0 group">
+                    <Link href={articleHref} className="relative w-full sm:w-[220px] md:w-[240px] aspect-[16/10] flex-shrink-0 overflow-hidden bg-gray-100 block">
+                      <img
+                        src={article.image}
+                        alt={article.title}
+                        onError={(e) => { e.currentTarget.src = "/ai_hero.png"; }}
+                        className="w-full h-full object-cover group-hover:opacity-90 transition-opacity"
+                      />
                     </Link>
-                    <p className="text-[13px] md:text-[13.5px] text-zinc-700 leading-relaxed mb-2.5 font-sans">
-                      {article.description}
-                    </p>
-                    <div className="text-[11.5px] text-zinc-500 font-sans">
-                      By <Link href={`/author/${authorName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`} className="underline hover:text-[#BF1E2D] cursor-pointer text-black font-semibold">{authorName}</Link> {dateStr && `• ${dateStr}`}
+                    <div className="flex flex-col flex-grow">
+                      <Link href={articleHref} className="block">
+                        <h3 className="text-[17px] md:text-[18px] font-bold leading-[1.25] text-black group-hover:text-[#BF1E2D] transition-colors mb-2">
+                          {article.title}
+                        </h3>
+                      </Link>
+                      <p className="text-[13px] md:text-[13.5px] text-zinc-700 leading-relaxed mb-2.5 font-sans">
+                        {article.description}
+                      </p>
+                      <div className="text-[11.5px] text-zinc-500 font-sans">
+                        By <Link href={`/author/${authorName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`} className="underline hover:text-[#BF1E2D] cursor-pointer text-black font-semibold">{authorName}</Link> {dateStr && `• ${dateStr}`}
+                      </div>
                     </div>
+                  </article>
+                );
+              })}
+            </div>
+
+            {/* Category Pages — Sidebar Bottom Tall Ad Box (Slot 5: 300x600 skyscraper) */}
+            <div className="lg:col-span-4 lg:pl-4 hidden lg:flex flex-col items-center sticky top-24">
+              {(() => {
+                const adSlot5 = adSlots.find(s => s.id === "slot-5" || (s.categoryGroup === "CATEGORY" && s.dimensions.includes("600")) || s.title.includes("Tall Ad"));
+                if (!adSlot5 || !adSlot5.isActive) return null;
+                const slot5Dimensions = formatAdDimensions(adSlot5.dimensions || "300X600");
+                const hasSlot5Image =
+                  adSlot5.imageUrl &&
+                  adSlot5.imageUrl.trim() !== "" &&
+                  !isDuplicateAdImage(adSlot5.imageUrl, adSlot5.id, adSlots);
+                const isExternal = (adSlot5.actionType || "").toLowerCase().includes("external") || (adSlot5.targetUrl || "").startsWith("http");
+                return (
+                  <div className="flex flex-col items-center w-full">
+                    <span className="text-[10px] font-mono tracking-widest uppercase text-zinc-400 mb-2 font-bold">
+                      ADVERTISEMENT
+                    </span>
+                    {hasSlot5Image ? (
+                      <a
+                        href={adSlot5.targetUrl || "#"}
+                        target={isExternal ? "_blank" : "_self"}
+                        rel={isExternal ? "noopener noreferrer" : undefined}
+                        className="block group relative overflow-hidden rounded-xs border border-zinc-200 bg-black w-[300px] h-[600px]"
+                      >
+                        <img
+                          src={adSlot5.imageUrl}
+                          alt={adSlot5.title || "Advertisement"}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                        <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-xs px-2 py-0.5 text-[9px] font-mono tracking-widest uppercase text-white border border-white/10">
+                          Ad
+                        </div>
+                      </a>
+                    ) : (
+                      <div className="w-[300px] h-[600px] bg-[#111827] border border-dashed border-gray-700 rounded-xs flex flex-col items-center justify-center p-6 text-center">
+                        <span className="text-[10px] font-mono tracking-widest uppercase text-[#D31220] font-bold mb-2">
+                          ADVERTISEMENT
+                        </span>
+                        <span className="text-white font-mono font-bold text-base tracking-widest">
+                          {slot5Dimensions}
+                        </span>
+                        <span className="text-[11px] font-mono text-gray-400 mt-2">
+                          Size: {slot5Dimensions} px
+                        </span>
+                        <span className="text-[10px] font-mono text-gray-500 mt-1">
+                          Tall Skyscraper Ad
+                        </span>
+                      </div>
+                    )}
                   </div>
-                </article>
-              );
-            })}
+                );
+              })()}
+            </div>
           </div>
 
           {/* Category News Feed Pagination */}
-          <div className="flex items-center gap-2 mt-10 pt-4 border-t border-gray-100 text-xs font-bold text-gray-500 uppercase select-none">
+          <div className="flex items-center flex-wrap gap-2 mt-10 pt-4 border-t border-gray-100 text-xs font-bold text-gray-500 uppercase select-none overflow-x-auto pb-2">
             {currentPage > 1 && (
               <button
                 onClick={() => handlePageChange(currentPage - 1)}

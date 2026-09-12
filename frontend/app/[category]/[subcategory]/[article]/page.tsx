@@ -1,4 +1,9 @@
+import { redirect } from 'next/navigation';
+import { Metadata } from 'next';
+import { generateSocialMetadata } from '@/lib/seoHelper';
 import SubcategoryPage from '../page';
+
+export const dynamic = 'force-dynamic';
 
 interface ThreeSegmentPageProps {
   params: Promise<{
@@ -6,6 +11,20 @@ interface ThreeSegmentPageProps {
     subcategory: string;
     article: string;
   }>;
+}
+
+export async function generateMetadata({ params }: ThreeSegmentPageProps): Promise<Metadata> {
+  const resolved = await params;
+  const effectiveCategory = (resolved.category === "news" && resolved.subcategory)
+    ? resolved.subcategory
+    : resolved.category;
+  const articleSlug = resolved.article || resolved.subcategory;
+
+  return generateSocialMetadata({
+    category: effectiveCategory,
+    subcategory: resolved.subcategory,
+    articleSlug,
+  });
 }
 
 export async function generateStaticParams() {
@@ -86,11 +105,24 @@ export async function generateStaticParams() {
 export default async function ThreeSegmentArticlePage({ params }: ThreeSegmentPageProps) {
   const resolved = await params;
   
+  const effectiveCategory = (resolved.category === "news" && resolved.subcategory)
+    ? resolved.subcategory
+    : resolved.category;
+
+  const articleSlug = resolved.article || resolved.subcategory;
+
+  // Clean, easy-to-understand route path redirection:
+  // If an article is accessed with redundant middle segments like /companies/ or /news/,
+  // redirect directly to the canonical clean 2-segment path /[category]/[article]
+  if (resolved.article && (resolved.subcategory === "companies" || resolved.subcategory === "news" || resolved.category === "news")) {
+    redirect(`/${effectiveCategory.toLowerCase()}/${articleSlug}`);
+  }
+
   // Delegate rendering to the article page handler using the article slug
   return SubcategoryPage({
     params: Promise.resolve({
-      category: resolved.category,
-      subcategory: resolved.article || resolved.subcategory
+      category: effectiveCategory,
+      subcategory: articleSlug
     })
   });
 }

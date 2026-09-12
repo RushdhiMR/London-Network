@@ -1,14 +1,10 @@
 import Link from 'next/link';
 
 const authorsList = [
-  { name: "Rushdhi MR", image: "/author_bluesuit.jpg" },
-  { name: "Chris Hogg", image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=250&h=250&fit=crop" },
-  { name: "Jennifer Friesen", image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=250&h=250&fit=crop" },
-  { name: "Dr. Andrew Forde", image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=250&h=250&fit=crop" },
-  { name: "David Potter", image: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=250&h=250&fit=crop" },
-  { name: "Pramod Jain", image: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=250&h=250&fit=crop" },
-  { name: "April Hicke", image: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=250&h=250&fit=crop" },
-  { name: "Dr. Tim Sandle", image: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=250&h=250&fit=crop" }
+  { name: "Rushdhi MR", image: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_bluesuit.jpg" },
+  { name: "Muba_kity", image: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_woman.jpg" },
+  { name: "Roomi", image: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_glasses.jpg" },
+  { name: "Ruzni", image: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_beard.jpg" }
 ];
 
 export default function PeopleBehindStories() {
