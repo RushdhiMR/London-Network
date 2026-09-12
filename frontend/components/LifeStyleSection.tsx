@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesCategory } from "@/lib/articlesSync";
+import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesMainCategory } from "@/lib/articlesSync";
 
 export default function LifeStyleSection() {
   const { articles: liveArticles = [] } = useLiveArticles();
@@ -39,7 +39,7 @@ export default function LifeStyleSection() {
 
   const lifestyleLive = (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
     if (!art || (art.status || "").toLowerCase() !== "published") return false;
-    return articleMatchesCategory(art, "lifestyle");
+    return articleMatchesMainCategory(art, "lifestyle");
   });
 
   lifestyleLive.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));

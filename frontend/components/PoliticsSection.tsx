@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesCategory } from "@/lib/articlesSync";
+import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesMainCategory } from "@/lib/articlesSync";
 
 export default function PoliticsSection() {
   const { articles: liveArticles = [] } = useLiveArticles();
@@ -40,7 +40,7 @@ export default function PoliticsSection() {
   // Filter politics articles
   const politicsLive = (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
     if (!art || (art.status || "").toLowerCase() !== "published") return false;
-    return articleMatchesCategory(art, "politics");
+    return articleMatchesMainCategory(art, "politics");
   });
 
   politicsLive.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));

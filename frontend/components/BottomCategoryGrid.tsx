@@ -1,16 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesCategory } from "@/lib/articlesSync";
+import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesMainCategory } from "@/lib/articlesSync";
 
 export default function BottomCategoryGrid() {
   const { articles: liveArticles = [] } = useLiveArticles();
 
-  // Helper to filter articles by category keywords
+  // Helper to filter articles by category keywords (strictly main category for homepage sections)
   const getCategoryArticles = (keywords: string[]) => {
     return (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
       if (!art || (art.status || "").toLowerCase() !== "published") return false;
-      return keywords.some(k => articleMatchesCategory(art, k));
+      return keywords.some(k => articleMatchesMainCategory(art, k));
     });
   };
 

@@ -344,13 +344,21 @@ export function articleMatchesCategory(post: any, categoryOrSub: string): boolea
 
 export function articleMatchesMainCategory(post: any, targetCategory: string): boolean {
   if (!post || !targetCategory) return false;
+  const cleanTarget = targetCategory.toLowerCase().trim().replace(/[^a-z0-9]/g, "");
+  if (!cleanTarget) return false;
+
+  const catRaw = String(post.category || post.category_name || "").toLowerCase().trim().replace(/[^a-z0-9]/g, "");
+  if (catRaw === cleanTarget || catRaw.includes(cleanTarget) || cleanTarget.includes(catRaw)) {
+    return true;
+  }
+
   const targetNorm = normalizeCategoryKey(targetCategory);
   const catNorm = normalizeCategoryKey(post.category || post.category_name || "");
-  if (targetNorm && catNorm) return targetNorm === catNorm;
+  if (targetNorm && catNorm && targetNorm === catNorm) {
+    return true;
+  }
 
-  const cleanTarget = targetCategory.toLowerCase().trim().replace(/[^a-z0-9]/g, "");
-  const catRaw = String(post.category || post.category_name || "").toLowerCase().trim().replace(/[^a-z0-9]/g, "");
-  return catRaw === cleanTarget || catRaw.includes(cleanTarget) || cleanTarget.includes(catRaw);
+  return false;
 }
 
 let broadcastChannel: BroadcastChannel | null = null;

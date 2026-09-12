@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesCategory } from "@/lib/articlesSync";
+import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesMainCategory } from "@/lib/articlesSync";
 
 export default function TechnologyGrid() {
   const { articles: liveArticles = [] } = useLiveArticles();
@@ -39,7 +39,7 @@ export default function TechnologyGrid() {
 
   const techLive = (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
     if (!art || (art.status || "").toLowerCase() !== "published") return false;
-    return articleMatchesCategory(art, "technology");
+    return articleMatchesMainCategory(art, "technology");
   });
 
   // Sort strictly by timestamp descending (newest first)
