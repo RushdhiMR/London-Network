@@ -1436,9 +1436,8 @@ function isWorldOrWorldSub(cat: string): boolean {
     const activeUserEmail = auth.user?.email || currentUser?.email || activeEmail || "rushdhiriyaj2005@gmail.com";
     const activeUserName = auth.user?.name || currentUser?.name || activeName || "Rushdhi";
     const savedProf = getUserProfile(activeUserEmail);
-
-    if (originalAuthor?.name && !originalAuthor.name.toLowerCase().includes("admin") && !isAdmin) {
-      finalAuthorName = originalAuthor.name;
+    if (originalAuthor?.name && originalAuthor.name.trim() !== "") {
+      finalAuthorName = originalAuthor.name.trim();
       finalAuthorEmail = originalAuthor.email || activeUserEmail;
       finalAuthorAvatar = originalAuthor.avatar || resolveUserAvatar({ name: finalAuthorName, email: finalAuthorEmail, role: "Writer" });
       finalAuthorBio = originalAuthor.bio || `${finalAuthorName} is a journalist for London BigBen.`;

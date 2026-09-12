@@ -442,13 +442,18 @@ export default function AdminDashboardPage() {
   const handleApproveReviewStudio = async () => {
     if (!reviewingSubmission) return;
 
+    const authorName = (reviewingSubmission as any).authorName || (reviewingSubmission as any).author_name || (reviewingSubmission as any).author || (reviewingSubmission as any).writerName || (reviewingSubmission as any).writer || "Staff Journalist";
+    const authorEmail = (reviewingSubmission as any).authorEmail || (reviewingSubmission as any).author_email || (reviewingSubmission as any).writerEmail;
+    const authorAvatar = (reviewingSubmission as any).authorAvatar || (reviewingSubmission as any).author_avatar || (reviewingSubmission as any).writerAvatar;
+    const authorBio = (reviewingSubmission as any).authorBio || (reviewingSubmission as any).author_bio || (reviewingSubmission as any).writerBio;
+
     const newArt: Article = {
       id: reviewingSubmission.id || `art_${Date.now()}`,
       title: reviewTitle.trim(),
       slug: reviewTitle.trim().toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-'),
       description: reviewSummary.trim(),
       category_name: reviewCategory,
-      author_name: reviewingSubmission.authorName || (reviewingSubmission as any).author || adminUser?.name || "Staff Journalist",
+      author_name: authorName,
       readTime: reviewReadTime.trim() || "5 min read",
       imageUrl: reviewImageUrl || "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=500&h=300&fit=crop",
       views: 120,
@@ -467,7 +472,10 @@ export default function AdminDashboardPage() {
       subheading: reviewSummary,
       summary: reviewSummary,
       content: reviewContent,
-      authorName: newArt.author_name,
+      authorName: authorName,
+      authorEmail: authorEmail,
+      authorAvatar: authorAvatar,
+      authorBio: authorBio,
       category: reviewCategory,
       subcategories: reviewSubCategories,
       tags: reviewTags,
