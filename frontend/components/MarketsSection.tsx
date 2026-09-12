@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesCategory, hasArticleSubcategories } from "@/lib/articlesSync";
+import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesCategory } from "@/lib/articlesSync";
 
 export default function MarketsSection() {
   const { articles: liveArticles = [] } = useLiveArticles();
@@ -39,7 +39,6 @@ export default function MarketsSection() {
 
   const marketsLive = (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
     if (!art || (art.status || "").toLowerCase() !== "published") return false;
-    if (hasArticleSubcategories(art)) return false;
     return articleMatchesCategory(art, "markets");
   });
 

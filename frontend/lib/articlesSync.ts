@@ -170,31 +170,8 @@ export function isDuplicateAdImage(url: string, currentSlotId?: string, allSlots
   return Boolean(duplicate);
 }
 
-export function getArticleSubcategories(post: any): string[] {
-  if (!post) return [];
-  const subs = post.subcategories || post.subCategories || post.sub_categories || [];
-  if (Array.isArray(subs)) {
-    return subs.map((s: any) => String(s || "").trim()).filter(Boolean);
-  }
-  if (typeof subs === "string") {
-    try {
-      const parsed = JSON.parse(subs);
-      if (Array.isArray(parsed)) {
-        return parsed.map((s: any) => String(s || "").trim()).filter(Boolean);
-      }
-    } catch (e) {}
-    return subs.split(",").map((s: string) => s.trim()).filter(Boolean);
-  }
-  return [];
-}
-
-export function hasArticleSubcategories(post: any): boolean {
-  if (!post) return false;
-  return getArticleSubcategories(post).length > 0;
-}
-
 export function isHomePageAPlus(post: any): boolean {
-  if (!post || hasArticleSubcategories(post)) return false;
+  if (!post) return false;
   const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
   if (pl.includes("section 2") || pl.includes("a+ 2") || pl.includes("a+2")) return false;
   return (
@@ -207,7 +184,7 @@ export function isHomePageAPlus(post: any): boolean {
 }
 
 export function isTrendingNow(post: any): boolean {
-  if (!post || hasArticleSubcategories(post)) return false;
+  if (!post) return false;
   const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
   return (
     pl === "trending now section" ||
@@ -218,7 +195,7 @@ export function isTrendingNow(post: any): boolean {
 }
 
 export function isEditorsPick(post: any): boolean {
-  if (!post || hasArticleSubcategories(post)) return false;
+  if (!post) return false;
   const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
   return (
     pl === "editor's picks section" ||
@@ -232,7 +209,7 @@ export function isEditorsPick(post: any): boolean {
 }
 
 export function isLatestNews(post: any): boolean {
-  if (!post || hasArticleSubcategories(post)) return false;
+  if (!post) return false;
   const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
   return (
     pl === "latest news section" ||
@@ -243,7 +220,7 @@ export function isLatestNews(post: any): boolean {
 }
 
 export function isHomePageAPlus2(post: any): boolean {
-  if (!post || hasArticleSubcategories(post)) return false;
+  if (!post) return false;
   const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
   return (
     pl === "home page a+ section 2" ||
@@ -257,7 +234,6 @@ export function isHomePageAPlus2(post: any): boolean {
 
 export function isCategorySectionOnly(post: any): boolean {
   if (!post) return true;
-  if (hasArticleSubcategories(post)) return false;
   const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
   if (
     pl === "standard post" ||
@@ -281,6 +257,24 @@ export function isCategorySectionOnly(post: any): boolean {
 
 export function isTopPlacementArticle(post: any): boolean {
   return !isCategorySectionOnly(post);
+}
+
+export function getArticleSubcategories(post: any): string[] {
+  if (!post) return [];
+  const subs = post.subcategories || post.subCategories || post.sub_categories || [];
+  if (Array.isArray(subs)) {
+    return subs.map((s: any) => String(s || "").trim()).filter(Boolean);
+  }
+  if (typeof subs === "string") {
+    try {
+      const parsed = JSON.parse(subs);
+      if (Array.isArray(parsed)) {
+        return parsed.map((s: any) => String(s || "").trim()).filter(Boolean);
+      }
+    } catch (e) {}
+    return subs.split(",").map((s: string) => s.trim()).filter(Boolean);
+  }
+  return [];
 }
 
 export function normalizeCategoryKey(name: string): string {
