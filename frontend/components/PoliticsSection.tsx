@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesCategory } from "@/lib/articlesSync";
+import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesCategory, hasArticleSubcategories } from "@/lib/articlesSync";
 
 export default function PoliticsSection() {
   const { articles: liveArticles = [] } = useLiveArticles();
@@ -37,9 +37,10 @@ export default function PoliticsSection() {
     return 0;
   };
 
-  // Filter politics articles
+  // Filter politics articles (homepage section only shows articles without subcategories)
   const politicsLive = (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
     if (!art || (art.status || "").toLowerCase() !== "published") return false;
+    if (hasArticleSubcategories(art)) return false;
     return articleMatchesCategory(art, "politics");
   });
 
