@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useLiveArticles, useLiveAdSlots, ArticleItem, isTopPlacementArticle, articleMatchesMainCategory, formatAdDimensions, isDuplicateAdImage } from "@/lib/articlesSync";
+import { useLiveArticles, useLiveAdSlots, ArticleItem, isTopPlacementArticle, articleMatchesCategory, formatAdDimensions, isDuplicateAdImage } from "@/lib/articlesSync";
 
 export default function BusinessGrid() {
   const { articles: liveArticles = [] } = useLiveArticles();
@@ -39,17 +39,13 @@ export default function BusinessGrid() {
 
   const businessLive = (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
     if (!art || (art.status || "").toLowerCase() !== "published") return false;
-    return articleMatchesMainCategory(art, "business") || (art.category || "").toLowerCase().includes("biz") || (art.category || "").toLowerCase().includes("business");
+    return articleMatchesCategory(art, "business");
   });
 
   // Sort chronological descending: Newest article first
   businessLive.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
 
-  const allPublished = (Array.isArray(liveArticles) ? liveArticles : []).filter(
-    (a: ArticleItem) => a && (a.status || "").toLowerCase() === "published"
-  );
-
-  const displayList = businessLive.length > 0 ? businessLive : allPublished;
+  const displayList = businessLive;
 
   if (displayList.length === 0) {
     return null;

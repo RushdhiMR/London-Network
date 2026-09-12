@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Check } from "lucide-react";
-import { useLiveArticles } from "@/lib/articlesSync";
+import { useLiveArticles, isHomePageAPlus, isTrendingNow } from "@/lib/articlesSync";
 import { getAuthorAvatarByNameOrEmail, resolveUserAvatar } from "@/lib/userProfiles";
 
 export default function HeroSection() {
@@ -80,20 +80,8 @@ export default function HeroSection() {
       // 1. Home Page A+ Section (Carousel Main Story)
       let aPlusPublished = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
         if (!p || (p.status || "").toLowerCase() !== "published") return false;
-        const pl = (p.placement || "").toLowerCase();
-        return (
-          pl.includes("home page a+") ||
-          pl === "home page a+ section" ||
-          pl === "a+ section" ||
-          p.is_featured === true
-        ) && !pl.includes("section 2");
+        return isHomePageAPlus(p);
       });
-
-      if (aPlusPublished.length === 0) {
-        aPlusPublished = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
-          return p && (p.status || "").toLowerCase() === "published";
-        });
-      }
 
       aPlusPublished.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
 
@@ -135,15 +123,8 @@ export default function HeroSection() {
       // 2. Trending Now Section
       let trendingPublished = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
         if (!p || (p.status || "").toLowerCase() !== "published") return false;
-        const pl = (p.placement || "").toLowerCase();
-        return pl.includes("trending") || pl === "trending now" || pl === "trending now section";
+        return isTrendingNow(p);
       });
-
-      if (trendingPublished.length === 0) {
-        trendingPublished = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
-          return p && (p.status || "").toLowerCase() === "published";
-        }).slice(4, 10);
-      }
 
       trendingPublished.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
 

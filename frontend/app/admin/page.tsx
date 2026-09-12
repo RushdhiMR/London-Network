@@ -5894,18 +5894,12 @@ export default function AdminDashboardPage() {
                         onChange={(e) => setReviewPlacement(e.target.value)}
                         className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-amber-500 cursor-pointer shadow-xs"
                       >
-                        <option value="None">None (category & search only)</option>
-                        <option value="Home Page A+ Section">Home Page A+ Section (Hero Top Story)</option>
-                        <option value="Home Page A+ Section 2">Home Page A+ Section 2 (Middle Banner)</option>
-                        <option value="Trending Now">Trending Now</option>
-                        <option value="Editor's Pick">Editor's Pick</option>
-                        <option value="Latest News">Latest News</option>
-                        <option value="Politics Section">Politics Section</option>
-                        <option value="Business Section">Business Section</option>
-                        <option value="Technology Section">Technology Section</option>
-                        <option value="Markets Section">Markets Section</option>
-                        <option value="Lifestyle Section">Lifestyle Section</option>
-                        <option value="Bottom Category Grid">Bottom Category Grid</option>
+                        <option value="Category Section Only">Category Section Only (Default category news feed)</option>
+                        <option value="Home Page A+ Section">Home Page A+ Section (Top Hero Carousel main story)</option>
+                        <option value="Trending Now Section">Trending Now Section (Trending sidebar list beside Hero)</option>
+                        <option value="Editor's Picks Section">Editor&apos;s Picks Section (4-Card featured row below Hero)</option>
+                        <option value="Latest News Section">Latest News Section (Latest news feed and featured lead)</option>
+                        <option value="Home Page A+ Section 2">Home Page A+ Section 2 (Middle dark spotlight banner)</option>
                       </select>
                       <p className="text-[10px] text-slate-500 leading-normal font-sans">
                         Select where this story will be curated on the homepage layout. Any list slots will automatically push the newest article to rank #1 and shift older items down.

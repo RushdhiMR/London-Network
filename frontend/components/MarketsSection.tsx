@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesMainCategory } from "@/lib/articlesSync";
+import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesCategory } from "@/lib/articlesSync";
 
 export default function MarketsSection() {
   const { articles: liveArticles = [] } = useLiveArticles();
@@ -39,34 +39,18 @@ export default function MarketsSection() {
 
   const marketsLive = (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
     if (!art || (art.status || "").toLowerCase() !== "published") return false;
-    return articleMatchesMainCategory(art, "markets") || (art.category || "").toLowerCase().includes("market");
+    return articleMatchesCategory(art, "markets");
   });
 
   marketsLive.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
 
-  const mappedLive = marketsLive.map((a: ArticleItem) => ({
+  const displayArticles = marketsLive.slice(0, 4).map((a: ArticleItem) => ({
     id: a.id,
     title: a.title,
     description: a.description || a.summary || "",
     image: a.imageUrl || a.image || "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=500&h=350&fit=crop",
-    href: `/${(a.category || "news").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}`
+    href: `/${(a.category || "markets").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}`
   }));
-
-  const allPublished = (Array.isArray(liveArticles) ? liveArticles : []).filter(
-    (a: ArticleItem) => a && (a.status || "").toLowerCase() === "published"
-  );
-
-  const displayList = mappedLive.length > 0
-    ? mappedLive
-    : allPublished.map((a: ArticleItem) => ({
-        id: a.id,
-        title: a.title,
-        description: a.description || a.summary || "",
-        image: a.imageUrl || a.image || "/ai_hero.png",
-        href: `/${(a.category || "news").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}`
-      }));
-
-  const displayArticles = displayList.slice(0, 4);
 
   if (displayArticles.length === 0) {
     return null;

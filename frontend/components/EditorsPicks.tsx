@@ -1,98 +1,63 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Clock } from "lucide-react";
-import { useLiveArticles } from "@/lib/articlesSync";
+import { useLiveArticles, isEditorsPick } from "@/lib/articlesSync";
 
 export default function EditorsPicks() {
   const [activeTab, setActiveTab] = useState<"indices" | "commodities" | "currencies">("indices");
   const { articles: liveArticles = [] } = useLiveArticles();
-  const [dynamicEditorsPicks, setDynamicEditorsPicks] = useState<any[]>([]);
 
-  useEffect(() => {
-    try {
-      const getArticleTimestamp = (item: any): number => {
-        if (!item) return 0;
-        if (item.updatedAt) {
-          const t = new Date(item.updatedAt).getTime();
-          if (!isNaN(t) && t > 0) return t;
-        }
-        if (item.updated_at) {
-          const t = new Date(item.updated_at).getTime();
-          if (!isNaN(t) && t > 0) return t;
-        }
-        if (item.publishedAt) {
-          const t = new Date(item.publishedAt).getTime();
-          if (!isNaN(t) && t > 0) return t;
-        }
-        if (item.published_at) {
-          const t = new Date(item.published_at).getTime();
-          if (!isNaN(t) && t > 0) return t;
-        }
-        if (item.createdAt) {
-          const t = new Date(item.createdAt).getTime();
-          if (!isNaN(t) && t > 0) return t;
-        }
-        if (item.created_at) {
-          const t = new Date(item.created_at).getTime();
-          if (!isNaN(t) && t > 0) return t;
-        }
-        if (item.date && item.date !== "Just now" && item.date !== "Today" && item.date !== "Just published") {
-          const t = new Date(item.date).getTime();
-          if (!isNaN(t) && t > 0) return t;
-        }
-        if (typeof item.id === "number") return item.id;
-        if (typeof item.id === "string") {
-          const match = item.id.match(/\d{10,}/);
-          if (match) {
-            const num = parseInt(match[0], 10);
-            if (!isNaN(num) && num > 0) return num;
-          }
-          const num = parseInt(item.id.replace(/[^0-9]/g, ""), 10);
-          if (!isNaN(num) && num > 0) return num;
-        }
-        return 0;
-      };
-
-      let picks = (Array.isArray(liveArticles) ? liveArticles : []).filter(
-        (a) => {
-          if (!a || (a.status || "").toLowerCase() !== "published") return false;
-          const pl = (a.placement || "").toLowerCase();
-          return pl.includes("editor") || a.is_editors_pick === true;
-        }
-      );
-
-      if (picks.length < 4) {
-        const otherPublished = (Array.isArray(liveArticles) ? liveArticles : []).filter(
-          (a) => a && (a.status || "").toLowerCase() === "published" && !picks.some(p => String(p.id) === String(a.id))
-        );
-        picks = [...picks, ...otherPublished];
+  const getArticleTimestamp = (item: any): number => {
+    if (!item) return 0;
+    if (item.updatedAt || item.updated_at) {
+      const t = new Date(item.updatedAt || item.updated_at).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    if (item.published_at || item.publishedAt) {
+      const t = new Date(item.published_at || item.publishedAt).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    if (item.createdAt || item.created_at) {
+      const t = new Date(item.createdAt || item.created_at).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    if (item.date && item.date !== "Just now" && item.date !== "Today" && item.date !== "Just published") {
+      const t = new Date(item.date).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    if (typeof item.id === "number") return item.id;
+    if (typeof item.id === "string") {
+      const match = item.id.match(/\d{10,}/);
+      if (match) {
+        const num = parseInt(match[0], 10);
+        if (!isNaN(num) && num > 0) return num;
       }
+      const num = parseInt(item.id.replace(/[^0-9]/g, ""), 10);
+      if (!isNaN(num) && num > 0) return num;
+    }
+    return 0;
+  };
 
-      picks.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
+  const picks = (Array.isArray(liveArticles) ? liveArticles : []).filter(
+    (a) => a && (a.status || "").toLowerCase() === "published" && isEditorsPick(a)
+  );
 
-      if (picks.length > 0) {
-        const formatted = picks.map((post, idx) => {
-          const cat = (post.category || "BUSINESS").toUpperCase();
-          const postSlug = (post.title || "").toLowerCase().replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-");
-          return {
-            id: `ed-pick-${post.id || idx}`,
-            category: cat,
-            title: post.title,
-            readTime: post.readDuration || "5 MIN READ",
-            image: post.imageUrl || post.image || "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=500&h=380&fit=crop",
-            href: `/${cat.toLowerCase()}/companies/${postSlug}?id=${post.id}`
-          };
-        });
-        setDynamicEditorsPicks(formatted);
-      } else {
-        setDynamicEditorsPicks([]);
-      }
-    } catch (e) {}
-  }, [liveArticles]);
+  picks.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
 
-  const displayPicks = dynamicEditorsPicks.slice(0, 4);
+  const displayPicks = picks.slice(0, 4).map((post, idx) => {
+    const cat = (post.category || "BUSINESS").toUpperCase();
+    const postSlug = (post.title || "").toLowerCase().replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-");
+    return {
+      id: `ed-pick-${post.id || idx}`,
+      category: cat,
+      title: post.title,
+      readTime: post.readDuration || "5 MIN READ",
+      image: post.imageUrl || post.image || "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=500&h=380&fit=crop",
+      href: `/${cat.toLowerCase()}/companies/${postSlug}?id=${post.id}`
+    };
+  });
 
   if (displayPicks.length === 0) {
     return null;

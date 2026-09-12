@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesMainCategory } from "@/lib/articlesSync";
+import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesCategory } from "@/lib/articlesSync";
 
 export default function LifeStyleSection() {
   const { articles: liveArticles = [] } = useLiveArticles();
@@ -39,28 +39,18 @@ export default function LifeStyleSection() {
 
   const lifestyleLive = (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
     if (!art || (art.status || "").toLowerCase() !== "published") return false;
-    return articleMatchesMainCategory(art, "lifestyle") || (art.category || "").toLowerCase().includes("life");
+    return articleMatchesCategory(art, "lifestyle");
   });
 
-  const allPublished = (Array.isArray(liveArticles) ? liveArticles : []).filter(
-    (a: ArticleItem) => a && (a.status || "").toLowerCase() === "published"
-  );
+  lifestyleLive.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
 
-  const displayArticles = lifestyleLive.length > 0
-    ? lifestyleLive.slice(0, 4).map((a: ArticleItem) => ({
-        id: a.id,
-        title: a.title,
-        description: a.description || a.summary || "",
-        image: a.imageUrl || a.image || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=500&h=350&fit=crop",
-        href: `/${(a.category || "lifestyle").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}`
-      }))
-    : allPublished.slice(0, 4).map((a: ArticleItem) => ({
-        id: a.id,
-        title: a.title,
-        description: a.description || a.summary || "",
-        image: a.imageUrl || a.image || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=500&h=350&fit=crop",
-        href: `/${(a.category || "lifestyle").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}`
-      }));
+  const displayArticles = lifestyleLive.slice(0, 4).map((a: ArticleItem) => ({
+    id: a.id,
+    title: a.title,
+    description: a.description || a.summary || "",
+    image: a.imageUrl || a.image || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=500&h=350&fit=crop",
+    href: `/${(a.category || "lifestyle").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}`
+  }));
 
   if (displayArticles.length === 0) {
     return null;

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { Share2, Bookmark } from "lucide-react";
-import { useLiveArticles } from "@/lib/articlesSync";
+import { useLiveArticles, isLatestNews } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
 
 export default function LatestNewsSection() {
@@ -45,16 +45,8 @@ export default function LatestNewsSection() {
 
   let approved = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
     if (!p || (p.status || "").toLowerCase() !== "published") return false;
-    const pl = (p.placement || "").toLowerCase();
-    return pl.includes("latest") || pl === "latest news" || pl === "latest news section";
+    return isLatestNews(p);
   });
-
-  if (approved.length < 4) {
-    const otherPublished = (Array.isArray(liveArticles) ? liveArticles : []).filter(
-      (a) => a && (a.status || "").toLowerCase() === "published" && !approved.some(p => String(p.id) === String(a.id))
-    );
-    approved = [...approved, ...otherPublished];
-  }
 
   approved.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
 

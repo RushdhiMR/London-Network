@@ -170,63 +170,98 @@ export function isDuplicateAdImage(url: string, currentSlotId?: string, allSlots
   return Boolean(duplicate);
 }
 
-export function isCategorySectionOnly(post: any): boolean {
+export function isHomePageAPlus(post: any): boolean {
+  if (!post) return false;
+  const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
+  if (pl.includes("section 2") || pl.includes("a+ 2") || pl.includes("a+2")) return false;
+  return (
+    pl === "home page a+ section" ||
+    pl === "home page a+" ||
+    pl === "a+ section" ||
+    pl.includes("home page a+") ||
+    (post.is_featured === true && !pl.includes("trending") && !pl.includes("editor") && !pl.includes("latest") && !pl.includes("section 2"))
+  );
+}
+
+export function isTrendingNow(post: any): boolean {
   if (!post) return false;
   const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
   return (
+    pl === "trending now section" ||
+    pl === "trending now" ||
+    pl === "trending" ||
+    pl.includes("trending")
+  );
+}
+
+export function isEditorsPick(post: any): boolean {
+  if (!post) return false;
+  const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
+  return (
+    pl === "editor's picks section" ||
+    pl === "editor's pick" ||
+    pl === "editor's picks" ||
+    pl === "editors pick" ||
+    pl === "editors picks" ||
+    pl.includes("editor") ||
+    post.is_editors_pick === true
+  );
+}
+
+export function isLatestNews(post: any): boolean {
+  if (!post) return false;
+  const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
+  return (
+    pl === "latest news section" ||
+    pl === "latest news" ||
+    pl === "latest" ||
+    pl.includes("latest")
+  );
+}
+
+export function isHomePageAPlus2(post: any): boolean {
+  if (!post) return false;
+  const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
+  return (
+    pl === "home page a+ section 2" ||
+    pl === "a+ section 2" ||
+    pl === "a+2" ||
+    pl.includes("a+ section 2") ||
+    pl.includes("section 2") ||
+    pl === "middle dark spotlight banner"
+  );
+}
+
+export function isCategorySectionOnly(post: any): boolean {
+  if (!post) return true;
+  const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
+  if (
     pl === "standard post" ||
     pl === "category section only" ||
     pl === "category_only" ||
     pl === "category only" ||
-    pl.includes("category section") ||
-    pl.includes("category only") ||
-    pl.includes("section only") ||
     pl === "standard" ||
-    pl === "none"
+    pl === "none" ||
+    pl === ""
+  ) {
+    return true;
+  }
+  return (
+    !isHomePageAPlus(post) &&
+    !isTrendingNow(post) &&
+    !isEditorsPick(post) &&
+    !isLatestNews(post) &&
+    !isHomePageAPlus2(post)
   );
 }
 
 export function isTopPlacementArticle(post: any): boolean {
-  if (!post) return false;
-  const pl = (post.placement || "").toLowerCase().trim();
-  if (
-    pl === "standard post" ||
-    pl === "category section only" ||
-    pl === "none" ||
-    pl === "standard" ||
-    pl === "" ||
-    pl.includes("section only") ||
-    pl.includes("technology") ||
-    pl.includes("business") ||
-    pl.includes("politics") ||
-    pl.includes("market") ||
-    pl.includes("lifestyle")
-  ) {
-    return false;
-  }
-  if (
-    pl === "home page a+ section" ||
-    pl === "home page a+ section 2" ||
-    pl === "a+ section" ||
-    pl === "trending now" ||
-    pl === "trending now section" ||
-    pl === "editor's pick" ||
-    pl === "editor's picks" ||
-    pl === "latest news" ||
-    pl === "latest news section" ||
-    pl.includes("a+ section") ||
-    pl.includes("trending") ||
-    pl.includes("editor") ||
-    pl.includes("latest")
-  ) {
-    return true;
-  }
-  return false;
+  return !isCategorySectionOnly(post);
 }
 
 export function getArticleSubcategories(post: any): string[] {
   if (!post) return [];
-  const subs = post.subcategories || post.subCategories || [];
+  const subs = post.subcategories || post.subCategories || post.sub_categories || [];
   if (Array.isArray(subs)) {
     return subs.map((s: any) => String(s || "").trim()).filter(Boolean);
   }
@@ -268,20 +303,37 @@ export function normalizeCategoryKey(name: string): string {
 
 export function articleBelongsToCategory(post: any, targetCategory: string): boolean {
   if (!post || !targetCategory) return false;
-  const targetKey = normalizeCategoryKey(targetCategory);
-  if (!targetKey) return false;
+  const cleanTarget = targetCategory.toLowerCase().trim().replace(/[^a-z0-9]/g, "");
+  if (!cleanTarget) return false;
 
-  const catKey = normalizeCategoryKey(post.category || post.category_name || "");
   // 1. Direct match with Main Category
-  if (catKey === targetKey) return true;
+  const catRaw = String(post.category || post.category_name || "").toLowerCase().trim().replace(/[^a-z0-9]/g, "");
+  if (catRaw === cleanTarget || catRaw.includes(cleanTarget) || cleanTarget.includes(catRaw)) {
+    return true;
+  }
 
   // 2. Direct match with selected Subcategories
-  const subsKeys = getArticleSubcategories(post).map((s: any) => normalizeCategoryKey(s)).filter(Boolean);
-  if (subsKeys.includes(targetKey)) return true;
+  const subs = getArticleSubcategories(post);
+  for (const sub of subs) {
+    const cleanSub = String(sub).toLowerCase().trim().replace(/[^a-z0-9]/g, "");
+    if (cleanSub === cleanTarget || cleanSub.includes(cleanTarget) || cleanTarget.includes(cleanSub)) {
+      return true;
+    }
+  }
 
-  // 3. Direct match with placement (e.g. "Politics Section", "Business Section", "Technology Section")
-  const plKey = normalizeCategoryKey(post.placement || "");
-  if (plKey === targetKey || plKey.includes(targetKey)) return true;
+  // 3. Match normalized category keys
+  const targetNorm = normalizeCategoryKey(targetCategory);
+  const catNorm = normalizeCategoryKey(post.category || post.category_name || "");
+  if (targetNorm && catNorm && targetNorm === catNorm) {
+    return true;
+  }
+
+  for (const sub of subs) {
+    const subNorm = normalizeCategoryKey(sub);
+    if (targetNorm && subNorm && targetNorm === subNorm) {
+      return true;
+    }
+  }
 
   return false;
 }
@@ -292,11 +344,13 @@ export function articleMatchesCategory(post: any, categoryOrSub: string): boolea
 
 export function articleMatchesMainCategory(post: any, targetCategory: string): boolean {
   if (!post || !targetCategory) return false;
-  const targetKey = normalizeCategoryKey(targetCategory);
-  if (!targetKey) return false;
+  const targetNorm = normalizeCategoryKey(targetCategory);
+  const catNorm = normalizeCategoryKey(post.category || post.category_name || "");
+  if (targetNorm && catNorm) return targetNorm === catNorm;
 
-  const catKey = normalizeCategoryKey(post.category || post.category_name || "");
-  return catKey === targetKey;
+  const cleanTarget = targetCategory.toLowerCase().trim().replace(/[^a-z0-9]/g, "");
+  const catRaw = String(post.category || post.category_name || "").toLowerCase().trim().replace(/[^a-z0-9]/g, "");
+  return catRaw === cleanTarget || catRaw.includes(cleanTarget) || cleanTarget.includes(catRaw);
 }
 
 let broadcastChannel: BroadcastChannel | null = null;

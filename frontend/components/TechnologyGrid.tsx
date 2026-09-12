@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesMainCategory } from "@/lib/articlesSync";
+import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesCategory } from "@/lib/articlesSync";
 
 export default function TechnologyGrid() {
   const { articles: liveArticles = [] } = useLiveArticles();
@@ -39,32 +39,19 @@ export default function TechnologyGrid() {
 
   const techLive = (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
     if (!art || (art.status || "").toLowerCase() !== "published") return false;
-    return articleMatchesMainCategory(art, "technology") || (art.category || "").toLowerCase().includes("tech");
+    return articleMatchesCategory(art, "technology");
   });
 
   // Sort strictly by timestamp descending (newest first)
   techLive.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
 
-  const mappedLive = techLive.map((a: ArticleItem) => ({
+  const displayArticles = techLive.slice(0, 2).map((a: ArticleItem) => ({
     id: a.id,
     title: a.title,
     description: a.description || a.summary || "",
     image: a.imageUrl || a.image || "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&h=480&fit=crop",
     href: `/${(a.category || "technology").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}`
   }));
-
-  const displayArticles = mappedLive.length > 0
-    ? mappedLive.slice(0, 2)
-    : (Array.isArray(liveArticles) ? liveArticles : [])
-        .filter((a: ArticleItem) => a && (a.status || "").toLowerCase() === "published")
-        .slice(0, 2)
-        .map((a: ArticleItem) => ({
-          id: a.id,
-          title: a.title,
-          description: a.description || a.summary || "",
-          image: a.imageUrl || a.image || "/ai_hero.png",
-          href: `/${(a.category || "technology").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}`
-        }));
 
   if (displayArticles.length === 0) {
     return null;

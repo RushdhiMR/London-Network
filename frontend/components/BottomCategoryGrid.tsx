@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesMainCategory } from "@/lib/articlesSync";
+import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesCategory } from "@/lib/articlesSync";
 
 export default function BottomCategoryGrid() {
   const { articles: liveArticles = [] } = useLiveArticles();
@@ -10,8 +10,7 @@ export default function BottomCategoryGrid() {
   const getCategoryArticles = (keywords: string[]) => {
     return (Array.isArray(liveArticles) ? liveArticles : []).filter((art: ArticleItem) => {
       if (!art || (art.status || "").toLowerCase() !== "published") return false;
-      if (isTopPlacementArticle(art)) return false;
-      return keywords.some(k => articleMatchesMainCategory(art, k));
+      return keywords.some(k => articleMatchesCategory(art, k));
     });
   };
 
@@ -23,8 +22,7 @@ export default function BottomCategoryGrid() {
 
   const buildColumnData = (
     title: string,
-    liveList: ArticleItem[],
-    poolFallback: ArticleItem[]
+    liveList: ArticleItem[]
   ) => {
     // Sort liveList in strict descending order (newest first)
     const sortedLive = [...liveList].sort((a, b) => {
@@ -33,11 +31,9 @@ export default function BottomCategoryGrid() {
       return timeB - timeA;
     });
 
-    const candidateList = sortedLive.length > 0 ? sortedLive : poolFallback;
-
-    if (candidateList.length > 0) {
-      const first = candidateList[0];
-      const rest = candidateList.slice(1, 4);
+    if (sortedLive.length > 0) {
+      const first = sortedLive[0];
+      const rest = sortedLive.slice(1, 4);
       const firstCat = (first.category || first.category_name || title).toLowerCase().replace(/[^a-z0-9]/g, "-");
       const firstSlug = first.slug || (first.title || "").toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
       
@@ -63,16 +59,12 @@ export default function BottomCategoryGrid() {
     return null;
   };
 
-  const allPublishedLive = (Array.isArray(liveArticles) ? liveArticles : []).filter(
-    (art: ArticleItem) => art && (art.status || "").toLowerCase() === "published"
-  );
-
   const columns = [
-    buildColumnData("Research & Innovation", researchLive, allPublishedLive.slice(0, 4)),
-    buildColumnData("Sports", sportsLive, allPublishedLive.slice(4, 8)),
-    buildColumnData("Economy", economyLive, allPublishedLive.slice(8, 12)),
-    buildColumnData("Health", healthLive, allPublishedLive.slice(12, 16)),
-    buildColumnData("Entertainment", entertainmentLive, allPublishedLive.slice(16, 20))
+    buildColumnData("Research & Innovation", researchLive),
+    buildColumnData("Sports", sportsLive),
+    buildColumnData("Economy", economyLive),
+    buildColumnData("Health", healthLive),
+    buildColumnData("Entertainment", entertainmentLive)
   ].filter(Boolean) as { title: string; featured: any; list: any[] }[];
 
   if (!columns || columns.length === 0) {

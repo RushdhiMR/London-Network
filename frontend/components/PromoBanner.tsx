@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useLiveArticles, isCategorySectionOnly } from "@/lib/articlesSync";
+import { useLiveArticles, isHomePageAPlus2 } from "@/lib/articlesSync";
 
 export default function PromoBanner() {
   const { articles } = useLiveArticles();
@@ -9,18 +9,9 @@ export default function PromoBanner() {
   // Find article designated for Home Page A+ Section 2
   const aPlus2Articles = (Array.isArray(articles) ? articles : []).filter((a) => {
     if (!a) return false;
-    if (isCategorySectionOnly(a)) return false;
     const st = (a.status || "").toLowerCase().trim();
     if (st !== "published" && st !== "approved") return false;
-    const pl = (a.placement || "").toLowerCase().trim();
-    return (
-      pl === "home page a+ section 2" ||
-      pl.includes("a+ section 2") ||
-      pl.includes("section 2") ||
-      pl.includes("a+2") ||
-      pl.includes("a+ 2") ||
-      pl === "middle dark spotlight banner"
-    );
+    return isHomePageAPlus2(a);
   });
 
   const getArticleTimestamp = (item: any): number => {
