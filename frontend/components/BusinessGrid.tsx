@@ -3,41 +3,6 @@
 import Link from "next/link";
 import { useLiveArticles, useLiveAdSlots, ArticleItem, isTopPlacementArticle, articleMatchesMainCategory, formatAdDimensions, isDuplicateAdImage } from "@/lib/articlesSync";
 
-const FALLBACK_BUSINESS_BOTTOM = [
-  {
-    id: "biz-b-1",
-    title: "Hong Kong activist allowed to stay in UK after deportation threat",
-    description: "Wu was detained for hours at London's Heathrow Airport last week and refused entry, he told the BBC.",
-    time: "35 mins ago | Asia",
-    image: "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=500&h=330&fit=crop",
-    href: "/business/hong-kong-activist-uk-stay"
-  },
-  {
-    id: "biz-b-2",
-    title: "Chip stocks slide in US and Asia as AI jitters rattle investors",
-    description: "Trading on South Korea's Kospi index was paused temporarily on Tuesday morning after slumping by 8%.",
-    time: "Just now",
-    image: "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=500&h=330&fit=crop",
-    href: "/business/chip-stocks-slide-us-asia"
-  },
-  {
-    id: "biz-b-3",
-    title: "'I just found all the classified stuff downstairs' - Biden to ghostwriter",
-    description: "Recordings between Biden and his ghostwriter reveal references to classified information and memory gaps.",
-    time: "2 hrs ago | US & Canada",
-    image: "https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?w=500&h=330&fit=crop",
-    href: "/business/biden-ghostwriter-classified-documents"
-  },
-  {
-    id: "biz-b-4",
-    title: "China's new challenge as natural disasters strike - fake AI videos",
-    description: "Storms and flooding incidents over the last few months have seen fake videos inundating social media.",
-    image: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&h=375&fit=crop",
-    time: "7 hrs ago | Asia",
-    href: "/business/china-fake-ai-videos-disasters"
-  }
-];
-
 export default function BusinessGrid() {
   const { articles: liveArticles = [] } = useLiveArticles();
 
@@ -80,32 +45,32 @@ export default function BusinessGrid() {
   // Sort chronological descending: Newest article first
   businessLive.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
 
-  const featuredStory = businessLive.length > 0 ? {
-    title: businessLive[0].title,
-    description: businessLive[0].description || businessLive[0].summary || "",
-    image: businessLive[0].imageUrl || businessLive[0].image || "https://images.unsplash.com/photo-1547683905-f686c993aae5?w=1000&h=650&fit=crop",
-    time: businessLive[0].date || "Just published",
-    href: `/business/${businessLive[0].slug || String(businessLive[0].id)}`
-  } : {
-    title: "'It took everything from us': India's Assam faces worst floods in years",
-    description: "While flooding happens in Assam every year, a state minister described this year as the worst in six decades.",
-    image: "https://images.unsplash.com/photo-1547683905-f686c993aae5?w=1000&h=650&fit=crop",
-    time: "7 hrs ago | Asia",
-    href: "/business/assam-worst-floods-in-years"
+  const allPublished = (Array.isArray(liveArticles) ? liveArticles : []).filter(
+    (a: ArticleItem) => a && (a.status || "").toLowerCase() === "published"
+  );
+
+  const displayList = businessLive.length > 0 ? businessLive : allPublished;
+
+  if (displayList.length === 0) {
+    return null;
+  }
+
+  const featuredStory = {
+    title: displayList[0].title,
+    description: displayList[0].description || displayList[0].summary || "",
+    image: displayList[0].imageUrl || displayList[0].image || "/ai_hero.png",
+    time: displayList[0].date || "Just published",
+    href: `/business/${displayList[0].slug || String(displayList[0].id)}`
   };
 
-  const userBottomArticles = businessLive.slice(1).map((a, idx) => ({
+  const bottomCards = displayList.slice(1, 5).map((a, idx) => ({
     id: a.id || `biz-user-${idx}`,
     title: a.title,
     description: a.description || a.summary || "",
     time: a.date || "Just published",
-    image: a.imageUrl || a.image || "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=500&h=330&fit=crop",
+    image: a.imageUrl || a.image || "/ai_hero.png",
     href: `/business/${a.slug || String(a.id)}`
   }));
-
-  const bottomCards = userBottomArticles.length >= 4
-    ? userBottomArticles.slice(0, 4)
-    : [...userBottomArticles, ...FALLBACK_BUSINESS_BOTTOM].slice(0, 4);
 
   const { adSlots } = useLiveAdSlots();
   const businessAdSlot = adSlots.find(s => s.id === "slot-3" || s.title.includes("Business Section Top-Right") || s.title.includes("Business Section"));

@@ -24,19 +24,20 @@ export default function BottomCategoryGrid() {
   const buildColumnData = (
     title: string,
     liveList: ArticleItem[],
-    fallbackFeatured: any,
-    fallbackList: any[]
+    poolFallback: ArticleItem[]
   ) => {
-    if (liveList.length > 0) {
-      // Sort in strict descending order (newest first)
-      const sortedLive = [...liveList].sort((a, b) => {
-        const timeA = new Date(a.published_at || a.date || 0).getTime() || (typeof a.id === 'number' ? a.id : Number(String(a.id).replace(/\D/g, '')) || 0);
-        const timeB = new Date(b.published_at || b.date || 0).getTime() || (typeof b.id === 'number' ? b.id : Number(String(b.id).replace(/\D/g, '')) || 0);
-        return timeB - timeA;
-      });
+    // Sort liveList in strict descending order (newest first)
+    const sortedLive = [...liveList].sort((a, b) => {
+      const timeA = new Date(a.published_at || a.date || 0).getTime() || (typeof a.id === 'number' ? a.id : Number(String(a.id).replace(/\D/g, '')) || 0);
+      const timeB = new Date(b.published_at || b.date || 0).getTime() || (typeof b.id === 'number' ? b.id : Number(String(b.id).replace(/\D/g, '')) || 0);
+      return timeB - timeA;
+    });
 
-      const first = sortedLive[0];
-      const rest = sortedLive.slice(1);
+    const candidateList = sortedLive.length > 0 ? sortedLive : poolFallback;
+
+    if (candidateList.length > 0) {
+      const first = candidateList[0];
+      const rest = candidateList.slice(1, 4);
       const firstCat = (first.category || first.category_name || title).toLowerCase().replace(/[^a-z0-9]/g, "-");
       const firstSlug = first.slug || (first.title || "").toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
       
@@ -46,108 +47,37 @@ export default function BottomCategoryGrid() {
         return { title: r.title, href: `/${rCat}/${rSlug}` };
       });
 
-      // Shift previous fallback featured article down into the top of the list
-      const allFallbackHeadlines = [
-        { title: fallbackFeatured.title, href: fallbackFeatured.href },
-        ...fallbackList.filter(f => f.title !== fallbackFeatured.title)
-      ];
-
-      // Combine in chronological order: older published articles first, then fallback headlines
-      const combinedHeadlines = [...restList, ...allFallbackHeadlines].slice(0, 3);
-
       return {
         title,
         featured: {
           title: first.title,
           description: first.description || first.summary || "",
-          image: first.imageUrl || first.image || fallbackFeatured.image,
+          image: first.imageUrl || first.image || "https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=400&h=250&fit=crop",
           href: `/${firstCat}/${firstSlug}`,
           hasPlay: false
         },
-        list: combinedHeadlines
+        list: restList
       };
     }
-    return { title, featured: fallbackFeatured, list: fallbackList };
+
+    return null;
   };
 
+  const allPublishedLive = (Array.isArray(liveArticles) ? liveArticles : []).filter(
+    (art: ArticleItem) => art && (art.status || "").toLowerCase() === "published"
+  );
+
   const columns = [
-    buildColumnData(
-      "Research & Innovation",
-      researchLive,
-      {
-        title: "What next for the green transition in light of new economic headwinds?",
-        description: "Governments balance renewable targets with immediate energy security demands across key industrial sectors.",
-        image: "https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=400&h=250&fit=crop",
-        href: "/news/top-news/green-transition-economic-headwinds"
-      },
-      [
-        { title: "International data privacy standards updated after cross-border audits", href: "/news/top-news/data-privacy-standards" },
-        { title: "Public transportation systems roll out unified digital ticketing", href: "/news/top-news/public-transport-digital-ticketing" },
-        { title: "Education systems adapt curricula to include basic AI literacy", href: "/news/top-news/education-ai-literacy" }
-      ]
-    ),
-    buildColumnData(
-      "Sports",
-      sportsLive,
-      {
-        title: "EU & US leaders sign historic defense and international trade agreement",
-        description: "Multilateral summits conclude with commitments to strengthen economic ties and critical supply chains.",
-        image: "https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?w=400&h=250&fit=crop",
-        hasPlay: true,
-        href: "/sports/eu-us-leaders-sign-trade-agreement"
-      },
-      [
-        { title: "Global athletic championships adopt real-time AI biomechanics tracking", href: "/sports/athletic-championships-ai-tracking" },
-        { title: "Formula E expands battery recovery rules ahead of next season", href: "/sports/formula-e-battery-recovery" },
-        { title: "New stadium infrastructure integrates zero-waste solar canopy roofs", href: "/sports/stadium-zero-waste-solar" }
-      ]
-    ),
-    buildColumnData(
-      "Economy",
-      economyLive,
-      {
-        title: "Transportation sector speeds up transition to zero emission heavy fleets",
-        description: "Commercial freight operators replace diesel fleets with hydrogen and battery-electric heavy trucks.",
-        image: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=400&h=250&fit=crop",
-        href: "/economy/transportation-zero-emission-fleets"
-      },
-      [
-        { title: "Central banks test inter-bank settlement protocols via digital ledger", href: "/economy/central-banks-digital-ledger" },
-        { title: "Global inflation indicators stabilize as supply lines recover", href: "/economy/global-inflation-indicators" },
-        { title: "E-commerce platforms scale up localized transaction distribution nodes", href: "/economy/e-commerce-distribution-nodes" }
-      ]
-    ),
-    buildColumnData(
-      "Health",
-      healthLive,
-      {
-        title: "AI in healthcare: groundbreaking algorithm detects early stage heart anomalies",
-        description: "Machine learning models trained on millions of ECG scans identify cardiovascular risks long before symptoms emerge.",
-        image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&h=250&fit=crop",
-        href: "/health/ai-healthcare-heart-anomalies"
-      },
-      [
-        { title: "Gene therapy trials deliver promising early results for rare conditions", href: "/health/gene-therapy-trials-promising" },
-        { title: "Wearable biosensors allow real-time glucose and hydration monitoring", href: "/health/wearable-biosensors-real-time" },
-        { title: "Surgical robotics systems achieve sub-millimeter precision milestone", href: "/health/surgical-robotics-precision" }
-      ]
-    ),
-    buildColumnData(
-      "Entertainment",
-      entertainmentLive,
-      {
-        title: "Streaming platforms pivot to live interactive events as viewer habits shift",
-        description: "Global studios invest heavily in hybrid productions, blending immersive gaming elements with traditional episodic television.",
-        image: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=400&h=250&fit=crop",
-        href: "/news/entertainment/streaming-platforms-interactive-events"
-      },
-      [
-        { title: "Box office rebounds with resurgence of original theatrical releases", href: "/news/entertainment/box-office-theatrical-resurgence" },
-        { title: "Digital rights and AI likeness protections established in historic actor contracts", href: "/news/entertainment/ai-likeness-actor-contracts" },
-        { title: "Virtual production stages cut post-production turnaround times by half", href: "/news/entertainment/virtual-production-stages" }
-      ]
-    )
-  ];
+    buildColumnData("Research & Innovation", researchLive, allPublishedLive.slice(0, 4)),
+    buildColumnData("Sports", sportsLive, allPublishedLive.slice(4, 8)),
+    buildColumnData("Economy", economyLive, allPublishedLive.slice(8, 12)),
+    buildColumnData("Health", healthLive, allPublishedLive.slice(12, 16)),
+    buildColumnData("Entertainment", entertainmentLive, allPublishedLive.slice(16, 20))
+  ].filter(Boolean) as { title: string; featured: any; list: any[] }[];
+
+  if (!columns || columns.length === 0) {
+    return null;
+  }
 
   return (
     <section className="max-w-[1400px] mx-auto px-4 md:px-6 py-8">

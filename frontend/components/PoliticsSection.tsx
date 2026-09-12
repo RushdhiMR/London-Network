@@ -3,23 +3,6 @@
 import Link from "next/link";
 import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesMainCategory } from "@/lib/articlesSync";
 
-const FALLBACK_POLITICS_ARTICLES = [
-  {
-    id: "pol-1",
-    title: "Global Leaders Summit Reaches Milestone Consensus on Climate and Energy Accord",
-    description: "Multilateral delegates conclude intensive negotiations in Geneva, establishing binding milestones for clean energy investment and carbon reduction.",
-    image: "https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?w=800&h=480&fit=crop",
-    href: "/politics/global-leaders-summit-climate-accord"
-  },
-  {
-    id: "pol-2",
-    title: "Parliamentary Committee Unveils Comprehensive Legislative Package for Digital Privacy",
-    description: "The bipartisan privacy bill introduces strict algorithmic transparency requirements and enhanced consumer rights across all digital platforms.",
-    image: "https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?w=800&h=480&fit=crop",
-    href: "/politics/parliamentary-committee-digital-privacy-bill"
-  }
-];
-
 export default function PoliticsSection() {
   const { articles: liveArticles = [] } = useLiveArticles();
 
@@ -70,9 +53,22 @@ export default function PoliticsSection() {
     href: `/${(a.category || "news").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}`
   }));
 
-  const displayArticles = mappedLive.length >= 2
+  const displayArticles = mappedLive.length > 0
     ? mappedLive.slice(0, 2)
-    : (mappedLive.length > 0 ? [...mappedLive, ...FALLBACK_POLITICS_ARTICLES].slice(0, 2) : FALLBACK_POLITICS_ARTICLES);
+    : (Array.isArray(liveArticles) ? liveArticles : [])
+        .filter((a: ArticleItem) => a && (a.status || "").toLowerCase() === "published")
+        .slice(0, 2)
+        .map((a: ArticleItem) => ({
+          id: a.id,
+          title: a.title,
+          description: a.description || a.summary || "",
+          image: a.imageUrl || a.image || "/ai_hero.png",
+          href: `/${(a.category || "news").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}`
+        }));
+
+  if (displayArticles.length === 0) {
+    return null;
+  }
 
   return (
     <section className="max-w-[1400px] mx-auto px-4 md:px-6 py-10 border-b border-gray-200 font-sans">

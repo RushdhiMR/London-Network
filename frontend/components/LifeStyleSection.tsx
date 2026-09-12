@@ -3,37 +3,6 @@
 import Link from "next/link";
 import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesMainCategory } from "@/lib/articlesSync";
 
-const FALLBACK_LIFESTYLE_ARTICLES = [
-  {
-    id: 1,
-    title: "Silicon Valley chip manufacturers announce breakthrough architectural updates",
-    description: "New nanometer transistor architectures are set to double computing speeds while reducing power requirements...",
-    image: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=500&h=350&fit=crop",
-    href: "/news/lifestyle/silicon-valley-chip-breakthrough"
-  },
-  {
-    id: 2,
-    title: "New quantum computing clusters open to public cloud developer preview",
-    description: "Developers can now run quantum algorithms directly on secure cloud nodes powered by next-gen cooling systems...",
-    image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&h=350&fit=crop",
-    href: "/news/lifestyle/quantum-computing-clusters-cloud-preview"
-  },
-  {
-    id: 3,
-    title: "Open-source database platform raises record funding round for scaling",
-    description: "The open-source ecosystem gains support with a massive funding round targeted at global replication modules...",
-    image: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=500&h=350&fit=crop",
-    href: "/news/lifestyle/open-source-database-record-funding"
-  },
-  {
-    id: 4,
-    title: "How edge computing is transforming real-time telemetry processing",
-    description: "Processing data closer to the source decreases latency and allows immediate feedback in remote sensor arrays...",
-    image: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=500&h=350&fit=crop",
-    href: "/news/lifestyle/edge-computing-telemetry-processing"
-  }
-];
-
 export default function LifeStyleSection() {
   const { articles: liveArticles = [] } = useLiveArticles();
 
@@ -73,24 +42,29 @@ export default function LifeStyleSection() {
     return articleMatchesMainCategory(art, "lifestyle") || (art.category || "").toLowerCase().includes("life");
   });
 
-  lifestyleLive.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
+  const allPublished = (Array.isArray(liveArticles) ? liveArticles : []).filter(
+    (a: ArticleItem) => a && (a.status || "").toLowerCase() === "published"
+  );
 
-  const mappedLive = lifestyleLive.map((a: ArticleItem) => ({
-    id: a.id,
-    title: a.title,
-    description: a.description || a.summary || "",
-    image: a.imageUrl || a.image || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=500&h=350&fit=crop",
-    href: `/${(a.category || "business").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}`
-  }));
+  const displayArticles = lifestyleLive.length > 0
+    ? lifestyleLive.slice(0, 4).map((a: ArticleItem) => ({
+        id: a.id,
+        title: a.title,
+        description: a.description || a.summary || "",
+        image: a.imageUrl || a.image || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=500&h=350&fit=crop",
+        href: `/${(a.category || "lifestyle").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}`
+      }))
+    : allPublished.slice(0, 4).map((a: ArticleItem) => ({
+        id: a.id,
+        title: a.title,
+        description: a.description || a.summary || "",
+        image: a.imageUrl || a.image || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=500&h=350&fit=crop",
+        href: `/${(a.category || "lifestyle").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}`
+      }));
 
-  const displayArticles = mappedLive.length >= 4
-    ? mappedLive.slice(0, 4)
-    : [
-        ...mappedLive,
-        ...FALLBACK_LIFESTYLE_ARTICLES.filter(
-          (fb) => !mappedLive.some((m) => m.title.toLowerCase().trim() === fb.title.toLowerCase().trim())
-        )
-      ].slice(0, 4);
+  if (displayArticles.length === 0) {
+    return null;
+  }
 
   return (
     <section className="max-w-[1400px] mx-auto px-4 md:px-6 py-10 border-b border-gray-200 font-sans">

@@ -287,23 +287,41 @@ export default function HeroSection() {
     }
   ];
 
-  const allCarouselArticles = (
-    userPublishedArticles.length >= 6
-      ? userPublishedArticles
-      : (userPublishedArticles.length > 0 
-          ? [...userPublishedArticles, ...carouselArticles] 
-          : carouselArticles)
-  ).slice(0, 6);
+  const allCarouselArticles = userPublishedArticles.length > 0 ? userPublishedArticles.slice(0, 6) : [];
 
   const handlePrevSlide = () => {
+    if (allCarouselArticles.length <= 1) return;
     setCurrentSlide((prev) => (prev === 0 ? allCarouselArticles.length - 1 : prev - 1));
   };
 
   const handleNextSlide = () => {
+    if (allCarouselArticles.length <= 1) return;
     setCurrentSlide((prev) => (prev === allCarouselArticles.length - 1 ? 0 : prev + 1));
   };
 
-  const activeArticle = allCarouselArticles[currentSlide] || carouselArticles[0];
+  const activeArticle = allCarouselArticles[currentSlide] || allCarouselArticles[0] || {
+    id: 0,
+    category: "News",
+    readTime: "Live",
+    title: "London BigBen Global Financial & Technology Report",
+    description: "Real-time market updates, financial technology analysis, and international economic intelligence.",
+    author: "London BigBen",
+    date: "Live",
+    image: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=1200&h=750&fit=crop",
+    href: "/news"
+  };
+
+  const trendingList = userTrendingArticles.length > 0
+    ? userTrendingArticles.slice(0, 4)
+    : userPublishedArticles.slice(1, 5).map((post, index) => ({
+        number: `0${index + 1}`.slice(-2),
+        category: post.category,
+        title: post.title,
+        time: post.date,
+        image: post.image,
+        hasVideo: false,
+        href: post.href
+      }));
 
   return (
     <section className="max-w-[1400px] mx-auto px-4 md:px-6 py-6 border-b border-gray-200 font-sans">
@@ -460,7 +478,7 @@ export default function HeroSection() {
 
             {/* List */}
             <div className="space-y-2.5 flex-1 flex flex-col justify-between">
-              {(userTrendingArticles.length > 0 ? [...userTrendingArticles, ...trendingNowItems].slice(0, 4) : trendingNowItems).map((item, idx) => (
+              {trendingList.map((item, idx) => (
                 <div 
                   key={`trending-item-${idx}-${item.title || item.href}`}
                   className="flex items-center gap-3 p-1.5 rounded hover:bg-gray-50 transition-colors group cursor-pointer"

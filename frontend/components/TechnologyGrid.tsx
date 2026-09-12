@@ -3,23 +3,6 @@
 import Link from "next/link";
 import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesMainCategory } from "@/lib/articlesSync";
 
-const FALLBACK_TECH_ARTICLES = [
-  {
-    id: "tech-1",
-    title: "Next-Generation Quantum Chips Achieve Room-Temperature Processing Stability",
-    description: "Research institutions confirm micro-architecture stability at ambient temperatures, unlocking massive parallel compute clusters for enterprise deployment.",
-    image: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&h=480&fit=crop",
-    href: "/technology/quantum-chips-room-temperature-breakthrough"
-  },
-  {
-    id: "tech-2",
-    title: "Autonomous AI Telematics Infrastructure Expands Regional Transportation Networks",
-    description: "Real-time edge processing and autonomous fleet management nodes achieve zero critical disruptions across over one million test highway miles.",
-    image: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&h=480&fit=crop",
-    href: "/technology/autonomous-ai-telematics-fleet-networks"
-  }
-];
-
 export default function TechnologyGrid() {
   const { articles: liveArticles = [] } = useLiveArticles();
 
@@ -70,9 +53,22 @@ export default function TechnologyGrid() {
     href: `/${(a.category || "technology").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}`
   }));
 
-  const displayArticles = mappedLive.length >= 2
+  const displayArticles = mappedLive.length > 0
     ? mappedLive.slice(0, 2)
-    : (mappedLive.length > 0 ? [...mappedLive, ...FALLBACK_TECH_ARTICLES].slice(0, 2) : FALLBACK_TECH_ARTICLES);
+    : (Array.isArray(liveArticles) ? liveArticles : [])
+        .filter((a: ArticleItem) => a && (a.status || "").toLowerCase() === "published")
+        .slice(0, 2)
+        .map((a: ArticleItem) => ({
+          id: a.id,
+          title: a.title,
+          description: a.description || a.summary || "",
+          image: a.imageUrl || a.image || "/ai_hero.png",
+          href: `/${(a.category || "technology").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}`
+        }));
+
+  if (displayArticles.length === 0) {
+    return null;
+  }
 
   return (
     <section className="max-w-[1400px] mx-auto px-4 md:px-6 py-10 border-b border-gray-200 font-sans">

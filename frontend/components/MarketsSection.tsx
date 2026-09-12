@@ -3,37 +3,6 @@
 import Link from "next/link";
 import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesMainCategory } from "@/lib/articlesSync";
 
-const FALLBACK_MARKET_ARTICLES = [
-  {
-    id: 1,
-    title: "Canada's Conexiom bets that the future of AI lies in automation, not experimentation",
-    description: "Conexiom's CEO discusses how automating key transactional data is the key to enterprise growth...",
-    image: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=500&h=350&fit=crop",
-    href: "/news/markets/conexiom-bets-future-ai-automation"
-  },
-  {
-    id: 2,
-    title: "Canada's AI adoption problem meets its youth employment problem",
-    description: "A new study outlines how integrating AI training into entry-level roles could solve both problems...",
-    image: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=500&h=350&fit=crop",
-    href: "/news/markets/ai-adoption-meets-youth-employment"
-  },
-  {
-    id: 3,
-    title: "Op-Ed: Rethinking humanity as automation rewrites human realities",
-    description: "Automation is not just about replacing jobs; it's about redefining what it means to be human...",
-    image: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=500&h=350&fit=crop",
-    href: "/news/markets/op-ed-rethinking-humanity-automation"
-  },
-  {
-    id: 4,
-    title: "Lightworks, Scotiabank, Sun Life and TELUS launch AI Consortium",
-    description: "Major financial and telecom leaders collaborate to invest in and govern ethical AI models...",
-    image: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=500&h=350&fit=crop",
-    href: "/news/markets/scotiabank-sun-life-telus-ai-consortium"
-  }
-];
-
 export default function MarketsSection() {
   const { articles: liveArticles = [] } = useLiveArticles();
 
@@ -83,14 +52,25 @@ export default function MarketsSection() {
     href: `/${(a.category || "news").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}`
   }));
 
-  const displayArticles = mappedLive.length >= 4
-    ? mappedLive.slice(0, 4)
-    : [
-        ...mappedLive,
-        ...FALLBACK_MARKET_ARTICLES.filter(
-          (fb) => !mappedLive.some((m) => m.title.toLowerCase().trim() === fb.title.toLowerCase().trim())
-        )
-      ].slice(0, 4);
+  const allPublished = (Array.isArray(liveArticles) ? liveArticles : []).filter(
+    (a: ArticleItem) => a && (a.status || "").toLowerCase() === "published"
+  );
+
+  const displayList = mappedLive.length > 0
+    ? mappedLive
+    : allPublished.map((a: ArticleItem) => ({
+        id: a.id,
+        title: a.title,
+        description: a.description || a.summary || "",
+        image: a.imageUrl || a.image || "/ai_hero.png",
+        href: `/${(a.category || "news").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}`
+      }));
+
+  const displayArticles = displayList.slice(0, 4);
+
+  if (displayArticles.length === 0) {
+    return null;
+  }
 
   return (
     <section className="max-w-[1400px] mx-auto px-4 md:px-6 py-10 border-b border-gray-200 font-sans">

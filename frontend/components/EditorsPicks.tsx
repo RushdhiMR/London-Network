@@ -10,41 +10,6 @@ export default function EditorsPicks() {
   const { articles: liveArticles = [] } = useLiveArticles();
   const [dynamicEditorsPicks, setDynamicEditorsPicks] = useState<any[]>([]);
 
-  const defaultEditorsPicks = [
-    {
-      id: 1,
-      category: "INNOVATION",
-      title: "Inside the lab developing tomorrow's sustainable materials",
-      readTime: "7 MIN READ",
-      image: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=500&h=380&fit=crop",
-      href: "/innovation/lab-developing-sustainable-materials"
-    },
-    {
-      id: 2,
-      category: "TECHNOLOGY",
-      title: "5G expansion continues to transform industries worldwide",
-      readTime: "4 MIN READ",
-      image: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=500&h=380&fit=crop",
-      href: "/technology/5g-expansion-transforms-industries"
-    },
-    {
-      id: 3,
-      category: "BUSINESS",
-      title: "The future of work: How companies are adapting to hybrid everything",
-      readTime: "4 MIN READ",
-      image: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=500&h=380&fit=crop",
-      href: "/business/future-of-work-hybrid-everything"
-    },
-    {
-      id: 4,
-      category: "BUSINESS",
-      title: "How small businesses can compete in an AI-driven world",
-      readTime: "5 MIN READ",
-      image: "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=500&h=380&fit=crop",
-      href: "/business/small-businesses-compete-ai-world"
-    }
-  ];
-
   useEffect(() => {
     try {
       const getArticleTimestamp = (item: any): number => {
@@ -127,11 +92,11 @@ export default function EditorsPicks() {
     } catch (e) {}
   }, [liveArticles]);
 
-  const displayPicks = dynamicEditorsPicks.length >= 4 
-    ? dynamicEditorsPicks.slice(0, 4) 
-    : (dynamicEditorsPicks.length > 0
-        ? [...dynamicEditorsPicks, ...defaultEditorsPicks].slice(0, 4)
-        : defaultEditorsPicks);
+  const displayPicks = dynamicEditorsPicks.slice(0, 4);
+
+  if (displayPicks.length === 0) {
+    return null;
+  }
 
   const marketTabs = {
     indices: [
