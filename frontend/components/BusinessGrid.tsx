@@ -5,6 +5,7 @@ import { useLiveArticles, useLiveAdSlots, ArticleItem, isTopPlacementArticle, ar
 
 export default function BusinessGrid() {
   const { articles: liveArticles = [] } = useLiveArticles();
+  const { adSlots } = useLiveAdSlots();
 
   const getArticleTimestamp = (item: any): number => {
     if (!item) return 0;
@@ -68,7 +69,6 @@ export default function BusinessGrid() {
     href: `/business/${a.slug || String(a.id)}`
   }));
 
-  const { adSlots } = useLiveAdSlots();
   const businessAdSlot = adSlots.find(s => s.id === "slot-3" || s.title.includes("Business Section Top-Right") || s.title.includes("Business Section"));
   const businessDimensions = formatAdDimensions(businessAdSlot?.dimensions || "300X250");
   const hasBusinessImage =
