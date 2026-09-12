@@ -733,26 +733,8 @@ export async function deletePermanentlyOnServer(id: string | number, title?: str
 }
 
 export function useLiveArticles() {
-  const [articles, setArticles] = useState<ArticleItem[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const cached = getCachedArticles();
-        if (Array.isArray(cached) && cached.length > 0) {
-          return cached;
-        }
-      } catch (e) {}
-    }
-    return [];
-  });
-  const [loading, setLoading] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const cached = getCachedArticles();
-        return !Array.isArray(cached) || cached.length === 0;
-      } catch (e) {}
-    }
-    return true;
-  });
+  const [articles, setArticles] = useState<ArticleItem[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
 
   const refresh = useCallback(async () => {
     setLoading(true);
