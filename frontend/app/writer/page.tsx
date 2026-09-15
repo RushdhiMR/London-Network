@@ -241,9 +241,28 @@ export default function WriterDashboardPage() {
       });
 
       // 3. Keep recent local submissions (e.g. newly submitted for review)
+      let localUpdated = false;
       localArticles.forEach((item) => {
         const idKey = cleanKey(item.id);
         const titleKey = normalizeTitle(item.title);
+        const existing = (idKey && mergedMap.get(idKey)) || (titleKey && mergedMap.get(`t_${titleKey}`));
+
+        // If the server/admin has marked the article as Rejected or Published, honor the admin decision
+        if (existing) {
+          const exSt = (existing.status || "").toLowerCase().trim();
+          if (exSt.includes("reject") || exSt === "published" || exSt === "approved") {
+            if (item.status !== existing.status) {
+              item.status = existing.status;
+              if (existing.rejectionReason) item.rejectionReason = existing.rejectionReason;
+              if (existing.rejection_reason) item.rejection_reason = existing.rejection_reason;
+              if (existing.rejectedAt) item.rejectedAt = existing.rejectedAt;
+              if (existing.rejected_at) item.rejected_at = existing.rejected_at;
+              localUpdated = true;
+            }
+            return;
+          }
+        }
+
         if (item.status === "Pending review" || item.status === "Draft") {
           const existing = (idKey && mergedMap.get(idKey)) || (titleKey && mergedMap.get(`t_${titleKey}`));
           if (existing && existing.status !== item.status && (!item.updated_at || !existing.updated_at || new Date(item.updated_at) >= new Date(existing.updated_at))) {
@@ -253,6 +272,12 @@ export default function WriterDashboardPage() {
           }
         }
       });
+
+      if (localUpdated && typeof window !== "undefined") {
+        try {
+          localStorage.setItem("dj_writer_submitted_articles", JSON.stringify(localArticles));
+        } catch (e) {}
+      }
 
       const uniqueList: any[] = [];
       const seenKeys = new Set<string>();
@@ -645,6 +670,14 @@ export default function WriterDashboardPage() {
     const isRushdhiUser = userEmail.includes("rushdhi") || userName.includes("rushdhi");
     const isRushdhiPost = postEmail.includes("rushdhi") || postName.includes("rushdhi");
     if (isRushdhiUser && isRushdhiPost) return true;
+
+    const isAbcdUser = userEmail.includes("abcd") || userName.includes("abcd");
+    const isAbcdPost = postEmail.includes("abcd") || postName.includes("abcd");
+    if (isAbcdUser && isAbcdPost) return true;
+
+    const isNestoUser = userEmail.includes("nesto") || userName.includes("nesto");
+    const isNestoPost = postEmail.includes("nesto") || postName.includes("nesto");
+    if (isNestoUser && isNestoPost) return true;
 
     // 6. Generic/default writer fallback matching
     if (

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readArticlesStore } from "@/lib/serverArticlesStore";
+import { customNewsDatabase, getTopicMatchingImage, knownNewsArticles } from "@/lib/customNewsData";
 import fs from "fs";
 import path from "path";
 
@@ -13,39 +14,66 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Missing article slug or id" }, { status: 400 });
     }
 
-    const articles = await readArticlesStore();
-    const article = articles.find(
-      (a) =>
-        (slug && (a.slug === slug || String(a.id) === slug)) ||
-        (id && (String(a.id) === id || a.slug === id))
-    );
+    let imgData = "";
 
-    let imgData = article?.imageUrl || article?.image || article?.image_url || article?.ogImage || "";
-
-    // If no image on matching article, check fallback database json directly
-    if (!imgData) {
-      try {
-        const dbPath = path.join(process.cwd(), "data", "digital_journal_db.json");
-        if (fs.existsSync(dbPath)) {
-          const raw = fs.readFileSync(dbPath, "utf-8");
-          const db = JSON.parse(raw);
-          const fallbackArt = (db.articles || []).find(
-            (a: any) =>
-              (slug && (a.slug === slug || String(a.id) === slug)) ||
-              (id && (String(a.id) === id || a.slug === id))
-          );
-          if (fallbackArt) {
-            imgData = fallbackArt.imageUrl || fallbackArt.image || fallbackArt.image_url || "";
-          }
-        }
-      } catch (e) {
-        console.warn("Error reading fallback db for image route:", e);
+    try {
+      const articles = await readArticlesStore();
+      const article = articles.find(
+        (a) =>
+          (slug && (a.slug === slug || String(a.id) === slug)) ||
+          (id && (String(a.id) === id || a.slug === id))
+      );
+      if (article) {
+        imgData = article.imageUrl || article.image || article.image_url || article.ogImage || "";
       }
+    } catch (e) {
+      console.warn("Error reading articles store for image route:", e);
+    }
+
+    // Check fallback database json across candidate paths
+    if (!imgData) {
+      const candidatePaths = [
+        path.join(process.cwd(), "data", "digital_journal_db.json"),
+        path.join(process.cwd(), "frontend", "data", "digital_journal_db.json"),
+      ];
+      for (const dbPath of candidatePaths) {
+        if (fs.existsSync(dbPath)) {
+          try {
+            const raw = fs.readFileSync(dbPath, "utf-8");
+            const db = JSON.parse(raw);
+            const fallbackArt = (db.articles || []).find(
+              (a: any) =>
+                (slug && (a.slug === slug || String(a.id) === slug)) ||
+                (id && (String(a.id) === id || a.slug === id))
+            );
+            if (fallbackArt) {
+              imgData = fallbackArt.imageUrl || fallbackArt.image || fallbackArt.image_url || "";
+              break;
+            }
+          } catch (e) {}
+        }
+      }
+    }
+
+    // Check customNewsDatabase
+    if (!imgData && (slug || id)) {
+      const key = slug || id;
+      const customArt = customNewsDatabase[key];
+      if (customArt && customArt.image) {
+        imgData = customArt.image;
+      }
+    }
+
+    // Check knownNewsArticles topic matching
+    if (!imgData && (slug || id)) {
+      const key = slug || id;
+      const title = knownNewsArticles[key] || key.replace(/-/g, " ");
+      imgData = getTopicMatchingImage(key, title);
     }
 
     // Default fallback image if nothing found
     if (!imgData) {
-      imgData = "/ai_hero.png";
+      imgData = "/og-image.png";
     }
 
     // 1. If it's a remote URL (e.g. Backblaze B2, Unsplash, Cloudinary), redirect to it

@@ -12,7 +12,7 @@ async function setDefaultAdmins() {
   });
 
   const defaultAdmins = [
-    { name: 'Admin User', email: 'admin@digitaljournal.com' },
+    { name: 'Geeth Liyanage', email: 'geethliyanage979@gmail.com' },
     { name: 'London BigBen Official', email: 'londonbigben.offical@gmail.com' },
     { name: 'Akram Yoonos', email: 'akramyoonos006@gmail.com' },
   ];

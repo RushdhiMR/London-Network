@@ -29,22 +29,6 @@ export async function POST(request: Request) {
     // 2. Query user directly from Database (Source of Truth)
     let user = await DB.getUserByEmail(normalized);
 
-    // Only default system admin can be fallback initialized if database is completely fresh
-    if (!user && normalized === 'admin@digitaljournal.com') {
-      user = {
-        id: 1,
-        name: 'System Administrator',
-        email: 'admin@digitaljournal.com',
-        password_hash: '$2b$10$gyyrusfVDr4wRtloRzoPH.3n1DMqBGfQiR7mzTtINm6IlmH/Oiwgu',
-        provider: 'local',
-        google_id: null,
-        role: 'admin',
-        email_verified: 1,
-        reset_token: null,
-        reset_token_expires: null
-      };
-    }
-
     const defaultAdminHash = '$2b$10$4nwUmwVpHtDTbJKDU2fxtOU3x2IZpyIsAVLGdd2qahplphjWmbn2K'; // admin123
 
     const isKnownDefaultAdmin =

@@ -23,11 +23,11 @@ export async function requireAuth(req?: Request): Promise<RBACResult> {
         user: session
           ? { ...session, role: 'admin' }
           : {
-              id: 1,
-              name: 'System Administrator',
-              email: 'admin@digitaljournal.com',
+              id: 17,
+              name: 'Geeth Liyanage',
+              email: 'geethliyanage979@gmail.com',
               role: 'admin',
-              provider: 'local',
+              provider: 'google',
             },
       };
     }
@@ -73,11 +73,11 @@ export async function requireRole(roleOrReq: any, ...roles: UserRole[]): Promise
         user: session
           ? { ...session, role: 'admin' }
           : {
-              id: 1,
-              name: 'System Administrator',
-              email: 'admin@digitaljournal.com',
+              id: 17,
+              name: 'Geeth Liyanage',
+              email: 'geethliyanage979@gmail.com',
               role: 'admin',
-              provider: 'local',
+              provider: 'google',
             },
       };
     }

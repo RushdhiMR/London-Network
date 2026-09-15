@@ -3,7 +3,7 @@ import { Metadata } from 'next';
 import { generateSocialMetadata } from '@/lib/seoHelper';
 
 export async function generateMetadata(): Promise<Metadata> {
-  return generateSocialMetadata({ category: "business" });
+  return generateSocialMetadata({ category: "business", rawPath: "/business" });
 }
 
 export default function BusinessPage() {
@@ -122,6 +122,7 @@ export default function BusinessPage() {
   return (
     <CategoryPageLayout
       categoryName="Business"
+      categorySlug="business"
       categoryColor="bg-[#FFE9D6]"
       infoBoxText={`Business covers corporations, startups, leadership dynamics, and entrepreneurship. We track corporate policy changes, strategic pivots, venture capital funding, and market directions that affect modern business organizations.\n\nWe verify and report on developments in real time. Essential details and updates to keep you informed of global impacts.`}
       featured={featured}

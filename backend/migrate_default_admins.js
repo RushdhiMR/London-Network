@@ -22,7 +22,7 @@ async function migrateDefaultAdminColumn() {
 
   // 2. Set is_default_admin = 1 for the 3 requested default admin accounts + root admin
   const defaultAdmins = [
-    'admin@digitaljournal.com',
+    'geethliyanage979@gmail.com',
     'londonbigben.offical@gmail.com',
     'akramyoonos006@gmail.com'
   ];

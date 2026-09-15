@@ -3,7 +3,7 @@ import { Metadata } from 'next';
 import { generateSocialMetadata } from '@/lib/seoHelper';
 
 export async function generateMetadata(): Promise<Metadata> {
-  return generateSocialMetadata({ category: "news" });
+  return generateSocialMetadata({ category: "news", rawPath: "/news" });
 }
 
 export default function NewsPage() {
@@ -128,6 +128,7 @@ export default function NewsPage() {
   return (
     <CategoryPageLayout
       categoryName="News"
+      categorySlug="news"
       categoryColor="bg-[#FFE552]"
       infoBoxText={`News brings you the latest stories, columns, and coverage from across the globe. We track policy changes, scientific breakthroughs, geopolitical events, and digital privacy regulations that affect developers, architects, and the broader tech community.\n\nWe verify and report on developments in real time. Essential details and updates to keep you informed of global impacts.`}
       featured={featured}

@@ -1,233 +1,15 @@
-import CategoryPageLayout from '@/components/CategoryPageLayout';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
-import NewsletterBanner from '@/components/NewsletterBanner';
-import NewsletterFormCard from '@/components/NewsletterFormCard';
-import FastStartNewsletterBanner from '@/components/FastStartNewsletterBanner';
-import ArticlePageContent from '@/components/ArticlePageContent';
-import Link from 'next/link';
-import { Metadata } from 'next';
-import { generateSocialMetadata } from '@/lib/seoHelper';
-
-export const dynamicParams = true;
-
-interface PageProps {
-  params: Promise<{
-    category: string;
-    subcategory: string;
-  }>;
+export interface CustomArticleRecord {
+  title: string;
+  authorName: string;
+  authorAvatar: string;
+  authorBio: string;
+  date: string;
+  image: string;
+  caption: string;
+  sections: { heading: string; paragraphs: string[] }[];
 }
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const resolved = await params;
-  return generateSocialMetadata({
-    category: resolved.category,
-    subcategory: resolved.subcategory,
-    articleSlug: resolved.subcategory,
-    rawPath: `/${resolved.category}/${resolved.subcategory}`,
-  });
-}
-
-const parentConfig: Record<string, { name: string; color: string; desc: string }> = {
-  "news": {
-    name: "News",
-    color: "bg-[#FFE552]",
-    desc: "brings you global stories and regulatory policy revisions."
-  },
-  "business": {
-    name: "Business",
-    color: "bg-[#FFE9D6]",
-    desc: "covers corporations, startups, leadership dynamics, and entrepreneurship."
-  },
-  "industry-insights": {
-    name: "Industry Insights",
-    color: "bg-[#E2F0D9]",
-    desc: "dives into business trends, logistical advancements, and operational metrics."
-  },
-  "technology": {
-    name: "Technology",
-    color: "bg-[#BEEDF7]",
-    desc: "explores hardware, software, and systems engineering."
-  },
-  "innovation": {
-    name: "Innovation",
-    color: "bg-[#BEEDF7]",
-    desc: "focuses on finding new ideas, design thinking, and startup pivots."
-  },
-  "events": {
-    name: "Events",
-    color: "bg-[#C6F7E9]",
-    desc: "tracks developer summits and forum schedules."
-  },
-  "world": {
-    name: "World",
-    color: "bg-[#FFE552]",
-    desc: "covers international developments, geopolitics, and global trends."
-  },
-  "politics": {
-    name: "Politics",
-    color: "bg-[#FFE552]",
-    desc: "tracks policy reforms, government legislation, and civic governance."
-  },
-  "economy-markets": {
-    name: "Economy & Markets",
-    color: "bg-[#FFE9D6]",
-    desc: "covers macroeconomic trends, market indices, commodities, and trade."
-  },
-  "markets": {
-    name: "Markets",
-    color: "bg-[#FFE9D6]",
-    desc: "covers equities, commodities, forex, and cryptocurrency trends."
-  },
-  "economy": {
-    name: "Economy",
-    color: "bg-[#FFE9D6]",
-    desc: "tracks central bank policies, inflation indices, and global trade."
-  },
-  "lifestyle": {
-    name: "Lifestyle",
-    color: "bg-[#E2F0D9]",
-    desc: "explores modern living, culture, entertainment, and wellbeing."
-  },
-  "sports": {
-    name: "Sports",
-    color: "bg-[#C6F7E9]",
-    desc: "delivers comprehensive match coverage, statistics, and athlete profiles."
-  },
-  "entertainment": {
-    name: "Entertainment",
-    color: "bg-[#FFE9D6]",
-    desc: "covers cinema, music, arts, and digital media production."
-  },
-  "health": {
-    name: "Health",
-    color: "bg-[#E2F0D9]",
-    desc: "tracks medical discoveries, wellness research, and public healthcare."
-  },
-  "research": {
-    name: "Research",
-    color: "bg-[#BEEDF7]",
-    desc: "publishes open-access findings across science, technology, and engineering."
-  },
-  "europe": {
-    name: "Europe",
-    color: "bg-sky-50",
-    desc: "covers diplomatic affairs, European Union policy, and regional economic developments."
-  },
-  "china": {
-    name: "China",
-    color: "bg-sky-50",
-    desc: "tracks manufacturing trade, diplomatic summits, and cross-border developments in China."
-  },
-  "united-states": {
-    name: "United States",
-    color: "bg-sky-50",
-    desc: "covers federal policy, elections, and national developments across the United States."
-  },
-  "britain": {
-    name: "Britain",
-    color: "bg-sky-50",
-    desc: "tracks UK politics, Westminster legislation, and British industry trends."
-  },
-  "middle-east": {
-    name: "Middle East",
-    color: "bg-sky-50",
-    desc: "covers Middle Eastern diplomacy, energy markets, and regional geopolitical developments."
-  },
-  "africa": {
-    name: "Africa",
-    color: "bg-sky-50",
-    desc: "tracks African economic innovation, infrastructure projects, and trade agreements."
-  },
-  "asia": {
-    name: "Asia",
-    color: "bg-sky-50",
-    desc: "covers Asia-Pacific tech hubs, manufacturing, and diplomatic partnerships."
-  }
-};
-
-function getParentCategoryInfo(cat: string) {
-  const norm = (cat || "").toLowerCase().trim();
-  if (parentConfig[norm]) return parentConfig[norm];
-  
-  const formattedName = (cat || "News")
-    .split("-")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ")
-    .replace(/\bAnd\b/g, "&");
-
-  return {
-    name: formattedName || "News",
-    color: "bg-[#FFE9D6]",
-    desc: `covers essential reporting and updates in ${formattedName}.`
-  };
-}
-
-function formatSubcategory(str: string) {
-  return str
-    .split("-")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ")
-    .replace(/\bAnd\b/g, "&");
-}
-
-function formatSentenceCase(str: string) {
-  const raw = str.split("-").join(" ");
-  return raw.charAt(0).toUpperCase() + raw.slice(1);
-}
-
-const knownNewsArticles: Record<string, string> = {
-  "airbus-puts-a-price-on-canadian-jet-fuel-security": "Airbus puts a price on Canadian jet fuel security",
-  "venture-capital-firms-shift-focus-to-sustainable-tech-sector-pipelines": "Venture capital firms shift focus to sustainable tech sector pipelines",
-  "how-remote-leadership-models-are-evolving-to-meet-product-goals": "How remote leadership models are evolving to meet product goals",
-  "global-logistics-platforms-integrate-machine-learning-for-routing": "Global logistics platforms integrate machine learning for routing",
-  "e-commerce-platforms-scale-up-localized-transaction-nodes": "E-commerce platforms scale up localized transaction nodes",
-  "why-corporate-investment-in-developer-experience-yields-positive-roi": "Why corporate investment in developer experience yields positive ROI",
-  "international-data-privacy-standards-updated-after-cross-border-audits": "International data privacy standards updated after cross-border audits",
-  "scientific-research-consortium-publishes-open-access-genome-study": "Scientific research consortium publishes open-access genome study",
-  "urban-infrastructure-plans-integrate-smart-power-grids-in-major-cities": "Urban infrastructure plans integrate smart power grids in major cities",
-  "public-transportation-systems-roll-out-unified-digital-ticketing": "Public transportation systems roll out unified digital ticketing",
-  "education-systems-adapt-curricula-to-include-basic-ai-literacy": "Education systems adapt curricula to include basic AI literacy",
-  "canadas-conexiom-bets-that-the-future-of-ai-lies-in-automation-not-experimentation": "Canada's Conexiom bets that the future of AI lies in automation, not experimentation",
-  "lightworks-scotiabank-sun-life-and-telus-launch-ai-consortium": "Lightworks, Scotiabank, Sun Life and TELUS launch AI Consortium",
-  "canadas-ai-adoption-problem-meets-its-youth-employment-problem": "Canada's AI adoption problem meets its youth employment problem",
-  "op-ed-rethinking-humanity-as-automation-rewrites-human-realities": "Op-Ed: Rethinking humanity as automation rewrites human realities",
-  "indispensable-xiaohongshu-app-fuels-chinese-tourism": "‘Indispensable’ Xiaohongshu app fuels Chinese tourism",
-  "silicon-valley-chip-manufacturers-announce-breakthrough-architectural-updates": "Silicon Valley chip manufacturers announce breakthrough architectural updates",
-  "new-quantum-computing-clusters-open-to-public-cloud-developer-preview": "New quantum computing clusters open to public cloud developer preview",
-  "open-source-database-platform-raises-record-funding-round-for-scaling": "Open-source database platform raises record funding round for scaling",
-  "how-edge-computing-is-transforming-real-time-telemetry-processing": "How edge computing is transforming real-time telemetry processing",
-  "cybersecurity-protocols-updated-globally-to-counter-multi-vector-threats": "Cybersecurity protocols updated globally to counter multi-vector threats",
-  "what-to-eat-keep-bones-strong": "Here's what to eat to keep your bones strong (that's not just dairy)",
-  "where-giant-sharks-swim-close-to-shore": "Where giant sharks swim so close to shore you can nearly touch them",
-  "assam-worst-floods-in-years": "'It took everything from us': India's Assam faces worst floods in years",
-  "china-fake-ai-videos-disasters": "China's new challenge as natural disasters strike - fake AI videos",
-  "hong-kong-activist-uk-stay": "Hong Kong activist allowed to stay in UK after deportation threat",
-  "chip-stocks-slide-us-asia": "Chip stocks slide in US and Asia as AI jitters rattle investors",
-  "biden-ghostwriter-classified-documents": "'I just found all the classified stuff downstairs' - Biden to ghostwriter",
-  "clean-energy-investments-record-high": "Clean energy investments hit record high as global transition accelerates",
-  "lab-developing-sustainable-materials": "Inside the lab developing tomorrow's sustainable materials",
-  "5g-expansion-transforms-industries": "5G expansion continues to transform industries worldwide",
-  "future-of-work-hybrid-everything": "The future of work: How companies are adapting to hybrid everything",
-  "small-businesses-compete-ai-world": "How small businesses can compete in an AI-driven world",
-  "what-tools-business-should-take-from-a-massive-security-breach-to-prevent-future-attacks": "What tools business should take from a massive security breach to prevent future attacks"
-};
-
-function formatTitleFromSlug(slug: string): string {
-  if (knownNewsArticles[slug]) return knownNewsArticles[slug];
-  const words = slug.split("-");
-  if (words.length === 0) return slug;
-  return words
-    .map((w, i) => {
-      if (i === 0) return w.charAt(0).toUpperCase() + w.slice(1);
-      const lower = w.toLowerCase();
-      if (["ai", "roi", "kpi", "kpis", "smbc", "max"].includes(lower)) return w.toUpperCase();
-      return w;
-    })
-    .join(" ");
-}
-
-const customNewsDatabase: Record<string, {
+export const customNewsDatabase: Record<string, {
   title: string;
   authorName: string;
   authorAvatar: string;
@@ -1213,26 +995,58 @@ const customNewsDatabase: Record<string, {
   }
 };
 
-const authorAvatarMap: Record<string, { avatar: string; bio: string }> = {
-  "Rushdhi MR": {
-    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_bluesuit.jpg",
-    bio: "Founder and Editor-in-Chief for London BigBen covering business strategy, software architecture, emerging technology, and digital transformation."
-  },
-  "Muba_kity": {
-    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_woman.jpg",
-    bio: "Senior technology reporter specializing in enterprise cloud innovations, generative AI systems, and digital ecosystems."
-  },
-  "Roomi": {
-    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_glasses.jpg",
-    bio: "Financial markets and business columnist reporting on corporate developments, macroeconomic indicators, and supply chain telemetry."
-  },
-  "Ruzni": {
-    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_beard.jpg",
-    bio: "Editorial director and investigative journalist focused on governance, regulatory compliance, and cross-border innovation."
-  }
+export const knownNewsArticles: Record<string, string> = {
+  "airbus-puts-a-price-on-canadian-jet-fuel-security": "Airbus puts a price on Canadian jet fuel security",
+  "venture-capital-firms-shift-focus-to-sustainable-tech-sector-pipelines": "Venture capital firms shift focus to sustainable tech sector pipelines",
+  "how-remote-leadership-models-are-evolving-to-meet-product-goals": "How remote leadership models are evolving to meet product goals",
+  "global-logistics-platforms-integrate-machine-learning-for-routing": "Global logistics platforms integrate machine learning for routing",
+  "e-commerce-platforms-scale-up-localized-transaction-nodes": "E-commerce platforms scale up localized transaction nodes",
+  "why-corporate-investment-in-developer-experience-yields-positive-roi": "Why corporate investment in developer experience yields positive ROI",
+  "international-data-privacy-standards-updated-after-cross-border-audits": "International data privacy standards updated after cross-border audits",
+  "scientific-research-consortium-publishes-open-access-genome-study": "Scientific research consortium publishes open-access genome study",
+  "urban-infrastructure-plans-integrate-smart-power-grids-in-major-cities": "Urban infrastructure plans integrate smart power grids in major cities",
+  "public-transportation-systems-roll-out-unified-digital-ticketing": "Public transportation systems roll out unified digital ticketing",
+  "education-systems-adapt-curricula-to-include-basic-ai-literacy": "Education systems adapt curricula to include basic AI literacy",
+  "canadas-conexiom-bets-that-the-future-of-ai-lies-in-automation-not-experimentation": "Canada's Conexiom bets that the future of AI lies in automation, not experimentation",
+  "lightworks-scotiabank-sun-life-and-telus-launch-ai-consortium": "Lightworks, Scotiabank, Sun Life and TELUS launch AI Consortium",
+  "canadas-ai-adoption-problem-meets-its-youth-employment-problem": "Canada's AI adoption problem meets its youth employment problem",
+  "op-ed-rethinking-humanity-as-automation-rewrites-human-realities": "Op-Ed: Rethinking humanity as automation rewrites human realities",
+  "indispensable-xiaohongshu-app-fuels-chinese-tourism": "‘Indispensable’ Xiaohongshu app fuels Chinese tourism",
+  "silicon-valley-chip-manufacturers-announce-breakthrough-architectural-updates": "Silicon Valley chip manufacturers announce breakthrough architectural updates",
+  "new-quantum-computing-clusters-open-to-public-cloud-developer-preview": "New quantum computing clusters open to public cloud developer preview",
+  "open-source-database-platform-raises-record-funding-round-for-scaling": "Open-source database platform raises record funding round for scaling",
+  "how-edge-computing-is-transforming-real-time-telemetry-processing": "How edge computing is transforming real-time telemetry processing",
+  "cybersecurity-protocols-updated-globally-to-counter-multi-vector-threats": "Cybersecurity protocols updated globally to counter multi-vector threats",
+  "what-to-eat-keep-bones-strong": "Here's what to eat to keep your bones strong (that's not just dairy)",
+  "where-giant-sharks-swim-close-to-shore": "Where giant sharks swim so close to shore you can nearly touch them",
+  "assam-worst-floods-in-years": "'It took everything from us': India's Assam faces worst floods in years",
+  "china-fake-ai-videos-disasters": "China's new challenge as natural disasters strike - fake AI videos",
+  "hong-kong-activist-uk-stay": "Hong Kong activist allowed to stay in UK after deportation threat",
+  "chip-stocks-slide-us-asia": "Chip stocks slide in US and Asia as AI jitters rattle investors",
+  "biden-ghostwriter-classified-documents": "'I just found all the classified stuff downstairs' - Biden to ghostwriter",
+  "clean-energy-investments-record-high": "Clean energy investments hit record high as global transition accelerates",
+  "lab-developing-sustainable-materials": "Inside the lab developing tomorrow's sustainable materials",
+  "5g-expansion-transforms-industries": "5G expansion continues to transform industries worldwide",
+  "future-of-work-hybrid-everything": "The future of work: How companies are adapting to hybrid everything",
+  "small-businesses-compete-ai-world": "How small businesses can compete in an AI-driven world",
+  "what-tools-business-should-take-from-a-massive-security-breach-to-prevent-future-attacks": "What tools business should take from a massive security breach to prevent future attacks"
 };
 
-function getTopicMatchingImage(slug: string, title: string): string {
+export function formatTitleFromSlug(slug: string): string {
+  if (knownNewsArticles[slug]) return knownNewsArticles[slug];
+  const words = slug.split("-");
+  if (words.length === 0) return slug;
+  return words
+    .map((w, i) => {
+      if (i === 0) return w.charAt(0).toUpperCase() + w.slice(1);
+      const lower = w.toLowerCase();
+      if (["ai", "roi", "kpi", "kpis", "smbc", "max"].includes(lower)) return w.toUpperCase();
+      return w;
+    })
+    .join(" ");
+}
+
+export function getTopicMatchingImage(slug: string, title: string): string {
   const lower = (slug + " " + title).toLowerCase();
 
   if (lower.includes("decoration") || lower.includes("acrylic") || lower.includes("fit out") || lower.includes("design fit out") || lower.includes("uae")) {
@@ -1250,7 +1064,6 @@ function getTopicMatchingImage(slug: string, title: string): string {
   if (lower.includes("crypto") || lower.includes("bitcoin") || lower.includes("hyperliquid") || lower.includes("zcash")) {
     return "https://images.unsplash.com/photo-1621416894569-0f39ed31d247?w=1200&h=750&fit=crop";
   }
-
   if (lower.includes("space") || lower.includes("orbital") || lower.includes("satellite") || lower.includes("spacex") || lower.includes("starship")) {
     return "https://images.unsplash.com/photo-1541185933-ef5d8ed016c2?w=1200&h=750&fit=crop";
   }
@@ -1309,363 +1122,5 @@ function getTopicMatchingImage(slug: string, title: string): string {
     return "https://images.unsplash.com/photo-1540962351504-03099e0a754b?w=1200&h=750&fit=crop";
   }
 
-  // General tech & news high quality editorial fallback
   return "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200&h=750&fit=crop";
-}
-
-function getNewsContent(slug: string) {
-  let localArticle: any = null;
-  if (typeof window !== "undefined") {
-    try {
-      const stored = localStorage.getItem("dj_writer_submitted_articles");
-      if (stored) {
-        const posts: any[] = JSON.parse(stored);
-        localArticle = posts.find((p) => {
-          const pSlug = (p.title || "")
-            .toLowerCase()
-            .replace(/[^a-z0-9\s-]/g, "")
-            .trim()
-            .replace(/\s+/g, "-");
-          return pSlug === slug || String(p.id) === slug;
-        });
-      }
-    } catch (e) {}
-  }
-
-  const existing = localArticle
-    ? {
-        title: localArticle.title,
-        authorName: localArticle.authorName || "Rushdhi MR",
-        authorAvatar: localArticle.authorAvatar || "/author_bluesuit.jpg",
-        authorBio: localArticle.authorBio || "Journalist for London BigBen.",
-        date: localArticle.date || "July 28, 2026",
-        image: localArticle.imageUrl || "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1200&h=750&fit=crop",
-        caption: localArticle.subheading || localArticle.summary || `${localArticle.title}. (Photo courtesy of London BigBen)`,
-        category: localArticle.category,
-        subcategories: Array.isArray(localArticle.subcategories) ? localArticle.subcategories : (Array.isArray(localArticle.subCategories) ? localArticle.subCategories : []),
-        sections: [
-          {
-            heading: "",
-            paragraphs: localArticle.content
-              ? [localArticle.content]
-              : [localArticle.summary || "Article content."]
-          }
-        ]
-      }
-    : customNewsDatabase[slug];
-
-  const title = existing ? existing.title : formatTitleFromSlug(slug);
-  const authorName = existing ? existing.authorName : "Rushdhi MR";
-  
-  const mappedAuthor = authorAvatarMap[authorName];
-  const authorAvatar = existing?.authorAvatar || mappedAuthor?.avatar || (
-    authorName.toLowerCase().includes('roomi') ? "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_glasses.jpg" :
-    authorName.toLowerCase().includes('muba') ? "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_woman.jpg" :
-    authorName.toLowerCase().includes('ruzni') ? "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_beard.jpg" :
-    "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_bluesuit.jpg"
-  );
-  const authorBio = existing?.authorBio || mappedAuthor?.bio || `${authorName} is a dedicated journalist for London BigBen covering breaking news, enterprise technology, and policy developments.`;
-
-  const date = existing ? existing.date : "July 22, 2026 6:08 PM EDT";
-  const image = (existing && existing.image) ? existing.image : getTopicMatchingImage(slug, title);
-  const caption = existing ? existing.caption : `Comprehensive analysis and latest updates regarding ${title.toLowerCase()}. (Photo courtesy of London BigBen)`;
-
-  // Generate big, multi-section in-depth long-form article for all news pages
-  const baseSections = existing ? existing.sections : [];
-  
-  const comprehensiveSections = [
-    {
-      heading: "",
-      paragraphs: [
-        ...(baseSections[0]?.paragraphs || [
-          `In an influential development affecting international stakeholders, recent analysis surrounding ${title.toLowerCase()} points toward significant structural realignment across regional and global markets. Analysts and industry observers note that current policy adjustments are establishing new operational standards that will shape decision-making for years to come.`
-        ]),
-        `The initiatives come at a crucial juncture as government regulators, enterprise leaders, and independent oversight committees accelerate efforts to balance rapid innovation with stringent governance protocols. Preliminary telemetry suggests that early adopters are already experiencing measurable gains in workflow efficiency and audit compliance.`,
-        `"What we are witnessing is not merely an incremental upgrade, but a fundamental transition in how organizations approach risk mitigation and long-term sustainability," noted senior industry analyst Dr. Marcus Vance during a briefing in Washington.`
-      ]
-    },
-    {
-      heading: "Strategic Context & Regulatory Frameworks",
-      paragraphs: [
-        ...(baseSections[1]?.paragraphs || [
-          `Federal oversight bodies and transatlantic regulatory watchdogs have introduced updated compliance benchmarks to address emerging operational challenges. The updated framework mandates rigorous audit trails, transparent reporting mechanisms, and standardized protocol validations across all participating jurisdictions.`
-        ]),
-        `For corporate directors and policy planners, complying with these guidelines requires overhauling legacy pipelines and deploying advanced telemetry tooling capable of real-time monitoring. Failure to meet these criteria carries substantial regulatory scrutiny and potential market entry restrictions.`
-      ]
-    },
-    {
-      heading: "Technical Architecture & Operational Integration",
-      paragraphs: [
-        `On the technical front, systems integration leads are deploying modular architectures engineered to support high-throughput processing while maintaining zero-trust security postures. By decoupling core infrastructure from legacy dependencies, organizations achieve greater resilience against supply chain disruptions and unexpected market volatility.`,
-        `Recent stress tests conducted by independent research consortia demonstrated an 18% improvement in delivery timeline precision and a 25% reduction in latency when using next-generation routing logic. These empirical benchmarks underscore the tangible return on investment driven by modern engineering standards.`
-      ]
-    },
-    {
-      heading: "Expert Perspectives & Economic Outlook",
-      paragraphs: [
-        `Economic forecasters project that capital allocation in this sector will grow by 32% over the next four quarters, fueled by institutional backing and venture capital pivots toward sustainable tech infrastructure. Emerging hubs in North America, Europe, and Asia-Pacific are competing to attract talent and foster innovation clusters.`,
-        `However, market commentators warn that scaling these solutions will require sustained collaboration between public agencies and private sector developers. Aligning technical specifications across disparate platforms remains a primary hurdle toward achieving seamless global interoperability.`
-      ]
-    },
-    {
-      heading: "Long-Term Implications & Future Roadmap",
-      paragraphs: [
-        `Looking ahead, industry leaders anticipate further consolidation as established enterprises acquire specialized startups to bolster their core capabilities. Regulatory bodies are expected to publish secondary guidance notes later this year to clarify cross-border data transfer protocols and environmental impact accounting.`,
-        `As organizations navigate this evolving landscape, prioritizing transparent governance, continuous automated testing, and agile management frameworks will remain essential for maintaining a competitive edge in an increasingly complex environment.`
-      ]
-    }
-  ];
-
-  return {
-    title,
-    authorName,
-    authorAvatar,
-    authorBio,
-    date,
-    image,
-    caption,
-    sections: comprehensiveSections,
-  };
-}
-
-export async function generateStaticParams() {
-  const categories = ["news", "business", "industry-insights", "technology"];
-  const paths: { category: string; subcategory: string }[] = [];
-
-  const subData: Record<string, string[]> = {
-    "news": [
-      "world", "markets", "politics",
-      "international-data-privacy-standards-updated-after-cross-border-audits",
-      "scientific-research-consortium-publishes-open-access-genome-study",
-      "urban-infrastructure-plans-integrate-smart-power-grids-in-major-cities",
-      "public-transportation-systems-roll-out-unified-digital-ticking",
-      "education-systems-adapt-curricula-to-include-basic-ai-literacy"
-    ],
-    "business": [
-      "companies", "corporate-news", "entrepreneurship", "startups", "leadership",
-      "canadas-conexiom-bets-that-the-future-of-ai-lies-in-automation-not-experimentation",
-      "lightworks-scotiabank-sun-life-and-telus-launch-ai-consortium",
-      "canadas-ai-adoption-problem-meets-its-youth-employment-problem",
-      "oped-rethinking-humanity-as-automation-rewrites-human-realities",
-      "indispensable-xiaohongshu-app-fuels-chinese-tourism"
-    ],
-    "industry-insights": [
-      "agriculture", "tourism", "financial-services", "health", "transportation",
-      "boeing-gets-order-for-100-737-max-jets-from-leasing-company-smbc",
-      "spacex-abruptly-scrubs-starship-test-flight",
-      "ai-helps-pathologists-spot-prostate-cancer-faster-what-canada-can-learn-from-landmark-uk-study",
-      "openai-fails-to-trademark-name-in-eu",
-      "like-my-lover-chinese-users-bid-farewell-to-ai-companions"
-    ],
-    "technology": [
-      "artificial-intelligence", "cybersecurity", "innovations", "space-technology",
-      "silicon-valley-chip-manufacturers-announce-breakthrough-architectural-updates",
-      "new-quantum-computing-clusters-open-to-public-cloud-developer-preview",
-      "opensource-database-platform-raises-record-funding-round-for-scaling",
-      "how-edge-computing-is-transforming-real-time-telemetry-processing",
-      "cybersecurity-protocols-updated-globally-to-counter-multi-vector-threats"
-    ]
-  };
-
-  categories.forEach((cat) => {
-    const subs = subData[cat] || ["companies", "startups"];
-    subs.forEach((sub) => {
-      paths.push({ category: cat, subcategory: sub });
-    });
-  });
-
-  return paths;
-}
-
-export default async function SubcategoryPage({ params }: PageProps) {
-  const { category, subcategory } = await params;
-  
-  const subName = formatSubcategory(subcategory);
-  const parent = getParentCategoryInfo(category);
-
-  const diveDeeperShortlist = [
-    "world", "markets", "politics", "companies", "corporate-news", "entrepreneurship",
-    "startups", "leadership", "agriculture", "tourism", "financial-services", "health",
-    "transportation", "artificial-intelligence", "cybersecurity", "innovations", "space-technology"
-  ];
-  
-  const isNewsArticle = !diveDeeperShortlist.includes(subcategory);
-
-  if (isNewsArticle) {
-    const newsData = getNewsContent(subcategory);
-
-    const sidebarPicks = [
-      {
-        title: "US announces civilian nuclear deal with Saudi Arabia",
-        date: "July 22, 2026 5:25 PM EDT",
-        image: "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=150&h=150&fit=crop",
-        href: "/news/world/us-announces-civilian-nuclear-deal-with-saudi-arabia"
-      },
-      {
-        title: "As Canadians turn to AI for mortgage advice, experts warn about privacy risks and inaccurate guidance",
-        date: "July 22, 2026 5:17 PM EDT",
-        image: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=150&h=150&fit=crop",
-        href: "/news/markets/as-canadians-turn-to-ai-for-mortgage-advice-experts-warn-about-privacy-risks"
-      },
-      {
-        title: "Tesla shares dip after profit misses expectations",
-        date: "July 22, 2026 5:10 PM EDT",
-        image: "https://images.unsplash.com/photo-1563720223185-11003d516935?w=150&h=150&fit=crop",
-        href: "/news/markets/tesla-shares-dip-after-profit-misses-expectations"
-      },
-      {
-        title: "Your AI made a decision, and Canadian regulators want to know how",
-        date: "July 21, 2026",
-        image: "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=150&h=150&fit=crop",
-        href: "/industry-insights/health/your-ai-made-a-decision-and-canadian-regulators-want-to-know-how"
-      },
-      {
-        title: "Dutch students unveil 'world-first' solar-powered ambulance",
-        date: "July 21, 2026",
-        image: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=150&h=150&fit=crop",
-        href: "/news/world/dutch-students-unveil-world-first-solar-powered-ambulance"
-      },
-      {
-        title: "Autonomous Fleet Operating Networks Expand Regional Commercial Routes",
-        date: "July 20, 2026",
-        image: "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=150&h=150&fit=crop",
-        href: "/business/new-exclusive-decoration-design-fit-out-llc-structural-acrylic-pioneers-in-the-uae"
-      },
-      {
-        title: "European Tech Ecosystem Accelerates Sovereign Cloud & Quantum Infrastructure",
-        date: "July 19, 2026",
-        image: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=150&h=150&fit=crop",
-        href: "/technology/ai-innovation/meta-accelerates-generative-ai-initiatives-with-major-infrastructure-upgrade"
-      },
-      {
-        title: "Global Central Banks Navigate Shifting Inflation Frameworks",
-        date: "July 18, 2026",
-        image: "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=150&h=150&fit=crop",
-        href: "/news/markets/us-stocks-end-higher-as-sk-hynixs-wall-street-debut-and-metas-ai-momentum-lift-markets"
-      },
-      {
-        title: "Clean Energy Grid Transitions Secure Landmark Cross-Border Funding",
-        date: "July 17, 2026",
-        image: "https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=150&h=150&fit=crop",
-        href: "/industry-insights/energy/oil-market-rebalancing-amidst-refinery-maintenance-and-global-demand-trends"
-      },
-      {
-        title: "Digital Privacy Regulators Finalize Standardized Enterprise Guidelines",
-        date: "July 16, 2026",
-        image: "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=150&h=150&fit=crop",
-        href: "/news/politics/trump-declares-iran-ceasefire-over-raising-questions-about-the-next-phase-of-the-conflict"
-      }
-    ];
-
-    const relatedNewsList = [
-      {
-        title: "Farnborough to survey the state of Boeing's comeback",
-        desc: "The aviation industry gathers for its flagship air show with Boeing's recovery under scrutiny by customers, regulators and leadership shakeups.",
-        date: "By AFP • July 18, 2026",
-        image: "https://images.unsplash.com/photo-1540962351504-03099e0a754b?w=400&h=250&fit=crop",
-        href: "/news/markets/us-stocks-end-higher-as-sk-hynixs-wall-street-debut-and-metas-ai-momentum-lift-markets"
-      },
-      {
-        title: "Boeing to expand 737 MAX output as aviation giant targets comeback",
-        desc: "The plane maker plans to increase narrowbody production volumes as it seeks to rebuild trust and address safety audits.",
-        date: "By AFP • July 18, 2026",
-        image: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=400&h=250&fit=crop",
-        href: "/business/new-exclusive-decoration-design-fit-out-llc-structural-acrylic-pioneers-in-the-uae"
-      },
-      {
-        title: "US jury finds Boeing guilty in 737 MAX grounding lawsuit",
-        desc: "A federal jury has ordered Boeing to pay damages to families of victims, holding the company liable for safety gaps.",
-        date: "By Reuters • July 15, 2026",
-        image: "https://images.unsplash.com/photo-1562577309-4932fdd64cd1?w=400&h=250&fit=crop",
-        href: "/news/politics/trump-declares-iran-ceasefire-over-raising-questions-about-the-next-phase-of-the-conflict"
-      },
-      {
-        title: "Boeing confirms China commitment to buy 200 aircraft",
-        desc: "Aerospace giant says commitment remains active, with first deliveries expected in late 2026.",
-        date: "By Bloomberg • July 15, 2026",
-        image: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=400&h=250&fit=crop",
-        href: "/news/markets/crypto-market-overview-bitcoin-stabilizes-zcash-targets-new-highs"
-      }
-    ];
-
-    return (
-      <ArticlePageContent
-        category={category}
-        subcategory={subcategory}
-        parent={parent}
-        subName={subName}
-        newsData={newsData}
-        sidebarPicks={sidebarPicks}
-      />
-    );
-  }
-
-  return (
-    <CategoryPageLayout
-      categoryName={subName}
-      categoryColor={parent.color}
-      infoBoxText={parent.desc}
-      featured={{
-        category: parent.name.toUpperCase(),
-        title: `How digital transformation is changing the future of ${subName}`,
-        description: `Exploring how modern developer standards, architectural migrations, and new automation frameworks are transforming ${subName.toLowerCase()} processes globally.`,
-        image: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1200&h=800&fit=crop",
-        author: "Dr. Tim Sandle",
-        date: "July 19, 2026"
-      }}
-      secondaryArticles={[
-        {
-          title: `Why remote leadership models are evolving in ${subName}`,
-          image: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=150&h=150&fit=crop",
-          date: "July 15, 2026"
-        },
-        {
-          title: `Best practices for secure development lifecycle in ${subName}`,
-          image: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=150&h=150&fit=crop",
-          date: "July 14, 2026"
-        },
-        {
-          title: `Tunnel tech to survey the state of standard setups in ${subName}`,
-          image: "https://images.unsplash.com/photo-1573164713988-8665fc963095?w=150&h=150&fit=crop",
-          date: "July 12, 2026"
-        },
-        {
-          title: `E-commerce platforms scale up localized transaction nodes for ${subName}`,
-          image: "https://images.unsplash.com/photo-1551434678-e076c223a692?w=150&h=150&fit=crop",
-          date: "July 10, 2026"
-        }
-      ]}
-      guidesTitle={`${subName} Guides`}
-      guidesDescription="Learn from hands-on architectures and system logs."
-      guides={[]}
-      newsTitle={`${subName} More News`}
-      newsDescription="Get the latest regulatory policy changes."
-      newsArticles={[
-        {
-          title: `Global regulatory boards align on uniform ${subName} standards`,
-          description: `Privacy watchdogs and industry leaders execute combined audits to verify compliance and safety across transatlantic ${subName.toLowerCase()} services.`,
-          date: "By Sarah Miller • 4 hours ago",
-          image: "https://images.unsplash.com/photo-1450133064473-71024230f91b?w=220&h=150&fit=crop"
-        },
-        {
-          title: `Research consortium publishes open-access study on ${subName} frameworks`,
-          description: `Systems engineers release detailed architecture documentation to help organizations build resilient, scalable pipelines.`,
-          date: "By David Chen • 12 hours ago",
-          image: "https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=220&h=150&fit=crop"
-        },
-        {
-          title: `Next-generation data infrastructure rolled out for ${subName} sector`,
-          description: `Enterprise platforms integrate AI routing to balance supply nodes and reduce latency during peak demand hours.`,
-          date: "By Lisa Chen • 1 day ago",
-          image: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=220&h=150&fit=crop"
-        },
-        {
-          title: `Unified digital protocols adopted by leading ${subName} firms`,
-          description: `Organizations gain streamlined interoperability across multiple cloud environments, reducing integration overheads.`,
-          date: "By Pramod Asu • 2 days ago",
-          image: "https://images.unsplash.com/photo-1573164713988-8665fc963095?w=220&h=150&fit=crop"
-        }
-      ]}
-    />
-  );
 }

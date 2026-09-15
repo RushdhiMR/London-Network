@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Link from 'next/link';
-import { useLiveArticles, useLiveAdSlots, articleMatchesCategory, formatAdDimensions, isDuplicateAdImage } from '@/lib/articlesSync';
+import { useLiveArticles, useLiveAdSlots, articleMatchesCategory, isTopPlacementArticle, formatAdDimensions, isDuplicateAdImage } from '@/lib/articlesSync';
 
 interface Article {
   title: string;
@@ -21,6 +21,7 @@ interface Guide {
 
 interface CategoryPageLayoutProps {
   categoryName: string;
+  categorySlug?: string; // URL slug e.g. "politics", "markets" — used for article matching
   categoryColor: string; // e.g. "bg-[#FFE9D6]"
   infoBoxText: string;
   infoBoxSubtext?: string;
@@ -43,6 +44,7 @@ interface CategoryPageLayoutProps {
 
 export default function CategoryPageLayout({
   categoryName,
+  categorySlug,
   categoryColor,
   infoBoxText,
   infoBoxSubtext,
@@ -63,7 +65,33 @@ export default function CategoryPageLayout({
   const { adSlots } = useLiveAdSlots();
 
   // Find all published live articles that match this category or subcategory
+  // Use the URL slug (e.g. "politics", "markets") for matching — it is a clean single word
+  // that reliably matches both main category and subcategory values stored on articles.
+  // cleanTarget from categoryName (e.g. "Politics & Policy" → "politicspolicy") is kept as a fallback.
+  const derivedSlug = categorySlug || (() => {
+    const name = (categoryName || "").toLowerCase();
+    if (name.includes("world")) return "world";
+    if (name.includes("politic")) return "politics";
+    if (name.includes("business") || name.includes("biz")) return "business";
+    if (name.includes("tech")) return "technology";
+    if (name.includes("econom")) return "economy";
+    if (name.includes("market")) return "markets";
+    if (name.includes("lifestyle") || name.includes("culture")) return "lifestyle";
+    if (name.includes("sport")) return "sports";
+    if (name.includes("entertain")) return "entertainment";
+    if (name.includes("health")) return "health";
+    if (name.includes("research") || name.includes("insight")) return "research";
+    if (name.includes("middle east")) return "middle-east";
+    if (name.includes("united states")) return "united-states";
+    if (name.includes("china")) return "china";
+    if (name.includes("europe")) return "europe";
+    if (name.includes("britain")) return "britain";
+    if (name.includes("africa")) return "africa";
+    if (name.includes("asia")) return "asia";
+    return "";
+  })();
   const cleanTarget = (categoryName || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const slugTarget = (derivedSlug || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
   const getArticleTimestamp = (item: any): number => {
     if (!item) return 0;
@@ -96,6 +124,11 @@ export default function CategoryPageLayout({
     if (!art) return false;
     const st = (art.status || "").toLowerCase().trim();
     if (st !== "published" && st !== "approved") return false;
+    // Exclude articles placed in homepage sections — they should only appear there
+    if (isTopPlacementArticle(art)) return false;
+    // Match using the clean URL slug first (most reliable for subcategory matching),
+    // then fall back to the full categoryName-derived target.
+    if (slugTarget && articleMatchesCategory(art, slugTarget)) return true;
     return articleMatchesCategory(art, cleanTarget || categoryName);
   }).sort((a: any, b: any) => {
     const timeA = getArticleTimestamp(a);

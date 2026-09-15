@@ -97,7 +97,7 @@ export async function readArticlesStore(): Promise<ArticleRecord[]> {
     `);
 
     if (Array.isArray(rows) && rows.length > 0) {
-      return rows.map((r: any) => {
+      const sqlArticles: ArticleRecord[] = rows.map((r: any) => {
         let parsedSubcategories: string[] = [];
         if (r.subcategories) {
           try {
@@ -137,7 +137,7 @@ export async function readArticlesStore(): Promise<ArticleRecord[]> {
         const pubDate = r.published_at ? new Date(r.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Jul 2026';
 
         const rawImg = (r.image_url || '').trim();
-        const safeImg = (rawImg && !rawImg.includes('backblazeb2.com')) ? rawImg : 'https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=800&h=600&fit=crop';
+        const safeImg = rawImg || '/ai_hero.png';
 
         return {
           id: r.id,
@@ -181,6 +181,42 @@ export async function readArticlesStore(): Promise<ArticleRecord[]> {
           seo: parsedSeo
         };
       });
+
+      // Seamlessly merge with JSON store so articles are never lost if saved during DB state changes
+      const jsonArticles = readJsonArticles();
+      if (jsonArticles.length > 0) {
+        const cleanT = (t: any) => String(t || '').toLowerCase().replace(/[\u2018\u2019\u201A\u201B']/g, "'").replace(/[\u201C\u201D\u201E\u201F"]/g, '"').replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ').trim();
+        const mergedMap = new Map<string, any>();
+        sqlArticles.forEach((a: any) => {
+          mergedMap.set(String(a.id), a);
+          const tk = cleanT(a.title);
+          if (tk) mergedMap.set(`t_${tk}`, a);
+        });
+
+        jsonArticles.forEach((ja: any) => {
+          const tk = cleanT(ja.title);
+          const match = (tk && mergedMap.get(`t_${tk}`)) || mergedMap.get(String(ja.id));
+          if (!match) {
+            mergedMap.set(String(ja.id), ja);
+            if (tk) mergedMap.set(`t_${tk}`, ja);
+          }
+        });
+
+        const seen = new Set<string>();
+        const finalCombined: ArticleRecord[] = [];
+        Array.from(mergedMap.values()).forEach((item: any) => {
+          const idKey = String(item.id);
+          const tk = cleanT(item.title);
+          if (!seen.has(idKey) && (!tk || !seen.has(`t_${tk}`))) {
+            seen.add(idKey);
+            if (tk) seen.add(`t_${tk}`);
+            finalCombined.push(item);
+          }
+        });
+        return finalCombined;
+      }
+
+      return sqlArticles;
     }
   } catch (err) {
     console.warn('[serverArticlesStore] MySQL read notice, checking JSON fallback:', err);
@@ -565,7 +601,7 @@ export async function recordArticleViewStore(
 
           if (ins && ins.affectedRows > 0) {
             currentReads += 1;
-            await db.query('UPDATE articles SET reads_count = reads_count + 1 WHERE id = ?', [realId]);
+            await db.query('UPDATE articles SET reads_count = reads_count + 1, updated_at = updated_at WHERE id = ?', [realId]);
             return { success: true, reads: currentReads, incremented: true };
           } else {
             // Already viewed by this registered account -> do not increment
@@ -577,7 +613,7 @@ export async function recordArticleViewStore(
       } else {
         // Unregistered Visitor (Guest): Every visit increments the view count by 1
         currentReads += 1;
-        await db.query('UPDATE articles SET reads_count = reads_count + 1 WHERE id = ?', [realId]);
+        await db.query('UPDATE articles SET reads_count = reads_count + 1, updated_at = updated_at WHERE id = ?', [realId]);
         return { success: true, reads: currentReads, incremented: true };
       }
     }

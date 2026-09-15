@@ -4,6 +4,8 @@ import SubcategoryPage from "@/app/[category]/[subcategory]/page";
 import { Metadata } from "next";
 import { generateSocialMetadata } from "@/lib/seoHelper";
 
+export const dynamicParams = true;
+
 interface NewsSubcategoryPageProps {
   params: Promise<{
     subcategory: string;
@@ -16,11 +18,12 @@ export async function generateMetadata({ params }: NewsSubcategoryPageProps): Pr
     category: "news",
     subcategory: resolved.subcategory,
     articleSlug: resolved.subcategory,
+    rawPath: `/news/${resolved.subcategory}`,
   });
 }
 
 const knownNewsSubcategories = [
-  "world", "politics", "economy", "markets", "lifestyle", "sports", "entertainment", "health", "research", "china", "europe", "united-states", "britain", "middle-east", "africa", "asia"
+  "world", "politics", "business", "technology", "economy", "markets", "lifestyle", "sports", "entertainment", "health", "research", "china", "europe", "united-states", "britain", "middle-east", "africa", "asia"
 ];
 
 export async function generateStaticParams() {
@@ -46,6 +49,7 @@ export default async function NewsSubcategoryPage({ params }: NewsSubcategoryPag
   return (
     <CategoryPageLayout
       categoryName={data.categoryName}
+      categorySlug={subcategorySlug}
       categoryColor={data.categoryColor}
       infoBoxText={data.infoBoxText}
       featured={data.featured}

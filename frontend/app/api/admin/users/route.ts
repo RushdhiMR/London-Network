@@ -341,10 +341,8 @@ export async function DELETE(request: Request) {
       callerEmail === 'londonbigben.offical@gmail.com' ||
       callerEmail === 'akramyoonos006@gmail.com' ||
       callerEmail === 'rushdhiriyaj2005@gmail.com' ||
-      callerEmail === 'admin@digitaljournal.com' ||
       Boolean((rbac.user as any)?.isDefaultAdmin) ||
-      Boolean((rbac.user as any)?.is_default_admin) ||
-      rbac.user?.id === 1;
+      Boolean((rbac.user as any)?.is_default_admin);
 
     const targetUser = id ? await DB.getUserById(id) : (email ? await DB.getUserByEmail(email) : null);
     const targetEmailLower = (email || targetUser?.email || '').toLowerCase().trim();
@@ -366,11 +364,8 @@ export async function DELETE(request: Request) {
       targetEmailLower === 'geethliyanage979@gmail.com' ||
       targetEmailLower === 'londonbigben.offical@gmail.com' ||
       targetEmailLower === 'akramyoonos006@gmail.com' ||
-      targetEmailLower === 'rushdhiriyaj2005@gmail.com' ||
-      targetEmailLower === 'admin@digitaljournal.com' ||
       Boolean((targetUser as any)?.isDefaultAdmin) ||
-      Boolean((targetUser as any)?.is_default_admin) ||
-      targetUser?.id === 1
+      Boolean((targetUser as any)?.is_default_admin)
     );
 
     if (isTargetDefaultAdmin) {

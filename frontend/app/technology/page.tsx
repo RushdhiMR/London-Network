@@ -3,7 +3,7 @@ import { Metadata } from 'next';
 import { generateSocialMetadata } from '@/lib/seoHelper';
 
 export async function generateMetadata(): Promise<Metadata> {
-  return generateSocialMetadata({ category: "technology" });
+  return generateSocialMetadata({ category: "technology", rawPath: "/technology" });
 }
 
 export default function TechnologyPage() {
@@ -128,6 +128,7 @@ export default function TechnologyPage() {
   return (
     <CategoryPageLayout
       categoryName="Technology"
+      categorySlug="technology"
       categoryColor="bg-[#FFE9D6]"
       infoBoxText={`Technology is changing how organizations work, build, and compete. The main parts of influence, insight, and competitive advantage.\n\nFiguring out details in data nodes, and what it takes to get them working, makes technology builders working every day.`}
       featured={featured}

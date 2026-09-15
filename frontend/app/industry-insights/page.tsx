@@ -122,6 +122,7 @@ export default function IndustryInsightsPage() {
   return (
     <CategoryPageLayout
       categoryName="Industry Insights"
+      categorySlug="research"
       categoryColor="bg-[#E2F0D9]"
       infoBoxText={`Industry Insights dives into the business trends, enterprise scaling, and strategic leadership that shape today's markets.\n\nHow executive choices, funding shifts, and logistical advancements translate into real-world returns and structural growth in highly competitive sectors.`}
       featured={featured}

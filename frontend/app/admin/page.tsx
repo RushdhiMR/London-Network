@@ -274,8 +274,8 @@ export default function AdminDashboardPage() {
   const router = useRouter();
   const auth = useAuth();
   const [adminUser, setAdminUser] = useState<{ name: string; email: string; role: string } | null>({
-    name: "rushdi admin",
-    email: "admin@digitaljournal.com",
+    name: "Geeth Liyanage",
+    email: "geethliyanage979@gmail.com",
     role: "Admin"
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -1298,7 +1298,7 @@ export default function AdminDashboardPage() {
         } catch (e) {}
       }
 
-      const fallbackAdmin = { name: "rushdi admin", email: "admin@digitaljournal.com", role: "Admin" };
+      const fallbackAdmin = { name: "Geeth Liyanage", email: "geethliyanage979@gmail.com", role: "Admin" };
       const resolvedAdmin = effectiveUser || fallbackAdmin;
 
       setAdminUser(resolvedAdmin);
@@ -1348,18 +1348,24 @@ export default function AdminDashboardPage() {
       // Collect all real users
       const localUsersMap = new Map<string, WorkspaceUser>();
 
+      const allowedDefaultAdmins = [
+        "geethliyanage979@gmail.com",
+        "londonbigben.offical@gmail.com",
+        "akramyoonos006@gmail.com"
+      ];
+
       // A. Add from Database API
       dbUsersList.forEach((u: any, idx: number) => {
         if (!u || !u.email) return;
         const cleanEmail = u.email.toLowerCase().trim();
-        if (cleanEmail.startsWith("hacker_") || cleanEmail.startsWith("test_") || u.name === "Sneaky Hacker") return;
+        if (cleanEmail === "admin@digitaljournal.com" || cleanEmail.startsWith("hacker_") || cleanEmail.startsWith("test_") || u.name === "Sneaky Hacker") return;
 
         localUsersMap.set(cleanEmail, {
           id: u.id || `u-${idx}-${u.email}`,
           name: u.name || u.email.split('@')[0],
           email: u.email,
           role: (u.role || "reader").toUpperCase() as "ADMIN" | "WRITER" | "READER",
-          isDefaultAdmin: Boolean(u.is_default_admin || u.isDefaultAdmin || u.is_default || cleanEmail === "admin@digitaljournal.com" || u.id === 1),
+          isDefaultAdmin: Boolean(allowedDefaultAdmins.includes(cleanEmail) || u.is_default_admin === 1 || u.is_default_admin === true),
           joinedDate: u.created_at ? new Date(u.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Aug 2026",
           status: "Active"
         });
@@ -1374,7 +1380,7 @@ export default function AdminDashboardPage() {
             regList.forEach((u: any, idx: number) => {
               if (!u || !u.email) return;
               const cleanEmail = u.email.toLowerCase().trim();
-              if (cleanEmail.startsWith("hacker_") || cleanEmail.startsWith("test_") || u.name === "Sneaky Hacker") return;
+              if (cleanEmail === "admin@digitaljournal.com" || cleanEmail.startsWith("hacker_") || cleanEmail.startsWith("test_") || u.name === "Sneaky Hacker") return;
 
               const existing = localUsersMap.get(cleanEmail);
               localUsersMap.set(cleanEmail, {
@@ -1382,7 +1388,7 @@ export default function AdminDashboardPage() {
                 name: u.name || existing?.name || cleanEmail.split('@')[0],
                 email: u.email,
                 role: (u.role || existing?.role || "READER").toUpperCase() as "ADMIN" | "WRITER" | "READER",
-                isDefaultAdmin: Boolean(u.is_default_admin || existing?.isDefaultAdmin || existing?.is_default_admin || cleanEmail === "admin@digitaljournal.com" || u.id === 1),
+                isDefaultAdmin: Boolean(allowedDefaultAdmins.includes(cleanEmail) || u.is_default_admin === 1 || existing?.is_default_admin === 1 || existing?.isDefaultAdmin),
                 joinedDate: u.joinedDate || u.created_at || existing?.joinedDate || "Aug 2026",
                 status: "Active"
               });
@@ -1398,7 +1404,7 @@ export default function AdminDashboardPage() {
             Object.values(profDb).forEach((u: any, idx: number) => {
               if (!u || !u.email) return;
               const cleanEmail = u.email.toLowerCase().trim();
-              if (cleanEmail.startsWith("hacker_") || cleanEmail.startsWith("test_") || u.name === "Sneaky Hacker") return;
+              if (cleanEmail === "admin@digitaljournal.com" || cleanEmail.startsWith("hacker_") || cleanEmail.startsWith("test_") || u.name === "Sneaky Hacker") return;
 
               const existing = localUsersMap.get(cleanEmail);
               localUsersMap.set(cleanEmail, {
@@ -1406,7 +1412,7 @@ export default function AdminDashboardPage() {
                 name: u.name || existing?.name || cleanEmail.split('@')[0],
                 email: u.email,
                 role: (u.role || existing?.role || "READER").toUpperCase() as "ADMIN" | "WRITER" | "READER",
-                isDefaultAdmin: Boolean(u.is_default_admin || existing?.isDefaultAdmin || existing?.is_default_admin || cleanEmail === "admin@digitaljournal.com" || u.id === 1),
+                isDefaultAdmin: Boolean(allowedDefaultAdmins.includes(cleanEmail) || u.is_default_admin === 1 || existing?.is_default_admin === 1 || existing?.isDefaultAdmin),
                 joinedDate: u.joinedDate || existing?.joinedDate || "Aug 2026",
                 status: "Active"
               });
@@ -1422,14 +1428,14 @@ export default function AdminDashboardPage() {
               const u = JSON.parse(str);
               if (u && u.email) {
                 const cleanEmail = u.email.toLowerCase().trim();
-                if (cleanEmail.startsWith("hacker_") || cleanEmail.startsWith("test_") || u.name === "Sneaky Hacker") return;
+                if (cleanEmail === "admin@digitaljournal.com" || cleanEmail.startsWith("hacker_") || cleanEmail.startsWith("test_") || u.name === "Sneaky Hacker") return;
                 const existing = localUsersMap.get(cleanEmail);
                 localUsersMap.set(cleanEmail, {
                   id: u.id || existing?.id || Date.now(),
                   name: u.name || existing?.name || cleanEmail.split('@')[0],
                   email: u.email,
                   role: (u.role || (k === "dj_writer_user" ? "WRITER" : "READER")).toUpperCase() as "ADMIN" | "WRITER" | "READER",
-                  isDefaultAdmin: Boolean(existing?.isDefaultAdmin || existing?.is_default_admin || cleanEmail === "admin@digitaljournal.com" || u.id === 1),
+                  isDefaultAdmin: Boolean(allowedDefaultAdmins.includes(cleanEmail) || existing?.isDefaultAdmin || existing?.is_default_admin === 1),
                   joinedDate: existing?.joinedDate || "Aug 2026",
                   status: "Active"
                 });
@@ -1821,7 +1827,7 @@ export default function AdminDashboardPage() {
     const validCoAdminPasswords = ["coadmin", "coadmin123", "coadmin2026"];
 
     if (validAdminPasswords.includes(pass)) {
-      const user = { name: "rushdi admin", email: "admin@digitaljournal.com", role: "Admin" };
+      const user = { name: "Geeth Liyanage", email: "geethliyanage979@gmail.com", role: "Admin" };
       setAdminUser(user);
       setIsAuthenticated(true);
       fetchDashboardData();
@@ -1931,14 +1937,51 @@ export default function AdminDashboardPage() {
     const reason = rejectionReasonInput.trim();
     const rejectedAt = new Date().toISOString();
 
-    const targetAuthorName = sub.authorName || (sub as any).author_name || (sub as any).author || "Writer";
-    const targetAuthorEmail = (sub as any).authorEmail || (sub as any).author_email || (
-      targetAuthorName.toLowerCase().includes("muba") ? "rura@gmail.com" :
-      targetAuthorName.toLowerCase().includes("roomi") ? "roomiwriter@gmail.com" :
-      targetAuthorName.toLowerCase().includes("rushdhi") ? "rushdhiriyaj2005@gmail.com" :
-      "writer@digitaljournal.com"
-    );
-    const targetAuthorAvatar = (sub as any).authorAvatar || (sub as any).author_avatar || "/author_bluesuit.jpg";
+    let targetAuthorName = sub.authorName || (sub as any).author_name || (sub as any).author || "";
+    let targetAuthorEmail = (sub as any).authorEmail || (sub as any).author_email || "";
+    let targetAuthorAvatar = (sub as any).authorAvatar || (sub as any).author_avatar || "/author_bluesuit.jpg";
+    let targetAuthorBio = (sub as any).authorBio || (sub as any).author_bio || "";
+
+    // If author email is missing, lookup in workspaceUsers or local storage
+    if (!targetAuthorEmail && targetAuthorName) {
+      const foundU = workspaceUsers.find(u => u.name && u.name.toLowerCase().trim() === targetAuthorName.toLowerCase().trim());
+      if (foundU?.email) targetAuthorEmail = foundU.email;
+    }
+
+    if (!targetAuthorEmail && targetAuthorName) {
+      try {
+        const uLists = ["dj_registered_users", "dj_users", "dj_all_users", "dj_user", "dj_writer_user"];
+        for (const key of uLists) {
+          const str = localStorage.getItem(key);
+          if (str) {
+            const parsed = JSON.parse(str);
+            const arr = Array.isArray(parsed) ? parsed : [parsed];
+            const foundUser = arr.find((u: any) =>
+              u && u.name && u.name.toLowerCase().trim() === targetAuthorName.toLowerCase().trim()
+            );
+            if (foundUser?.email) {
+              targetAuthorEmail = foundUser.email;
+              if (foundUser.avatar) targetAuthorAvatar = foundUser.avatar;
+              if (foundUser.bio) targetAuthorBio = foundUser.bio;
+              break;
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (!targetAuthorEmail && targetAuthorName) {
+      const cleanName = targetAuthorName.toLowerCase().trim();
+      if (cleanName.includes("muba")) targetAuthorEmail = "rura@gmail.com";
+      else if (cleanName.includes("roomi")) targetAuthorEmail = "roomiwriter@gmail.com";
+      else if (cleanName.includes("rushdhi")) targetAuthorEmail = "rushdhiwriter@gmail.com";
+      else if (cleanName.includes("abcd")) targetAuthorEmail = "abcd@gmail.com";
+      else if (cleanName.includes("nesto")) targetAuthorEmail = "nestosuper@gmail.com";
+      else targetAuthorEmail = "writer@digitaljournal.com";
+    }
+
+    if (!targetAuthorName) targetAuthorName = "Staff Journalist";
+    if (!targetAuthorEmail) targetAuthorEmail = "writer@digitaljournal.com";
 
     const rejectedItem = {
       ...sub,
@@ -1946,10 +1989,20 @@ export default function AdminDashboardPage() {
       title: sub.title,
       status: "Rejected",
       rejectionReason: reason || undefined,
+      rejection_reason: reason || undefined,
       rejectedAt,
+      rejected_at: rejectedAt,
       authorEmail: targetAuthorEmail,
+      author_email: targetAuthorEmail,
       authorName: targetAuthorName,
-      authorAvatar: targetAuthorAvatar
+      author_name: targetAuthorName,
+      author: targetAuthorName,
+      authorAvatar: targetAuthorAvatar,
+      author_avatar: targetAuthorAvatar,
+      authorBio: targetAuthorBio,
+      author_bio: targetAuthorBio,
+      updated_at: rejectedAt,
+      updatedAt: rejectedAt
     };
 
     const cleanT = (t: string) =>
@@ -1977,8 +2030,19 @@ export default function AdminDashboardPage() {
 
     // 2. Persist to server and local storage
     try {
-      const { saveArticleToServer } = await import("@/lib/articlesSync");
-      await saveArticleToServer(rejectedItem);
+      const { saveArticleToServer, setCachedArticles, getCachedArticles } = await import("@/lib/articlesSync");
+      const cached = getCachedArticles();
+      const cIdx = cached.findIndex((a: any) =>
+        String(a.id) === String(sub.id) || (cleanT(a.title) && cleanT(sub.title) && cleanT(a.title) === cleanT(sub.title))
+      );
+      if (cIdx >= 0) {
+        cached[cIdx] = { ...cached[cIdx], ...rejectedItem, status: "Rejected" };
+        setCachedArticles(cached, false);
+      } else {
+        setCachedArticles([rejectedItem, ...cached], false);
+      }
+
+      await saveArticleToServer(rejectedItem as any);
 
       const subsStr = localStorage.getItem("dj_writer_submitted_articles");
       let subsList: any[] = [];
@@ -1993,7 +2057,8 @@ export default function AdminDashboardPage() {
       if (existingIdx >= 0) {
         subsList[existingIdx] = {
           ...subsList[existingIdx],
-          ...rejectedItem
+          ...rejectedItem,
+          status: "Rejected"
         };
       } else {
         subsList.unshift(rejectedItem);
@@ -2048,12 +2113,25 @@ export default function AdminDashboardPage() {
     const parsedTags = extractCleanTagsList(fullPost);
 
     const targetAuthorName = fullPost.authorName || (sub as any).authorName || fullPost.author || (sub as any).author || "Writer";
-    const targetAuthorEmail = fullPost.authorEmail || (sub as any).authorEmail || (sub as any).author_email || (
-      targetAuthorName.toLowerCase().includes("muba") ? "rura@gmail.com" :
-      targetAuthorName.toLowerCase().includes("roomi") ? "roomiwriter@gmail.com" :
-      targetAuthorName.toLowerCase().includes("rushdhi") ? "rushdhiriyaj2005@gmail.com" :
-      "writer@digitaljournal.com"
-    );
+    let targetAuthorEmail = fullPost.authorEmail || (sub as any).authorEmail || (sub as any).author_email || "";
+
+    if (!targetAuthorEmail && targetAuthorName) {
+      const foundU = workspaceUsers.find(u => u.name && u.name.toLowerCase().trim() === targetAuthorName.toLowerCase().trim());
+      if (foundU?.email) targetAuthorEmail = foundU.email;
+    }
+
+    if (!targetAuthorEmail && targetAuthorName) {
+      const cleanName = targetAuthorName.toLowerCase().trim();
+      if (cleanName.includes("muba")) targetAuthorEmail = "rura@gmail.com";
+      else if (cleanName.includes("roomi")) targetAuthorEmail = "roomiwriter@gmail.com";
+      else if (cleanName.includes("rushdhi")) targetAuthorEmail = "rushdhiwriter@gmail.com";
+      else if (cleanName.includes("abcd")) targetAuthorEmail = "abcd@gmail.com";
+      else if (cleanName.includes("nesto")) targetAuthorEmail = "nestosuper@gmail.com";
+      else targetAuthorEmail = "writer@digitaljournal.com";
+    }
+
+    if (!targetAuthorEmail) targetAuthorEmail = "writer@digitaljournal.com";
+
     const targetAuthorAvatar = fullPost.authorAvatar || (sub as any).authorAvatar || (sub as any).author_avatar || "/author_bluesuit.jpg";
 
     const postToEdit = {
@@ -2068,9 +2146,14 @@ export default function AdminDashboardPage() {
       placement: (sub as any).placement || (fullPost as any).placement || "Standard Post",
       date: sub.date || fullPost.date || new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
       authorName: targetAuthorName,
+      author_name: targetAuthorName,
+      author: targetAuthorName,
       authorEmail: targetAuthorEmail,
+      author_email: targetAuthorEmail,
       authorAvatar: targetAuthorAvatar,
+      author_avatar: targetAuthorAvatar,
       authorBio: fullPost.authorBio || (sub as any).authorBio || "",
+      author_bio: fullPost.authorBio || (sub as any).authorBio || "",
       readDuration: sub.readTime || (sub as any).readDuration || fullPost.readDuration || "5 min read",
       tags: parsedTags,
       subcategories: parsedSubs,
@@ -2636,12 +2719,9 @@ export default function AdminDashboardPage() {
 
     const isTargetDefaultAdmin = Boolean(
       isDefault ||
-      id === 1 ||
-      String(id) === "1" ||
       targetUser?.isDefaultAdmin ||
       targetUser?.is_default_admin ||
-      targetEmail.toLowerCase() === "admin@digitaljournal.com" ||
-      ["rushdhiriyaj2005@gmail.com", "geethliyanage979@gmail.com", "londonbigben.offical@gmail.com", "akramyoonos006@gmail.com"].includes(targetEmail.toLowerCase().trim())
+      ["geethliyanage979@gmail.com", "londonbigben.offical@gmail.com", "akramyoonos006@gmail.com"].includes(targetEmail.toLowerCase().trim())
     );
 
     if (isTargetDefaultAdmin) {

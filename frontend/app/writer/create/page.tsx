@@ -331,40 +331,50 @@ export default function CreatePostPage() {
           }
 
           if (foundArticle) {
+            const isMatchingStoredPost = postToEdit && (String(postToEdit.id) === String(foundArticle.id) || (postToEdit.title && foundArticle.title && postToEdit.title.trim().toLowerCase() === foundArticle.title.trim().toLowerCase()));
+            const safeStoredPost = isMatchingStoredPost ? postToEdit : {};
             const rawFoundPlacement = foundArticle.placement || (foundArticle.is_featured ? "Home Page A+ Section" : foundArticle.is_editors_pick ? "Editor's Picks" : null);
-            const rawStoredPlacement = postToEdit?.placement || (postToEdit?.is_featured ? "Home Page A+ Section" : postToEdit?.is_editors_pick ? "Editor's Picks" : null);
+            const rawStoredPlacement = safeStoredPost?.placement || (safeStoredPost?.is_featured ? "Home Page A+ Section" : safeStoredPost?.is_editors_pick ? "Editor's Picks" : null);
             const finalPlacement = rawStoredPlacement && rawStoredPlacement !== "Standard Post" && rawStoredPlacement !== "None"
               ? rawStoredPlacement
               : (rawFoundPlacement || rawStoredPlacement || "Standard Post");
 
             postToEdit = {
               ...foundArticle,
-              ...(postToEdit || {}),
+              ...safeStoredPost,
               placement: finalPlacement,
-              is_featured: foundArticle.is_featured ?? postToEdit?.is_featured,
-              is_editors_pick: foundArticle.is_editors_pick ?? postToEdit?.is_editors_pick,
+              is_featured: foundArticle.is_featured ?? safeStoredPost?.is_featured,
+              is_editors_pick: foundArticle.is_editors_pick ?? safeStoredPost?.is_editors_pick,
               subcategories: (foundArticle.subcategories && foundArticle.subcategories.length > 0)
                 ? foundArticle.subcategories
-                : (foundArticle.subCategories || postToEdit?.subcategories || postToEdit?.subCategories || []),
+                : (foundArticle.subCategories || safeStoredPost?.subcategories || safeStoredPost?.subCategories || []),
               tags: extractCleanTagsList(
                 (foundArticle.tags && (Array.isArray(foundArticle.tags) ? foundArticle.tags.length > 0 : String(foundArticle.tags).trim().length > 0))
                   ? foundArticle
-                  : (postToEdit?.tags && (Array.isArray(postToEdit.tags) ? postToEdit.tags.length > 0 : String(postToEdit.tags).trim().length > 0))
-                  ? postToEdit
-                  : (foundArticle || postToEdit)
+                  : (safeStoredPost?.tags && (Array.isArray(safeStoredPost.tags) ? safeStoredPost.tags.length > 0 : String(safeStoredPost.tags).trim().length > 0))
+                  ? safeStoredPost
+                  : (foundArticle || safeStoredPost)
               ),
-              category: postToEdit?.category || foundArticle.category || foundArticle.category_name
+              category: safeStoredPost?.category || foundArticle.category || foundArticle.category_name,
+              authorName: foundArticle.authorName || foundArticle.author_name || foundArticle.author || safeStoredPost?.authorName || safeStoredPost?.author_name || safeStoredPost?.author,
+              authorEmail: foundArticle.authorEmail || foundArticle.author_email || safeStoredPost?.authorEmail || safeStoredPost?.author_email,
+              authorAvatar: foundArticle.authorAvatar || foundArticle.author_avatar || safeStoredPost?.authorAvatar || safeStoredPost?.author_avatar,
+              authorBio: foundArticle.authorBio || foundArticle.author_bio || safeStoredPost?.authorBio || safeStoredPost?.author_bio
             };
           }
         }
 
         if (postToEdit && postToEdit.id) {
-          if (postToEdit.authorName || postToEdit.author_name || postToEdit.authorEmail || postToEdit.authorAvatar) {
+          const authorN = postToEdit.authorName || postToEdit.author_name || postToEdit.author;
+          const authorE = postToEdit.authorEmail || postToEdit.author_email;
+          const authorA = postToEdit.authorAvatar || postToEdit.author_avatar;
+          const authorB = postToEdit.authorBio || postToEdit.author_bio;
+          if (authorN || authorE || authorA) {
             setOriginalAuthor({
-              name: postToEdit.authorName || postToEdit.author_name || postToEdit.author,
-              email: postToEdit.authorEmail || postToEdit.author_email,
-              avatar: postToEdit.authorAvatar || postToEdit.author_avatar,
-              bio: postToEdit.authorBio || postToEdit.author_bio
+              name: authorN,
+              email: authorE,
+              avatar: authorA,
+              bio: authorB
             });
           }
           setEditingPostId(String(postToEdit.id));
@@ -1781,32 +1791,6 @@ function isWorldOrWorldSub(cat: string): boolean {
       const rejectionReason = rejectionReasonInput.trim() || undefined;
       const rejectedAt = new Date().toISOString();
 
-      const targetAuthorName = originalAuthor?.name || "Writer";
-      const targetAuthorEmail = originalAuthor?.email || (
-        targetAuthorName.toLowerCase().includes("muba") ? "rura@gmail.com" :
-        targetAuthorName.toLowerCase().includes("roomi") ? "roomiwriter@gmail.com" :
-        targetAuthorName.toLowerCase().includes("rushdhi") ? "rushdhiriyaj2005@gmail.com" :
-        "rura@gmail.com"
-      );
-      const targetAuthorAvatar = originalAuthor?.avatar || "/author_bluesuit.jpg";
-
-      const rejectedArticle = {
-        id: editingPostId || `art_${Date.now()}`,
-        title: liveTitle,
-        category,
-        subcategories: selectedSubcategories,
-        tags,
-        summary: subheading,
-        content: editorRef.current ? editorRef.current.innerHTML : content,
-        imageUrl: imageUrl || "",
-        status: "Rejected",
-        rejectionReason,
-        rejectedAt,
-        authorEmail: targetAuthorEmail,
-        authorName: targetAuthorName,
-        authorAvatar: targetAuthorAvatar
-      };
-
       const cleanT = (t: string) =>
         String(t || "")
           .toLowerCase()
@@ -1816,6 +1800,134 @@ function isWorldOrWorldSub(cat: string): boolean {
           .replace(/[^\w\s-]/g, "")
           .replace(/\s+/g, " ")
           .trim();
+
+      // Look up existing article to accurately determine the author who wrote this article
+      let existingArticle: any = null;
+      try {
+        const subsStr = localStorage.getItem("dj_writer_submitted_articles");
+        if (subsStr) {
+          const list: any[] = JSON.parse(subsStr);
+          existingArticle = list.find((p: any) =>
+            (editingPostId && String(p.id) === String(editingPostId)) ||
+            (cleanT(p.title) && cleanT(liveTitle) && cleanT(p.title) === cleanT(liveTitle))
+          );
+        }
+      } catch (e) {}
+
+      if (!existingArticle) {
+        try {
+          const storedEdit = localStorage.getItem("dj_editing_post");
+          if (storedEdit) {
+            const parsed = JSON.parse(storedEdit);
+            if (
+              (editingPostId && String(parsed.id) === String(editingPostId)) ||
+              (cleanT(parsed.title) && cleanT(liveTitle) && cleanT(parsed.title) === cleanT(liveTitle))
+            ) {
+              existingArticle = parsed;
+            }
+          }
+        } catch (e) {}
+      }
+
+      if (!existingArticle) {
+        try {
+          const { fetchArticlesFromServer } = await import("@/lib/articlesSync");
+          const serverArts = await fetchArticlesFromServer();
+          existingArticle = serverArts.find((p: any) =>
+            (editingPostId && String(p.id) === String(editingPostId)) ||
+            (cleanT(p.title) && cleanT(liveTitle) && cleanT(p.title) === cleanT(liveTitle))
+          );
+        } catch (e) {}
+      }
+
+      let targetAuthorName =
+        originalAuthor?.name ||
+        existingArticle?.authorName ||
+        existingArticle?.author_name ||
+        existingArticle?.author ||
+        "";
+
+      let targetAuthorEmail =
+        originalAuthor?.email ||
+        existingArticle?.authorEmail ||
+        existingArticle?.author_email ||
+        "";
+
+      let targetAuthorAvatar =
+        originalAuthor?.avatar ||
+        existingArticle?.authorAvatar ||
+        existingArticle?.author_avatar ||
+        "/author_bluesuit.jpg";
+
+      let targetAuthorBio =
+        originalAuthor?.bio ||
+        existingArticle?.authorBio ||
+        existingArticle?.author_bio ||
+        "";
+
+      // If email is still missing, attempt lookup in saved user accounts
+      if (!targetAuthorEmail && targetAuthorName) {
+        try {
+          const uLists = ["dj_registered_users", "dj_users", "dj_all_users", "dj_user", "dj_writer_user"];
+          for (const key of uLists) {
+            const str = localStorage.getItem(key);
+            if (str) {
+              const parsed = JSON.parse(str);
+              const arr = Array.isArray(parsed) ? parsed : [parsed];
+              const foundUser = arr.find((u: any) =>
+                u && u.name && u.name.toLowerCase().trim() === targetAuthorName.toLowerCase().trim()
+              );
+              if (foundUser?.email) {
+                targetAuthorEmail = foundUser.email;
+                if (foundUser.avatar) targetAuthorAvatar = foundUser.avatar;
+                if (foundUser.bio) targetAuthorBio = foundUser.bio;
+                break;
+              }
+            }
+          }
+        } catch (e) {}
+      }
+
+      if (!targetAuthorEmail && targetAuthorName) {
+        const cleanName = targetAuthorName.toLowerCase().trim();
+        if (cleanName.includes("muba")) targetAuthorEmail = "rura@gmail.com";
+        else if (cleanName.includes("roomi")) targetAuthorEmail = "roomiwriter@gmail.com";
+        else if (cleanName.includes("rushdhi")) targetAuthorEmail = "rushdhiwriter@gmail.com";
+        else if (cleanName.includes("abcd")) targetAuthorEmail = "abcd@gmail.com";
+        else if (cleanName.includes("nesto")) targetAuthorEmail = "nestosuper@gmail.com";
+        else targetAuthorEmail = "writer@digitaljournal.com";
+      }
+
+      if (!targetAuthorName) targetAuthorName = "Staff Journalist";
+      if (!targetAuthorEmail) targetAuthorEmail = "writer@digitaljournal.com";
+
+      const rejectedArticle = {
+        ...(existingArticle || {}),
+        id: editingPostId || existingArticle?.id || `art_${Date.now()}`,
+        title: liveTitle,
+        category: category || existingArticle?.category || "Business",
+        subcategories: selectedSubcategories.length > 0 ? selectedSubcategories : (existingArticle?.subcategories || []),
+        tags: tags.length > 0 ? tags : (existingArticle?.tags || []),
+        summary: subheading || existingArticle?.summary || "",
+        content: (editorRef.current ? editorRef.current.innerHTML : content) || existingArticle?.content || "",
+        imageUrl: imageUrl || existingArticle?.imageUrl || "",
+        status: "Rejected",
+        rejectionReason,
+        rejection_reason: rejectionReason,
+        rejectedAt,
+        rejected_at: rejectedAt,
+        authorEmail: targetAuthorEmail,
+        author_email: targetAuthorEmail,
+        authorName: targetAuthorName,
+        author_name: targetAuthorName,
+        author: targetAuthorName,
+        authorAvatar: targetAuthorAvatar,
+        author_avatar: targetAuthorAvatar,
+        authorBio: targetAuthorBio,
+        author_bio: targetAuthorBio,
+        updated_at: rejectedAt,
+        updatedAt: rejectedAt
+      };
 
       // 1. Update/upsert submissions with status Rejected in localStorage
       const subsStr = localStorage.getItem("dj_writer_submitted_articles");
@@ -1827,13 +1939,16 @@ function isWorldOrWorldSub(cat: string): boolean {
       }
 
       const existingIndex = subsList.findIndex((p: any) =>
-        String(p.id) === String(editingPostId) || (cleanT(p.title) && cleanT(liveTitle) && cleanT(p.title) === cleanT(liveTitle))
+        (editingPostId && String(p.id) === String(editingPostId)) ||
+        (cleanT(p.title) && cleanT(liveTitle) && cleanT(p.title) === cleanT(liveTitle)) ||
+        (existingArticle?.id && String(p.id) === String(existingArticle.id))
       );
 
       if (existingIndex >= 0) {
         subsList[existingIndex] = {
           ...subsList[existingIndex],
-          ...rejectedArticle
+          ...rejectedArticle,
+          status: "Rejected"
         };
       } else {
         subsList.unshift(rejectedArticle);
@@ -1841,8 +1956,21 @@ function isWorldOrWorldSub(cat: string): boolean {
       localStorage.setItem("dj_writer_submitted_articles", JSON.stringify(subsList));
 
       // 2. Persist to backend server API
-      const { saveArticleToServer } = await import("@/lib/articlesSync");
-      await saveArticleToServer(rejectedArticle);
+      const { saveArticleToServer, setCachedArticles, getCachedArticles } = await import("@/lib/articlesSync");
+      const cached = getCachedArticles();
+      const cIdx = cached.findIndex((a: any) =>
+        (editingPostId && String(a.id) === String(editingPostId)) ||
+        (cleanT(a.title) && cleanT(liveTitle) && cleanT(a.title) === cleanT(liveTitle)) ||
+        (existingArticle?.id && String(a.id) === String(existingArticle.id))
+      );
+      if (cIdx >= 0) {
+        cached[cIdx] = { ...cached[cIdx], ...rejectedArticle, status: "Rejected" };
+        setCachedArticles(cached, false);
+      } else {
+        setCachedArticles([rejectedArticle, ...cached], false);
+      }
+
+      await saveArticleToServer(rejectedArticle as any);
 
       // 3. Dispatch live sync event across all browser windows/tabs
       if (typeof window !== "undefined") {

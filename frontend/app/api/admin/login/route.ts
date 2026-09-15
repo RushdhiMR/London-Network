@@ -22,19 +22,6 @@ export async function POST(request: Request) {
     const { comparePassword } = await import('@/lib/auth');
     let user = await DB.getUserByEmail(normalized);
 
-    // Fallback for initial system administrator
-    if (!user && normalized === 'admin@digitaljournal.com') {
-      user = {
-        id: 1,
-        name: 'System Administrator',
-        email: 'admin@digitaljournal.com',
-        password_hash: '$2b$10$gyyrusfVDr4wRtloRzoPH.3n1DMqBGfQiR7mzTtINm6IlmH/Oiwgu', // admin123
-        provider: 'local',
-        role: 'admin',
-        email_verified: 1,
-      };
-    }
-
     if (user && user.role === 'admin' && user.password_hash) {
       const isValid = await comparePassword(cleanPassword, user.password_hash);
       if (isValid) {

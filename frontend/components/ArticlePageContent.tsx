@@ -392,28 +392,53 @@ function ArticlePageContentInner({
   const auth = useAuth();
 
   // Track article view in real time:
-  // - Unregistered person: Every visit increments view count by 1.
-  // - Registered account: Exactly 1 view per account for this article.
+  // - Unregistered person: Every visit increments view count by 1 (including repeated visits).
+  // - Registered account: Exactly 1 view per account for this article, no matter how many times they revisit.
   const didRecordView = useRef<string | null>(null);
+  const canonicalArticleKey = (pathname || subcategory || newsData?.title || "").trim().toLowerCase();
+
   useEffect(() => {
     // Wait until auth has completed loading to avoid false guest tracking on logged-in users
     if (auth.loading) return;
-    if (!activeNewsData?.title || typeof window === "undefined") return;
+    if (!canonicalArticleKey || typeof window === "undefined") return;
 
-    const articleIdentifier = String((activeNewsData as any).id || (activeNewsData as any).slug || activeNewsData.title).trim();
     const activeEmail = auth.user?.email ? auth.user.email.trim().toLowerCase() : null;
-    const viewSessionKey = `${articleIdentifier}_${activeEmail || "guest"}`;
+    const currentVisitKey = activeEmail
+      ? `${canonicalArticleKey}_${activeEmail}`
+      : `${canonicalArticleKey}_guest`;
 
-    if (didRecordView.current === viewSessionKey) return;
-    didRecordView.current = viewSessionKey;
+    // 1. In-memory component ref check: during this component's mount/render lifecycle,
+    // only record once for this article visit.
+    if (didRecordView.current === currentVisitKey) return;
+
+    // 2. Short-window throttle (2.5s) in sessionStorage to guard against React Strict Mode's
+    // rapid double-mount in dev mode (which mounts twice within ~50ms).
+    // A genuine revisit (navigating away and back, or page reload after reading) happens after >2.5s.
+    const ssKey = `ln_view_recorded_${currentVisitKey}`;
+    const lastRecorded = typeof window !== "undefined" ? sessionStorage.getItem(ssKey) : null;
+    const now = Date.now();
+    if (lastRecorded && now - parseInt(lastRecorded, 10) < 2500) {
+      return;
+    }
+
+    didRecordView.current = currentVisitKey;
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.setItem(ssKey, String(now));
+      } catch (e) {}
+    }
+
+    const targetTitle = (activeNewsData?.title || newsData?.title || "").trim();
+    const targetSlug = String((activeNewsData as any)?.slug || subcategory || "").trim();
+    const targetId = (activeNewsData as any)?.id;
 
     fetch("/api/articles/views", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        title: activeNewsData.title,
-        slug: (activeNewsData as any).slug,
-        articleId: (activeNewsData as any).id,
+        title: targetTitle,
+        slug: targetSlug,
+        articleId: targetId,
         userIdentifier: activeEmail,
       }),
     })
@@ -427,8 +452,8 @@ function ArticlePageContentInner({
               const updatedCache = cached.map((a: any) => {
                 if (
                   ((activeNewsData as any).id && String(a.id) === String((activeNewsData as any).id)) ||
-                  (a.title && a.title.trim().toLowerCase() === activeNewsData.title.trim().toLowerCase()) ||
-                  ((activeNewsData as any).slug && a.slug === (activeNewsData as any).slug)
+                  (a.title && a.title.trim().toLowerCase() === targetTitle.toLowerCase()) ||
+                  (targetSlug && a.slug === targetSlug)
                 ) {
                   return { ...a, reads: data.reads, views: data.reads, reads_count: data.reads };
                 }
@@ -444,8 +469,8 @@ function ArticlePageContentInner({
                 const updated = list.map((a: any) => {
                   if (
                     ((activeNewsData as any).id && String(a.id) === String((activeNewsData as any).id)) ||
-                    (a.title && a.title.trim().toLowerCase() === activeNewsData.title.trim().toLowerCase()) ||
-                    ((activeNewsData as any).slug && a.slug === (activeNewsData as any).slug)
+                    (a.title && a.title.trim().toLowerCase() === targetTitle.toLowerCase()) ||
+                    (targetSlug && a.slug === targetSlug)
                   ) {
                     return { ...a, reads: data.reads, views: data.reads, reads_count: data.reads };
                   }
@@ -459,7 +484,7 @@ function ArticlePageContentInner({
         }
       })
       .catch(() => {});
-  }, [activeNewsData?.title, (activeNewsData as any)?.id, auth.loading, auth.user?.email]);
+  }, [canonicalArticleKey, auth.loading, auth.user?.email]);
 
   const isAdmin = Boolean(
     isMounted && (
@@ -1242,7 +1267,7 @@ function ArticlePageContentInner({
                       <p className="text-[14px] font-bold text-black font-sans leading-tight">
                         By <Link href={`/author/${authorSlug}`} className="underline hover:text-[#BF1E2D] transition-colors">{cleanAuth.name}</Link>
                       </p>
-                      <svg className="w-4 h-4 text-[#1D9BF0]" fill="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 text-[#1D9BF0]" fill="currentColor" viewBox="0 0 24 24" aria-label="Verified Journalist">
                         <title>Verified Journalist</title>
                         <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.34-1.89-4.24-4.23-4.24-.496 0-.966.084-1.4.238C14.31 2.225 12.94 1.35 11.36 1.35c-1.58 0-2.95.875-3.6 2.148-.435-.154-.905-.238-1.4-.238-2.34 0-4.24 1.89-4.24 4.23 0 .496.084.966.238 1.4C1.225 9.55.35 10.92.35 12.5c0 1.58.875 2.95 2.148 3.6-.154.435-.238.905-.238 1.4 0 2.34 1.89 4.24 4.23 4.24.496 0 .966-.084 1.4-.238.65 1.273 2.02 2.148 3.6 2.148 1.58 0 2.95-.875 3.6-2.148.435.154.905.238 1.4.238 2.34 0 4.24-1.89 4.24-4.23 0-.496-.084-.966-.238-1.4 1.273-.65 2.148-2.02 2.148-3.6zm-12.28 4.29l-4.11-4.11 1.41-1.41 2.7 2.7 6.44-6.44 1.41 1.41-7.85 7.85z"/>
                       </svg>

@@ -342,6 +342,16 @@ export function articleBelongsToCategory(post: any, targetCategory: string): boo
     }
   }
 
+  // 4. World region matching: Articles with world region subcategories belong to the World category
+  const worldRegions = ["china", "unitedstates", "europe", "britain", "middleeast", "africa", "asia"];
+  if (targetNorm === "world" || cleanTarget === "world") {
+    if (worldRegions.includes(catNorm)) return true;
+    for (const sub of subs) {
+      const subNorm = normalizeCategoryKey(sub);
+      if (worldRegions.includes(subNorm)) return true;
+    }
+  }
+
   return false;
 }
 
@@ -453,7 +463,10 @@ export async function fetchArticlesFromServer(): Promise<ArticleItem[]> {
               mergedMap.set(String(a.id), a);
             } else {
               const serverVersion = mergedMap.get(String(a.id))!;
-              mergedMap.set(String(a.id), { ...a, ...serverVersion });
+              const mergedSubcategories = (Array.isArray(serverVersion.subcategories) && serverVersion.subcategories.length > 0)
+                ? serverVersion.subcategories
+                : (Array.isArray(a.subcategories) && a.subcategories.length > 0 ? a.subcategories : (a.subCategories || []));
+              mergedMap.set(String(a.id), { ...a, ...serverVersion, subcategories: mergedSubcategories });
             }
           });
           const combined = Array.from(mergedMap.values());

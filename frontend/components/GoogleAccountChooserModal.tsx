@@ -134,7 +134,6 @@ export default function GoogleAccountChooserModal({
     const lower = email.trim().toLowerCase();
     if (isEmailDeletedOnClient(lower)) return false;
     const systemAccounts = [
-      "admin@digitaljournal.com",
       "coadmin@digitaljournal.com",
       "writer@digitaljournal.com",
       "reader@digitaljournal.com",

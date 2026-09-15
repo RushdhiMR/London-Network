@@ -14,10 +14,6 @@ export default function LatestNewsSection() {
   const [bookmarked, setBookmarked] = useState(false);
   const getArticleTimestamp = (item: any): number => {
     if (!item) return 0;
-    if (item.updatedAt || item.updated_at) {
-      const t = new Date(item.updatedAt || item.updated_at).getTime();
-      if (!isNaN(t) && t > 0) return t;
-    }
     if (item.published_at || item.publishedAt) {
       const t = new Date(item.published_at || item.publishedAt).getTime();
       if (!isNaN(t) && t > 0) return t;
@@ -28,6 +24,10 @@ export default function LatestNewsSection() {
     }
     if (item.date && item.date !== "Just now" && item.date !== "Today" && item.date !== "Just published") {
       const t = new Date(item.date).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    if (item.updatedAt || item.updated_at) {
+      const t = new Date(item.updatedAt || item.updated_at).getTime();
       if (!isNaN(t) && t > 0) return t;
     }
     if (typeof item.id === "number") return item.id;

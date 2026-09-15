@@ -3,7 +3,7 @@ import { Metadata } from 'next';
 import { generateSocialMetadata } from '@/lib/seoHelper';
 import SubcategoryPage from '../page';
 
-export const dynamic = 'force-dynamic';
+export const dynamicParams = true;
 
 interface ThreeSegmentPageProps {
   params: Promise<{
@@ -24,6 +24,7 @@ export async function generateMetadata({ params }: ThreeSegmentPageProps): Promi
     category: effectiveCategory,
     subcategory: resolved.subcategory,
     articleSlug,
+    rawPath: `/${resolved.category}/${resolved.subcategory}/${resolved.article}`,
   });
 }
 
@@ -111,18 +112,11 @@ export default async function ThreeSegmentArticlePage({ params }: ThreeSegmentPa
 
   const articleSlug = resolved.article || resolved.subcategory;
 
-  // Clean, easy-to-understand route path redirection:
-  // If an article is accessed with redundant middle segments like /companies/ or /news/,
-  // redirect directly to the canonical clean 2-segment path /[category]/[article]
-  if (resolved.article && (resolved.subcategory === "companies" || resolved.subcategory === "news" || resolved.category === "news")) {
-    redirect(`/${effectiveCategory.toLowerCase()}/${articleSlug}`);
-  }
-
-  // Delegate rendering to the article page handler using the article slug
+  // Delegate rendering directly to the article page handler using the resolved article slug
   return SubcategoryPage({
     params: Promise.resolve({
       category: effectiveCategory,
-      subcategory: articleSlug
-    })
+      subcategory: articleSlug,
+    }),
   });
 }

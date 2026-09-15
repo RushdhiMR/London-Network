@@ -816,7 +816,6 @@ export default function Header() {
                     userRole === "admin" ||
                     userRole === "co-admin" ||
                     email === "writer@digitaljournal.com" ||
-                    email === "admin@digitaljournal.com" ||
                     email === "coadmin@digitaljournal.com" ||
                     email.includes("admin") ||
                     email.includes("writer");

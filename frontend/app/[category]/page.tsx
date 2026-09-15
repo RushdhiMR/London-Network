@@ -13,6 +13,7 @@ export async function generateMetadata({ params }: DynamicCategoryPageProps): Pr
   const resolved = await params;
   return generateSocialMetadata({
     category: resolved.category,
+    rawPath: `/${resolved.category}`,
   });
 }
 
@@ -45,6 +46,7 @@ export default async function DynamicCategoryPage({ params }: DynamicCategoryPag
   return (
     <CategoryPageLayout
       categoryName={data.categoryName}
+      categorySlug={categorySlug}
       categoryColor={data.categoryColor}
       infoBoxText={data.infoBoxText}
       featured={data.featured}
