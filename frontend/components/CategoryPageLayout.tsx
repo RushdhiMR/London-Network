@@ -332,51 +332,6 @@ export default function CategoryPageLayout({
                   </Link>
                 ))}
               </div>
-
-              {/* Category Pages — Sidebar Top Ad Box (Slot 4) */}
-              {(() => {
-                const adSlot4 = adSlots.find(s => s.id === "slot-4" || (s.categoryGroup === "CATEGORY" && s.dimensions.includes("250")) || s.title.includes("Sidebar Top"));
-                if (!adSlot4 || !adSlot4.isActive) return null;
-                const slot4Dimensions = formatAdDimensions(adSlot4.dimensions || "300X250");
-                const hasSlot4Image =
-                  adSlot4.imageUrl &&
-                  adSlot4.imageUrl.trim() !== "" &&
-                  !isDuplicateAdImage(adSlot4.imageUrl, adSlot4.id, adSlots);
-                const isExternal = (adSlot4.actionType || "").toLowerCase().includes("external") || (adSlot4.targetUrl || "").startsWith("http");
-                return (
-                  <div className="pt-6 border-t border-zinc-200 mt-6 w-full flex flex-col items-center">
-                    {hasSlot4Image ? (
-                      <a
-                        href={adSlot4.targetUrl || "#"}
-                        target={isExternal ? "_blank" : "_self"}
-                        rel={isExternal ? "noopener noreferrer" : undefined}
-                        className="block group relative overflow-hidden rounded-xs border border-zinc-200 bg-black w-full max-w-[300px] aspect-[300/250]"
-                      >
-                        <img
-                          src={adSlot4.imageUrl}
-                          alt={adSlot4.title || "Advertisement"}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                        <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-xs px-2 py-0.5 text-[9px] font-mono tracking-widest uppercase text-white border border-white/10">
-                          Ad
-                        </div>
-                      </a>
-                    ) : (
-                      <div className="w-full max-w-[300px] aspect-[300/250] bg-[#111827] border border-dashed border-gray-700 rounded-xs flex flex-col items-center justify-center p-4 text-center">
-                        <span className="text-[10px] font-mono tracking-widest uppercase text-[#D31220] font-bold mb-1">
-                          ADVERTISEMENT
-                        </span>
-                        <span className="text-white font-mono font-bold text-sm tracking-widest">
-                          {slot4Dimensions}
-                        </span>
-                        <span className="text-[10px] font-mono text-gray-400 mt-1">
-                          Size: {slot4Dimensions} px
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
             </div>
           </div>
         </div>

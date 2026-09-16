@@ -192,6 +192,7 @@ function ArticlePageContentInner({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const [isArticleResolved, setIsArticleResolved] = useState(false);
   const { adSlots } = useLiveAdSlots();
 
   useEffect(() => {
@@ -255,9 +256,11 @@ function ArticlePageContentInner({
     category: newsData.category || parent?.name || category,
     subcategories: newsData.subcategories || (subName ? [subName] : [])
   });
-  const { articles: liveArticles } = useLiveArticles();
+  const { articles: liveArticles, loading: liveArticlesLoading } = useLiveArticles();
 
   useEffect(() => {
+    // Only run the match once live articles have been fetched (not still loading)
+    if (liveArticlesLoading) return;
     try {
         const searchId = searchParams?.get("id") || (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("id") : null);
         const currentTitle = (newsData.title || "").trim().toLowerCase();
@@ -344,10 +347,13 @@ function ArticlePageContentInner({
             ]
           });
         }
+        // Mark as resolved whether or not a live match was found
+        setIsArticleResolved(true);
     } catch (err) {
       console.warn("Dynamic article page content sync notice:", err);
+      setIsArticleResolved(true);
     }
-  }, [liveArticles, newsData, searchParams]);
+  }, [liveArticles, liveArticlesLoading, newsData, searchParams]);
 
   // Clean address bar: strip unnecessary query strings (?id=50, ?sub=...) for a clear, readable route path
   useEffect(() => {
@@ -1081,6 +1087,24 @@ function ArticlePageContentInner({
         }}
       />
       <Header />
+
+      {/* Show loading skeleton until live article data is resolved to prevent stale/old article flash */}
+      {!isArticleResolved ? (
+        <div className="max-w-[1240px] mx-auto px-4 md:px-6 pt-6 pb-16 font-sans" aria-hidden="true">
+          <div className="animate-pulse">
+            <div className="h-4 bg-gray-100 rounded w-48 mb-6" />
+            <div className="h-8 bg-gray-100 rounded w-3/4 mb-3" />
+            <div className="h-8 bg-gray-100 rounded w-1/2 mb-6" />
+            <div className="h-[420px] bg-gray-100 rounded mb-6" />
+            <div className="space-y-3">
+              <div className="h-4 bg-gray-100 rounded" />
+              <div className="h-4 bg-gray-100 rounded w-5/6" />
+              <div className="h-4 bg-gray-100 rounded w-4/6" />
+            </div>
+          </div>
+        </div>
+      ) : (
+      <>
 
       {toastMessage && (
         <div className="fixed top-16 left-1/2 -translate-x-1/2 bg-zinc-900 text-white text-xs font-bold py-2.5 px-6 rounded-full border border-zinc-700 shadow-2xl flex items-center justify-center gap-2 animate-bounce z-50">
@@ -2246,6 +2270,9 @@ function ArticlePageContentInner({
       )}
 
       <Footer />
+      </>
+      )}
+
     </main>
   );
 }
