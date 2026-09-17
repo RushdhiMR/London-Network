@@ -118,30 +118,42 @@ function isSameOrMatchingCategory(catA: string, catB: string): boolean {
 
 function extractCleanTagsList(source: any): string[] {
   if (!source) return [];
-  const raw = Array.isArray(source)
-    ? source
-    : (source.tags ?? source.hashtags ?? source.hash_tags ?? source.hashTags ?? (source.seo && source.seo.keywords) ?? source.keywords ?? source);
-  if (!raw) return [];
-  if (Array.isArray(raw)) {
-    return raw
-      .flatMap((t: any) => typeof t === "string" ? t.split(/[\s,]+/) : [])
-      .map((t: string) => t.replace(/^#+/, "").trim())
-      .filter(Boolean);
-  }
-  if (typeof raw === "string" && raw.trim()) {
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed
-          .flatMap((t: any) => typeof t === "string" ? t.split(/[\s,]+/) : [])
-          .map((t: string) => t.replace(/^#+/, "").trim())
-          .filter(Boolean);
-      }
-    } catch (e) {}
-    return raw
-      .split(/[\s,]+/)
-      .map((s: string) => s.replace(/^#+/, "").trim())
-      .filter(Boolean);
+  const candidates = [
+    source.tags,
+    source.hashtags,
+    source.hash_tags,
+    source.hashTags,
+    source.seo?.keywords,
+    source.keywords
+  ];
+  if (Array.isArray(source)) candidates.unshift(source);
+
+  for (const raw of candidates) {
+    if (!raw) continue;
+    if (Array.isArray(raw) && raw.length > 0) {
+      const list = raw
+        .flatMap((t: any) => typeof t === "string" ? t.split(/[\s,]+/) : [])
+        .map((t: string) => t.replace(/^#+/, "").trim())
+        .filter(Boolean);
+      if (list.length > 0) return Array.from(new Set(list));
+    }
+    if (typeof raw === "string" && raw.trim()) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const list = parsed
+            .flatMap((t: any) => typeof t === "string" ? t.split(/[\s,]+/) : [])
+            .map((t: string) => t.replace(/^#+/, "").trim())
+            .filter(Boolean);
+          if (list.length > 0) return Array.from(new Set(list));
+        }
+      } catch (e) {}
+      const list = raw
+        .split(/[\s,]+/)
+        .map((s: string) => s.replace(/^#+/, "").trim())
+        .filter(Boolean);
+      if (list.length > 0) return Array.from(new Set(list));
+    }
   }
   return [];
 }
@@ -265,20 +277,37 @@ export default function CreatePostPage() {
   const isAdmin = mounted && (userRole === "admin" || userRole === "co-admin" || userRole === "editor" || (auth.user?.email || currentUser?.email || "").toLowerCase().includes("admin"));
 
   useEffect(() => {
-    if (auth.loading) return;
+    let effectiveUser = auth.user;
+    if (!effectiveUser && typeof window !== "undefined") {
+      try {
+        const storedAdmin = localStorage.getItem("dj_admin_user");
+        if (storedAdmin) {
+          const parsed = JSON.parse(storedAdmin);
+          if (parsed && (parsed.email || parsed.role)) {
+            effectiveUser = {
+              id: parsed.id || 1,
+              name: parsed.name || "Admin",
+              email: parsed.email || "admin@digitaljournal.com",
+              role: "admin",
+              avatar: parsed.avatar || "/author_bluesuit.jpg"
+            } as any;
+          }
+        }
+      } catch (e) {}
+    }
 
-    if (!auth.authenticated || !auth.user) {
+    if (!effectiveUser) {
       router.push("/login");
       return;
     }
 
-    const uRole = (auth.user.role || "").toLowerCase();
-    if (uRole !== "writer" && uRole !== "admin") {
+    const uRole = (effectiveUser.role || "").toLowerCase();
+    if (uRole !== "writer" && uRole !== "admin" && uRole !== "co-admin") {
       router.push("/reader");
       return;
     }
 
-    setCurrentUser(auth.user);
+    setCurrentUser(effectiveUser);
 
     const initPostData = async () => {
       try {
@@ -1477,6 +1506,17 @@ function isWorldOrWorldSub(cat: string): boolean {
     const isPostFeatured = canonicalPlacement === "Home Page A+ Section";
     const isPostEditorsPick = canonicalPlacement === "Editor's Picks";
 
+    let tagsToSave = [...tags];
+    if (tagInput && tagInput.trim()) {
+      const extra = tagInput
+        .split(/[\s,]+/)
+        .map((t) => t.replace(/^#+/, "").trim().toUpperCase())
+        .filter(Boolean);
+      extra.forEach((t) => {
+        if (!tagsToSave.includes(t)) tagsToSave.push(t);
+      });
+    }
+
     const postToSave = {
       id: editingPostId || `post-${Date.now()}`,
       title: title.trim(),
@@ -1501,7 +1541,7 @@ function isWorldOrWorldSub(cat: string): boolean {
       adPlacement: adSlot !== "none" ? adSlot : undefined,
       is_featured: isPostFeatured,
       is_editors_pick: isPostEditorsPick,
-      tags: tags,
+      tags: tagsToSave,
       subcategories: selectedSubcategories,
       readDuration: readDuration,
       authorEmail: finalAuthorEmail,
@@ -2001,7 +2041,7 @@ function isWorldOrWorldSub(cat: string): boolean {
         {/* Left Side: Cancel Link & Context Breadcrumb */}
         <div className="flex items-center gap-4">
           <Link
-            href={isUserAdmin ? "/admin" : "/writer"}
+            href={isReviewMode || isUserAdmin ? "/admin" : "/writer"}
             onClick={() => {
               try {
                 localStorage.removeItem("dj_editing_post");
@@ -2900,6 +2940,20 @@ function isWorldOrWorldSub(cat: string): boolean {
                       value={tagInput}
                       onChange={(e) => setTagInput(e.target.value)}
                       onKeyDown={handleAddTag}
+                      onBlur={() => {
+                        if (tagInput && tagInput.trim()) {
+                          const extra = tagInput
+                            .split(/[\s,]+/)
+                            .map((t) => t.replace(/^#+/, "").trim().toUpperCase())
+                            .filter(Boolean);
+                          const updated = [...tags];
+                          extra.forEach((t) => {
+                            if (!updated.includes(t)) updated.push(t);
+                          });
+                          setTags(updated);
+                          setTagInput("");
+                        }
+                      }}
                       className="w-full text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none bg-transparent"
                     />
                   </div>

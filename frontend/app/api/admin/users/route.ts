@@ -148,26 +148,41 @@ export async function PUT(request: Request) {
 
   try {
     const body = await request.json();
-    const { id, name, email, role, password } = body;
+    const { id, name, email, role, password, originalEmail } = body;
 
-    if (!id) {
+    if (!id && !email && !originalEmail) {
       return NextResponse.json(
-        { error: 'User ID is required' },
+        { error: 'User ID or Email is required' },
         { status: 400 }
       );
     }
 
-    const targetUser = await DB.getUserById(Number(id));
+    let targetUser = id ? await DB.getUserById(id) : null;
+    if (!targetUser && originalEmail) {
+      targetUser = await DB.getUserByEmail(originalEmail);
+    }
+    if (!targetUser && email) {
+      targetUser = await DB.getUserByEmail(email);
+    }
+
     if (!targetUser) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      );
+      const normalizedEmail = (email || originalEmail || '').trim().toLowerCase();
+      const validRoles = ['reader', 'writer', 'admin'];
+      const normalizedRole = (role || 'reader').toLowerCase().trim();
+      const passwordHash = bcrypt.hashSync(password && password.trim() ? password.trim() : 'digitaljournal123', 10);
+      targetUser = await DB.createUser({
+        name: (name || normalizedEmail.split('@')[0] || 'User').trim(),
+        email: normalizedEmail,
+        password_hash: passwordHash,
+        role: validRoles.includes(normalizedRole) ? (normalizedRole as any) : 'reader',
+        provider: 'local',
+        email_verified: true,
+      });
     }
 
     const isSelf = Boolean(
       rbac.user &&
-      (rbac.user.id === Number(id) ||
+      (rbac.user.id === targetUser.id ||
        (rbac.user.email && targetUser.email && rbac.user.email.toLowerCase().trim() === targetUser.email.toLowerCase().trim()))
     );
 
@@ -212,7 +227,7 @@ export async function PUT(request: Request) {
       const normalizedEmail = email.trim().toLowerCase();
       // Check if email already taken by another user
       const existing = await DB.getUserByEmail(normalizedEmail);
-      if (existing && existing.id !== Number(id)) {
+      if (existing && String(existing.id) !== String(targetUser.id)) {
         return NextResponse.json(
           { error: 'This email is already in use by another user' },
           { status: 400 }
@@ -290,8 +305,8 @@ export async function PUT(request: Request) {
       updates.avatar = finalAvatar;
     }
 
-    const updatedUser = await DB.updateUser(Number(id), updates);
-    const { password_hash: _uph, password: _up, ...safeUpdatedUser } = (updatedUser || {}) as any;
+    const updatedUser = await DB.updateUser(targetUser.id, updates, originalEmail || targetUser.email);
+    const { password_hash: _uph, password: _up, ...safeUpdatedUser } = (updatedUser || targetUser || {}) as any;
 
     return NextResponse.json({
       success: true,

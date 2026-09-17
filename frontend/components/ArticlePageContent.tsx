@@ -147,6 +147,48 @@ function processContentLinks(html: string): string {
   });
 }
 
+function resolveArticleTags(article: any): string[] {
+  if (!article) return [];
+  const sources = [
+    article.tags,
+    article.hashtags,
+    article.hash_tags,
+    article.hashTags,
+    article.seo?.keywords,
+    article.keywords
+  ];
+  if (Array.isArray(article)) sources.unshift(article);
+
+  for (const s of sources) {
+    if (!s) continue;
+    if (Array.isArray(s) && s.length > 0) {
+      const list = s
+        .flatMap((item: any) => typeof item === "string" ? item.split(/[\s,]+/) : [])
+        .map((t: string) => t.replace(/^#+/, "").trim())
+        .filter(Boolean);
+      if (list.length > 0) return Array.from(new Set(list));
+    }
+    if (typeof s === "string" && s.trim().length > 0) {
+      try {
+        const parsed = JSON.parse(s);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const list = parsed
+            .flatMap((item: any) => typeof item === "string" ? item.split(/[\s,]+/) : [])
+            .map((t: string) => t.replace(/^#+/, "").trim())
+            .filter(Boolean);
+          if (list.length > 0) return Array.from(new Set(list));
+        }
+      } catch (e) {}
+      const list = s
+        .split(/[\s,]+/)
+        .map((t: string) => t.replace(/^#+/, "").trim())
+        .filter(Boolean);
+      if (list.length > 0) return Array.from(new Set(list));
+    }
+  }
+  return [];
+}
+
 function parseHtmlToParagraphs(html: string): string[] {
   if (!html) return [];
   
@@ -254,7 +296,8 @@ function ArticlePageContentInner({
     authorName: initialAuthor.name,
     authorAvatar: initialAuthor.avatar,
     category: newsData.category || parent?.name || category,
-    subcategories: newsData.subcategories || (subName ? [subName] : [])
+    subcategories: newsData.subcategories || (subName ? [subName] : []),
+    tags: resolveArticleTags(newsData)
   });
   const { articles: liveArticles, loading: liveArticlesLoading } = useLiveArticles();
 
@@ -337,7 +380,12 @@ function ArticlePageContentInner({
             caption: matched.subheading || matched.summary || newsData.caption,
             category: rawCategory,
             subcategories: rawSubcategories,
-            tags: matched.tags || (matched as any).tags || [],
+            tags: (() => {
+              const fromMatched = resolveArticleTags(matched);
+              if (fromMatched.length > 0) return fromMatched;
+              const fromNews = resolveArticleTags(newsData);
+              return fromNews.length > 0 ? fromNews : [];
+            })(),
             rawContent: matched.content || "",
             sections: [
               {
@@ -1374,18 +1422,26 @@ function ArticlePageContentInner({
             )}
 
             {/* HASHTAGS SECTION */}
-            {activeNewsData.tags && activeNewsData.tags.length > 0 && (
-              <div className="mt-6 flex flex-wrap items-center gap-3">
-                {activeNewsData.tags.map((t: string) => (
-                  <span
-                    key={t}
-                    className="text-slate-800 hover:text-[#BF1E2D] font-bold text-xs cursor-pointer transition-colors"
-                  >
-                    #{t}
-                  </span>
-                ))}
-              </div>
-            )}
+            {(() => {
+              const displayTags = resolveArticleTags(activeNewsData);
+              if (!displayTags || displayTags.length === 0) return null;
+              return (
+                <div className="mt-6 flex flex-wrap items-center gap-3">
+                  {displayTags.map((t: string) => {
+                    const cleanTag = (t || "").replace(/^#+/, "").trim();
+                    if (!cleanTag) return null;
+                    return (
+                      <span
+                        key={cleanTag}
+                        className="text-slate-800 hover:text-[#BF1E2D] font-bold text-xs cursor-pointer transition-colors"
+                      >
+                        #{cleanTag}
+                      </span>
+                    );
+                  })}
+                </div>
+              );
+            })()}
 
             {/* Bottom Saved Stories Toggle Bar */}
             {(() => {

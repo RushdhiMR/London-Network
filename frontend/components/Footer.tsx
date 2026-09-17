@@ -138,22 +138,22 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/about#terms" className="hover:text-[#BF1E2D] transition-colors">
+                <Link href="/terms" className="hover:text-[#BF1E2D] transition-colors">
                   Terms &amp; Conditions
                 </Link>
               </li>
               <li>
-                <Link href="/about#privacy" className="hover:text-[#BF1E2D] transition-colors">
+                <Link href="/privacy" className="hover:text-[#BF1E2D] transition-colors">
                   Privacy Policy
                 </Link>
               </li>
               <li>
-                <Link href="/about#cookies" className="hover:text-[#BF1E2D] transition-colors">
+                <Link href="/cookies" className="hover:text-[#BF1E2D] transition-colors">
                   Cookie Policy
                 </Link>
               </li>
               <li>
-                <Link href="/about#editorial" className="hover:text-[#BF1E2D] transition-colors">
+                <Link href="/editorial-policy" className="hover:text-[#BF1E2D] transition-colors">
                   Editorial Policy
                 </Link>
               </li>

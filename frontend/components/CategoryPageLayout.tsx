@@ -59,7 +59,7 @@ export default function CategoryPageLayout({
 }: CategoryPageLayoutProps) {
   const newsSectionRef = useRef<HTMLDivElement>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const totalPages = 27;
+  const ARTICLES_PER_PAGE = 10;
 
   const { articles: liveArticles = [] } = useLiveArticles();
   const { adSlots } = useLiveAdSlots();
@@ -173,7 +173,8 @@ export default function CategoryPageLayout({
 
   const activeSecondaryArticles = sideBoxArticles;
 
-  const liveFormattedArticles: Article[] = matchingLive.map((a: any) => ({
+  // Skip index 0 (featured hero) and indexes 1-4 (side box articles) to avoid duplicates in the news feed
+  const liveFormattedArticles: Article[] = matchingLive.slice(5).map((a: any) => ({
     title: a.title,
     image: a.imageUrl || a.image || a.image_url || "/ai_hero.png",
     date: a.date ? `By ${resolveLiveAuthorName(a.authorName || a.author_name || a.author)} • ${a.date}` : `By ${resolveLiveAuthorName(a.authorName || a.author_name || a.author)} • Jul 2026`,
@@ -181,9 +182,11 @@ export default function CategoryPageLayout({
   }));
 
   // Combine live articles with existing newsArticles (deduplicated by title)
+  // Also exclude any static article whose title matches any live article (including featured/side-box)
+  const allLiveTitles = new Set(matchingLive.map((a: any) => a.title.toLowerCase().trim()));
   const combinedNewsArticles = [
     ...liveFormattedArticles,
-    ...newsArticles.filter(na => !liveFormattedArticles.some(la => la.title.toLowerCase().trim() === na.title.toLowerCase().trim()))
+    ...newsArticles.filter(na => !allLiveTitles.has(na.title.toLowerCase().trim()))
   ];
 
   const finalNewsTitle = (() => {
@@ -211,6 +214,8 @@ export default function CategoryPageLayout({
       ? `${categoryName} Guides`
       : guidesTitle;
 
+  const totalPages = Math.max(1, Math.ceil(combinedNewsArticles.length / ARTICLES_PER_PAGE));
+
   const handlePageChange = (page: number) => {
     if (page < 1 || page > totalPages) return;
     setCurrentPage(page);
@@ -220,6 +225,9 @@ export default function CategoryPageLayout({
   };
 
   const getPageNumbers = () => {
+    if (totalPages <= 5) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
     if (currentPage <= 3) {
       return [1, 2, 3, "...", totalPages];
     }
@@ -229,14 +237,10 @@ export default function CategoryPageLayout({
     return [1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages];
   };
 
-  const displayedNewsArticles = combinedNewsArticles.map((art) => {
-    if (currentPage === 1) return art;
-    return {
-      ...art,
-      title: `${art.title} (Page ${currentPage})`,
-      date: `Page ${currentPage} • ${art.date.includes('•') ? art.date.split('•')[1].trim() : art.date}`
-    };
-  });
+  const displayedNewsArticles = combinedNewsArticles.slice(
+    (currentPage - 1) * ARTICLES_PER_PAGE,
+    currentPage * ARTICLES_PER_PAGE
+  );
 
   const getArticleSlug = (title: string) => {
     return title

@@ -136,11 +136,14 @@ export function useLiveAdSlots() {
 
   useEffect(() => {
     loadSlots();
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === null || e.key === AD_STORAGE_KEY) loadSlots();
+    };
     window.addEventListener(AD_SYNC_EVENT, loadSlots);
-    window.addEventListener("storage", loadSlots);
+    window.addEventListener("storage", handleStorageChange);
     return () => {
       window.removeEventListener(AD_SYNC_EVENT, loadSlots);
-      window.removeEventListener("storage", loadSlots);
+      window.removeEventListener("storage", handleStorageChange);
     };
   }, [loadSlots]);
 
@@ -378,19 +381,11 @@ export function articleMatchesMainCategory(post: any, targetCategory: string): b
   return false;
 }
 
-let broadcastChannel: BroadcastChannel | null = null;
-if (typeof window !== "undefined" && "BroadcastChannel" in window) {
-  try {
-    broadcastChannel = new BroadcastChannel("dj_articles_channel");
-  } catch (e) {}
-}
-
 function notifyLocalChange() {
   if (typeof window !== "undefined") {
+    // Only dispatch within the current tab — do NOT use BroadcastChannel
+    // to avoid triggering re-renders/reloads in other open tabs.
     window.dispatchEvent(new Event(SYNC_EVENT_NAME));
-    if (broadcastChannel) {
-      broadcastChannel.postMessage({ type: "ARTICLES_UPDATED" });
-    }
   }
 }
 
@@ -797,28 +792,26 @@ export function useLiveArticles() {
       }
     };
 
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === null || e.key === STORAGE_KEY) {
+        const current = getCachedArticles();
+        if (current.length > 0) {
+          setArticles(current);
+        }
+      }
+    };
+
     if (typeof window !== "undefined") {
       window.addEventListener(SYNC_EVENT_NAME, handleSync);
       window.addEventListener("dj_articles_updated", handleSync);
-      window.addEventListener("storage", handleSync);
-    }
-
-    if (broadcastChannel) {
-      broadcastChannel.onmessage = (event) => {
-        if (event.data?.type === "ARTICLES_UPDATED") {
-          const current = getCachedArticles();
-          if (current.length > 0) {
-            setArticles(current);
-          }
-        }
-      };
+      window.addEventListener("storage", handleStorageChange);
     }
 
     return () => {
       if (typeof window !== "undefined") {
         window.removeEventListener(SYNC_EVENT_NAME, handleSync);
         window.removeEventListener("dj_articles_updated", handleSync);
-        window.removeEventListener("storage", handleSync);
+        window.removeEventListener("storage", handleStorageChange);
       }
     };
   }, []);

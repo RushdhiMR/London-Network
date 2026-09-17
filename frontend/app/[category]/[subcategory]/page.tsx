@@ -1332,23 +1332,49 @@ function getNewsContent(slug: string) {
     } catch (e) {}
   }
 
-  const existing = localArticle
+  let serverArticle: any = null;
+  if (!localArticle) {
+    try {
+      const fs = require("fs");
+      const path = require("path");
+      const dbPath = path.join(process.cwd(), "data", "digital_journal_db.json");
+      if (fs.existsSync(dbPath)) {
+        const raw = fs.readFileSync(dbPath, "utf-8");
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed.articles)) {
+          const clean = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+          const targetClean = clean(slug);
+          serverArticle = parsed.articles.find((a: any) => {
+            return clean(a.slug) === targetClean ||
+                   clean(a.title) === targetClean ||
+                   String(a.id) === String(slug);
+          });
+        }
+      }
+    } catch (e) {}
+  }
+
+  const artSource = localArticle || serverArticle;
+
+  const existing = artSource
     ? {
-        title: localArticle.title,
-        authorName: localArticle.authorName || "Rushdhi MR",
-        authorAvatar: localArticle.authorAvatar || "/author_bluesuit.jpg",
-        authorBio: localArticle.authorBio || "Journalist for London BigBen.",
-        date: localArticle.date || "July 28, 2026",
-        image: localArticle.imageUrl || "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1200&h=750&fit=crop",
-        caption: localArticle.subheading || localArticle.summary || `${localArticle.title}. (Photo courtesy of London BigBen)`,
-        category: localArticle.category,
-        subcategories: Array.isArray(localArticle.subcategories) ? localArticle.subcategories : (Array.isArray(localArticle.subCategories) ? localArticle.subCategories : []),
+        title: artSource.title,
+        authorName: artSource.authorName || artSource.author || "Rushdhi MR",
+        authorAvatar: artSource.authorAvatar || "/author_bluesuit.jpg",
+        authorBio: artSource.authorBio || "Journalist for London BigBen.",
+        date: artSource.date || "July 28, 2026",
+        image: artSource.imageUrl || artSource.image || "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1200&h=750&fit=crop",
+        caption: artSource.subheading || artSource.summary || `${artSource.title}. (Photo courtesy of London BigBen)`,
+        category: artSource.category,
+        subcategories: Array.isArray(artSource.subcategories) ? artSource.subcategories : (Array.isArray(artSource.subCategories) ? artSource.subCategories : []),
+        tags: (artSource.tags && artSource.tags.length > 0) ? artSource.tags : (artSource.hashtags || artSource.seo?.keywords || []),
+        rawContent: artSource.content || "",
         sections: [
           {
             heading: "",
-            paragraphs: localArticle.content
-              ? [localArticle.content]
-              : [localArticle.summary || "Article content."]
+            paragraphs: artSource.content
+              ? [artSource.content]
+              : [artSource.summary || "Article content."]
           }
         ]
       }
@@ -1424,6 +1450,8 @@ function getNewsContent(slug: string) {
     date,
     image,
     caption,
+    tags: (existing as any)?.tags || [],
+    rawContent: (existing as any)?.rawContent || "",
     sections: comprehensiveSections,
   };
 }

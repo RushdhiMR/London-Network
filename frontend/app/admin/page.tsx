@@ -242,30 +242,42 @@ function isWorldOrWorldSub(cat: string): boolean {
 
 function extractCleanTagsList(source: any): string[] {
   if (!source) return [];
-  const raw = Array.isArray(source)
-    ? source
-    : (source.tags ?? source.hashtags ?? source.hash_tags ?? source.hashTags ?? (source.seo && source.seo.keywords) ?? source.keywords ?? source);
-  if (!raw) return [];
-  if (Array.isArray(raw)) {
-    return raw
-      .flatMap((t: any) => typeof t === "string" ? t.split(/[\s,]+/) : [])
-      .map((t: string) => t.replace(/^#+/, "").trim())
-      .filter(Boolean);
-  }
-  if (typeof raw === "string" && raw.trim()) {
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed
-          .flatMap((t: any) => typeof t === "string" ? t.split(/[\s,]+/) : [])
-          .map((t: string) => t.replace(/^#+/, "").trim())
-          .filter(Boolean);
-      }
-    } catch (e) {}
-    return raw
-      .split(/[\s,]+/)
-      .map((s: string) => s.replace(/^#+/, "").trim())
-      .filter(Boolean);
+  const candidates = [
+    source.tags,
+    source.hashtags,
+    source.hash_tags,
+    source.hashTags,
+    source.seo?.keywords,
+    source.keywords
+  ];
+  if (Array.isArray(source)) candidates.unshift(source);
+
+  for (const raw of candidates) {
+    if (!raw) continue;
+    if (Array.isArray(raw) && raw.length > 0) {
+      const list = raw
+        .flatMap((t: any) => typeof t === "string" ? t.split(/[\s,]+/) : [])
+        .map((t: string) => t.replace(/^#+/, "").trim())
+        .filter(Boolean);
+      if (list.length > 0) return Array.from(new Set(list));
+    }
+    if (typeof raw === "string" && raw.trim()) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const list = parsed
+            .flatMap((t: any) => typeof t === "string" ? t.split(/[\s,]+/) : [])
+            .map((t: string) => t.replace(/^#+/, "").trim())
+            .filter(Boolean);
+          if (list.length > 0) return Array.from(new Set(list));
+        }
+      } catch (e) {}
+      const list = raw
+        .split(/[\s,]+/)
+        .map((s: string) => s.replace(/^#+/, "").trim())
+        .filter(Boolean);
+      if (list.length > 0) return Array.from(new Set(list));
+    }
   }
   return [];
 }
@@ -1384,10 +1396,10 @@ export default function AdminDashboardPage() {
 
               const existing = localUsersMap.get(cleanEmail);
               localUsersMap.set(cleanEmail, {
-                id: u.id || existing?.id || `reg-${idx}-${cleanEmail}`,
-                name: u.name || existing?.name || cleanEmail.split('@')[0],
-                email: u.email,
-                role: (u.role || existing?.role || "READER").toUpperCase() as "ADMIN" | "WRITER" | "READER",
+                id: existing?.id || u.id || `reg-${idx}-${cleanEmail}`,
+                name: existing?.name || u.name || cleanEmail.split('@')[0],
+                email: existing?.email || u.email,
+                role: ((existing?.role as string) || u.role || "READER").toUpperCase() as "ADMIN" | "WRITER" | "READER",
                 isDefaultAdmin: Boolean(allowedDefaultAdmins.includes(cleanEmail) || u.is_default_admin === 1 || existing?.is_default_admin === 1 || existing?.isDefaultAdmin),
                 joinedDate: u.joinedDate || u.created_at || existing?.joinedDate || "Aug 2026",
                 status: "Active"
@@ -1408,10 +1420,10 @@ export default function AdminDashboardPage() {
 
               const existing = localUsersMap.get(cleanEmail);
               localUsersMap.set(cleanEmail, {
-                id: u.id || existing?.id || `prof-${idx}-${cleanEmail}`,
-                name: u.name || existing?.name || cleanEmail.split('@')[0],
-                email: u.email,
-                role: (u.role || existing?.role || "READER").toUpperCase() as "ADMIN" | "WRITER" | "READER",
+                id: existing?.id || u.id || `prof-${idx}-${cleanEmail}`,
+                name: existing?.name || u.name || cleanEmail.split('@')[0],
+                email: existing?.email || u.email,
+                role: ((existing?.role as string) || u.role || "READER").toUpperCase() as "ADMIN" | "WRITER" | "READER",
                 isDefaultAdmin: Boolean(allowedDefaultAdmins.includes(cleanEmail) || u.is_default_admin === 1 || existing?.is_default_admin === 1 || existing?.isDefaultAdmin),
                 joinedDate: u.joinedDate || existing?.joinedDate || "Aug 2026",
                 status: "Active"
@@ -1431,10 +1443,10 @@ export default function AdminDashboardPage() {
                 if (cleanEmail === "admin@digitaljournal.com" || cleanEmail.startsWith("hacker_") || cleanEmail.startsWith("test_") || u.name === "Sneaky Hacker") return;
                 const existing = localUsersMap.get(cleanEmail);
                 localUsersMap.set(cleanEmail, {
-                  id: u.id || existing?.id || Date.now(),
-                  name: u.name || existing?.name || cleanEmail.split('@')[0],
-                  email: u.email,
-                  role: (u.role || (k === "dj_writer_user" ? "WRITER" : "READER")).toUpperCase() as "ADMIN" | "WRITER" | "READER",
+                  id: existing?.id || u.id || Date.now(),
+                  name: existing?.name || u.name || cleanEmail.split('@')[0],
+                  email: existing?.email || u.email,
+                  role: ((existing?.role as string) || u.role || (k === "dj_writer_user" ? "WRITER" : "READER")).toUpperCase() as "ADMIN" | "WRITER" | "READER",
                   isDefaultAdmin: Boolean(allowedDefaultAdmins.includes(cleanEmail) || existing?.isDefaultAdmin || existing?.is_default_admin === 1),
                   joinedDate: existing?.joinedDate || "Aug 2026",
                   status: "Active"
@@ -1872,7 +1884,7 @@ export default function AdminDashboardPage() {
       id: sub.id || `post-${Date.now()}`,
       category: matchedMainCat,
       subcategories: (sub as any).subcategories || (sub as any).subCategories || [],
-      tags: (sub as any).tags || [],
+      tags: extractCleanTagsList(sub),
       placement: (sub as any).placement || "Standard Post",
       status: "Published",
       published_at: new Date().toISOString(),
@@ -1901,7 +1913,7 @@ export default function AdminDashboardPage() {
                   is_editors_pick: newArt.is_editors_pick,
                   category: matchedMainCat,
                   subcategories: (sub as any).subcategories || (sub as any).subCategories || [],
-                  tags: (sub as any).tags || []
+                  tags: extractCleanTagsList(sub)
                 }
               : p
           );
@@ -1914,7 +1926,7 @@ export default function AdminDashboardPage() {
     } catch (e) {}
 
     setArticles(prev => [newArt, ...prev.filter(a => String(a.id) !== String(newArt.id))]);
-    setWriterSubmissions(prev => prev.filter(s => String(s.id) !== String(sub.id)));
+    setWriterSubmissions(prev => prev.filter(s => String(s.id) !== String(sub.id) && s.title !== sub.title));
     setStats(prev => ({
       ...prev,
       totalArticles: prev.totalArticles + 1
@@ -2660,8 +2672,14 @@ export default function AdminDashboardPage() {
       return;
     }
 
+    const oldEmail = (editingUser.email || "").toLowerCase().trim();
+    const newEmail = editUserEmail.trim().toLowerCase();
+    const newName = editUserName.trim();
+    const newRole = editUserRole;
+    const newPassword = editUserPassword.trim();
+
     try {
-      await fetch("/api/admin/users", {
+      const res = await fetch("/api/admin/users", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -2669,37 +2687,126 @@ export default function AdminDashboardPage() {
         },
         body: JSON.stringify({
           id: editingUser.id,
-          name: editUserName.trim(),
-          email: editUserEmail.trim().toLowerCase(),
-          role: editUserRole.toLowerCase(),
-          ...(editUserPassword.trim() ? { password: editUserPassword.trim() } : {}),
+          originalEmail: oldEmail,
+          name: newName,
+          email: newEmail,
+          role: newRole.toLowerCase(),
+          ...(newPassword ? { password: newPassword } : {}),
         }),
       });
 
-      setWorkspaceUsers(prev => prev.map(u => u.id === editingUser.id ? {
-        ...u,
-        name: editUserName.trim(),
-        email: editUserEmail.trim().toLowerCase(),
-        role: editUserRole
-      } : u));
+      const resData = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(resData.error || "Failed to update user credentials.");
+        return;
+      }
+
+      // Synchronize localStorage caches so stale entries don't revert updates
+      if (typeof window !== "undefined") {
+        try {
+          // 1. dj_registered_users
+          const regStr = localStorage.getItem("dj_registered_users");
+          if (regStr) {
+            let regList = JSON.parse(regStr);
+            if (Array.isArray(regList)) {
+              regList = regList.map((u: any) => {
+                const uEmail = (u.email || "").toLowerCase().trim();
+                if (uEmail === oldEmail || String(u.id) === String(editingUser.id)) {
+                  return {
+                    ...u,
+                    name: newName,
+                    email: newEmail,
+                    role: newRole.toLowerCase(),
+                    ...(newPassword ? { password: newPassword } : {}),
+                  };
+                }
+                return u;
+              });
+              localStorage.setItem("dj_registered_users", JSON.stringify(regList));
+            }
+          }
+
+          // 2. dj_user_profiles_db
+          const profStr = localStorage.getItem("dj_user_profiles_db");
+          if (profStr) {
+            const profDb = JSON.parse(profStr);
+            let profileObj = profDb[oldEmail] || profDb[editingUser.id] || null;
+            if (profileObj || oldEmail !== newEmail) {
+              if (oldEmail !== newEmail) {
+                delete profDb[oldEmail];
+              }
+              profDb[newEmail] = {
+                ...(profileObj || {}),
+                id: resData.user?.id || profileObj?.id || editingUser.id,
+                name: newName,
+                email: newEmail,
+                role: newRole.toLowerCase(),
+              };
+              localStorage.setItem("dj_user_profiles_db", JSON.stringify(profDb));
+            }
+          }
+
+          // 3. dj_user & dj_writer_user & dj_author_profile (active session storage)
+          ["dj_user", "dj_writer_user", "dj_author_profile"].forEach((k) => {
+            const s = localStorage.getItem(k);
+            if (s) {
+              try {
+                const u = JSON.parse(s);
+                const uEmail = (u.email || "").toLowerCase().trim();
+                if (uEmail === oldEmail || String(u.id) === String(editingUser.id)) {
+                  const updated = {
+                    ...u,
+                    id: resData.user?.id || u.id,
+                    name: newName,
+                    email: newEmail,
+                    role: newRole.toLowerCase(),
+                  };
+                  localStorage.setItem(k, JSON.stringify(updated));
+                }
+              } catch (e) {}
+            }
+          });
+
+          // 4. Update individual profile cache if present
+          if (oldEmail !== newEmail) {
+            const oldProf = localStorage.getItem(`dj_profile_${oldEmail}`);
+            if (oldProf) {
+              localStorage.removeItem(`dj_profile_${oldEmail}`);
+              try {
+                const p = JSON.parse(oldProf);
+                p.name = newName;
+                p.email = newEmail;
+                localStorage.setItem(`dj_profile_${newEmail}`, JSON.stringify(p));
+              } catch (e) {}
+            }
+          }
+        } catch (e) {
+          console.warn("Error updating local storage cache:", e);
+        }
+      }
+
+      setWorkspaceUsers(prev => prev.map(u => {
+        const uEmail = (u.email || "").toLowerCase().trim();
+        if (u.id === editingUser.id || uEmail === oldEmail) {
+          return {
+            ...u,
+            id: resData.user?.id || u.id,
+            name: newName,
+            email: newEmail,
+            role: newRole as "ADMIN" | "WRITER" | "READER",
+          };
+        }
+        return u;
+      }));
 
       setIsEditUserModalOpen(false);
       setEditingUser(null);
       setEditUserPassword("");
       await fetchDashboardData();
-      showNotification(`✓ User "${editUserName}" updated successfully!`);
-    } catch (err) {
+      showNotification(`✓ User "${newName}" updated successfully!`);
+    } catch (err: any) {
       console.error("Update user API error:", err);
-      setWorkspaceUsers(prev => prev.map(u => u.id === editingUser.id ? {
-        ...u,
-        name: editUserName.trim(),
-        email: editUserEmail.trim().toLowerCase(),
-        role: editUserRole
-      } : u));
-      setIsEditUserModalOpen(false);
-      setEditingUser(null);
-      setEditUserPassword("");
-      showNotification(`✓ User "${editUserName}" updated!`);
+      alert(err.message || "Failed to update user");
     }
   };
 
@@ -4076,6 +4183,14 @@ export default function AdminDashboardPage() {
                                       className="border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold px-3.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer shadow-xs"
                                     >
                                       Review & Publish
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleOpenRejectModal(sub)}
+                                      title="Reject Article"
+                                      className="border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer"
+                                    >
+                                      Reject
                                     </button>
 
                                     <button

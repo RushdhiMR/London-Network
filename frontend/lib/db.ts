@@ -525,14 +525,23 @@ export const DB = {
     }
   },
 
-  async updateUser(id: number | string, updates: Partial<UserRow>): Promise<UserRow | null> {
+  async updateUser(id: number | string, updates: Partial<UserRow>, optionalEmail?: string): Promise<UserRow | null> {
     const numId = Number(id);
     const now = new Date().toISOString();
+    const cleanEmail = (optionalEmail || (updates.email as string) || '').trim().toLowerCase();
 
     // 1. Update MySQL
-    if (!isNaN(numId)) {
-      try {
-        const db = getDbPool();
+    let targetNumId = !isNaN(numId) ? numId : null;
+    try {
+      const db = getDbPool();
+      if (!targetNumId && cleanEmail) {
+        const [rows]: any = await db.query('SELECT id FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1', [cleanEmail]);
+        if (Array.isArray(rows) && rows.length > 0) {
+          targetNumId = rows[0].id;
+        }
+      }
+
+      if (targetNumId) {
         const fields: string[] = [];
         const values: any[] = [];
 
@@ -578,28 +587,86 @@ export const DB = {
         }
 
         if (fields.length > 0) {
-          values.push(numId);
+          values.push(targetNumId);
           await db.query(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`, values);
         }
-      } catch (e) {
-        console.warn('[DB.updateUser] MySQL sync notice:', e);
       }
+    } catch (e) {
+      console.warn('[DB.updateUser] MySQL sync notice:', e);
     }
 
     // 2. Update persistent JSON storage
     const jsonDb = readJsonDb();
-    const index = jsonDb.users.findIndex(u => String(u.id) === String(id) || (!isNaN(numId) && u.id === numId));
+    const index = jsonDb.users.findIndex(u => 
+      (targetNumId !== null && u.id === targetNumId) ||
+      String(u.id) === String(id) || 
+      (!isNaN(numId) && u.id === numId) ||
+      (cleanEmail && (u.email || '').trim().toLowerCase() === cleanEmail)
+    );
+
+    let updatedResult: UserRow;
     if (index >= 0) {
       jsonDb.users[index] = {
         ...jsonDb.users[index],
         ...updates,
         updated_at: now,
       };
-      writeJsonDb(jsonDb);
-      return jsonDb.users[index];
+      updatedResult = jsonDb.users[index];
+    } else {
+      const newUser: UserRow = {
+        id: targetNumId || (!isNaN(numId) ? numId : Date.now()),
+        name: updates.name || 'User',
+        email: (updates.email || cleanEmail).toLowerCase().trim(),
+        role: updates.role || 'reader',
+        provider: updates.provider || 'local',
+        email_verified: 1,
+        ...updates,
+        created_at: now,
+        updated_at: now,
+      };
+      jsonDb.users.push(newUser);
+      updatedResult = newUser;
     }
 
-    return await this.getUserById(id);
+    // 3. Keep author's articles in sync if name or email changed
+    if (cleanEmail && (updates.name || updates.email)) {
+      if (Array.isArray(jsonDb.articles)) {
+        for (const art of jsonDb.articles) {
+          const artEmail = (art.author_email || art.authorEmail || '').trim().toLowerCase();
+          if (artEmail === cleanEmail) {
+            if (updates.name) {
+              art.author_name = updates.name;
+              art.authorName = updates.name;
+            }
+            if (updates.email) {
+              art.author_email = updates.email.trim().toLowerCase();
+              art.authorEmail = updates.email.trim().toLowerCase();
+            }
+          }
+        }
+      }
+
+      try {
+        const db = getDbPool();
+        const artFields: string[] = [];
+        const artVals: any[] = [];
+        if (updates.name) {
+          artFields.push('author_name = ?');
+          artVals.push(updates.name);
+        }
+        if (updates.email) {
+          artFields.push('author_email = ?');
+          artVals.push(updates.email.trim().toLowerCase());
+        }
+        if (artFields.length > 0) {
+          artVals.push(cleanEmail);
+          await db.query(`UPDATE articles SET ${artFields.join(', ')} WHERE LOWER(author_email) = LOWER(?)`, artVals);
+        }
+      } catch (e) {}
+    }
+
+    writeJsonDb(jsonDb);
+    return updatedResult;
   },
 
   async deleteUser(id: number | string, optionalEmail?: string): Promise<boolean> {
