@@ -169,7 +169,17 @@ const DEFAULT_CONTACT_SUBMISSIONS: ContactSubmissionRow[] = [
   }
 ];
 
-function readJsonDb(): { users: UserRow[]; articles: any[]; deleted_emails: string[]; subscribers: SubscriberRow[]; contact_submissions: ContactSubmissionRow[]; advertise_leads: AdvertiseLeadRow[] } {
+interface DeletedUserProfile {
+  email: string;
+  name?: string;
+  avatar?: string | null;
+  bio?: string | null;
+  linkedin?: string | null;
+  role?: string;
+  deleted_at: string;
+}
+
+function readJsonDb(): { users: UserRow[]; articles: any[]; deleted_emails: string[]; deleted_user_profiles: Record<string, DeletedUserProfile>; subscribers: SubscriberRow[]; contact_submissions: ContactSubmissionRow[]; advertise_leads: AdvertiseLeadRow[] } {
   try {
     if (fs.existsSync(DB_JSON_PATH)) {
       const raw = fs.readFileSync(DB_JSON_PATH, 'utf-8');
@@ -179,6 +189,7 @@ function readJsonDb(): { users: UserRow[]; articles: any[]; deleted_emails: stri
           users: Array.isArray(parsed.users) ? parsed.users : [],
           articles: Array.isArray(parsed.articles) ? parsed.articles : [],
           deleted_emails: Array.isArray(parsed.deleted_emails) ? parsed.deleted_emails : [],
+          deleted_user_profiles: (parsed.deleted_user_profiles && typeof parsed.deleted_user_profiles === 'object' && !Array.isArray(parsed.deleted_user_profiles)) ? parsed.deleted_user_profiles : {},
           subscribers: Array.isArray(parsed.subscribers) ? parsed.subscribers : [],
           contact_submissions: Array.isArray(parsed.contact_submissions) && parsed.contact_submissions.length > 0 
             ? parsed.contact_submissions 
@@ -192,10 +203,10 @@ function readJsonDb(): { users: UserRow[]; articles: any[]; deleted_emails: stri
   } catch (err) {
     console.warn('[DB] JSON fallback read warning:', err);
   }
-  return { users: [], articles: [], deleted_emails: [], subscribers: [], contact_submissions: DEFAULT_CONTACT_SUBMISSIONS, advertise_leads: DEFAULT_ADVERTISE_LEADS };
+  return { users: [], articles: [], deleted_emails: [], deleted_user_profiles: {}, subscribers: [], contact_submissions: DEFAULT_CONTACT_SUBMISSIONS, advertise_leads: DEFAULT_ADVERTISE_LEADS };
 }
 
-function writeJsonDb(data: { users: UserRow[]; articles: any[]; deleted_emails?: string[]; subscribers?: SubscriberRow[]; contact_submissions?: ContactSubmissionRow[]; advertise_leads?: AdvertiseLeadRow[] }) {
+function writeJsonDb(data: { users: UserRow[]; articles: any[]; deleted_emails?: string[]; deleted_user_profiles?: Record<string, DeletedUserProfile>; subscribers?: SubscriberRow[]; contact_submissions?: ContactSubmissionRow[]; advertise_leads?: AdvertiseLeadRow[] }) {
   try {
     const dir = path.dirname(DB_JSON_PATH);
     if (!fs.existsSync(dir)) {
@@ -234,6 +245,19 @@ async function ensureMysqlTable(db: mysql.Pool) {
       CREATE TABLE IF NOT EXISTS deleted_users (
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
         email VARCHAR(255) NOT NULL UNIQUE,
+        deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS deleted_user_profiles (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        name VARCHAR(255) NULL,
+        avatar VARCHAR(1000) NULL,
+        bio TEXT NULL,
+        linkedin VARCHAR(500) NULL,
+        role VARCHAR(50) NULL,
         deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
@@ -400,6 +424,13 @@ export const DB = {
     const verified = userData.email_verified ? 1 : 0;
     const now = new Date().toISOString();
 
+    // Check for a previously saved profile for this email (from a prior deletion)
+    const savedProfile = await this.getDeletedUserProfile(norm);
+
+    // Merge saved profile data: restore avatar, bio, linkedin if the new account has none
+    const restoredAvatar = userData.avatar || savedProfile?.avatar || null;
+    const restoredRole = (userData.role && userData.role !== 'reader') ? userData.role : ((savedProfile?.role as any) || role);
+
     let newId = Date.now();
 
     // 1. Insert into MySQL if available
@@ -412,11 +443,11 @@ export const DB = {
           userData.name.trim(),
           norm,
           userData.password_hash || null,
-          role,
+          restoredRole,
           provider,
           userData.google_id || null,
           verified,
-          userData.avatar || null,
+          restoredAvatar || null,
         ]
       );
       if (result && result.insertId) {
@@ -431,11 +462,14 @@ export const DB = {
       name: userData.name.trim(),
       email: norm,
       password_hash: userData.password_hash || null,
-      role: role as any,
+      role: restoredRole as any,
       provider,
       google_id: userData.google_id || null,
       email_verified: verified,
-      avatar: userData.avatar || null,
+      avatar: restoredAvatar,
+      // Restore additional profile fields if saved
+      ...(savedProfile?.bio ? { bio: savedProfile.bio } : {}),
+      ...(savedProfile?.linkedin ? { linkedin: savedProfile.linkedin } : {}),
       created_at: now,
       updated_at: now,
     };
@@ -452,6 +486,21 @@ export const DB = {
       jsonDb.users.push(newUser);
     }
     writeJsonDb(jsonDb);
+
+    // 4. Also update MySQL with restored profile fields if available
+    if (savedProfile?.bio || savedProfile?.linkedin) {
+      try {
+        const db = getDbPool();
+        const extraFields: string[] = [];
+        const extraVals: any[] = [];
+        if (savedProfile.bio) { extraFields.push('bio = ?'); extraVals.push(savedProfile.bio); }
+        if (savedProfile.linkedin) { extraFields.push('linkedin = ?'); extraVals.push(savedProfile.linkedin); }
+        if (extraFields.length > 0) {
+          extraVals.push(norm);
+          await db.query(`UPDATE users SET ${extraFields.join(', ')} WHERE LOWER(email) = LOWER(?)`, extraVals);
+        }
+      } catch (e) {}
+    }
 
     return newUser;
   },
@@ -673,13 +722,29 @@ export const DB = {
     const numId = Number(id);
     let affected = false;
 
-    // Resolve email of target user to blacklist
+    // Resolve email of target user
     let targetEmail = (optionalEmail || '').trim().toLowerCase();
-    if (!targetEmail) {
-      const userObj = await this.getUserById(id);
-      if (userObj?.email) {
-        targetEmail = userObj.email.trim().toLowerCase();
+    let userToDelete: UserRow | null = null;
+    if (!targetEmail || true) {
+      userToDelete = await this.getUserById(id);
+      if (!userToDelete && targetEmail) {
+        userToDelete = await this.getUserByEmail(targetEmail);
       }
+      if (userToDelete?.email) {
+        targetEmail = userToDelete.email.trim().toLowerCase();
+      }
+    }
+
+    // Save the user's profile data BEFORE deleting, so it can be restored on re-registration
+    if (targetEmail && userToDelete) {
+      await this.saveDeletedUserProfile({
+        email: targetEmail,
+        name: userToDelete.name,
+        avatar: (userToDelete as any).avatar || null,
+        bio: (userToDelete as any).bio || null,
+        linkedin: (userToDelete as any).linkedin || null,
+        role: userToDelete.role,
+      });
     }
 
     // 1. Delete from MySQL
@@ -711,18 +776,70 @@ export const DB = {
       affected = true;
     }
 
-    // 3. Blacklist email so they cannot log in again
-    if (targetEmail) {
-      const currentList = Array.isArray(jsonDb.deleted_emails) ? jsonDb.deleted_emails : [];
-      if (!currentList.some(e => e.toLowerCase() === targetEmail)) {
-        currentList.push(targetEmail);
-      }
-      jsonDb.deleted_emails = currentList;
-      await this.blacklistDeletedEmail(targetEmail);
-    }
+    // NOTE: We do NOT blacklist the email — deletion preserves profile data
+    // so the user can re-register and have their previous data restored.
 
     writeJsonDb(jsonDb);
     return affected;
+  },
+
+  async saveDeletedUserProfile(profile: { email: string; name?: string; avatar?: string | null; bio?: string | null; linkedin?: string | null; role?: string }): Promise<void> {
+    const norm = (profile.email || '').trim().toLowerCase();
+    if (!norm) return;
+    const now = new Date().toISOString();
+
+    // Save to MySQL
+    try {
+      const db = getDbPool();
+      await db.query(
+        `INSERT INTO deleted_user_profiles (email, name, avatar, bio, linkedin, role, deleted_at)
+         VALUES (?, ?, ?, ?, ?, ?, NOW())
+         ON DUPLICATE KEY UPDATE
+           name = VALUES(name),
+           avatar = VALUES(avatar),
+           bio = VALUES(bio),
+           linkedin = VALUES(linkedin),
+           role = VALUES(role),
+           deleted_at = NOW()`,
+        [norm, profile.name || null, profile.avatar || null, profile.bio || null, profile.linkedin || null, profile.role || null]
+      );
+    } catch (e) {}
+
+    // Save to JSON
+    const jsonDb = readJsonDb();
+    if (!jsonDb.deleted_user_profiles) jsonDb.deleted_user_profiles = {};
+    jsonDb.deleted_user_profiles[norm] = {
+      email: norm,
+      name: profile.name,
+      avatar: profile.avatar,
+      bio: profile.bio,
+      linkedin: profile.linkedin,
+      role: profile.role,
+      deleted_at: now,
+    };
+    writeJsonDb(jsonDb);
+  },
+
+  async getDeletedUserProfile(email: string): Promise<DeletedUserProfile | null> {
+    const norm = (email || '').trim().toLowerCase();
+    if (!norm) return null;
+
+    // Check MySQL first
+    try {
+      const db = getDbPool();
+      const [rows]: any = await db.query(
+        'SELECT * FROM deleted_user_profiles WHERE LOWER(email) = LOWER(?) LIMIT 1',
+        [norm]
+      );
+      if (Array.isArray(rows) && rows.length > 0) {
+        return rows[0] as DeletedUserProfile;
+      }
+    } catch (e) {}
+
+    // Check JSON
+    const jsonDb = readJsonDb();
+    const profiles = jsonDb.deleted_user_profiles || {};
+    return profiles[norm] || null;
   },
 
   async getAllSubscribers(): Promise<SubscriberRow[]> {

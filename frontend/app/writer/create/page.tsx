@@ -2034,7 +2034,7 @@ function isWorldOrWorldSub(cat: string): boolean {
   const isUserAdmin = mounted && ((currentUser?.role || auth.user?.role || "").toLowerCase() === "admin" || (currentUser?.role || auth.user?.role || "").toLowerCase() === "co-admin");
 
   return (
-    <div className="min-h-screen bg-slate-100/70 flex flex-col font-sans antialiased text-slate-900 selection:bg-orange-100 selection:text-orange-900">
+    <div className="min-h-screen bg-slate-100/70 flex flex-col font-sans antialiased text-slate-900 selection:bg-red-100 selection:text-red-900">
       
       {/* FIXED TOP NAVBAR HEADER */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-[#0B0F19] border-b border-slate-800 text-white px-6 py-3 flex items-center justify-between shadow-lg w-full">
@@ -2141,7 +2141,7 @@ function isWorldOrWorldSub(cat: string): boolean {
                   type="button"
                   onClick={handleSubmitReview}
                   disabled={isSubmitting}
-                  className="bg-[#F97316] hover:bg-[#EA580C] active:scale-[0.98] text-white font-bold text-[10px] sm:text-xs px-3 sm:px-5 py-1.5 sm:py-2 rounded-xl flex items-center gap-1.5 sm:gap-2 shadow-sm shadow-orange-500/20 transition-all cursor-pointer uppercase tracking-wider disabled:opacity-60 disabled:cursor-not-allowed font-mono"
+                  className="bg-[#D31220] hover:bg-[#B91C1C] active:scale-[0.98] text-white font-bold text-[10px] sm:text-xs px-3 sm:px-5 py-1.5 sm:py-2 rounded-xl flex items-center gap-1.5 sm:gap-2 shadow-sm shadow-red-950/20 transition-all cursor-pointer uppercase tracking-wider disabled:opacity-60 disabled:cursor-not-allowed font-mono"
                 >
                   {isSubmitting && submittingAction === "publish" ? (
                     <>
@@ -2356,7 +2356,7 @@ function isWorldOrWorldSub(cat: string): boolean {
                     setShowImageModal(true);
                   }
                 }}
-                className="border border-orange-200 bg-orange-50/80 text-[#F97316] hover:bg-orange-100 font-bold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer uppercase tracking-wider transition-colors shadow-2xs"
+                className="border border-slate-200 bg-slate-50 text-slate-700 hover:text-[#D31220] hover:bg-red-50 hover:border-red-200 font-bold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer uppercase tracking-wider transition-colors shadow-2xs"
               >
                 <ImageIcon size={14} />
                 {selectedImg ? "EDIT IMAGE" : "INSERT IMAGE"}
@@ -2402,7 +2402,7 @@ function isWorldOrWorldSub(cat: string): boolean {
                 }
               }}
               rows={2}
-              className="w-full font-serif text-lg sm:text-xl font-normal text-slate-600 placeholder:text-slate-300 focus:outline-none border-none py-1 mb-6 bg-transparent resize-none leading-relaxed overflow-hidden whitespace-normal break-words"
+              className="w-full font-serif text-lg sm:text-xl text-slate-600 placeholder:text-slate-300 focus:outline-none border-none py-1 mb-6 bg-transparent resize-none leading-snug overflow-hidden whitespace-normal break-words"
               onInput={(e: any) => {
                 e.target.style.height = "auto";
                 e.target.style.height = e.target.scrollHeight + "px";
@@ -2456,7 +2456,7 @@ function isWorldOrWorldSub(cat: string): boolean {
                   }, 10);
                 }}
                 data-placeholder="Start writing or type / for plugins"
-                className="article-content-editor outline-none text-slate-800 leading-relaxed min-h-[420px] pb-24 text-[16px] select-text focus:outline-none focus:ring-0 [&_figure]:cursor-pointer [&_img]:cursor-pointer [&_blockquote]:border-l-4 [&_blockquote]:border-[#F97316] [&_blockquote]:pl-4 [&_blockquote]:py-2.5 [&_blockquote]:my-4 [&_blockquote]:italic [&_blockquote]:text-slate-700 [&_blockquote]:bg-slate-50/80 [&_blockquote]:rounded-r-xl [&_pre]:bg-slate-100/90 [&_pre]:p-3.5 [&_pre]:my-4 [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-slate-200/80 [&_pre]:overflow-x-auto [&_pre]:font-mono [&_pre]:text-sm [&_pre]:text-slate-800 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:my-3 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:my-3 [&_li]:my-1"
+                className="article-content-editor outline-none text-slate-800 leading-relaxed min-h-[420px] pb-24 text-[16px] select-text focus:outline-none focus:ring-0 [&_figure]:cursor-pointer [&_img]:cursor-pointer [&_blockquote]:border-l-4 [&_blockquote]:border-[#D31220] [&_blockquote]:pl-4 [&_blockquote]:py-2.5 [&_blockquote]:my-4 [&_blockquote]:italic [&_blockquote]:text-slate-700 [&_blockquote]:bg-slate-50/80 [&_blockquote]:rounded-r-xl [&_pre]:bg-slate-100/90 [&_pre]:p-3.5 [&_pre]:my-4 [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-slate-200/80 [&_pre]:overflow-x-auto [&_pre]:font-mono [&_pre]:text-sm [&_pre]:text-slate-800 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:my-3 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:my-3 [&_li]:my-1"
                 style={{
                   minHeight: "420px",
                   lineHeight: "1.85",
@@ -2719,10 +2719,10 @@ function isWorldOrWorldSub(cat: string): boolean {
                   <button
                     type="button"
                     onClick={() => setIsCatDropdownOpen((prev) => !prev)}
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 flex items-center justify-between focus:outline-none focus:border-orange-500 cursor-pointer shadow-2xs hover:border-slate-300 transition-colors"
+                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 flex items-center justify-between focus:outline-none focus:border-[#D31220] cursor-pointer shadow-2xs hover:border-slate-300 transition-colors"
                   >
                     <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-[#F97316]"></span>
+                      <span className="w-2 h-2 rounded-full bg-[#D31220]"></span>
                       <span className="font-bold">{category}</span>
                     </div>
                     <ChevronDown size={14} className={`text-slate-400 transition-transform duration-200 ${isCatDropdownOpen ? "rotate-180" : ""}`} />
@@ -2763,13 +2763,13 @@ function isWorldOrWorldSub(cat: string): boolean {
                               }}
                               className={`w-full text-left px-3 py-2 text-xs font-medium rounded-lg flex items-center justify-between transition-colors cursor-pointer ${
                                 isSelected || isWorldActive
-                                  ? "bg-orange-50 text-orange-700 font-bold"
+                                  ? "bg-red-50 text-[#D31220] font-bold"
                                   : "text-slate-700 hover:bg-slate-50 hover:text-slate-900"
                               }`}
                             >
                               <span>{cat}</span>
                               {isWorld && (
-                                <ChevronRight size={13} className={`text-orange-500 transition-transform ${isWorldActive ? "translate-x-0.5" : ""}`} />
+                                <ChevronRight size={13} className={`text-[#D31220] transition-transform ${isWorldActive ? "translate-x-0.5" : ""}`} />
                               )}
                             </button>
                           );
@@ -2783,7 +2783,7 @@ function isWorldOrWorldSub(cat: string): boolean {
                           className="p-1.5 bg-slate-50/60 flex flex-col max-h-72 overflow-y-auto overscroll-contain scrollbar-thin animate-in fade-in duration-150"
                         >
                           <div className="px-2 py-1 mb-1 border-b border-slate-200/80 flex items-center justify-between">
-                            <span className="text-[10px] font-extrabold uppercase text-orange-600 tracking-wider">
+                            <span className="text-[10px] font-extrabold uppercase text-[#D31220] tracking-wider font-mono">
                               World Regions
                             </span>
                             <span className="text-[9px] text-slate-400 font-mono">7 Regions</span>
@@ -2804,12 +2804,12 @@ function isWorldOrWorldSub(cat: string): boolean {
                                   }}
                                   className={`w-full text-left px-2.5 py-1.5 text-xs rounded-lg flex items-center justify-between transition-colors cursor-pointer ${
                                     isSubSelected
-                                      ? "bg-orange-100/90 text-orange-800 font-bold"
-                                      : "text-slate-700 hover:bg-white hover:text-orange-700 shadow-2xs hover:shadow-xs"
+                                      ? "bg-red-50 text-[#D31220] font-bold"
+                                      : "text-slate-700 hover:bg-white hover:text-[#D31220] shadow-2xs hover:shadow-xs"
                                   }`}
                                 >
                                   <span>{sub}</span>
-                                  {isSubSelected && <Check size={12} strokeWidth={3} className="text-orange-600" />}
+                                  {isSubSelected && <Check size={12} strokeWidth={3} className="text-[#D31220]" />}
                                 </button>
                               );
                             })}
@@ -2849,7 +2849,7 @@ function isWorldOrWorldSub(cat: string): boolean {
                           >
                             <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${
                               isChecked
-                                ? "bg-[#F97316] border-[#F97316] text-white"
+                                ? "bg-[#D31220] border-[#D31220] text-white"
                                 : isDisabled
                                   ? "border-slate-200 bg-slate-100/80"
                                   : "border-slate-300 bg-white"
@@ -2884,7 +2884,7 @@ function isWorldOrWorldSub(cat: string): boolean {
                               >
                                 <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${
                                   isChecked
-                                    ? "bg-[#F97316] border-[#F97316] text-white"
+                                    ? "bg-[#D31220] border-[#D31220] text-white"
                                     : isDisabled
                                       ? "border-slate-200 bg-slate-100/80"
                                       : "border-slate-300 bg-white"
@@ -2911,14 +2911,14 @@ function isWorldOrWorldSub(cat: string): boolean {
                     TAGS
                   </label>
                   
-                  <div className="border-2 border-orange-500/80 rounded-xl p-3 bg-white focus-within:ring-2 focus-within:ring-orange-500/20 transition-all shadow-xs">
+                  <div className="border border-slate-200/90 rounded-xl p-3 bg-white focus-within:border-[#D31220] focus-within:ring-1 focus-within:ring-[#D31220] transition-all shadow-xs">
                     {/* Render Active Tag Pills */}
                     {tags.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mb-2">
                         {tags.map((tag) => (
                           <span
                             key={tag}
-                            className="bg-orange-50 text-orange-700 border border-orange-200 text-xs font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1 group"
+                            className="bg-slate-100 text-slate-800 border border-slate-200 hover:border-slate-300 text-xs font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1 group font-mono"
                           >
                             <span>#{tag}</span>
                             <button
@@ -2973,7 +2973,7 @@ function isWorldOrWorldSub(cat: string): boolean {
                     value={readDuration}
                     onChange={(e) => setReadDuration(e.target.value)}
                     placeholder="e.g. 5 min read"
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all shadow-2xs"
+                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all shadow-2xs"
                   />
                 </div>
 
@@ -3100,8 +3100,8 @@ function isWorldOrWorldSub(cat: string): boolean {
 
             {/* Modal Title */}
             <div className="flex items-center gap-2.5 mb-5">
-              <ImageIcon size={20} className="text-[#F97316] flex-shrink-0" />
-              <h3 className="text-lg font-serif font-bold text-slate-900">
+              <ImageIcon size={20} className="text-[#D31220] flex-shrink-0" />
+              <h3 className="text-lg font-sans font-bold text-slate-900">
                 {selectedImg ? "Edit / Replace Image" : "Insert Article Image"}
               </h3>
             </div>
@@ -3110,16 +3110,16 @@ function isWorldOrWorldSub(cat: string): boolean {
               
               {/* CHOOSE COMPUTER FILE / UPLOAD IMAGE */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 font-mono">
                   CHOOSE IMAGE FILE
                 </label>
                 
-                <label className="border-2 border-dashed border-slate-200 hover:border-orange-300 rounded-xl p-4 bg-slate-50/50 hover:bg-slate-100/50 transition-all flex items-center justify-between cursor-pointer group">
+                <label className="border-2 border-dashed border-slate-200 hover:border-red-300 rounded-xl p-4 bg-slate-50/50 hover:bg-red-50/20 transition-all flex items-center justify-between cursor-pointer group">
                   <div className="flex items-center gap-3 overflow-hidden">
                     {imageUrl ? (
                       <img src={imageUrl} alt="Preview" className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0" />
                     ) : (
-                      <div className="w-10 h-10 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center shrink-0">
+                      <div className="w-10 h-10 rounded-lg bg-red-50 text-[#D31220] flex items-center justify-center shrink-0">
                         <ImageIcon size={20} />
                       </div>
                     )}
@@ -3131,7 +3131,7 @@ function isWorldOrWorldSub(cat: string): boolean {
                     </div>
                   </div>
 
-                  <span className="text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 px-3 py-1.5 rounded-lg shrink-0 transition-colors shadow-2xs">
+                  <span className="text-xs font-bold text-white bg-[#D31220] hover:bg-[#B91C1C] px-3.5 py-1.5 rounded-lg shrink-0 transition-colors shadow-2xs font-mono">
                     Browse
                   </span>
                   <input
@@ -3165,7 +3165,7 @@ function isWorldOrWorldSub(cat: string): boolean {
 
               {/* Field 3: IMAGE CAPTION / ALT TEXT */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 font-mono">
                   IMAGE CAPTION / ALT TEXT
                 </label>
                 <input
@@ -3173,13 +3173,13 @@ function isWorldOrWorldSub(cat: string): boolean {
                   placeholder="Describe this image..."
                   value={imageCaption}
                   onChange={(e) => setImageCaption(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-100 transition-all"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all"
                 />
               </div>
 
               {/* Field 4: IMAGE CREDIT / SOURCE (OPTIONAL) */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 font-mono">
                   IMAGE CREDIT / SOURCE (OPTIONAL)
                 </label>
                 <input
@@ -3187,20 +3187,20 @@ function isWorldOrWorldSub(cat: string): boolean {
                   placeholder="e.g. Getty Images, AP Photo"
                   value={imageCredit}
                   onChange={(e) => setImageCredit(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-100 transition-all"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all"
                 />
               </div>
 
               {/* Field 5 & 6 (2 columns): IMAGE SIZE & POSITION ALIGNMENT */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 font-mono">
                     IMAGE SIZE
                   </label>
                   <select
                     value={imageSize}
                     onChange={(e) => setImageSize(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-orange-500"
+                    className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#D31220]"
                   >
                     <option value="Medium (Width: 450px)">Medium (Width: 450px)</option>
                     <option value="Small (Width: 300px)">Small (Width: 300px)</option>
@@ -3209,13 +3209,13 @@ function isWorldOrWorldSub(cat: string): boolean {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 font-mono">
                     POSITION ALIGNMENT
                   </label>
                   <select
                     value={imageAlignment}
                     onChange={(e) => setImageAlignment(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-orange-500"
+                    className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#D31220]"
                   >
                     <option value="Center (No Wrap)">Center (No Wrap)</option>
                     <option value="Left (Wrap Text)">Left (Wrap Text)</option>
@@ -3229,14 +3229,14 @@ function isWorldOrWorldSub(cat: string): boolean {
                 <button
                   type="button"
                   onClick={() => setShowImageModal(false)}
-                  className="flex-1 py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-xl transition-colors cursor-pointer text-center"
+                  className="flex-1 py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-xl transition-colors cursor-pointer text-center font-mono"
                 >
                   CANCEL
                 </button>
                 <button
                   type="button"
                   onClick={handleInsertImageToCanvas}
-                  className="flex-1 py-3 px-4 bg-[#F97316] hover:bg-[#EA580C] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-xs transition-colors cursor-pointer text-center"
+                  className="flex-1 py-3 px-4 bg-[#D31220] hover:bg-[#B91C1C] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-xs transition-colors cursor-pointer text-center font-mono"
                 >
                   {selectedImg ? "UPDATE IMAGE" : "INSERT IMAGE"}
                 </button>

@@ -136,7 +136,10 @@ export async function readArticlesStore(): Promise<ArticleRecord[]> {
 
         const pubDate = r.published_at ? new Date(r.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Jul 2026';
 
-        const rawImg = (r.image_url || '').trim();
+        let rawImg = (r.image_url || '').trim();
+        if (rawImg.includes('f005.backblazeb2.com/file/LondonNetwork/')) {
+          rawImg = rawImg.replace(/https?:\/\/f005\.backblazeb2\.com\/file\/LondonNetwork\//g, 'https://LondonNetwork.s3.us-east-005.backblazeb2.com/');
+        }
         const safeImg = rawImg || '/ai_hero.png';
 
         return {
@@ -328,8 +331,12 @@ export async function upsertArticleStore(article: ArticleRecord): Promise<Articl
     const authorName = sanitizedArticle.authorName || sanitizedArticle.author || 'Staff Journalist';
     const authorAvatar = sanitizedArticle.authorAvatar || '/author_bluesuit.jpg';
     const authorBio = sanitizedArticle.authorBio || `${authorName} is a journalist for Digital Journal.`;
-    const authorEmail = sanitizedArticle.authorEmail || 'writer@digitaljournal.com';
-    const imageUrl = sanitizedArticle.imageUrl || sanitizedArticle.image || sanitizedArticle.image_url || '/ai_hero.png';
+    const authorEmail = sanitizedArticle.authorEmail || sanitizedArticle.author_email || 'writer@digitaljournal.com';
+    let rawUpsertImg = (sanitizedArticle.imageUrl || sanitizedArticle.image || sanitizedArticle.image_url || '/ai_hero.png').trim();
+    if (rawUpsertImg.includes('f005.backblazeb2.com/file/LondonNetwork/')) {
+      rawUpsertImg = rawUpsertImg.replace(/https?:\/\/f005\.backblazeb2\.com\/file\/LondonNetwork\//g, 'https://LondonNetwork.s3.us-east-005.backblazeb2.com/');
+    }
+    const imageUrl = rawUpsertImg;
     const description = sanitizedArticle.summary || sanitizedArticle.description || sanitizedArticle.subheading || '';
     const content = sanitizedArticle.content || '';
     const status = sanitizedArticle.status || 'Published';

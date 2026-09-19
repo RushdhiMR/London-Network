@@ -405,6 +405,15 @@ export function isArticleDeleted(post: any): boolean {
   }
 }
 
+export function resolveArticleImageUrl(url?: string): string {
+  if (!url) return "";
+  let clean = String(url).trim();
+  if (clean.includes("f005.backblazeb2.com/file/LondonNetwork/")) {
+    clean = clean.replace(/https?:\/\/f005\.backblazeb2\.com\/file\/LondonNetwork\//g, "https://LondonNetwork.s3.us-east-005.backblazeb2.com/");
+  }
+  return clean;
+}
+
 export function getCachedArticles(): ArticleItem[] {
   if (typeof window === "undefined") return [];
   try {
@@ -412,7 +421,15 @@ export function getCachedArticles(): ArticleItem[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        return parsed.filter(a => !isArticleDeleted(a));
+        return parsed.filter(a => !isArticleDeleted(a)).map(a => {
+          const resolvedImg = resolveArticleImageUrl(a.imageUrl || a.image || a.image_url || "");
+          return {
+            ...a,
+            imageUrl: resolvedImg || a.imageUrl,
+            image: resolvedImg || a.image,
+            image_url: resolvedImg || a.image_url,
+          };
+        });
       }
     }
   } catch (e) {}
@@ -452,18 +469,40 @@ export async function fetchArticlesFromServer(): Promise<ArticleItem[]> {
           const activeArticles = data.articles.filter((a: any) => !isArticleDeleted(a));
           const localCached = getCachedArticles();
           const mergedMap = new Map<string, ArticleItem>();
-          activeArticles.forEach((a: any) => mergedMap.set(String(a.id), a));
+          
+          activeArticles.forEach((a: any) => {
+            const resolvedImg = resolveArticleImageUrl(a.imageUrl || a.image || a.image_url || "");
+            const itemWithCleanImg: ArticleItem = {
+              ...a,
+              imageUrl: resolvedImg || a.imageUrl,
+              image: resolvedImg || a.image,
+              image_url: resolvedImg || a.image_url,
+            };
+            mergedMap.set(String(a.id), itemWithCleanImg);
+          });
+
           localCached.forEach((a: any) => {
             if (!mergedMap.has(String(a.id))) {
-              mergedMap.set(String(a.id), a);
+              // Only retain local unpublished drafts or pending reviews
+              if (a.status === "Draft" || a.status === "Pending review") {
+                const resolvedImg = resolveArticleImageUrl(a.imageUrl || a.image || a.image_url || "");
+                mergedMap.set(String(a.id), {
+                  ...a,
+                  imageUrl: resolvedImg || a.imageUrl,
+                  image: resolvedImg || a.image,
+                  image_url: resolvedImg || a.image_url,
+                });
+              }
             } else {
+              // Server database is the single source of truth for published articles
               const serverVersion = mergedMap.get(String(a.id))!;
               const mergedSubcategories = (Array.isArray(serverVersion.subcategories) && serverVersion.subcategories.length > 0)
                 ? serverVersion.subcategories
                 : (Array.isArray(a.subcategories) && a.subcategories.length > 0 ? a.subcategories : (a.subCategories || []));
-              mergedMap.set(String(a.id), { ...a, ...serverVersion, subcategories: mergedSubcategories });
+              mergedMap.set(String(a.id), { ...serverVersion, subcategories: mergedSubcategories });
             }
           });
+
           const combined = Array.from(mergedMap.values());
           setCachedArticles(combined, false);
           lastArticlesFetchTime = Date.now();
@@ -477,6 +516,7 @@ export async function fetchArticlesFromServer(): Promise<ArticleItem[]> {
     }
     return getCachedArticles();
   })();
+
 
   return activeArticlesFetchPromise;
 }

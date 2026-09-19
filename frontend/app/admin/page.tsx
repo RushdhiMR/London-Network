@@ -44,6 +44,8 @@ import {
   Edit3,
   X,
   Menu,
+  PanelLeftClose,
+  PanelLeft,
   Check,
   Clock,
   Bell,
@@ -299,6 +301,7 @@ export default function AdminDashboardPage() {
     "overview" | "newsletter" | "articles" | "users" | "ads" | "contact_submissions" | "advertise_leads" | "backups"
   >("overview");
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const [userSubTab, setUserSubTab] = useState<"ALL" | "ADMINS" | "WRITERS" | "READERS">("ALL");
   const [postSubTab, setPostSubTab] = useState<"published" | "drafts" | "pending" | "rejected" | "trash">("published");
@@ -3236,8 +3239,17 @@ export default function AdminDashboardPage() {
   const completedReleasesCount = articles.length;
   const newsletterSubsCount = newsletterSubscribers.length;
 
+  const adminName = adminUser?.name || "Geeth Liyanage";
+  const userInitials = adminName
+    .split(" ")
+    .filter(Boolean)
+    .map((n: string) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "GL";
+
   return (
-    <div className="h-screen bg-[#F8FAFC] flex font-standard-sans text-slate-800 overflow-hidden relative">
+    <div className="h-screen bg-[#EBF0F7] flex font-sans text-slate-800 overflow-hidden relative">
       
       {/* MOBILE BACKDROP OVERLAY (< md) */}
       {isMobileSidebarOpen && (
@@ -3248,12 +3260,12 @@ export default function AdminDashboardPage() {
         />
       )}
 
-      {/* LEFT SIDEBAR NAVIGATION - RESPONSIVE DRAWER ON MOBILE, FIXED IN PLACE ON DESKTOP */}
+      {/* LEFT SIDEBAR NAVIGATION - RESPONSIVE DRAWER ON MOBILE, COLLAPSIBLE ON DESKTOP */}
       <aside
         className={`
-          fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-[#0F172A] text-white flex flex-col h-full border-r border-slate-800 select-none transition-transform duration-300 ease-in-out shadow-2xl
+          fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-[#0B111E] text-white flex flex-col h-full border-r border-slate-800/80 select-none transition-transform duration-300 ease-in-out shadow-2xl
           ${isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"}
-          md:translate-x-0 md:static md:w-64 md:h-screen md:flex-shrink-0 md:z-auto md:shadow-none
+          ${isSidebarOpen ? "md:static md:w-68 lg:w-72 md:translate-x-0 md:h-screen md:flex-shrink-0 md:z-auto md:shadow-none" : "md:hidden"}
         `}
       >
         
@@ -3265,38 +3277,41 @@ export default function AdminDashboardPage() {
               onClick={() => setIsMobileSidebarOpen(false)}
               className="flex items-center gap-3 group min-w-0"
             >
-              <img
-                src="/logo.png"
-                alt="London BigBen Logo"
-                className="w-9 h-9 object-contain rounded-lg shadow-md shrink-0"
-              />
+              <div className="relative shrink-0">
+                <img
+                  src="/logo.png"
+                  alt="London BigBen Logo"
+                  className="w-10 h-10 object-contain rounded-xl shadow-md border border-white/10 group-hover:scale-105 transition-transform"
+                />
+              </div>
               <div className="min-w-0">
-                <h1 className="font-serif font-black text-sm tracking-tight text-white uppercase leading-none group-hover:text-[#D31220] transition-colors truncate">
+                <h1 className="font-sans font-extrabold text-sm tracking-tight text-white uppercase leading-none group-hover:text-[#D31220] transition-colors truncate">
                   LONDON BIGBEN
                 </h1>
-                <p className="text-[9px] font-mono text-slate-400 tracking-widest uppercase mt-1 truncate">
-                  EXECUTIVE CONTROL
-                </p>
               </div>
             </Link>
 
-            {/* Mobile Close Button */}
+            {/* Button to Disappear / Hide Sidebar */}
             <button
-              onClick={() => setIsMobileSidebarOpen(false)}
-              className="md:hidden text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors ml-2 shrink-0 cursor-pointer"
-              aria-label="Close Sidebar"
+              onClick={() => {
+                setIsSidebarOpen(false);
+                setIsMobileSidebarOpen(false);
+              }}
+              className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors ml-2 shrink-0 cursor-pointer flex items-center justify-center"
+              title="Disappear Sidebar"
+              aria-label="Disappear Sidebar"
             >
-              <X className="w-5 h-5" />
+              <PanelLeftClose className="w-5 h-5" />
             </button>
           </div>
 
           <Link
             href="/"
             onClick={() => setIsMobileSidebarOpen(false)}
-            className="mt-4 sm:mt-5 flex items-center gap-2 text-slate-400 hover:text-white text-xs font-semibold transition-colors group"
+            className="mt-4 flex items-center gap-2 text-slate-400 hover:text-white text-xs font-semibold transition-colors group px-2 py-1.5 rounded-lg hover:bg-slate-800/50"
           >
-            <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform" />
-            <span>Back to Home</span>
+            <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform text-slate-400 group-hover:text-white" />
+            <span>Back to Live Website</span>
           </Link>
         </div>
 
@@ -3309,16 +3324,16 @@ export default function AdminDashboardPage() {
               setActiveTab("overview");
               setIsMobileSidebarOpen(false);
             }}
-            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[11.5px] font-extrabold transition-all cursor-pointer ${
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === "overview"
-                ? "bg-[#D31220] text-white shadow-lg shadow-red-950/40"
-                : "text-slate-400 hover:bg-slate-800/70 hover:text-white"
+                ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
+                : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
             }`}
           >
             <LayoutDashboard className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">Overview</span>
-            <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full font-mono font-bold flex-shrink-0 ${
-              activeTab === "overview" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-300"
+            <span className="font-sans">Overview</span>
+            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
+              activeTab === "overview" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
             }`}>
               {pendingSubmissions.length}
             </span>
@@ -3330,16 +3345,16 @@ export default function AdminDashboardPage() {
               setActiveTab("newsletter");
               setIsMobileSidebarOpen(false);
             }}
-            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[11.5px] font-extrabold transition-all cursor-pointer ${
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === "newsletter"
-                ? "bg-[#D31220] text-white shadow-lg shadow-red-950/40"
-                : "text-slate-400 hover:bg-slate-800/70 hover:text-white"
+                ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
+                : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
             }`}
           >
             <Mail className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">Newsletter</span>
-            <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full font-mono font-bold flex-shrink-0 ${
-              activeTab === "newsletter" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-300"
+            <span className="font-sans">Newsletter</span>
+            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
+              activeTab === "newsletter" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
             }`}>
               {newsletterSubscribers.length}
             </span>
@@ -3351,16 +3366,16 @@ export default function AdminDashboardPage() {
               setActiveTab("articles");
               setIsMobileSidebarOpen(false);
             }}
-            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[11.5px] font-extrabold transition-all cursor-pointer ${
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === "articles"
-                ? "bg-[#D31220] text-white shadow-lg shadow-red-950/40"
-                : "text-slate-400 hover:bg-slate-800/70 hover:text-white"
+                ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
+                : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
             }`}
           >
             <FileText className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">Published Posts</span>
-            <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full font-mono font-bold flex-shrink-0 ${
-              activeTab === "articles" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-300"
+            <span className="font-sans">Published Posts</span>
+            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
+              activeTab === "articles" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
             }`}>
               {articles.length}
             </span>
@@ -3372,16 +3387,16 @@ export default function AdminDashboardPage() {
               setActiveTab("users");
               setIsMobileSidebarOpen(false);
             }}
-            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[11.5px] font-extrabold transition-all cursor-pointer ${
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === "users"
-                ? "bg-[#D31220] text-white shadow-lg shadow-red-950/40"
-                : "text-slate-400 hover:bg-slate-800/70 hover:text-white"
+                ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
+                : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
             }`}
           >
             <Users className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">Users</span>
-            <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full font-mono font-bold flex-shrink-0 ${
-              activeTab === "users" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-300"
+            <span className="font-sans">Users</span>
+            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
+              activeTab === "users" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
             }`}>
               {workspaceUsers.length}
             </span>
@@ -3393,16 +3408,16 @@ export default function AdminDashboardPage() {
               setActiveTab("ads");
               setIsMobileSidebarOpen(false);
             }}
-            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[11.5px] font-extrabold transition-all cursor-pointer ${
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === "ads"
-                ? "bg-[#D31220] text-white shadow-lg shadow-red-950/40"
-                : "text-slate-400 hover:bg-slate-800/70 hover:text-white"
+                ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
+                : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
             }`}
           >
             <Megaphone className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">Manage Ads</span>
-            <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full font-mono font-bold flex-shrink-0 ${
-              activeTab === "ads" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-300"
+            <span className="font-sans">Manage Ads</span>
+            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
+              activeTab === "ads" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
             }`}>
               {adSlots.length}
             </span>
@@ -3414,16 +3429,16 @@ export default function AdminDashboardPage() {
               setActiveTab("contact_submissions");
               setIsMobileSidebarOpen(false);
             }}
-            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[11.5px] font-extrabold transition-all cursor-pointer ${
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === "contact_submissions"
-                ? "bg-[#D31220] text-white shadow-lg shadow-red-950/40"
-                : "text-slate-400 hover:bg-slate-800/70 hover:text-white"
+                ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
+                : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
             }`}
           >
             <MessageSquare className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">Contact Us Submissions</span>
-            <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full font-mono font-bold flex-shrink-0 ${
-              activeTab === "contact_submissions" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-300"
+            <span className="font-sans">Contact Submissions</span>
+            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
+              activeTab === "contact_submissions" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
             }`}>
               {contactSubmissions.length}
             </span>
@@ -3435,16 +3450,16 @@ export default function AdminDashboardPage() {
               setActiveTab("advertise_leads");
               setIsMobileSidebarOpen(false);
             }}
-            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[11.5px] font-extrabold transition-all cursor-pointer ${
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === "advertise_leads"
-                ? "bg-[#D31220] text-white shadow-lg shadow-red-950/40"
-                : "text-slate-400 hover:bg-slate-800/70 hover:text-white"
+                ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
+                : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
             }`}
           >
             <Briefcase className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">Advertise Leads</span>
-            <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full font-mono font-bold flex-shrink-0 ${
-              activeTab === "advertise_leads" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-300"
+            <span className="font-sans">Advertise Leads</span>
+            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
+              activeTab === "advertise_leads" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
             }`}>
               {advertiseLeads.length}
             </span>
@@ -3456,14 +3471,14 @@ export default function AdminDashboardPage() {
               setActiveTab("backups");
               setIsMobileSidebarOpen(false);
             }}
-            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[11.5px] font-extrabold transition-all cursor-pointer ${
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === "backups"
-                ? "bg-[#D31220] text-white shadow-lg shadow-red-950/40"
-                : "text-slate-400 hover:bg-slate-800/70 hover:text-white"
+                ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
+                : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
             }`}
           >
             <Database className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">Database Backups</span>
+            <span className="font-sans">Database Backups</span>
           </button>
         </nav>
 
@@ -3474,21 +3489,21 @@ export default function AdminDashboardPage() {
               setIsMobileSidebarOpen(false);
               handleLogout();
             }}
-            className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-rose-950/80 text-slate-300 hover:text-rose-300 text-xs font-bold transition-all cursor-pointer border border-slate-800 hover:border-rose-900"
+            className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-rose-950/80 text-slate-300 hover:text-rose-300 text-xs font-bold transition-all cursor-pointer border border-slate-800 hover:border-rose-900 group"
           >
-            <span className="flex items-center gap-2">
-              <LogOut className="w-4 h-4 text-rose-400" />
-              Sign Out Terminal
+            <span className="flex items-center gap-2.5">
+              <LogOut className="w-4 h-4 text-rose-400 group-hover:rotate-12 transition-transform" />
+              <span>Sign Out Terminal</span>
             </span>
           </button>
         </div>
       </aside>
 
       {/* MAIN CONTENT WORKSPACE AREA - SCROLLS INDEPENDENTLY */}
-      <main className="flex-1 h-screen p-3.5 sm:p-6 md:p-10 overflow-y-auto min-w-0 w-full">
+      <main className="flex-1 h-screen p-3.5 sm:p-6 md:p-8 lg:p-10 overflow-y-auto min-w-0 w-full bg-[#EBF0F7]">
         
         {/* MOBILE WORKSPACE TOP APP BAR (< md) */}
-        <div className="md:hidden flex items-center justify-between px-3.5 py-2.5 bg-white border border-slate-200/90 rounded-2xl shadow-xs mb-4">
+        <div className="md:hidden flex items-center justify-between px-4 py-3 bg-[#EBF0F7] border border-white/80 rounded-2xl shadow-[6px_6px_14px_#c8d2df,-6px_-6px_14px_#ffffff] mb-5">
           <div className="flex items-center gap-2.5 min-w-0">
             <button
               onClick={() => setIsMobileSidebarOpen(true)}
@@ -3498,23 +3513,23 @@ export default function AdminDashboardPage() {
               <Menu className="w-4 h-4" />
             </button>
             <div className="min-w-0">
-              <span className="font-serif font-black text-xs uppercase tracking-tight text-slate-900 block truncate">
+              <span className="font-sans font-extrabold text-xs uppercase tracking-tight text-slate-900 block truncate">
                 Admin Control
               </span>
-              <span className="text-[10px] font-mono text-[#D31220] uppercase font-bold block truncate">
+              <span className="text-[10px] font-sans text-[#D31220] uppercase font-bold block truncate">
                 {activeTab.replace(/_/g, " ")}
               </span>
             </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <div className="w-7 h-7 rounded-lg bg-[#D31220] text-white font-extrabold text-[11px] flex items-center justify-center font-mono shadow-xs">
-              RA
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#D31220] to-[#99000D] text-white font-extrabold text-xs flex items-center justify-center font-sans shadow-[2px_2px_5px_#c8d2df,-2px_-2px_5px_#ffffff]">
+              {userInitials}
             </div>
             <button
               onClick={handleLogout}
               title="Sign Out"
-              className="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              className="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -3523,7 +3538,7 @@ export default function AdminDashboardPage() {
 
         {/* TOAST NOTIFICATION BANNER */}
         {toastMessage && (
-          <div className="mb-6 w-full bg-[#D31220] text-white text-xs font-extrabold py-3 px-5 rounded-xl shadow-lg flex items-center justify-between animate-fade-in">
+          <div className="mb-6 w-full bg-[#D31220] text-white text-xs font-extrabold py-3 px-5 rounded-2xl shadow-[6px_6px_16px_#c8d2df,-6px_-6px_16px_#ffffff] flex items-center justify-between animate-fade-in">
             <div className="flex items-center gap-2.5">
               <CheckCircle2 className="w-4 h-4" />
               <span>{toastMessage}</span>
@@ -3535,24 +3550,43 @@ export default function AdminDashboardPage() {
         )}
 
         {/* TOP HEADER BAR */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6 sm:mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-8">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-black font-serif text-slate-900 tracking-tight">
-              My Workspace
-            </h1>
-            <p className="text-xs font-semibold text-slate-500 mt-1">
-              Welcome back, <span className="text-slate-900 font-bold">{adminUser?.name || "rushdi admin"}</span>!
+            <div className="flex items-center gap-3">
+              {!isSidebarOpen && (
+                <button
+                  onClick={() => {
+                    setIsSidebarOpen(true);
+                    setIsMobileSidebarOpen(true);
+                  }}
+                  title="Show Sidebar"
+                  aria-label="Show Sidebar"
+                  className="p-2 rounded-xl bg-[#EBF0F7] shadow-[4px_4px_10px_#c8d2df,-4px_-4px_10px_#ffffff] active:shadow-[inset_2px_2px_5px_#c8d2df,inset_-2px_-2px_5px_#ffffff] border border-white/80 text-slate-700 hover:text-slate-900 transition-all cursor-pointer flex items-center justify-center mr-0.5"
+                >
+                  <PanelLeft className="w-5 h-5 text-slate-700" />
+                </button>
+              )}
+              <h1 className="text-2xl sm:text-3xl font-extrabold font-sans text-slate-900 tracking-tight">
+                My Workspace
+              </h1>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EBF0F7] shadow-[inset_2px_2px_4px_#c8d2df,inset_-2px_-2px_4px_#ffffff] border border-white/60 text-emerald-700 text-[11px] font-bold font-sans">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live Control
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm font-medium text-slate-500 mt-1">
+              Welcome back, <span className="text-slate-900 font-bold">{adminName}</span>! Here is your daily editorial overview.
             </p>
           </div>
 
           {/* User Profile Badge Chip */}
-          <div className="hidden sm:flex items-center gap-3 bg-white px-4 py-2 rounded-2xl border border-slate-200 shadow-sm self-start sm:self-auto">
-            <div className="w-8 h-8 rounded-xl bg-[#D31220] text-white font-extrabold text-xs flex items-center justify-center font-mono uppercase shadow-sm">
-              RA
+          <div className="hidden sm:flex items-center gap-3 bg-[#EBF0F7] px-4 py-2 rounded-2xl border border-white/80 shadow-[6px_6px_14px_#c8d2df,-6px_-6px_14px_#ffffff] self-start sm:self-auto hover:shadow-[inset_2px_2px_5px_#c8d2df,inset_-2px_-2px_5px_#ffffff] transition-all cursor-pointer">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#D31220] to-[#99000D] text-white font-extrabold text-xs flex items-center justify-center font-sans uppercase shadow-[2px_2px_5px_#c8d2df,-2px_-2px_5px_#ffffff]">
+              {userInitials}
             </div>
-            <div className="text-left leading-tight pr-2">
-              <p className="text-xs font-extrabold text-slate-900">{adminUser?.name || "rushdi admin"}</p>
-              <p className="text-[10px] text-slate-400 font-mono">System Admin</p>
+            <div className="text-left leading-tight pr-1.5">
+              <p className="text-xs font-bold text-slate-900">{adminName}</p>
+              <p className="text-[10px] text-slate-400 font-sans font-semibold uppercase tracking-wider">System Admin</p>
             </div>
           </div>
         </div>
@@ -3561,47 +3595,68 @@ export default function AdminDashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
           
           {/* Card 1: ACTIVE REVIEWS */}
-          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-sm border-l-4 border-l-purple-500 flex items-center justify-between">
-            <div>
-              <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 font-mono mb-1">
-                ACTIVE REVIEWS
-              </p>
-              <p className="text-3xl sm:text-4xl font-black text-slate-900 font-sans tracking-tight">
-                {activeReviewsCount}
-              </p>
-            </div>
-            <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shadow-inner shrink-0">
-              <FileText className="w-6 h-6" />
+          <div className="bg-[#EBF0F7] p-5 sm:p-6 rounded-3xl border border-white/80 shadow-[8px_8px_18px_#c8d2df,-8px_-8px_18px_#ffffff] hover:shadow-[10px_10px_22px_#becadb,-10px_-10px_22px_#ffffff] transition-all duration-300 group relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#D31220] to-red-400 opacity-90" />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500 font-sans mb-1">
+                  Active Reviews
+                </p>
+                <p className="text-3xl sm:text-4xl font-extrabold text-slate-900 font-sans tracking-tight group-hover:text-[#D31220] transition-colors">
+                  {activeReviewsCount}
+                </p>
+                <p className="text-[11px] font-medium text-slate-400 mt-1.5 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                  Submissions pending approval
+                </p>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-[#EBF0F7] text-[#D31220] shadow-[inset_3px_3px_6px_#c8d2df,inset_-3px_-3px_6px_#ffffff] border border-white/60 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <FileText className="w-6 h-6" />
+              </div>
             </div>
           </div>
 
           {/* Card 2: COMPLETED RELEASES */}
-          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-sm border-l-4 border-l-emerald-500 flex items-center justify-between">
-            <div>
-              <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 font-mono mb-1">
-                COMPLETED RELEASES
-              </p>
-              <p className="text-3xl sm:text-4xl font-black text-slate-900 font-sans tracking-tight">
-                {completedReleasesCount}
-              </p>
-            </div>
-            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shadow-inner shrink-0">
-              <CheckCircle2 className="w-6 h-6" />
+          <div className="bg-[#EBF0F7] p-5 sm:p-6 rounded-3xl border border-white/80 shadow-[8px_8px_18px_#c8d2df,-8px_-8px_18px_#ffffff] hover:shadow-[10px_10px_22px_#becadb,-10px_-10px_22px_#ffffff] transition-all duration-300 group relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-600 to-teal-400 opacity-90" />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500 font-sans mb-1">
+                  Completed Releases
+                </p>
+                <p className="text-3xl sm:text-4xl font-extrabold text-slate-900 font-sans tracking-tight group-hover:text-emerald-600 transition-colors">
+                  {completedReleasesCount}
+                </p>
+                <p className="text-[11px] font-medium text-slate-400 mt-1.5 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  Live published stories
+                </p>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-[#EBF0F7] text-emerald-600 shadow-[inset_3px_3px_6px_#c8d2df,inset_-3px_-3px_6px_#ffffff] border border-white/60 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
             </div>
           </div>
 
           {/* Card 3: NEWSLETTER SUBS */}
-          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-sm border-l-4 border-l-amber-500 flex items-center justify-between sm:col-span-2 lg:col-span-1">
-            <div>
-              <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 font-mono mb-1">
-                NEWSLETTER SUBS
-              </p>
-              <p className="text-3xl sm:text-4xl font-black text-slate-900 font-sans tracking-tight">
-                {newsletterSubsCount}
-              </p>
-            </div>
-            <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center shadow-inner shrink-0">
-              <Mail className="w-6 h-6" />
+          <div className="bg-[#EBF0F7] p-5 sm:p-6 rounded-3xl border border-white/80 shadow-[8px_8px_18px_#c8d2df,-8px_-8px_18px_#ffffff] hover:shadow-[10px_10px_22px_#becadb,-10px_-10px_22px_#ffffff] sm:col-span-2 lg:col-span-1 transition-all duration-300 group relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 to-indigo-400 opacity-90" />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500 font-sans mb-1">
+                  Newsletter Subs
+                </p>
+                <p className="text-3xl sm:text-4xl font-extrabold text-slate-900 font-sans tracking-tight group-hover:text-blue-600 transition-colors">
+                  {newsletterSubsCount}
+                </p>
+                <p className="text-[11px] font-medium text-slate-400 mt-1.5 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                  Registered subscribers
+                </p>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-[#EBF0F7] text-blue-600 shadow-[inset_3px_3px_6px_#c8d2df,inset_-3px_-3px_6px_#ffffff] border border-white/60 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <Mail className="w-6 h-6" />
+              </div>
             </div>
           </div>
         </div>
@@ -3610,14 +3665,22 @@ export default function AdminDashboardPage() {
         {activeTab === "overview" && (
           <div className="space-y-8">
             {/* MAIN TABLE CONTAINER: Recent Projects (Pending Review) */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+            <div className="bg-[#EBF0F7] rounded-3xl border border-white/80 shadow-[10px_10px_24px_#c8d2df,-10px_-10px_24px_#ffffff] overflow-hidden">
               
               {/* Table Header Bar */}
-              <div className="p-4 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
-                <h2 className="text-base sm:text-lg font-black font-serif text-slate-900 tracking-tight">
-                  Recent Projects (Pending Review)
-                </h2>
-                <span className="text-[11px] font-extrabold bg-slate-200/70 text-slate-700 px-3.5 py-1 rounded-full font-mono self-start sm:self-auto">
+              <div className="p-4 sm:p-6 border-b border-[#c8d2df]/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#EBF0F7]">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-5 bg-[#D31220] rounded-full shadow-[inset_1px_1px_2px_rgba(0,0,0,0.2)]" />
+                  <div>
+                    <h2 className="text-base sm:text-lg font-bold font-sans text-slate-900 tracking-tight">
+                      Recent Projects (Pending Review)
+                    </h2>
+                    <p className="text-xs text-slate-400 font-sans">
+                      Editorial queue awaiting admin review and publishing
+                    </p>
+                  </div>
+                </div>
+                <span className="text-xs font-bold bg-[#EBF0F7] shadow-[inset_2px_2px_4px_#c8d2df,inset_-2px_-2px_4px_#ffffff] border border-white/60 text-slate-700 px-3.5 py-1.5 rounded-full font-sans self-start sm:self-auto">
                   Pending Count: {pendingSubmissions.length}
                 </span>
               </div>
@@ -3626,7 +3689,7 @@ export default function AdminDashboardPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-slate-200/60 bg-slate-50/80 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 font-mono">
+                    <tr className="border-b border-[#c8d2df]/60 bg-[#EBF0F7] text-[11px] font-bold uppercase tracking-wider text-slate-500 font-sans">
                       <th className="py-3.5 px-6">ARTICLE DETAILS</th>
                       <th className="py-3.5 px-4">CATEGORY</th>
                       <th className="py-3.5 px-4">AUTHOR</th>
@@ -3635,16 +3698,24 @@ export default function AdminDashboardPage() {
                       <th className="py-3.5 px-6 text-right">ACTIONS</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 text-xs">
+                  <tbody className="divide-y divide-[#c8d2df]/30 text-xs">
                     {pendingSubmissions.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-12 text-center text-slate-400">
-                          No pending submissions in queue. All articles have been reviewed!
+                        <td colSpan={6} className="py-16 text-center text-slate-400 font-medium">
+                          <div className="flex flex-col items-center justify-center gap-3">
+                            <div className="w-14 h-14 rounded-2xl bg-[#EBF0F7] shadow-[inset_3px_3px_6px_#c8d2df,inset_-3px_-3px_6px_#ffffff] border border-white/60 flex items-center justify-center text-slate-400">
+                              <CheckCircle2 className="w-7 h-7 text-emerald-500 stroke-[1.75]" />
+                            </div>
+                            <div>
+                              <p className="text-base font-bold text-slate-800 font-sans">No pending submissions in queue</p>
+                              <p className="text-xs text-slate-400 font-sans mt-0.5">All submitted articles have been reviewed and published.</p>
+                            </div>
+                          </div>
                         </td>
                       </tr>
                     ) : (
                       pendingSubmissions.map((post, idx) => (
-                        <tr key={`sub-${post.id}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
+                        <tr key={`sub-${post.id}-${idx}`} className="hover:bg-white/40 transition-colors">
                           
                           {/* ARTICLE DETAILS */}
                           <td className="py-4 px-6 max-w-md">
@@ -3652,16 +3723,16 @@ export default function AdminDashboardPage() {
                               <img
                                 src={post.imageUrl || "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=150&h=150&fit=crop"}
                                 alt="Thumbnail"
-                                className="w-12 h-12 rounded-xl object-cover border border-slate-200 flex-shrink-0 shadow-sm"
+                                className="w-12 h-12 rounded-xl object-cover shadow-[2px_2px_5px_#c8d2df,-2px_-2px_5px_#ffffff] border border-white/60 flex-shrink-0"
                               />
                               <div>
-                                <h3 className="font-extrabold text-slate-900 text-[13px] leading-snug line-clamp-1">
+                                <h3 className="font-extrabold text-slate-900 text-[13px] leading-snug line-clamp-1 font-sans">
                                   {post.title}
                                 </h3>
-                                <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 font-normal">
+                                <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 font-normal font-sans">
                                   {post.summary}
                                 </p>
-                                <span className="inline-block mt-1 text-[10px] font-mono text-slate-400">
+                                <span className="inline-block mt-1 text-[10px] font-sans font-medium text-slate-400">
                                   {post.readTime || "5 min read"}
                                 </span>
                               </div>
@@ -3670,24 +3741,24 @@ export default function AdminDashboardPage() {
 
                           {/* CATEGORY */}
                           <td className="py-4 px-4 whitespace-nowrap">
-                            <span className="inline-block px-2.5 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 text-[9px] font-extrabold uppercase rounded-full font-mono">
+                            <span className="inline-block px-2.5 py-1 bg-[#EBF0F7] shadow-[inset_2px_2px_4px_#c8d2df,inset_-2px_-2px_4px_#ffffff] border border-white/60 text-[#D31220] text-[10px] font-bold uppercase rounded-full font-sans tracking-wide">
                               {post.category}
                             </span>
                           </td>
 
                           {/* AUTHOR */}
-                          <td className="py-4 px-4 whitespace-nowrap font-bold text-slate-700">
+                          <td className="py-4 px-4 whitespace-nowrap font-bold text-slate-800 font-sans">
                             {post.authorName || "Rushdhi MR"}
                           </td>
 
                           {/* SUBMITTED DATE */}
-                          <td className="py-4 px-4 whitespace-nowrap font-mono text-slate-500 text-[11px]">
+                          <td className="py-4 px-4 whitespace-nowrap font-sans text-slate-500 text-xs">
                             {post.date || "Aug 11, 2026"}
                           </td>
 
                           {/* STATUS */}
                           <td className="py-4 px-4 whitespace-nowrap">
-                            <span className="px-2.5 py-1 bg-amber-100 text-amber-800 text-[10px] font-extrabold uppercase rounded-md tracking-wider font-mono">
+                            <span className="px-2.5 py-1 bg-[#EBF0F7] shadow-[inset_2px_2px_4px_#c8d2df,inset_-2px_-2px_4px_#ffffff] border border-white/60 text-amber-700 text-[10px] font-extrabold uppercase rounded-md tracking-wider font-sans">
                               PENDING
                             </span>
                           </td>
@@ -3696,7 +3767,7 @@ export default function AdminDashboardPage() {
                           <td className="py-4 px-6 whitespace-nowrap text-right">
                             <button
                               onClick={() => openStudioForArticle(post)}
-                              className="bg-[#D31220] hover:bg-[#BF1E2D] text-white text-xs font-extrabold px-4 py-1.5 rounded-lg transition-all cursor-pointer shadow-sm shadow-red-950/20 active:scale-95 uppercase tracking-wider"
+                              className="bg-[#D31220] hover:bg-[#b91522] text-white text-xs font-bold px-4 py-2 rounded-xl transition-all cursor-pointer shadow-[3px_3px_8px_#c8d2df,-3px_-3px_8px_#ffffff] active:shadow-[inset_2px_2px_4px_#c8d2df,inset_-2px_-2px_4px_#ffffff] uppercase tracking-wider font-sans"
                             >
                               OPEN
                             </button>
@@ -3718,7 +3789,7 @@ export default function AdminDashboardPage() {
             {/* Header Bar above Newsletter Table */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h2 className="text-xl font-black font-serif text-slate-900 tracking-tight">
+                <h2 className="text-xl font-extrabold font-sans text-slate-900 tracking-tight">
                   Newsletter Subscribers
                 </h2>
                 <p className="text-xs font-mono text-slate-400 mt-0.5">
@@ -3845,9 +3916,9 @@ export default function AdminDashboardPage() {
             
             {/* Posts Title & Filter Sub-Tabs matching User UI */}
             {/* Posts Title & Actions */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#c8d2df]/60 pb-4">
               <div>
-                <h2 className="text-2xl font-black font-serif text-slate-900 tracking-tight">
+                <h2 className="text-2xl font-extrabold font-sans text-slate-900 tracking-tight">
                   Posts
                 </h2>
               </div>
@@ -3855,16 +3926,16 @@ export default function AdminDashboardPage() {
               <div className="flex items-center gap-3 flex-shrink-0">
                 <button
                   onClick={handleBackupArticlesZIP}
-                  className="flex items-center gap-2 border border-orange-300 bg-orange-50/50 text-orange-700 hover:bg-orange-100/80 px-4 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer shadow-sm uppercase tracking-wider font-mono"
+                  className="flex items-center gap-2 bg-[#EBF0F7] shadow-[4px_4px_10px_#c8d2df,-4px_-4px_10px_#ffffff] active:shadow-[inset_2px_2px_5px_#c8d2df,inset_-2px_-2px_5px_#ffffff] border border-white/80 text-orange-700 hover:text-orange-800 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer uppercase tracking-wider font-mono"
                 >
                   <Download className="w-3.5 h-3.5 text-orange-600" />
                   BACKUP ARTICLES (ZIP)
                 </button>
 
-                <div className="flex items-center gap-2 border border-slate-200 bg-white text-slate-700 px-3.5 py-2 rounded-xl text-xs font-extrabold shadow-2xs font-mono">
+                <div className="flex items-center gap-2 bg-[#EBF0F7] shadow-[inset_3px_3px_6px_#c8d2df,inset_-3px_-3px_6px_#ffffff] border border-white/60 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-extrabold font-mono">
                   <FileText className="w-3.5 h-3.5 text-slate-500" />
                   <span className="uppercase tracking-wider text-slate-500 text-[10.5px]">Total Published Posts:</span>
-                  <span className="text-slate-900 bg-slate-100 border border-slate-200/80 px-2 py-0.5 rounded-lg text-xs font-black">
+                  <span className="text-slate-900 bg-[#EBF0F7] shadow-[2px_2px_5px_#c8d2df,-2px_-2px_5px_#ffffff] border border-white/80 px-2 py-0.5 rounded-lg text-xs font-black">
                     {articles.length}
                   </span>
                 </div>
@@ -3875,16 +3946,16 @@ export default function AdminDashboardPage() {
             {postSubTab === "published" && (
               <div className="space-y-6">
                 {/* FILTER & SEARCH TOOLBAR CARD */}
-                <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm font-mono text-xs flex flex-wrap items-center justify-between gap-4">
+                <div className="bg-[#EBF0F7] rounded-3xl border border-white/80 p-5 shadow-[8px_8px_18px_#c8d2df,-8px_-8px_18px_#ffffff] font-mono text-xs flex flex-wrap items-center justify-between gap-4">
                   <div className="flex flex-wrap items-center gap-4">
                     <div>
-                      <label className="block text-[9px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">
+                      <label className="block text-[9px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
                         FILTER BY CATEGORY
                       </label>
                       <select
                         value={categoryFilter}
                         onChange={(e) => setCategoryFilter(e.target.value)}
-                        className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-[#D31220] cursor-pointer uppercase"
+                        className="px-3.5 py-2.5 bg-[#EBF0F7] shadow-[inset_3px_3px_6px_#c8d2df,inset_-3px_-3px_6px_#ffffff] border border-white/50 rounded-xl text-xs font-bold text-slate-700 focus:outline-none cursor-pointer uppercase"
                       >
                         <option value="all">All Categories</option>
                         {ALL_MAIN_CATEGORIES.map((cat) => (
@@ -3896,13 +3967,13 @@ export default function AdminDashboardPage() {
                     </div>
 
                     <div>
-                      <label className="block text-[9px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">
+                      <label className="block text-[9px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
                         FILTER BY PLACEMENT
                       </label>
                       <select
                         value={placementFilter}
                         onChange={(e) => setPlacementFilter(e.target.value)}
-                        className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-[#D31220] cursor-pointer"
+                        className="px-3.5 py-2.5 bg-[#EBF0F7] shadow-[inset_3px_3px_6px_#c8d2df,inset_-3px_-3px_6px_#ffffff] border border-white/50 rounded-xl text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
                       >
                         <option value="all">All Placements</option>
                         <option value="home_page_a_plus">Home Page A+ Section</option>
@@ -3915,7 +3986,7 @@ export default function AdminDashboardPage() {
                     </div>
 
                     <div>
-                      <label className="block text-[9px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">
+                      <label className="block text-[9px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
                         SEARCH ARTICLES
                       </label>
                       <div className="relative">
@@ -3924,9 +3995,9 @@ export default function AdminDashboardPage() {
                           placeholder="Search title, author..."
                           value={articleSearchQuery}
                           onChange={(e) => setArticleSearchQuery(e.target.value)}
-                          className="w-64 pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-[#D31220]"
+                          className="w-64 pl-9 pr-3.5 py-2.5 bg-[#EBF0F7] shadow-[inset_3px_3px_6px_#c8d2df,inset_-3px_-3px_6px_#ffffff] border border-white/50 rounded-xl text-xs text-slate-900 focus:outline-none placeholder-slate-400 font-sans"
                         />
-                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-3" />
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3.5" />
                       </div>
                     </div>
                   </div>
@@ -3937,18 +4008,18 @@ export default function AdminDashboardPage() {
                       setPlacementFilter("all");
                       setArticleSearchQuery("");
                     }}
-                    className="border border-blue-200 text-blue-700 hover:bg-blue-50 font-bold px-4 py-2 rounded-xl text-xs transition-colors cursor-pointer"
+                    className="bg-[#EBF0F7] shadow-[4px_4px_10px_#c8d2df,-4px_-4px_10px_#ffffff] active:shadow-[inset_2px_2px_5px_#c8d2df,inset_-2px_-2px_5px_#ffffff] border border-white/80 text-blue-700 hover:text-blue-800 font-bold px-4 py-2.5 rounded-xl text-xs transition-all cursor-pointer"
                   >
                     Clear Filters
                   </button>
                 </div>
 
                 {/* PUBLISHED POSTS TABLE */}
-                <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                <div className="bg-[#EBF0F7] rounded-3xl shadow-[10px_10px_24px_#c8d2df,-10px_-10px_24px_#ffffff] border border-white/80 overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                       <thead>
-                        <tr className="border-b border-slate-200/60 bg-slate-50/80 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 font-mono">
+                        <tr className="border-b border-[#c8d2df]/60 bg-[#EBF0F7] text-[10px] font-extrabold uppercase tracking-wider text-slate-500 font-mono">
                           <th className="py-3.5 px-6">TITLE</th>
                           <th className="py-3.5 px-4">CATEGORY</th>
                           <th className="py-3.5 px-4">STATUS</th>
@@ -3957,7 +4028,7 @@ export default function AdminDashboardPage() {
                           <th className="py-3.5 px-6 text-right">ACTIONS</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100 text-xs">
+                      <tbody className="divide-y divide-[#c8d2df]/30 text-xs">
                         {filteredArticles.length === 0 ? (
                           <tr>
                             <td colSpan={6} className="py-12 text-center text-slate-400 font-mono">
@@ -3966,7 +4037,7 @@ export default function AdminDashboardPage() {
                           </tr>
                         ) : (
                           filteredArticles.map((art, idx) => (
-                            <tr key={`art-${art.id}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
+                            <tr key={`art-${art.id}-${idx}`} className="hover:bg-white/40 transition-colors">
                               <td className="py-4 px-6 max-w-lg">
                                 <div className="flex items-start gap-3.5">
                                   <img
@@ -3975,7 +4046,7 @@ export default function AdminDashboardPage() {
                                     onError={(e) => {
                                       e.currentTarget.src = "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=150&h=150&fit=crop";
                                     }}
-                                    className="w-12 h-12 rounded-xl object-cover border border-slate-200 flex-shrink-0 shadow-sm"
+                                    className="w-12 h-12 rounded-xl object-cover shadow-[2px_2px_5px_#c8d2df,-2px_-2px_5px_#ffffff] border border-white/60 flex-shrink-0"
                                   />
                                   <div>
                                     <h3 className="font-extrabold text-slate-900 text-[13px] leading-snug line-clamp-1">
@@ -3989,20 +4060,20 @@ export default function AdminDashboardPage() {
                               </td>
 
                               <td className="py-4 px-4 whitespace-nowrap">
-                                <span className="inline-block px-2.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-[9px] font-extrabold uppercase rounded-md font-mono">
+                                <span className="inline-block px-2.5 py-1 bg-[#EBF0F7] shadow-[inset_2px_2px_4px_#c8d2df,inset_-2px_-2px_4px_#ffffff] border border-white/60 text-blue-700 text-[9px] font-extrabold uppercase rounded-md font-mono">
                                   {art.category_name}
                                 </span>
                               </td>
 
                               <td className="py-4 px-4 whitespace-nowrap">
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-extrabold rounded-full font-mono">
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#EBF0F7] shadow-[inset_2px_2px_4px_#c8d2df,inset_-2px_-2px_4px_#ffffff] border border-white/60 text-emerald-700 text-[10px] font-extrabold rounded-full font-mono">
                                   <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
                                   Published
                                 </span>
                               </td>
 
                               <td className="py-4 px-4 whitespace-nowrap">
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100/90 text-slate-700 border border-slate-200/80 text-[11px] font-bold rounded-lg font-mono shadow-2xs">
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#EBF0F7] shadow-[inset_2px_2px_4px_#c8d2df,inset_-2px_-2px_4px_#ffffff] border border-white/60 text-slate-700 text-[11px] font-bold rounded-lg font-mono">
                                   <Eye className="w-3.5 h-3.5 text-blue-600" />
                                   <span>{Number(art.views || (art as any).reads || 0).toLocaleString()}</span>
                                   <span className="text-[10px] text-slate-400 font-normal">views</span>
@@ -4018,7 +4089,7 @@ export default function AdminDashboardPage() {
                                   <button
                                     onClick={() => handleOpenEditModal(art)}
                                     title="Edit Article"
-                                    className="flex items-center gap-1 border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 text-[11px] font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                                    className="flex items-center gap-1.5 bg-[#EBF0F7] shadow-[3px_3px_7px_#c8d2df,-3px_-3px_7px_#ffffff] active:shadow-[inset_2px_2px_4px_#c8d2df,inset_-2px_-2px_4px_#ffffff] border border-white/80 text-blue-700 hover:text-blue-800 text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer"
                                   >
                                     <Pencil className="w-3 h-3" />
                                     Edit
@@ -4027,7 +4098,7 @@ export default function AdminDashboardPage() {
                                   <button
                                     onClick={() => handleDeleteArticle(art.id, art.title)}
                                     title="Move to Trash"
-                                    className="w-8 h-8 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors cursor-pointer"
+                                    className="w-8 h-8 rounded-lg bg-[#EBF0F7] shadow-[3px_3px_7px_#c8d2df,-3px_-3px_7px_#ffffff] active:shadow-[inset_2px_2px_4px_#c8d2df,inset_-2px_-2px_4px_#ffffff] border border-white/80 text-slate-400 hover:text-rose-600 flex items-center justify-center transition-all cursor-pointer"
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </button>
@@ -4413,7 +4484,7 @@ export default function AdminDashboardPage() {
             {/* Header Bar above Users Desk Table */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h2 className="text-xl font-black font-serif text-slate-900 tracking-tight">
+                <h2 className="text-xl font-extrabold font-sans text-slate-900 tracking-tight">
                   Users Desk
                 </h2>
               </div>
@@ -4481,7 +4552,7 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* Subheading */}
-            <h3 className="text-base font-black font-serif text-slate-900 tracking-tight pt-2">
+            <h3 className="text-base font-extrabold font-sans text-slate-900 tracking-tight pt-2">
               User Workspace Roles
             </h3>
 
@@ -4609,7 +4680,7 @@ export default function AdminDashboardPage() {
             
             {/* Main Section Header */}
             <div>
-              <h2 className="text-xl font-black font-serif text-slate-900 tracking-tight">
+              <h2 className="text-xl font-extrabold font-sans text-slate-900 tracking-tight">
                 Manage Ads
               </h2>
               <p className="text-xs font-mono text-slate-400 mt-0.5">
@@ -4697,7 +4768,7 @@ export default function AdminDashboardPage() {
 
                   {/* Slot Title & Description */}
                   <div>
-                    <h3 className="text-lg font-black font-serif text-slate-900 leading-snug">
+                    <h3 className="text-lg font-bold font-sans text-slate-900 leading-snug">
                       {slot.title}
                     </h3>
                     <p className="text-xs text-slate-500 mt-1">
@@ -4825,7 +4896,7 @@ export default function AdminDashboardPage() {
             {/* Header & Search Toolbar */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h2 className="text-xl font-black font-serif text-slate-900 tracking-tight">
+                <h2 className="text-xl font-extrabold font-sans text-slate-900 tracking-tight">
                   Contact Us Submissions
                 </h2>
                 <p className="text-xs font-mono text-slate-400 mt-0.5">
@@ -4974,7 +5045,7 @@ export default function AdminDashboardPage() {
             {/* Header & Search Toolbar */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h2 className="text-xl font-black font-serif text-slate-900 tracking-tight">
+                <h2 className="text-xl font-extrabold font-sans text-slate-900 tracking-tight">
                   Advertise Client Leads
                 </h2>
                 <p className="text-xs font-mono text-slate-400 mt-0.5">
@@ -5123,7 +5194,7 @@ export default function AdminDashboardPage() {
             {/* Header & Right Action Buttons */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h2 className="text-xl font-black font-serif text-slate-900 tracking-tight">
+                <h2 className="text-xl font-extrabold font-sans text-slate-900 tracking-tight">
                   Database Backups & Cloud Restore
                 </h2>
                 <p className="text-xs font-mono text-slate-400 mt-0.5">
@@ -5253,7 +5324,7 @@ export default function AdminDashboardPage() {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-extrabold text-base font-serif text-slate-900">Add User to Workspace</h3>
+              <h3 className="font-extrabold text-base font-sans text-slate-900">Add User to Workspace</h3>
               <button onClick={() => setIsAddUserModalOpen(false)}>
                 <X className="w-5 h-5 text-slate-400" />
               </button>
@@ -5351,7 +5422,7 @@ export default function AdminDashboardPage() {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-extrabold text-base font-serif text-slate-900">Edit User Workspace Credentials</h3>
+              <h3 className="font-extrabold text-base font-sans text-slate-900">Edit User Workspace Credentials</h3>
               <button onClick={() => setIsEditUserModalOpen(false)}>
                 <X className="w-5 h-5 text-slate-400" />
               </button>
@@ -5437,12 +5508,12 @@ export default function AdminDashboardPage() {
       {viewingUser && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4 border border-slate-200 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-[#D31220] text-white text-xl font-extrabold flex items-center justify-center mx-auto shadow-md font-serif">
+            <div className="w-16 h-16 rounded-2xl bg-[#D31220] text-white text-xl font-extrabold flex items-center justify-center mx-auto shadow-md font-sans">
               {viewingUser.name.charAt(0)}
             </div>
 
             <div>
-              <h3 className="font-extrabold text-lg font-serif text-slate-900">{viewingUser.name}</h3>
+              <h3 className="font-extrabold text-lg font-sans text-slate-900">{viewingUser.name}</h3>
               <p className="text-xs text-slate-500 font-mono mt-0.5">{viewingUser.email}</p>
             </div>
 
@@ -5472,7 +5543,7 @@ export default function AdminDashboardPage() {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-slate-200">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-extrabold text-base font-serif text-slate-900">Edit Published Article</h3>
+              <h3 className="font-extrabold text-base font-sans text-slate-900">Edit Published Article</h3>
               <button onClick={() => setIsEditArticleModalOpen(false)}>
                 <X className="w-5 h-5 text-slate-400" />
               </button>
@@ -5555,7 +5626,7 @@ export default function AdminDashboardPage() {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-extrabold text-base font-serif text-slate-900">Add Newsletter Subscriber</h3>
+              <h3 className="font-extrabold text-base font-sans text-slate-900">Add Newsletter Subscriber</h3>
               <button onClick={() => setIsNewsletterModalOpen(false)}>
                 <X className="w-5 h-5 text-slate-400" />
               </button>
@@ -5614,7 +5685,7 @@ export default function AdminDashboardPage() {
                 <span className="px-2.5 py-0.5 bg-slate-100 text-slate-700 border border-slate-200 rounded-full font-mono text-[9px] font-extrabold uppercase">
                   {viewingContactModal.type}
                 </span>
-                <h3 className="font-extrabold text-base font-serif text-slate-900 mt-1">{viewingContactModal.name}</h3>
+                <h3 className="font-extrabold text-base font-sans text-slate-900 mt-1">{viewingContactModal.name}</h3>
                 <p className="text-xs text-slate-400 font-mono">{viewingContactModal.email} • {viewingContactModal.date}</p>
               </div>
               <button onClick={() => setViewingContactModal(null)}>
@@ -5655,7 +5726,7 @@ export default function AdminDashboardPage() {
                 <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-full font-mono text-[9px] font-extrabold uppercase">
                   {viewingLeadModal.serviceOption}
                 </span>
-                <h3 className="font-extrabold text-base font-serif text-slate-900 mt-1">{viewingLeadModal.submitterName}</h3>
+                <h3 className="font-extrabold text-base font-sans text-slate-900 mt-1">{viewingLeadModal.submitterName}</h3>
                 <p className="text-xs text-slate-400 font-mono">{viewingLeadModal.email} • {viewingLeadModal.date}</p>
               </div>
               <button onClick={() => setViewingLeadModal(null)}>

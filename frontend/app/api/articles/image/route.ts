@@ -76,6 +76,10 @@ export async function GET(request: NextRequest) {
       imgData = "/og-image.png";
     }
 
+    if (imgData.includes("f005.backblazeb2.com/file/LondonNetwork/")) {
+      imgData = imgData.replace(/https?:\/\/f005\.backblazeb2\.com\/file\/LondonNetwork\//g, "https://LondonNetwork.s3.us-east-005.backblazeb2.com/");
+    }
+
     // 1. If it's a remote URL (e.g. Backblaze B2, Unsplash, Cloudinary), redirect to it
     if (imgData.startsWith("http://") || imgData.startsWith("https://")) {
       return NextResponse.redirect(imgData);

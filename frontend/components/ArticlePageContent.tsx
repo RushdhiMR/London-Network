@@ -1443,6 +1443,50 @@ function ArticlePageContentInner({
               );
             })()}
 
+            {/* Author Metadata Bar Under Article */}
+            {(() => {
+              const cleanAuth = resolveCleanAuthor(activeNewsData.authorName, activeNewsData.authorAvatar, activeNewsData.authorEmail);
+              const authorSlug = cleanAuth.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+              return (
+                <div className="flex items-center gap-3.5 mt-8 pt-5 border-t border-zinc-200 font-sans" suppressHydrationWarning>
+                  <Link href={`/author/${authorSlug}`} className="w-14 h-14 rounded-full overflow-hidden bg-[#1E293B] flex-shrink-0 border border-zinc-300 hover:opacity-80 transition-opacity flex items-center justify-center text-white font-bold text-sm" suppressHydrationWarning>
+                    {cleanAuth.avatar && cleanAuth.avatar.length > 5 ? (
+                      <img src={cleanAuth.avatar} alt={cleanAuth.name} className="w-full h-full object-cover" suppressHydrationWarning />
+                    ) : (
+                      <span suppressHydrationWarning>{(cleanAuth.name || "RM").slice(0, 2).toUpperCase()}</span>
+                    )}
+                  </Link>
+                  <div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="text-[14px] font-bold text-black font-sans leading-tight">
+                        By <Link href={`/author/${authorSlug}`} className="underline hover:text-[#BF1E2D] transition-colors">{cleanAuth.name}</Link>
+                      </p>
+                      <svg className="w-4 h-4 text-[#1D9BF0]" fill="currentColor" viewBox="0 0 24 24" aria-label="Verified Journalist">
+                        <title>Verified Journalist</title>
+                        <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.34-1.89-4.24-4.23-4.24-.496 0-.966.084-1.4.238C14.31 2.225 12.94 1.35 11.36 1.35c-1.58 0-2.95.875-3.6 2.148-.435-.154-.905-.238-1.4-.238-2.34 0-4.24 1.89-4.24 4.23 0 .496.084.966.238 1.4C1.225 9.55.35 10.92.35 12.5c0 1.58.875 2.95 2.148 3.6-.154.435-.238.905-.238 1.4 0 2.34 1.89 4.24 4.23 4.24.496 0 .966-.084 1.4-.238.65 1.273 2.02 2.148 3.6 2.148 1.58 0 2.95-.875 3.6-2.148.435.154.905.238 1.4.238 2.34 0 4.24-1.89 4.24-4.23 0-.496-.084-.966-.238-1.4 1.273-.65 2.148-2.02 2.148-3.6zm-12.28 4.29l-4.11-4.11 1.41-1.41 2.7 2.7 6.44-6.44 1.41 1.41-7.85 7.85z"/>
+                      </svg>
+
+                      {/* Author LinkedIn Icon Symbol */}
+                      <a
+                        href={authorLinkedinUrl}
+                        suppressHydrationWarning
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-1 inline-flex items-center text-[#0A66C2] hover:text-[#004182] transition-colors p-0.5"
+                        title={`Connect with ${activeNewsData.authorName} on LinkedIn`}
+                      >
+                        <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
+                          <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
+                        </svg>
+                      </a>
+                    </div>
+                    <p className="text-[12px] text-zinc-500 mt-0.5">{activeNewsData.date}</p>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Bottom Saved Stories Toggle Bar */}
             {(() => {
               const totalCommentsCount = comments.length + comments.reduce((acc, c) => acc + (c.replies?.length || 0), 0);

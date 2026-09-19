@@ -606,6 +606,7 @@ export default function WriterDashboardPage() {
     if (!userEmail && !userName) return false;
 
     // Check if post was directly submitted or edited in this writer's local queue
+    // Also verify the stored article belongs to the current user (by author email or name)
     if (typeof window !== "undefined") {
       try {
         const subsStr = localStorage.getItem("dj_writer_submitted_articles");
@@ -616,11 +617,22 @@ export default function WriterDashboardPage() {
             const pTitle = String(post.title || "").toLowerCase().replace(/[^\w\s-]/g, '').trim();
             const pSlug = String(post.slug || "").toLowerCase().trim();
             const foundInLocal = parsed.some(
-              (p: any) =>
-                (pId && String(p.id) === pId) ||
-                (pTitle && String(p.title || "").toLowerCase().replace(/[^\w\s-]/g, '').trim() === pTitle) ||
-                (pSlug && String(p.slug || "").toLowerCase().trim() === pSlug) ||
-                (p.original_title && String(p.original_title).toLowerCase().replace(/[^\w\s-]/g, '').trim() === pTitle)
+              (p: any) => {
+                const titleMatch =
+                  (pId && String(p.id) === pId) ||
+                  (pTitle && String(p.title || "").toLowerCase().replace(/[^\w\s-]/g, '').trim() === pTitle) ||
+                  (pSlug && String(p.slug || "").toLowerCase().trim() === pSlug) ||
+                  (p.original_title && String(p.original_title).toLowerCase().replace(/[^\w\s-]/g, '').trim() === pTitle);
+                if (!titleMatch) return false;
+                // Also confirm this local article belongs to the current user
+                const pAuthorEmail = (p.authorEmail || p.author_email || "").trim().toLowerCase();
+                const pAuthorName = (p.authorName || p.author_name || p.author || "").trim().toLowerCase();
+                if (userEmail && pAuthorEmail && userEmail === pAuthorEmail) return true;
+                if (userName && pAuthorName && userName.replace(/[^a-z0-9]/g, "") === pAuthorName.replace(/[^a-z0-9]/g, "")) return true;
+                // If no author info on local record, trust it (was submitted in this session)
+                if (!pAuthorEmail && !pAuthorName) return true;
+                return false;
+              }
             );
             if (foundInLocal) return true;
           }
@@ -679,17 +691,8 @@ export default function WriterDashboardPage() {
     const isNestoPost = postEmail.includes("nesto") || postName.includes("nesto");
     if (isNestoUser && isNestoPost) return true;
 
-    // 6. Generic/default writer fallback matching
-    if (
-      postEmail === "writer@digitaljournal.com" ||
-      postEmail === "writer@londonbigben.com" ||
-      postName === "writer" ||
-      postName === "staff journalist" ||
-      postName === "london bigben writer" ||
-      postName === "digital journal writer"
-    ) {
-      return true;
-    }
+    // 6. Generic/default writer fallback removed — it incorrectly showed all writers
+    // articles that belong to generic/shared author accounts.
 
     return false;
   };
@@ -746,13 +749,13 @@ export default function WriterDashboardPage() {
                 placeholder="Enter passcode (e.g. rushdhi / writer123)"
                 value={lockPasscode}
                 onChange={(e) => setLockPasscode(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-[#D31220]"
                 autoFocus
               />
             </div>
             <button
               type="submit"
-              className="w-full bg-[#1B50E8] hover:bg-blue-700 text-white font-bold text-xs py-3.5 rounded-xl uppercase tracking-wider transition-all cursor-pointer shadow-lg"
+              className="w-full bg-[#D31220] hover:bg-[#B91C1C] text-white font-bold text-xs py-3.5 rounded-xl uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-red-950/30"
             >
               Access Writer Portal
             </button>
@@ -790,12 +793,12 @@ export default function WriterDashboardPage() {
                     (e.target as HTMLElement).style.display = "none";
                   }}
                 />
-                <span className="font-serif font-black text-xs md:text-sm tracking-tight text-gray-900">
+                <span className="font-sans font-extrabold text-xs md:text-sm tracking-tight text-gray-900">
                   LONDON BIGBEN
                 </span>
               </Link>
 
-              <span className="px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wider text-[#1B50E8] bg-blue-50/80 border border-blue-100 uppercase">
+              <span className="px-2 py-0.5 rounded-full text-[9px] font-bold font-mono tracking-wider text-[#D31220] bg-red-50/80 border border-red-100 uppercase">
                 WRITER PORTAL
               </span>
             </div>
@@ -877,93 +880,192 @@ export default function WriterDashboardPage() {
         
         {/* Title & Primary Action Button Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">Posts</h1>
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Posts</h1>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-50 text-[#D31220] border border-red-200/80 shadow-2xs">
+                {posts.filter(isPostVisibleInStudio).length} Total
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm text-slate-500 mt-1 font-medium">
+              Manage, compose, and review your articles for London BigBen
+            </p>
+          </div>
 
           <Link
             href="/writer/create"
             onClick={() => localStorage.removeItem("dj_editing_post")}
-            className="bg-[#1B50E8] hover:bg-[#1542C3] active:scale-[0.98] text-white font-semibold text-xs sm:text-sm px-5 py-2.5 rounded-full flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer self-start sm:self-auto"
+            className="bg-[#D31220] hover:bg-[#b91522] active:scale-[0.98] text-white font-bold text-xs sm:text-sm px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-sm shadow-red-950/20 hover:shadow-md hover:shadow-red-600/20 transition-all cursor-pointer self-start sm:self-auto"
           >
             <Plus size={18} className="stroke-[2.5]" />
             <span>Create New Post</span>
           </Link>
         </div>
 
-        {/* Navigation Filter Tabs Bar */}
-        <div className="flex items-center justify-between border-b border-gray-200 text-xs sm:text-sm font-medium mb-6 overflow-x-auto scrollbar-none max-w-full">
-          <div className="flex items-center gap-6 sm:gap-8">
-            {(["Published", "Drafts", "Pending review", "Rejected", "Trash"] as const).map((tab) => {
-              const isActive = activeTab === tab;
-              const count = posts.filter((p) => {
-                if (!isPostVisibleInStudio(p)) return false;
-                const st = (p.status || "").toLowerCase().trim();
-                if (tab === "Drafts") return st === "draft" || st === "drafts";
-                if (tab === "Pending review") return st.includes("pending") || st.includes("review") || st.includes("submitted");
-                if (tab === "Rejected") return st.includes("reject");
-                if (tab === "Trash") return st === "trash" || st === "trashed";
-                return st === "published" || st === "approved";
-              }).length;
+        {/* Quick Stat Overview KPI Cards */}
+        {(() => {
+          const publishedCount = posts.filter(p => isPostVisibleInStudio(p) && ((p.status || "").toLowerCase().trim() === "published" || (p.status || "").toLowerCase().trim() === "approved")).length;
+          const pendingCount = posts.filter(p => isPostVisibleInStudio(p) && ((p.status || "").toLowerCase().trim().includes("pending") || (p.status || "").toLowerCase().trim().includes("review") || (p.status || "").toLowerCase().trim().includes("submitted"))).length;
+          const draftsCount = posts.filter(p => isPostVisibleInStudio(p) && ((p.status || "").toLowerCase().trim() === "draft" || (p.status || "").toLowerCase().trim() === "drafts")).length;
+          const rejectedCount = posts.filter(p => isPostVisibleInStudio(p) && (p.status || "").toLowerCase().trim().includes("reject")).length;
 
-              return (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`pb-3.5 transition-colors cursor-pointer relative flex items-center gap-2 ${
-                    isActive
-                      ? "text-[#1B50E8] font-bold border-b-2 border-[#1B50E8] -mb-[1px]"
-                      : "text-gray-600 hover:text-gray-900 font-medium"
-                  }`}
-                >
-                  <span>{tab}</span>
-                  <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full transition-all ${
-                    tab === "Pending review" && count > 0
-                      ? "bg-amber-500 text-white shadow-2xs"
-                      : tab === "Rejected" && count > 0
-                      ? "bg-rose-100 text-rose-700"
-                      : isActive
-                      ? "bg-blue-100 text-[#1B50E8]"
-                      : "bg-gray-100 text-gray-500"
-                  }`}>
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
+          const statCards = [
+            {
+              label: "Published Stories",
+              count: publishedCount,
+              sub: "Live on publication",
+              tab: "Published" as const,
+              icon: CheckCircle2,
+              iconBg: "bg-emerald-50 text-emerald-600 border border-emerald-200/80",
+              activeBorder: "ring-2 ring-emerald-500/40 border-emerald-300"
+            },
+            {
+              label: "Editorial Review",
+              count: pendingCount,
+              sub: "Awaiting approval",
+              tab: "Pending review" as const,
+              icon: Clock,
+              iconBg: "bg-amber-50 text-amber-600 border border-amber-200/80",
+              activeBorder: "ring-2 ring-amber-500/40 border-amber-300"
+            },
+            {
+              label: "Drafts in Progress",
+              count: draftsCount,
+              sub: "Unpublished work",
+              tab: "Drafts" as const,
+              icon: FileText,
+              iconBg: "bg-slate-100 text-slate-600 border border-slate-200/80",
+              activeBorder: "ring-2 ring-slate-400/40 border-slate-300"
+            },
+            {
+              label: "Revision Required",
+              count: rejectedCount,
+              sub: "Editorial feedback",
+              tab: "Rejected" as const,
+              icon: AlertCircle,
+              iconBg: "bg-rose-50 text-rose-600 border border-rose-200/80",
+              activeBorder: "ring-2 ring-rose-500/40 border-rose-300"
+            }
+          ];
+
+          return (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
+              {statCards.map((card) => {
+                const isSelected = activeTab === card.tab;
+                const IconComponent = card.icon;
+                return (
+                  <button
+                    key={card.label}
+                    onClick={() => setActiveTab(card.tab)}
+                    className={`text-left p-4 rounded-2xl bg-white border transition-all cursor-pointer shadow-2xs hover:shadow-xs group ${
+                      isSelected
+                        ? `border-[#D31220]/60 ring-2 ring-[#D31220]/20 bg-red-50/10`
+                        : "border-slate-200/80 hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                        {card.label}
+                      </span>
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 ${card.iconBg}`}>
+                        <IconComponent size={16} />
+                      </div>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                        {card.count}
+                      </span>
+                      <span className="text-[11px] font-medium text-slate-400">
+                        {card.sub}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })()}
+
+        {/* Toolbar: Navigation Filter Tabs & Integrated Search */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs mb-6">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            
+            {/* Filter Tabs */}
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1 lg:pb-0">
+              {(["Published", "Drafts", "Pending review", "Rejected", "Trash"] as const).map((tab) => {
+                const isActive = activeTab === tab;
+                const count = posts.filter((p) => {
+                  if (!isPostVisibleInStudio(p)) return false;
+                  const st = (p.status || "").toLowerCase().trim();
+                  if (tab === "Drafts") return st === "draft" || st === "drafts";
+                  if (tab === "Pending review") return st.includes("pending") || st.includes("review") || st.includes("submitted");
+                  if (tab === "Rejected") return st.includes("reject");
+                  if (tab === "Trash") return st === "trash" || st === "trashed";
+                  return st === "published" || st === "approved";
+                }).length;
+
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+                      isActive
+                        ? "bg-[#D31220] text-white shadow-sm shadow-red-950/20"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 bg-slate-50/60 border border-slate-200/70"
+                    }`}
+                  >
+                    <span>{tab}</span>
+                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full transition-all ${
+                      isActive
+                        ? "bg-white/20 text-white"
+                        : tab === "Pending review" && count > 0
+                        ? "bg-amber-100 text-amber-700"
+                        : tab === "Rejected" && count > 0
+                        ? "bg-rose-100 text-rose-700"
+                        : "bg-slate-200/80 text-slate-600"
+                    }`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Search Box */}
+            <div className="flex items-center gap-3 self-stretch lg:self-auto">
+              <div className="relative flex-1 sm:w-80">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search articles by title, category, summary..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-8 py-2 bg-slate-50/80 border border-slate-200/90 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-[#D31220] focus:ring-2 focus:ring-red-100 transition-all font-medium"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                    title="Clear search"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+            </div>
+
           </div>
-
-          {/* Sort Arrows Icon on far right */}
-          <button
-            className="text-gray-400 hover:text-gray-600 pb-3 flex items-center justify-center p-1 cursor-pointer"
-            title="Sort posts"
-          >
-            <ChevronsUpDown size={15} />
-          </button>
         </div>
 
-        {/* MAIN POSTS CONTENT CONTAINER CARD */}
-        <div className="bg-white border border-gray-200/90 rounded-2xl p-6 sm:p-8 shadow-xs min-h-[460px] flex flex-col">
-          
-          {/* Top Right Search Bar */}
-          <div className="flex justify-end mb-8">
-            <div className="relative w-full max-w-xs">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-gray-50/80 border border-gray-200/90 rounded-full text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
-              />
-            </div>
-          </div>
+        {/* MAIN POSTS CONTENT CONTAINER */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden min-h-[460px] flex flex-col">
 
           {/* CONTENT AREA: LIST OR EMPTY STATE */}
           {filteredPosts.length === 0 ? (
-            /* EMPTY STATE ILLUSTRATION EXACT MATCH TO SCREENSHOT */
-            <div className="flex-1 flex flex-col items-center justify-center text-center py-12">
-              <div className="relative w-44 h-44 flex items-center justify-center mb-3">
+            /* EMPTY STATE */
+            <div className="flex-1 flex flex-col items-center justify-center text-center py-16 px-4">
+              <div className="relative w-40 h-40 flex items-center justify-center mb-4">
                 <svg viewBox="0 0 160 160" className="w-full h-full">
-                  {/* Dark rotated square on top left */}
                   <rect
                     x="36"
                     y="30"
@@ -973,11 +1075,7 @@ export default function WriterDashboardPage() {
                     transform="rotate(-15 36 30)"
                     fill="#1E293B"
                   />
-
-                  {/* Small dark dot top right */}
                   <circle cx="120" cy="36" r="3.5" fill="#1E293B" />
-
-                  {/* Pink swooping arc line on right */}
                   <path
                     d="M 94 66 C 122 66, 138 88, 134 116"
                     fill="none"
@@ -985,20 +1083,15 @@ export default function WriterDashboardPage() {
                     strokeWidth="3.5"
                     strokeLinecap="round"
                   />
-
-                  {/* Green circle at bottom end of pink arc */}
                   <circle cx="126" cy="116" r="11" fill="#00C853" />
-
-                  {/* Central blue squircle with white plus */}
                   <rect
                     x="58"
                     y="52"
                     width="48"
                     height="48"
                     rx="14"
-                    fill="#1B50E8"
+                    fill="#D31220"
                   />
-                  {/* Plus icon inside blue squircle */}
                   <line
                     x1="82"
                     y1="66"
@@ -1017,11 +1110,7 @@ export default function WriterDashboardPage() {
                     strokeWidth="3.5"
                     strokeLinecap="round"
                   />
-
-                  {/* Small light slate dot below center */}
                   <circle cx="85" cy="115" r="3" fill="#94A3B8" />
-
-                  {/* Yellow semicircle bottom left */}
                   <path
                     d="M 52 118 A 20 20 0 0 1 92 118 Z"
                     fill="#FBBF24"
@@ -1029,144 +1118,215 @@ export default function WriterDashboardPage() {
                 </svg>
               </div>
 
-              <h3 className="text-base font-bold text-gray-900 mb-1">
-                Share what&apos;s on your mind
+              <h3 className="text-base font-bold text-slate-900 mb-1">
+                {searchQuery ? "No matching articles found" : "No articles in this section yet"}
               </h3>
-              <p className="text-xs text-gray-500 mb-4">
-                Create or import posts to start publishing
+              <p className="text-xs text-slate-500 mb-5 max-w-sm">
+                {searchQuery
+                  ? `No posts matched "${searchQuery}". Try a different keyword or reset filters.`
+                  : "Compose new stories or import existing drafts to start publishing on London BigBen."}
               </p>
 
-              <Link
-                href="/writer/create"
-                onClick={() => localStorage.removeItem("dj_editing_post")}
-                className="text-[#1B50E8] hover:text-blue-700 font-semibold text-xs flex items-center gap-1.5 cursor-pointer hover:underline"
-              >
-                <Plus size={15} />
-                Create Post
-              </Link>
+              {searchQuery ? (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="text-xs font-bold text-[#D31220] hover:underline cursor-pointer"
+                >
+                  Clear search query
+                </button>
+              ) : (
+                <Link
+                  href="/writer/create"
+                  onClick={() => localStorage.removeItem("dj_editing_post")}
+                  className="bg-[#D31220] hover:bg-[#b91522] text-white font-bold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-sm shadow-red-950/20 cursor-pointer"
+                >
+                  <Plus size={15} />
+                  <span>Create New Post</span>
+                </Link>
+              )}
             </div>
           ) : (
-            /* POSTS TABLE / LIST WHEN POSTS EXIST */
-            <div className="space-y-3 flex-1">
+            /* POSTS TABLE WITH THUMBNAILS AND RICH ROW DETAILS */
+            <div className="flex-1 flex flex-col justify-between">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr className="border-b border-gray-200 text-gray-400 font-bold uppercase tracking-wider text-[10px]">
-                      <th className="pb-3 pl-2">Title</th>
-                      <th className="pb-3 px-3">Category</th>
-                      <th className="pb-3 px-3">Status</th>
-                      <th className="pb-3 px-3">Date</th>
-                      <th className="pb-3 pr-2 text-right">Actions</th>
+                    <tr className="bg-slate-50/80 border-b border-slate-200/80 text-slate-500 font-bold uppercase tracking-wider text-[10.5px]">
+                      <th className="py-3.5 pl-5 pr-4">Article</th>
+                      <th className="py-3.5 px-4">Category</th>
+                      <th className="py-3.5 px-4">Status</th>
+                      <th className="py-3.5 px-4">Date</th>
+                      <th className="py-3.5 pr-5 pl-4 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {filteredPosts.map((post) => (
-                      <tr key={post.id} className="hover:bg-gray-50/80 transition-colors group">
-                        <td className="py-4 pl-2 font-medium text-gray-900 max-w-md">
-                          <p className="font-semibold text-sm line-clamp-1 text-gray-900 group-hover:text-[#1B50E8] transition-colors">
-                            {post.title}
-                          </p>
-                          <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">{post.summary}</p>
-                        </td>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredPosts.map((post) => {
+                      const articleImg = post.imageUrl || "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=300&h=200&fit=crop";
+                      const statusNorm = (post.status || "").toLowerCase().trim();
+                      const isPublished = statusNorm === "published" || statusNorm === "approved";
+                      const isPending = statusNorm.includes("pending") || statusNorm.includes("review") || statusNorm.includes("submitted");
+                      const isDraft = statusNorm === "draft" || statusNorm === "drafts";
+                      const isRejected = statusNorm.includes("reject");
+                      const isTrash = statusNorm === "trash" || statusNorm === "trashed";
 
-                        <td className="py-4 px-3 whitespace-nowrap">
-                          <span className="px-2.5 py-1 bg-blue-50 text-blue-700 font-bold text-[10px] rounded-md tracking-wide uppercase">
-                            {post.category}
-                          </span>
-                        </td>
+                      return (
+                        <tr key={post.id} className="hover:bg-slate-50/80 transition-colors group">
+                          {/* Article Column: Thumbnail + Title + Excerpt + Metadata */}
+                          <td className="py-3.5 pl-5 pr-4 max-w-lg">
+                            <div className="flex items-center gap-3.5">
+                              <div className="w-14 h-14 sm:w-16 sm:h-14 rounded-xl overflow-hidden bg-slate-100 border border-slate-200/80 flex-shrink-0 relative group-hover:shadow-xs transition-all">
+                                <img
+                                  src={articleImg}
+                                  alt={post.title}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=300&h=200&fit=crop";
+                                  }}
+                                />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="font-bold text-sm text-slate-900 group-hover:text-[#D31220] transition-colors line-clamp-1 leading-snug">
+                                  {post.title}
+                                </p>
+                                <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">
+                                  {post.summary || "No summary provided for this article."}
+                                </p>
+                                <div className="flex items-center gap-2.5 mt-1.5 flex-wrap">
+                                  <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-slate-400">
+                                    <Clock size={11} className="text-slate-400" />
+                                    {post.readTime || post.readDuration || "5 min read"}
+                                  </span>
+                                  {post.authorName && (
+                                    <span className="text-[10.5px] text-slate-400 font-medium">
+                                      • By {post.authorName}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
 
-                        <td className="py-4 px-3 whitespace-nowrap">
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold flex items-center gap-1.5 w-fit ${
-                            post.status === "Published"
-                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
-                              : post.status === "Draft"
-                              ? "bg-gray-100 text-gray-700 border border-gray-200"
-                              : post.status === "Pending review"
-                              ? "bg-amber-50 text-amber-700 border border-amber-200"
-                              : "bg-red-50 text-red-700 border border-red-200"
-                          }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${
-                              post.status === "Published" ? "bg-emerald-500" :
-                              post.status === "Draft" ? "bg-gray-500" :
-                              post.status === "Pending review" ? "bg-amber-500" : "bg-red-500"
-                            }`}></span>
-                            {post.status}
-                          </span>
-                        </td>
+                          {/* Category Column */}
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            <span className="px-2.5 py-1 bg-slate-100 text-slate-700 font-bold text-[10px] rounded-md tracking-wider uppercase border border-slate-200/80 font-mono inline-block">
+                              {post.category || "GENERAL"}
+                            </span>
+                          </td>
 
-                        <td className="py-4 px-3 whitespace-nowrap text-gray-500 font-medium">
-                          {post.date}
-                        </td>
+                          {/* Status Column */}
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            <span className={`px-2.5 py-1 rounded-full text-[10.5px] font-semibold flex items-center gap-1.5 w-fit ${
+                              isPublished
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200/80"
+                                : isPending
+                                ? "bg-amber-50 text-amber-700 border border-amber-200/80"
+                                : isDraft
+                                ? "bg-slate-100 text-slate-700 border border-slate-200"
+                                : isRejected
+                                ? "bg-rose-50 text-rose-700 border border-rose-200/80"
+                                : "bg-red-50 text-red-700 border border-red-200/80"
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                isPublished ? "bg-emerald-500 ring-2 ring-emerald-400/30" :
+                                isPending ? "bg-amber-500 ring-2 ring-amber-400/30" :
+                                isDraft ? "bg-slate-400" :
+                                isRejected ? "bg-rose-500 ring-2 ring-rose-400/30" : "bg-red-500"
+                              }`}></span>
+                              {post.status}
+                            </span>
+                          </td>
 
-                        <td className="py-4 pr-2 whitespace-nowrap text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            {post.status === "Published" ? (
-                              <button
-                                onClick={() => setPreviewArticle(post)}
-                                className="px-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs font-mono"
-                                title="Preview article"
-                              >
-                                <Eye size={13} className="text-slate-500" />
-                                Preview
-                              </button>
-                            ) : (
-                              <>
-                                {((post.status || "").toLowerCase().includes("reject") || post.rejectionReason) && (
+                          {/* Date Column */}
+                          <td className="py-3.5 px-4 whitespace-nowrap text-slate-500 font-medium text-xs">
+                            <span className="inline-flex items-center gap-1.5">
+                              <Calendar size={12} className="text-slate-400" />
+                              {post.date}
+                            </span>
+                          </td>
+
+                          {/* Actions Column */}
+                          <td className="py-3.5 pr-5 pl-4 whitespace-nowrap text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {/* Preview Button */}
+                              {(isPublished || isPending) && (
+                                <button
+                                  onClick={() => setPreviewArticle(post)}
+                                  className="px-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-100/90 hover:bg-[#D31220] hover:text-white border border-slate-200 hover:border-[#D31220] rounded-lg transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-2xs font-mono"
+                                  title="Preview article"
+                                >
+                                  <Eye size={13} />
+                                  <span>Preview</span>
+                                </button>
+                              )}
+
+                              {/* Reason Button for Rejection */}
+                              {(isRejected || post.rejectionReason) && (
+                                <button
+                                  onClick={() => setSelectedReasonPost(post)}
+                                  className="px-2.5 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                                  title="View rejection reason"
+                                >
+                                  <AlertCircle size={13} />
+                                  <span>Reason</span>
+                                </button>
+                              )}
+
+                              {/* Edit Button */}
+                              {!isTrash && (
+                                <button
+                                  onClick={() => handleEditPost(post)}
+                                  className="px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200/80 border border-slate-200 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                                  title="Edit post"
+                                >
+                                  <PenTool size={13} />
+                                  <span>Edit</span>
+                                </button>
+                              )}
+
+                              {/* Trash Tab Actions (Restore & Delete) */}
+                              {isTrash ? (
+                                <>
                                   <button
-                                    onClick={() => setSelectedReasonPost(post)}
-                                    className="px-2.5 py-1 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
-                                    title="View rejection reason"
+                                    onClick={() => handleRestorePost(post.id)}
+                                    className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                                    title="Restore post"
                                   >
-                                    <AlertCircle size={13} />
-                                    Reason
+                                    <RotateCcw size={15} />
                                   </button>
-                                )}
-
-                                {post.status !== "Trash" && post.status?.toLowerCase() !== "trash" && (
                                   <button
-                                    onClick={() => handleEditPost(post)}
-                                    className="px-2.5 py-1 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
-                                    title="Edit post"
-                                  >
-                                    <PenTool size={13} />
-                                    Edit
-                                  </button>
-                                )}
-
-                                {post.status === "Trash" ? (
-                                  <>
-                                    <button
-                                      onClick={() => handleRestorePost(post.id)}
-                                      className="p-1.5 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
-                                      title="Restore post"
-                                    >
-                                      <RotateCcw size={15} />
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeletePermanently(post.id)}
-                                      className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                                      title="Delete permanently"
-                                    >
-                                      <Trash2 size={15} />
-                                    </button>
-                                  </>
-                                ) : (
-                                  <button
-                                    onClick={() => handleMoveToTrash(post.id)}
-                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                                    title="Move to trash"
+                                    onClick={() => handleDeletePermanently(post.id)}
+                                    className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                    title="Delete permanently"
                                   >
                                     <Trash2 size={15} />
                                   </button>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                                </>
+                              ) : (
+                                <button
+                                  onClick={() => handleMoveToTrash(post.id)}
+                                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                  title="Move to trash"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
+              </div>
+
+              {/* Table Footer */}
+              <div className="px-5 py-3.5 bg-slate-50/60 border-t border-slate-200/80 flex items-center justify-between text-xs text-slate-500">
+                <span className="font-medium">
+                  Showing <strong className="text-slate-800 font-bold">{filteredPosts.length}</strong> {filteredPosts.length === 1 ? 'article' : 'articles'}
+                </span>
+                <span className="text-[11px] font-semibold text-slate-400">
+                  London BigBen Editorial Studio
+                </span>
               </div>
             </div>
           )}
@@ -1186,7 +1346,7 @@ export default function WriterDashboardPage() {
             </button>
 
             <div className="flex items-center gap-2 mb-6">
-              <div className="w-8 h-8 rounded-full bg-blue-50 text-[#1B50E8] flex items-center justify-center font-bold">
+              <div className="w-8 h-8 rounded-full bg-red-50 text-[#D31220] flex items-center justify-center font-bold">
                 <Plus size={20} />
               </div>
               <div>
@@ -1206,7 +1366,7 @@ export default function WriterDashboardPage() {
                   placeholder="Enter a compelling story title..."
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:border-[#D31220] focus:ring-2 focus:ring-red-100"
                 />
               </div>
 
@@ -1218,7 +1378,7 @@ export default function WriterDashboardPage() {
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-xs font-medium text-gray-800 bg-white focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-xs font-medium text-gray-800 bg-white focus:outline-none focus:border-[#D31220]"
                   >
                     <option value="World">World</option>
                     <option value="Politics">Politics</option>
@@ -1241,7 +1401,7 @@ export default function WriterDashboardPage() {
                   <select
                     value={postStatus}
                     onChange={(e) => setPostStatus(e.target.value as any)}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-xs font-medium text-gray-800 bg-white focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-xs font-medium text-gray-800 bg-white focus:outline-none focus:border-[#D31220]"
                   >
                     <option value="Published">Publish Immediately</option>
                     <option value="Draft">Save as Draft</option>
@@ -1259,7 +1419,7 @@ export default function WriterDashboardPage() {
                   placeholder="https://images.unsplash.com/photo-..."
                   value={imageUrl}
                   onChange={(e) => setImageUrl(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-xl text-xs text-gray-800 focus:outline-none focus:border-blue-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl text-xs text-gray-800 focus:outline-none focus:border-[#D31220]"
                 />
               </div>
 
@@ -1272,7 +1432,7 @@ export default function WriterDashboardPage() {
                   placeholder="Short 2-line summary of the story..."
                   value={summary}
                   onChange={(e) => setSummary(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-xl text-xs text-gray-800 focus:outline-none focus:border-blue-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl text-xs text-gray-800 focus:outline-none focus:border-[#D31220]"
                 />
               </div>
 
@@ -1286,7 +1446,7 @@ export default function WriterDashboardPage() {
                   placeholder="Write story content paragraphs here..."
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl text-xs leading-relaxed text-gray-800 focus:outline-none focus:border-blue-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl text-xs leading-relaxed text-gray-800 focus:outline-none focus:border-[#D31220]"
                 />
               </div>
 
@@ -1301,7 +1461,7 @@ export default function WriterDashboardPage() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="bg-[#1B50E8] hover:bg-blue-700 text-white font-semibold text-xs px-6 py-2.5 rounded-full shadow-sm cursor-pointer transition-all flex items-center gap-1.5 disabled:opacity-50"
+                  className="bg-[#D31220] hover:bg-[#B91C1C] text-white font-semibold text-xs px-6 py-2.5 rounded-full shadow-sm cursor-pointer transition-all flex items-center gap-1.5 disabled:opacity-50"
                 >
                   <Send size={14} />
                   {isSubmitting ? "Saving Post..." : "Save Post"}
@@ -1503,7 +1663,7 @@ export default function WriterDashboardPage() {
                   required
                   value={profileName}
                   onChange={(e) => setProfileName(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 transition-all"
+                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all"
                 />
               </div>
 
@@ -1517,7 +1677,7 @@ export default function WriterDashboardPage() {
                   value={profileBio}
                   onChange={(e) => setProfileBio(e.target.value)}
                   placeholder="Tell readers about yourself..."
-                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 transition-all leading-relaxed"
+                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all leading-relaxed"
                 />
               </div>
 
@@ -1539,7 +1699,7 @@ export default function WriterDashboardPage() {
                     placeholder="https://www.linkedin.com/in/your-profile"
                     value={profileLinkedin}
                     onChange={(e) => setProfileLinkedin(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm font-medium text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 transition-all"
+                    className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm font-medium text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all"
                   />
                 </div>
                 <p className="text-[11px] text-gray-400 font-normal mt-1.5 leading-normal">
@@ -1558,7 +1718,7 @@ export default function WriterDashboardPage() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-3 px-4 bg-[#004B87] hover:bg-[#003866] text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-xs transition-all cursor-pointer text-center"
+                  className="flex-1 py-3 px-4 bg-[#D31220] hover:bg-[#B91C1C] text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-xs transition-all cursor-pointer text-center"
                 >
                   SAVE CHANGES
                 </button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { useLiveArticles, isHomePageAPlus, isTrendingNow } from "@/lib/articlesSync";
@@ -8,6 +8,7 @@ import { getAuthorAvatarByNameOrEmail, resolveUserAvatar } from "@/lib/userProfi
 
 export default function HeroSection() {
   const [currentSlide, setCurrentSlide] = useState(0);
+  const isPaused = useRef(false);
   const [userPublishedArticles, setUserPublishedArticles] = useState<any[]>([]);
   const [userTrendingArticles, setUserTrendingArticles] = useState<any[]>([]);
   const [profileSyncTick, setProfileSyncTick] = useState(0);
@@ -280,6 +281,17 @@ export default function HeroSection() {
     setCurrentSlide((prev) => (prev === allCarouselArticles.length - 1 ? 0 : prev + 1));
   };
 
+  // Auto-play: advance every 3 seconds, pause on hover
+  useEffect(() => {
+    if (allCarouselArticles.length <= 1) return;
+    const timer = setInterval(() => {
+      if (!isPaused.current) {
+        setCurrentSlide((prev) => (prev === allCarouselArticles.length - 1 ? 0 : prev + 1));
+      }
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [allCarouselArticles.length]);
+
   const activeArticle = allCarouselArticles[currentSlide] || allCarouselArticles[0] || {
     id: 0,
     category: "News",
@@ -309,7 +321,11 @@ export default function HeroSection() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
         
         {/* LEFT CARD: FEATURED ARTICLE CAROUSEL (~67% GRID WIDTH, FIXED HEIGHT FOR EXACT SAME IMAGE SIZE) */}
-        <div className="lg:col-span-8 bg-white border border-gray-200 rounded-none flex flex-col lg:flex-row items-stretch min-h-[360px] h-auto lg:h-[360px] overflow-hidden">
+        <div
+          className="lg:col-span-8 bg-white border border-gray-200 rounded-none flex flex-col lg:flex-row items-stretch min-h-[360px] h-auto lg:h-[360px] overflow-hidden"
+          onMouseEnter={() => { isPaused.current = true; }}
+          onMouseLeave={() => { isPaused.current = false; }}
+        >
           
           {/* WIDESCREEN RECTANGLE IMAGE (60% Width, Exact Same Size & Aspect Ratio Across All Slides) */}
           <div className="lg:w-[60%] w-full h-[260px] sm:h-[300px] lg:h-full relative flex-shrink-0 group overflow-hidden bg-gray-900">
