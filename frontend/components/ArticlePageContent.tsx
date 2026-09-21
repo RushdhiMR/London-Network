@@ -1239,10 +1239,11 @@ function ArticlePageContentInner({
               <div className="flex items-center gap-4">
                 <button
                   onClick={() => {
+                    const cleanUrl = window.location.origin + window.location.pathname;
                     if (navigator.share) {
-                      navigator.share({ title: activeNewsData.title || newsData.title, url: window.location.href }).catch(() => {});
+                      navigator.share({ title: activeNewsData.title || newsData.title, url: cleanUrl }).catch(() => {});
                     } else {
-                      navigator.clipboard.writeText(window.location.href);
+                      navigator.clipboard.writeText(cleanUrl);
                       showToast("Link copied to clipboard!");
                     }
                   }}
