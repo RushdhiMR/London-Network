@@ -847,7 +847,7 @@ export default function Header() {
             </div>
           </div>
 
-          {/* RIGHT: DATE, LOCATION & WEATHER WIDGET */}
+          {/* RIGHT: DATE, LOCATION & WEATHER WIDGET — desktop */}
           <div className="hidden lg:flex items-center gap-3 text-[11.5px] text-gray-500 font-medium shrink-0">
             {currentDate && <span>{currentDate}</span>}
             {currentDate && locationName && <span className="text-gray-300">•</span>}
@@ -864,7 +864,24 @@ export default function Header() {
             )}
           </div>
 
+          {/* MOBILE: Compact weather pill only (right side of trending bar) */}
+          {weatherTemp !== null && (
+            <div className="lg:hidden flex items-center gap-1 text-gray-800 font-semibold bg-white px-2 py-0.5 rounded border border-gray-200 shadow-2xs shrink-0">
+              <span className="text-xs">{getWeatherIcon(weatherCode)}</span>
+              <span className="text-[11px]">{weatherTemp}°C</span>
+            </div>
+          )}
+
         </div>
+
+        {/* MOBILE/TABLET ONLY: Date & Location row below trending strip */}
+        {(currentDate || locationName) && (
+          <div className="lg:hidden max-w-[1400px] mx-auto px-3 sm:px-6 pb-1 flex items-center gap-1.5 text-[10.5px] text-gray-400 font-medium flex-wrap">
+            {currentDate && <span>{currentDate}</span>}
+            {currentDate && locationName && <span className="text-gray-300">•</span>}
+            {locationName && <span>{locationName}</span>}
+          </div>
+        )}
       </div>
 
       {/* MOBILE DRAWER */}
