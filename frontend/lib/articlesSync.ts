@@ -451,6 +451,16 @@ let activeArticlesFetchPromise: Promise<ArticleItem[]> | null = null;
 let lastArticlesFetchTime = 0;
 const ARTICLES_FETCH_CACHE_TTL_MS = 6000;
 
+/**
+ * Reset the in-memory fetch cache so the next fetchArticlesFromServer call
+ * always goes to the server instead of returning stale localStorage data.
+ * Call this on every route change to prevent stale/duplicate data flashes.
+ */
+export function resetArticlesFetchCache() {
+  lastArticlesFetchTime = 0;
+  activeArticlesFetchPromise = null;
+}
+
 export async function fetchArticlesFromServer(): Promise<ArticleItem[]> {
   const now = Date.now();
   // Skip TTL cache on the very first call (page load/reload) so stale localStorage

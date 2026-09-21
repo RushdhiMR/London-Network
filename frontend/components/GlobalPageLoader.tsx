@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import PageSkeletonLoader from "@/components/PageSkeletonLoader";
+import { resetArticlesFetchCache } from "@/lib/articlesSync";
 
 // Event name that page-level components dispatch once their real data is loaded.
 export const PAGE_DATA_READY_EVENT = "dj_page_data_ready";
@@ -58,6 +59,10 @@ export default function GlobalPageLoader({ children }: { children: React.ReactNo
       setDataReady(true);
       return;
     }
+
+    // Invalidate the in-memory TTL cache so every route change fetches fresh
+    // data from the server instead of returning stale localStorage data.
+    resetArticlesFetchCache();
 
     // For dynamic data routes, reset dataReady so skeleton shows until data is loaded
     setDataReady(false);
