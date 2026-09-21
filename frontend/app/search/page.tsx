@@ -8,6 +8,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { getAllSearchableArticles, searchArticlesByQuery, SearchableArticle } from "@/lib/searchArticles";
 import { useLiveArticles } from "@/lib/articlesSync";
+import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
 import { resolveUserAvatar, getAuthorAvatarByNameOrEmail, getAuthorFullProfileByNameOrEmail, getUserProfile } from "@/lib/userProfiles";
 
 const POPULAR_SEARCH_TAGS = [
@@ -95,7 +96,13 @@ function SearchResultsContent() {
   const [profileVersion, setProfileVersion] = useState(0);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
-  const { articles: liveArticles } = useLiveArticles();
+  const { articles: liveArticles, loading } = useLiveArticles();
+
+  useEffect(() => {
+    if (!loading) {
+      dispatchPageDataReady();
+    }
+  }, [loading]);
 
   useEffect(() => {
     setMounted(true);

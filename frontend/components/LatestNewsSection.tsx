@@ -73,15 +73,14 @@ export default function LatestNewsSection() {
     }
   };
 
-  const mainFeatured = publishedNews[0] || {
-    id: 0,
-    category: "NEWS",
-    title: "Latest Breaking News & Global Reports",
-    time: "Live",
-    image: "https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=700&h=525&fit=crop",
-    href: "/news",
-    summary: "Stay informed with real-time news, investigative journalism, and market insights."
-  };
+  if (publishedNews.length === 0) {
+    return null;
+  }
+
+  const mainFeatured = publishedNews[0];
+  if (!mainFeatured) {
+    return null;
+  }
   const displayStacked = publishedNews.length > 1 ? publishedNews.slice(1, 4) : [];
 
   return (

@@ -34,6 +34,7 @@ import { saveUserProfile, getUserProfile, resolveUserAvatar, isUploadedAvatar } 
 import { useLiveArticles, moveArticleToTrashOnServer, deletePermanentlyOnServer, setCachedArticles } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
 import LogoLoader from "@/components/LogoLoader";
+import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
 
 interface ArticlePost {
   id: string;
@@ -201,7 +202,13 @@ export default function WriterDashboardPage() {
 
   // Initial Posts state
   const [posts, setPosts] = useState<ArticlePost[]>([]);
-  const { articles: liveArticles } = useLiveArticles();
+  const { articles: liveArticles, loading } = useLiveArticles();
+
+  useEffect(() => {
+    if (!loading) {
+      dispatchPageDataReady();
+    }
+  }, [loading]);
 
   const syncArticlesFromStorageAndServer = useCallback(() => {
     try {

@@ -448,8 +448,8 @@ export function setCachedArticles(articles: ArticleItem[], notify = true) {
 }
 
 let activeArticlesFetchPromise: Promise<ArticleItem[]> | null = null;
+let cachedServerArticles: ArticleItem[] | null = null;
 let lastArticlesFetchTime = 0;
-const ARTICLES_FETCH_CACHE_TTL_MS = 6000;
 
 /**
  * Reset the in-memory fetch cache so the next fetchArticlesFromServer call
@@ -459,23 +459,23 @@ const ARTICLES_FETCH_CACHE_TTL_MS = 6000;
 export function resetArticlesFetchCache() {
   lastArticlesFetchTime = 0;
   activeArticlesFetchPromise = null;
+  cachedServerArticles = null;
 }
 
 export async function fetchArticlesFromServer(): Promise<ArticleItem[]> {
-  const now = Date.now();
-  // Skip TTL cache on the very first call (page load/reload) so stale localStorage
-  // data is never returned instead of fresh server data.
-  const isFirstLoad = lastArticlesFetchTime === 0;
-  if (!isFirstLoad && now - lastArticlesFetchTime < ARTICLES_FETCH_CACHE_TTL_MS) {
-    return getCachedArticles();
-  }
   if (activeArticlesFetchPromise) {
     return activeArticlesFetchPromise;
   }
 
   activeArticlesFetchPromise = (async () => {
     try {
-      const res = await fetch("/api/articles", { cache: "no-store" });
+      const res = await fetch("/api/articles", {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache"
+        }
+      });
       if (res.ok) {
         const data = await res.json();
         if (data.success && Array.isArray(data.articles)) {
@@ -518,6 +518,7 @@ export async function fetchArticlesFromServer(): Promise<ArticleItem[]> {
 
           const combined = Array.from(mergedMap.values());
           setCachedArticles(combined, false);
+          cachedServerArticles = combined;
           lastArticlesFetchTime = Date.now();
           return combined;
         }
@@ -527,7 +528,7 @@ export async function fetchArticlesFromServer(): Promise<ArticleItem[]> {
     } finally {
       activeArticlesFetchPromise = null;
     }
-    return getCachedArticles();
+    return cachedServerArticles || getCachedArticles();
   })();
 
 

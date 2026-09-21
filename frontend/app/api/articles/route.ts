@@ -7,6 +7,9 @@ import {
   ArticleRecord
 } from '@/lib/serverArticlesStore';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -32,6 +35,12 @@ export async function GET(request: Request) {
       success: true,
       count: articles.length,
       articles,
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
     });
   } catch (error: any) {
     return NextResponse.json(

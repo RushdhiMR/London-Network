@@ -7,6 +7,7 @@ import JSZip from "jszip";
 import { useAuth } from "@/lib/auth-context";
 import SEOAssistantPanel from "@/components/SEOAssistantPanel";
 import LogoLoader from "@/components/LogoLoader";
+import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
 import { extractFocusKeyword, analyzeSEOScore, generateAutoSEO, extractCardSummary } from "@/lib/seo";
 import { uploadImageToBackblaze } from "@/lib/imageUtils";
 import {
@@ -363,6 +364,11 @@ export default function AdminDashboardPage() {
   const [isReviewCardSummaryCustom, setIsReviewCardSummaryCustom] = useState(false);
   const [isReviewMetaDescCustom, setIsReviewMetaDescCustom] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+
+  // Signal GlobalPageLoader that dashboard is mounted and ready
+  useEffect(() => {
+    dispatchPageDataReady();
+  }, []);
 
   // Auto-sync Focus Keyword to Title unless customized (matching Author page behavior)
   useEffect(() => {

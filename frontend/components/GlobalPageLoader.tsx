@@ -29,9 +29,6 @@ const STATIC_PREFIXES = [
   "/subscribe",
   "/newsletters",
   "/journal-of-record",
-  "/admin",
-  "/writer",
-  "/reader",
 ];
 
 function isStaticRoute(path: string): boolean {
@@ -41,43 +38,46 @@ function isStaticRoute(path: string): boolean {
 }
 
 export default function GlobalPageLoader({ children }: { children: React.ReactNode }) {
-  const [mounted, setMounted] = useState(false);
-  const [dataReady, setDataReady] = useState(false);
   const pathname = usePathname();
+  const [mounted, setMounted] = useState(false);
+  const [lastPathname, setLastPathname] = useState(pathname);
+  const [dataReady, setDataReady] = useState(false);
+
+  // Synchronous route change reset during render:
+  // If pathname has changed, immediately reset dataReady to false BEFORE any child paints!
+  if (pathname !== lastPathname) {
+    setLastPathname(pathname);
+    setDataReady(isStaticRoute(pathname));
+    resetArticlesFetchCache();
+  }
 
   // On first render (SSR → client hydration), mark mounted
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Manage dataReady state on route changes
+  // Manage dataReady event listener and safety timeout on route changes
   useEffect(() => {
     if (!mounted) return;
 
-    // For static routes (login, terms, etc.) or dashboards, content is ready immediately
+    // For static routes (login, terms, etc.), content is ready immediately
     if (isStaticRoute(pathname)) {
       setDataReady(true);
       return;
     }
 
-    // Invalidate the in-memory TTL cache so every route change fetches fresh
-    // data from the server instead of returning stale localStorage data.
-    resetArticlesFetchCache();
-
-    // For dynamic data routes, reset dataReady so skeleton shows until data is loaded
-    setDataReady(false);
-
+    // Dynamic data route: wait for real database/API data to arrive
     const handleDataReady = () => {
       setDataReady(true);
     };
 
     window.addEventListener(PAGE_DATA_READY_EVENT, handleDataReady);
 
-    // Safety fallback: if no component fires the event within 1.5 seconds,
-    // show the page anyway so it never stays stuck on the skeleton.
+    // Safety fallback: only if the network completely hangs (12 seconds),
+    // show the page so it never stays permanently stuck on the skeleton.
     const fallback = setTimeout(() => {
       setDataReady(true);
-    }, 1500);
+    }, 12000);
 
     return () => {
       window.removeEventListener(PAGE_DATA_READY_EVENT, handleDataReady);
@@ -91,11 +91,11 @@ export default function GlobalPageLoader({ children }: { children: React.ReactNo
   return (
     <>
       {showSkeleton && (
-        <div className="fixed inset-0 z-50 bg-white overflow-y-auto pointer-events-none">
+        <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
           <PageSkeletonLoader />
         </div>
       )}
-      <div className={showSkeleton ? "opacity-0 pointer-events-none select-none" : "opacity-100 transition-opacity duration-150"}>
+      <div className={showSkeleton ? "opacity-0 pointer-events-none select-none invisible h-0 overflow-hidden" : "opacity-100 visible transition-opacity duration-150"}>
         {children}
       </div>
     </>

@@ -307,17 +307,14 @@ export default function HeroSection() {
     return () => clearInterval(timer);
   }, [allCarouselArticles.length]);
 
-  const activeArticle = allCarouselArticles[currentSlide] || allCarouselArticles[0] || {
-    id: 0,
-    category: "News",
-    readTime: "Live",
-    title: "London BigBen Global Financial & Technology Report",
-    description: "Real-time market updates, financial technology analysis, and international economic intelligence.",
-    author: "London BigBen",
-    date: "Live",
-    image: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=1200&h=750&fit=crop",
-    href: "/news"
-  };
+  if (allCarouselArticles.length === 0) {
+    return null;
+  }
+
+  const activeArticle = allCarouselArticles[currentSlide] || allCarouselArticles[0];
+  if (!activeArticle) {
+    return null;
+  }
 
   const trendingList = userTrendingArticles.length > 0
     ? userTrendingArticles.slice(0, 4)

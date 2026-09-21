@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { getUserProfile, saveUserProfile, resolveUserAvatar, isUploadedAvatar } from "@/lib/userProfiles";
 import { uploadImageToBackblaze } from "@/lib/imageUtils";
+import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
 
 export default function ReaderDashboardPage() {
   const [currentUser, setCurrentUser] = useState<{
@@ -130,8 +131,10 @@ export default function ReaderDashboardPage() {
       } else {
         setSavedArticles([]);
       }
+      dispatchPageDataReady();
     } catch (e) {
       console.error(e);
+      dispatchPageDataReady();
     }
   }, [auth.loading, auth.authenticated, auth.user, router]);
 
