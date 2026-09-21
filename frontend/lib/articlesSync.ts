@@ -829,6 +829,9 @@ export function useLiveArticles() {
       setLoading(false);
       setTimeout(() => {
         if (typeof window !== "undefined") {
+          // Set the path flag before dispatching so GlobalPageLoader can detect
+          // a missed event if it hasn't registered its listener yet (production race fix).
+          window.__djPageDataReadyPath = window.location.pathname;
           window.dispatchEvent(new Event("dj_page_data_ready"));
         }
       }, 50);
@@ -839,6 +842,7 @@ export function useLiveArticles() {
       setLoading(false);
       setTimeout(() => {
         if (typeof window !== "undefined") {
+          window.__djPageDataReadyPath = window.location.pathname;
           window.dispatchEvent(new Event("dj_page_data_ready"));
         }
       }, 50);

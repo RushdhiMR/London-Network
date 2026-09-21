@@ -8,6 +8,19 @@ import { resetArticlesFetchCache } from "@/lib/articlesSync";
 // Event name that page-level components dispatch once their real data is loaded.
 export const PAGE_DATA_READY_EVENT = "dj_page_data_ready";
 
+// Browser-side flag: captures whether the ready event fired before the effect
+// had a chance to register its listener. This fixes the production race condition
+// where Vercel's fast servers resolve fetches during the hydration tick — before
+// GlobalPageLoader's useEffect([mounted, pathname]) has run and attached the
+// window listener. On each pathname change this flag is cleared so stale state
+// from a previous route never bleeds into the next route.
+// Stored on `window` so articlesSync.ts can also set it without a circular import.
+declare global {
+  interface Window {
+    __djPageDataReadyPath?: string | null;
+  }
+}
+
 const STATIC_PREFIXES = [
   "/login",
   "/register",
@@ -49,6 +62,8 @@ export default function GlobalPageLoader({ children }: { children: React.ReactNo
     setLastPathname(pathname);
     setDataReady(isStaticRoute(pathname));
     resetArticlesFetchCache();
+    // Clear the window flag so the new route starts fresh.
+    if (typeof window !== "undefined") window.__djPageDataReadyPath = null;
   }
 
   // On first render (SSR → client hydration), mark mounted
@@ -64,6 +79,14 @@ export default function GlobalPageLoader({ children }: { children: React.ReactNo
     if (isStaticRoute(pathname)) {
       setDataReady(true);
       return;
+    }
+
+    // Production race-condition fix: if the ready event already fired before
+    // this effect had a chance to register its listener, detect it here and
+    // immediately mark data as ready without waiting for a future event.
+    if (typeof window !== "undefined" && window.__djPageDataReadyPath === pathname) {
+      setDataReady(true);
+      // Still attach the listener below in case the component re-runs this effect.
     }
 
     // Dynamic data route: wait for real database/API data to arrive
@@ -105,9 +128,15 @@ export default function GlobalPageLoader({ children }: { children: React.ReactNo
 /**
  * Call this from any page-level component once its real data has been loaded
  * and set into state. This signals GlobalPageLoader to hide the skeleton.
+ *
+ * Also sets the module-level flag so GlobalPageLoader can detect the event
+ * even if it fired before the window listener was registered (production race fix).
  */
 export function dispatchPageDataReady() {
   if (typeof window !== "undefined") {
+    // Record the current pathname so GlobalPageLoader can detect a missed event
+    // even if the window event fired before the listener was registered.
+    window.__djPageDataReadyPath = window.location.pathname;
     window.dispatchEvent(new Event(PAGE_DATA_READY_EVENT));
   }
 }
