@@ -80,8 +80,105 @@ export default function Header() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   const [isProfileSettingsOpen, setIsProfileSettingsOpen] = useState(false);
-  const [selectedEdition, setSelectedEdition] = useState("US Edition");
-  const [isEditionOpen, setIsEditionOpen] = useState(false);
+  const [isLangOpen, setIsLangOpen] = useState(false);
+  const langDropdownRef = useRef<HTMLDivElement>(null);
+
+  // ── Real-time date / location / weather ──────────────────────────────────
+  const [currentDate, setCurrentDate] = useState("");
+  const [locationName, setLocationName] = useState("");
+  const [weatherTemp, setWeatherTemp] = useState<number | null>(null);
+  const [weatherCode, setWeatherCode] = useState<number | null>(null);
+
+  const getWeatherIcon = (code: number | null): string => {
+    if (code === null) return "⛅";
+    if (code === 0) return "☀️";
+    if (code <= 2) return "🌤️";
+    if (code === 3) return "☁️";
+    if (code <= 49) return "🌫️";
+    if (code <= 67) return "🌧️";
+    if (code <= 77) return "❄️";
+    if (code <= 82) return "🌦️";
+    if (code <= 99) return "⛈️";
+    return "⛅";
+  };
+
+  useEffect(() => {
+    const updateDate = () => {
+      const now = new Date();
+      setCurrentDate(now.toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }));
+    };
+    updateDate();
+    const dateTimer = setInterval(updateDate, 60000);
+
+    const fetchLocationAndWeather = async () => {
+      try {
+        const geoRes = await fetch("https://ipapi.co/json/", { cache: "no-store" });
+        if (!geoRes.ok) throw new Error("geo fetch failed");
+        const geo = await geoRes.json();
+        const city = geo.city || "";
+        const country = geo.country_name || "";
+        setLocationName(city && country ? `${city}, ${country}` : city || country || "");
+
+        if (geo.latitude && geo.longitude) {
+          const wxRes = await fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${geo.latitude}&longitude=${geo.longitude}&current=temperature_2m,weathercode&temperature_unit=celsius`,
+            { cache: "no-store" }
+          );
+          if (!wxRes.ok) throw new Error("weather fetch failed");
+          const wx = await wxRes.json();
+          setWeatherTemp(Math.round(wx.current.temperature_2m));
+          setWeatherCode(wx.current.weathercode);
+        }
+      } catch {
+        // silently ignore – keep previous values
+      }
+    };
+    fetchLocationAndWeather();
+    const wxTimer = setInterval(fetchLocationAndWeather, 600000);
+
+    return () => {
+      clearInterval(dateTimer);
+      clearInterval(wxTimer);
+    };
+  }, []);
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const languages = [
+    { code: "/auto/en", label: "English" },
+    { code: "/auto/fr", label: "Français" },
+    { code: "/auto/es", label: "Español" },
+    { code: "/auto/de", label: "Deutsch" },
+    { code: "/auto/ar", label: "العربية" },
+    { code: "/auto/zh-CN", label: "中文" },
+    { code: "/auto/hi", label: "हिन्दी" },
+    { code: "/auto/pt", label: "Português" },
+    { code: "/auto/ru", label: "Русский" },
+    { code: "/auto/ja", label: "日本語" },
+  ];
+
+  const [selectedLang, setSelectedLang] = useState("English");
+
+  // Restore saved language on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("lbn_lang_label");
+    if (saved) setSelectedLang(saved);
+  }, []);
+
+  const applyLanguage = (code: string, label: string) => {
+    setSelectedLang(label);
+    setIsLangOpen(false);
+    localStorage.setItem("lbn_lang_label", label);
+    // Set Google Translate cookie
+    const domain = window.location.hostname === "localhost" ? "localhost" : window.location.hostname;
+    document.cookie = `googtrans=${code};path=/;domain=${domain}`;
+    document.cookie = `googtrans=${code};path=/`;
+    window.location.reload();
+  };
 
   // Profile Form state
   const [profileName, setProfileName] = useState("");
@@ -115,7 +212,7 @@ export default function Header() {
     setIsMobileMenuOpen(false);
     setIsUserDropdownOpen(false);
     setIsNotificationsOpen(false);
-    setIsEditionOpen(false);
+    setIsLangOpen(false);
     setIsSearchFocused(false);
   }, [pathname]);
 
@@ -343,14 +440,43 @@ export default function Header() {
     { name: "Research", href: "/industry-insights", hasSub: false },
   ];
 
-  const trendingTopics = [
+  const [trendingTopics, setTrendingTopics] = useState([
     { name: "Cybersecurity Breach", href: "/search?q=Cybersecurity+Breach" },
     { name: "AI Regulation", href: "/search?q=AI+Regulation" },
     { name: "Global Markets", href: "/search?q=Global+Markets" },
     { name: "Clean Energy", href: "/search?q=Clean+Energy" },
     { name: "Space Economy", href: "/search?q=Space+Economy" },
     { name: "Inflation Rate", href: "/search?q=Inflation+Rate" }
-  ];
+  ]);
+
+  useEffect(() => {
+    const syncTrending = () => {
+      try {
+        const saved = localStorage.getItem("dj_trending_words");
+        if (saved) {
+          const list = JSON.parse(saved);
+          if (Array.isArray(list) && list.length > 0) {
+            const active = list
+              .filter((item: any) => item.status === "Active")
+              .map((item: any) => ({
+                name: item.word,
+                href: item.url || `/search?q=${encodeURIComponent(item.word)}`
+              }));
+            if (active.length > 0) {
+              setTrendingTopics(active);
+            }
+          }
+        }
+      } catch (e) {}
+    };
+    syncTrending();
+    window.addEventListener("storage", syncTrending);
+    window.addEventListener("dj_trending_words_change", syncTrending);
+    return () => {
+      window.removeEventListener("storage", syncTrending);
+      window.removeEventListener("dj_trending_words_change", syncTrending);
+    };
+  }, []);
 
   const worldRegionsList = [
     { name: "China", href: "/china" },
@@ -666,25 +792,30 @@ export default function Header() {
             })}
           </nav>
 
-          {/* Far Right Edition Selector */}
-          <div className="hidden lg:flex items-center pl-4 border-l border-gray-200 relative flex-shrink-0">
+          {/* Far Right Language Selector */}
+          <div className="hidden lg:flex items-center pl-4 border-l border-gray-200 relative flex-shrink-0" ref={langDropdownRef}>
             <button
-              onClick={() => setIsEditionOpen(!isEditionOpen)}
+              onClick={() => setIsLangOpen(!isLangOpen)}
               className="flex items-center gap-1.5 text-[12.5px] font-bold text-gray-700 hover:text-[#BF1E2D] cursor-pointer py-1 px-2 rounded-md hover:bg-gray-50 transition-colors"
             >
-              <span>{selectedEdition}</span>
+              <span>🌐</span>
+              <span>{selectedLang}</span>
               <ChevronDown size={12} strokeWidth={2.5} className="text-gray-400" />
             </button>
 
-            {isEditionOpen && (
-              <div className="absolute right-0 top-full mt-1 w-36 bg-white border border-gray-200 rounded-xl shadow-xl z-50 py-1.5 overflow-hidden">
-                {["US Edition", "Canada Edition", "Global Edition", "UK Edition"].map((ed) => (
+            {isLangOpen && (
+              <div className="absolute right-0 top-full mt-1 w-40 bg-white border border-gray-200 rounded-xl shadow-xl z-50 py-1.5 overflow-hidden">
+                {languages.map((lang) => (
                   <button
-                    key={ed}
-                    onClick={() => { setSelectedEdition(ed); setIsEditionOpen(false); }}
-                    className="w-full text-left px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-red-50 hover:text-[#BF1E2D] transition-colors"
+                    key={lang.code}
+                    onClick={() => applyLanguage(lang.code, lang.label)}
+                    className={`w-full text-left px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      selectedLang === lang.label
+                        ? "bg-red-50 text-[#BF1E2D]"
+                        : "text-gray-700 hover:bg-red-50 hover:text-[#BF1E2D]"
+                    }`}
                   >
-                    {ed}
+                    {lang.label}
                   </button>
                 ))}
               </div>
@@ -718,17 +849,19 @@ export default function Header() {
 
           {/* RIGHT: DATE, LOCATION & WEATHER WIDGET */}
           <div className="hidden lg:flex items-center gap-3 text-[11.5px] text-gray-500 font-medium shrink-0">
-            <span>Tuesday, July 13, 2026</span>
-            <span className="text-gray-300">•</span>
-            <span>New York, USA</span>
-            <span className="text-gray-300">•</span>
+            {currentDate && <span>{currentDate}</span>}
+            {currentDate && locationName && <span className="text-gray-300">•</span>}
+            {locationName && <span>{locationName}</span>}
+            {(locationName || currentDate) && weatherTemp !== null && <span className="text-gray-300">•</span>}
             
             {/* Weather Pill */}
-            <div className="flex items-center gap-1 text-gray-800 font-semibold cursor-pointer hover:text-[#BF1E2D] bg-white px-2 py-0.5 rounded border border-gray-200 shadow-2xs transition-colors">
-              <span className="text-amber-500 text-xs">⛅</span>
-              <span>26°C</span>
-              <ChevronDown size={11} strokeWidth={2.5} className="text-gray-400" />
-            </div>
+            {weatherTemp !== null && (
+              <div className="flex items-center gap-1 text-gray-800 font-semibold cursor-pointer hover:text-[#BF1E2D] bg-white px-2 py-0.5 rounded border border-gray-200 shadow-2xs transition-colors">
+                <span className="text-xs">{getWeatherIcon(weatherCode)}</span>
+                <span>{weatherTemp}°C</span>
+                <ChevronDown size={11} strokeWidth={2.5} className="text-gray-400" />
+              </div>
+            )}
           </div>
 
         </div>
@@ -922,6 +1055,28 @@ export default function Header() {
                 >
                   {cat.name}
                 </Link>
+              ))}
+            </div>
+          </div>
+
+          {/* Mobile Language Selector */}
+          <div className="pt-1 border-t border-gray-100">
+            <h5 className="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider mb-2">
+              Language
+            </h5>
+            <div className="grid grid-cols-2 gap-2">
+              {languages.map((lang) => (
+                <button
+                  key={lang.code}
+                  onClick={() => { applyLanguage(lang.code, lang.label); setIsMobileMenuOpen(false); }}
+                  className={`text-left py-2 px-3 text-xs font-bold rounded-md transition-colors ${
+                    selectedLang === lang.label
+                      ? "bg-red-50 text-[#BF1E2D]"
+                      : "text-gray-800 bg-gray-50 hover:bg-red-50 hover:text-[#BF1E2D]"
+                  }`}
+                >
+                  {lang.label}
+                </button>
               ))}
             </div>
           </div>

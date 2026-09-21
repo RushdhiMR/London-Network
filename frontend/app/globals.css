@@ -167,3 +167,38 @@ figure[style*="float: right"] {
   animation: loadingBarAnimation 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
+/* HIDE GOOGLE TRANSLATE TOP BAR */
+body > .skiptranslate:not(#google_translate_element),
+[class*="VIpgJd"],
+[id*=".container"],
+iframe.skiptranslate,
+iframe.goog-te-banner-frame,
+.goog-te-banner-frame,
+.goog-te-banner-frame.skiptranslate,
+#goog-gt-tt {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  max-height: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  border: none !important;
+}
+body,
+body.translated-ltr,
+body.translated-rtl {
+  top: 0px !important;
+  position: static !important;
+}
+.goog-te-gadget,
+.goog-te-gadget * {
+  display: none !important;
+}
+.goog-tooltip,
+.goog-tooltip:hover {
+  display: none !important;
+}
+.goog-text-highlight {
+  background-color: transparent !important;
+  box-shadow: none !important;
+}

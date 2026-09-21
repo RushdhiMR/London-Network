@@ -1,10 +1,12 @@
 "use client";
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Link from 'next/link';
 import { useLiveArticles, useLiveAdSlots, articleMatchesCategory, isTopPlacementArticle, formatAdDimensions, isDuplicateAdImage } from '@/lib/articlesSync';
+import { dispatchPageDataReady } from '@/components/GlobalPageLoader';
+
 
 interface Article {
   title: string;
@@ -61,8 +63,16 @@ export default function CategoryPageLayout({
   const [currentPage, setCurrentPage] = useState(1);
   const ARTICLES_PER_PAGE = 10;
 
-  const { articles: liveArticles = [] } = useLiveArticles();
+  const { articles: liveArticles = [], loading } = useLiveArticles();
   const { adSlots } = useLiveAdSlots();
+
+  // Signal GlobalPageLoader to hide the skeleton once data has loaded.
+  useEffect(() => {
+    if (!loading) {
+      dispatchPageDataReady();
+    }
+  }, [loading]);
+
 
   // Find all published live articles that match this category or subcategory
   // Use the URL slug (e.g. "politics", "markets") for matching — it is a clean single word

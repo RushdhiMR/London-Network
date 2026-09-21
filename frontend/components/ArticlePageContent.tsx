@@ -10,6 +10,7 @@ import { generateAutoSEO } from "@/lib/seo";
 import { getUserProfile, getAuthorAvatarByNameOrEmail, getAuthorFullProfileByNameOrEmail, resolveUserAvatar } from "@/lib/userProfiles";
 import { useLiveArticles, useLiveAdSlots, formatAdDimensions, isDuplicateAdImage } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
+import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
 
 interface ArticleReply {
   id: string;
@@ -241,7 +242,7 @@ function ArticlePageContentInner({
     setIsMounted(true);
   }, []);
 
-  const resolveCleanAuthor = (rawName?: string, rawAvatar?: string, rawEmail?: string) => {
+  const resolveCleanAuthor = (rawName?: string, rawAvatar?: string, rawEmail?: string, fallbackBio?: string) => {
     let name = (rawName || "").trim();
     if (!name || name.toLowerCase() === "system administrator" || name.toLowerCase() === "administrator" || name.toLowerCase() === "admin" || name.toLowerCase() === "editor") {
       name = "Rushdhi";
@@ -251,7 +252,7 @@ function ArticlePageContentInner({
     const writerProfile = typeof window !== "undefined" && isMounted
       ? (isRushdhi
         ? (getUserProfile("rushdhiwriter@gmail.com") || getUserProfile("writer@digitaljournal.com") || getAuthorFullProfileByNameOrEmail("rushdhi"))
-        : (getUserProfile(name) || getAuthorFullProfileByNameOrEmail(name)))
+        : (getUserProfile(rawEmail) || getUserProfile(name) || getAuthorFullProfileByNameOrEmail(name, rawEmail)))
       : null;
 
     if (writerProfile?.name && !writerProfile.name.toLowerCase().includes("reader")) {
@@ -287,14 +288,27 @@ function ArticlePageContentInner({
       else avatar = "/author_bluesuit.jpg";
     }
 
-    return { name, avatar };
+    // 5. Author Bio: Priority from author's saved profile settings, then fallback / article bio
+    let bio = "";
+    if (writerProfile?.bio && !writerProfile.bio.toLowerCase().includes("avid reader") && writerProfile.bio.trim().length > 0) {
+      bio = writerProfile.bio.trim();
+    } else if (fallbackBio && fallbackBio.trim().length > 0) {
+      bio = fallbackBio.trim();
+    } else if (newsData?.authorBio && newsData.authorBio.trim().length > 0) {
+      bio = newsData.authorBio.trim();
+    } else {
+      bio = `${name} is a journalist for London BigBen.`;
+    }
+
+    return { name, avatar, bio };
   };
 
-  const initialAuthor = resolveCleanAuthor(newsData.authorName, newsData.authorAvatar);
+  const initialAuthor = resolveCleanAuthor(newsData.authorName, newsData.authorAvatar, newsData.authorEmail, newsData.authorBio);
   const [activeNewsData, setActiveNewsData] = useState<ArticleData>({
     ...newsData,
     authorName: initialAuthor.name,
     authorAvatar: initialAuthor.avatar,
+    authorBio: initialAuthor.bio || newsData.authorBio,
     category: newsData.category || parent?.name || category,
     subcategories: newsData.subcategories || (subName ? [subName] : []),
     tags: resolveArticleTags(newsData)
@@ -403,6 +417,13 @@ function ArticlePageContentInner({
     }
   }, [liveArticles, liveArticlesLoading, newsData, searchParams]);
 
+  // Signal GlobalPageLoader to hide skeleton once article data is resolved
+  useEffect(() => {
+    if (isArticleResolved) {
+      dispatchPageDataReady();
+    }
+  }, [isArticleResolved]);
+
   // Clean address bar: strip unnecessary query strings (?id=50, ?sub=...) for a clear, readable route path
   useEffect(() => {
     if (typeof window !== "undefined" && window.location.search) {
@@ -414,8 +435,8 @@ function ArticlePageContentInner({
   useEffect(() => {
     const handleProfileUpdate = (e: any) => {
       try {
-        const detail = e.detail || (e.key === "dj_user_profile" && e.newValue ? JSON.parse(e.newValue) : null);
-        if (detail && detail.avatar && detail.avatar.length > 5 && !detail.avatar.includes("cart")) {
+        const detail = e?.detail || (e?.key === "dj_user_profile" && e?.newValue ? JSON.parse(e.newValue) : null);
+        if (detail) {
           const currentAuthor = activeNewsData.authorName.toLowerCase().trim();
           const isRushdhi = currentAuthor.includes("rushdhi") && 
             ((detail.email && detail.email.toLowerCase().includes("rushdhi")) || (detail.name && detail.name.toLowerCase().includes("rushdhi")));
@@ -424,7 +445,8 @@ function ArticlePageContentInner({
           if (isRushdhi || isMatch) {
             setActiveNewsData((prev) => ({
               ...prev,
-              authorAvatar: detail.avatar
+              ...(detail.avatar && detail.avatar.length > 5 && !detail.avatar.includes("cart") ? { authorAvatar: detail.avatar } : {}),
+              ...(detail.bio && detail.bio.trim().length > 0 ? { authorBio: detail.bio.trim() } : {})
             }));
           }
         }
@@ -433,11 +455,13 @@ function ArticlePageContentInner({
 
     if (typeof window !== "undefined") {
       window.addEventListener("dj_profile_updated", handleProfileUpdate);
+      window.addEventListener("dj_auth_change", handleProfileUpdate);
       window.addEventListener("storage", handleProfileUpdate);
     }
     return () => {
       if (typeof window !== "undefined") {
         window.removeEventListener("dj_profile_updated", handleProfileUpdate);
+        window.removeEventListener("dj_auth_change", handleProfileUpdate);
         window.removeEventListener("storage", handleProfileUpdate);
       }
     };
@@ -1445,24 +1469,37 @@ function ArticlePageContentInner({
 
             {/* Author Metadata Bar Under Article */}
             {(() => {
-              const cleanAuth = resolveCleanAuthor(activeNewsData.authorName, activeNewsData.authorAvatar, activeNewsData.authorEmail);
+              const cleanAuth = resolveCleanAuthor(activeNewsData.authorName, activeNewsData.authorAvatar, activeNewsData.authorEmail, activeNewsData.authorBio);
               const authorSlug = cleanAuth.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
               return (
-                <div className="flex items-center gap-3.5 mt-8 pt-5 border-t border-zinc-200 font-sans" suppressHydrationWarning>
-                  <Link href={`/author/${authorSlug}`} className="w-14 h-14 rounded-full overflow-hidden bg-[#1E293B] flex-shrink-0 border border-zinc-300 hover:opacity-80 transition-opacity flex items-center justify-center text-white font-bold text-sm" suppressHydrationWarning>
+                <div className="flex flex-col sm:flex-row items-start gap-5 sm:gap-7 mt-8 pt-6 border-t border-zinc-200 font-sans" suppressHydrationWarning>
+                  {/* Author Circular Avatar */}
+                  <Link
+                    href={`/author/${authorSlug}`}
+                    className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full overflow-hidden bg-[#1E293B] flex-shrink-0 border border-zinc-200 hover:opacity-85 transition-opacity flex items-center justify-center text-white font-bold text-xl shadow-2xs"
+                    suppressHydrationWarning
+                  >
                     {cleanAuth.avatar && cleanAuth.avatar.length > 5 ? (
                       <img src={cleanAuth.avatar} alt={cleanAuth.name} className="w-full h-full object-cover" suppressHydrationWarning />
                     ) : (
                       <span suppressHydrationWarning>{(cleanAuth.name || "RM").slice(0, 2).toUpperCase()}</span>
                     )}
                   </Link>
-                  <div>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <p className="text-[14px] font-bold text-black font-sans leading-tight">
-                        By <Link href={`/author/${authorSlug}`} className="underline hover:text-[#BF1E2D] transition-colors">{cleanAuth.name}</Link>
-                      </p>
-                      <svg className="w-4 h-4 text-[#1D9BF0]" fill="currentColor" viewBox="0 0 24 24" aria-label="Verified Journalist">
+
+                  {/* Author Details & Bio matching requested format */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] sm:text-xs font-bold tracking-wider text-black uppercase font-sans mb-1">
+                      WRITTEN BY
+                    </p>
+                    <div className="flex items-center gap-2 flex-wrap mb-3.5">
+                      <Link
+                        href={`/author/${authorSlug}`}
+                        className="text-xl sm:text-2xl font-bold text-black font-sans underline underline-offset-4 decoration-2 decoration-black hover:text-[#BF1E2D] hover:decoration-[#BF1E2D] transition-colors"
+                      >
+                        {cleanAuth.name}
+                      </Link>
+                      <svg className="w-4 h-4 text-[#1D9BF0] shrink-0" fill="currentColor" viewBox="0 0 24 24" aria-label="Verified Journalist">
                         <title>Verified Journalist</title>
                         <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.34-1.89-4.24-4.23-4.24-.496 0-.966.084-1.4.238C14.31 2.225 12.94 1.35 11.36 1.35c-1.58 0-2.95.875-3.6 2.148-.435-.154-.905-.238-1.4-.238-2.34 0-4.24 1.89-4.24 4.23 0 .496.084.966.238 1.4C1.225 9.55.35 10.92.35 12.5c0 1.58.875 2.95 2.148 3.6-.154.435-.238.905-.238 1.4 0 2.34 1.89 4.24 4.23 4.24.496 0 .966-.084 1.4-.238.65 1.273 2.02 2.148 3.6 2.148 1.58 0 2.95-.875 3.6-2.148.435.154.905.238 1.4.238 2.34 0 4.24-1.89 4.24-4.23 0-.496-.084-.966-.238-1.4 1.273-.65 2.148-2.02 2.148-3.6zm-12.28 4.29l-4.11-4.11 1.41-1.41 2.7 2.7 6.44-6.44 1.41 1.41-7.85 7.85z"/>
                       </svg>
@@ -1473,15 +1510,29 @@ function ArticlePageContentInner({
                         suppressHydrationWarning
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="ml-1 inline-flex items-center text-[#0A66C2] hover:text-[#004182] transition-colors p-0.5"
-                        title={`Connect with ${activeNewsData.authorName} on LinkedIn`}
+                        className="inline-flex items-center text-[#0A66C2] hover:text-[#004182] transition-colors p-0.5"
+                        title={`Connect with ${cleanAuth.name} on LinkedIn`}
                       >
                         <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
                           <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
                         </svg>
                       </a>
                     </div>
-                    <p className="text-[12px] text-zinc-500 mt-0.5">{activeNewsData.date}</p>
+
+                    {/* Author Bio Paragraphs */}
+                    <div className="text-[13.5px] sm:text-[14px] text-zinc-900 font-sans leading-relaxed space-y-3">
+                      {cleanAuth.bio
+                        ? cleanAuth.bio
+                            .split(/\r?\n+/)
+                            .map((p) => p.trim())
+                            .filter((p) => p.length > 0)
+                            .map((paragraph, pIdx) => (
+                              <p key={pIdx}>{paragraph}</p>
+                            ))
+                        : (
+                          <p>{cleanAuth.name} is a journalist for London BigBen.</p>
+                        )}
+                    </div>
                   </div>
                 </div>
               );
@@ -1512,7 +1563,7 @@ function ArticlePageContentInner({
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-sm font-bold text-black uppercase tracking-wider font-standard-sans flex items-center gap-2">
                         <MessageSquare size={16} className="text-[#BF1E2D]" />
-                        <span>Reader Opinions & Comments</span>
+                        <span>Comments</span>
                         <span className="text-[11px] bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded-full font-mono font-bold">
                           {totalCommentsCount}
                         </span>
@@ -1554,15 +1605,6 @@ function ArticlePageContentInner({
                       </div>
                     ) : (
                       <form onSubmit={handlePostComment} className="bg-slate-50/80 border border-slate-200 rounded-2xl p-4 sm:p-5 mb-8 shadow-2xs">
-                        {/* Hidden Image File Input */}
-                        <input
-                          type="file"
-                          ref={commentFileInputRef}
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => handleImageFileChange(e, false)}
-                        />
-
                         <div className="mb-3">
                           <textarea
                             value={newCommentText}
@@ -1571,21 +1613,6 @@ function ArticlePageContentInner({
                             rows={3}
                             className="w-full p-3.5 text-xs sm:text-sm bg-white border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all resize-y"
                           />
-
-                          {/* Image Preview if selected */}
-                          {commentImage && (
-                            <div className="relative inline-block mt-2.5 rounded-xl overflow-hidden border border-slate-200 shadow-2xs group">
-                              <img src={commentImage} alt="Attachment preview" className="h-20 w-auto max-w-[200px] object-cover rounded-xl" />
-                              <button
-                                type="button"
-                                onClick={() => setCommentImage("")}
-                                className="absolute top-1 right-1 bg-black/75 hover:bg-black text-white p-1 rounded-full cursor-pointer transition-colors shadow-xs"
-                                title="Remove image"
-                              >
-                                <X size={12} />
-                              </button>
-                            </div>
-                          )}
                         </div>
 
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
@@ -1607,17 +1634,6 @@ function ArticlePageContentInner({
                                 )}
                               </span>
                             </div>
-
-                            {/* + Add Image Button */}
-                            <button
-                              type="button"
-                              onClick={() => commentFileInputRef.current?.click()}
-                              className="p-1.5 px-2.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 flex items-center gap-1 text-xs font-semibold transition-all cursor-pointer shadow-2xs"
-                              title="Attach an image"
-                            >
-                              <Plus size={14} className="text-[#BF1E2D]" />
-                              <span>Image</span>
-                            </button>
                           </div>
 
                           <div className="flex items-center gap-3 self-end sm:self-auto">
@@ -1628,7 +1644,7 @@ function ArticlePageContentInner({
                             )}
                             <button
                               type="submit"
-                              disabled={(!newCommentText.trim() && !commentImage) || isPostingComment}
+                              disabled={!newCommentText.trim() || isPostingComment}
                               className="bg-[#BF1E2D] hover:bg-red-800 active:scale-95 text-white font-bold text-xs px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl uppercase tracking-wider transition-all cursor-pointer shadow-xs disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
                             >
                               <Send size={13} />
@@ -1875,15 +1891,6 @@ function ArticlePageContentInner({
                               {replyingToId === comment.id && (
                                 <div className="mt-3.5 pl-10 pt-3 border-t border-slate-100">
                                   <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-                                    {/* Hidden Reply Image File Input */}
-                                    <input
-                                      type="file"
-                                      ref={replyFileInputRef}
-                                      accept="image/*"
-                                      className="hidden"
-                                      onChange={(e) => handleImageFileChange(e, true)}
-                                    />
-
                                     <textarea
                                       value={replyText}
                                       onChange={(e) => setReplyText(e.target.value)}
@@ -1891,21 +1898,6 @@ function ArticlePageContentInner({
                                       rows={2}
                                       className="w-full p-2.5 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] transition-all resize-y mb-2"
                                     />
-
-                                    {/* Reply Image Preview if selected */}
-                                    {replyImage && (
-                                      <div className="relative inline-block mb-2 rounded-lg overflow-hidden border border-slate-200 shadow-2xs group">
-                                        <img src={replyImage} alt="Reply preview" className="h-16 w-auto max-w-[150px] object-cover rounded-lg" />
-                                        <button
-                                          type="button"
-                                          onClick={() => setReplyImage("")}
-                                          className="absolute top-0.5 right-0.5 bg-black/75 hover:bg-black text-white p-0.5 rounded-full cursor-pointer transition-colors"
-                                          title="Remove image"
-                                        >
-                                          <X size={10} />
-                                        </button>
-                                      </div>
-                                    )}
 
                                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
                                       <div className="flex items-center gap-2 flex-wrap">
@@ -1927,17 +1919,6 @@ function ArticlePageContentInner({
                                             )}
                                           </div>
                                         )}
-
-                                        {/* + Image button for reply */}
-                                        <button
-                                          type="button"
-                                          onClick={() => replyFileInputRef.current?.click()}
-                                          className="p-1 px-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 flex items-center gap-1 text-[11px] font-semibold transition-all cursor-pointer shadow-2xs"
-                                          title="Attach an image"
-                                        >
-                                          <Plus size={12} className="text-[#BF1E2D]" />
-                                          <span>Image</span>
-                                        </button>
                                       </div>
 
                                       <div className="flex items-center gap-2 self-end sm:self-auto">
@@ -1954,7 +1935,7 @@ function ArticlePageContentInner({
                                         <button
                                           type="button"
                                           onClick={() => handlePostReply(comment.id)}
-                                          disabled={!replyText.trim() && !replyImage}
+                                          disabled={!replyText.trim()}
                                           className="bg-[#BF1E2D] hover:bg-red-800 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg uppercase tracking-wider transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 shadow-2xs"
                                         >
                                           <Send size={11} />

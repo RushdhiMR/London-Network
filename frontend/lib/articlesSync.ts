@@ -453,7 +453,10 @@ const ARTICLES_FETCH_CACHE_TTL_MS = 6000;
 
 export async function fetchArticlesFromServer(): Promise<ArticleItem[]> {
   const now = Date.now();
-  if (now - lastArticlesFetchTime < ARTICLES_FETCH_CACHE_TTL_MS) {
+  // Skip TTL cache on the very first call (page load/reload) so stale localStorage
+  // data is never returned instead of fresh server data.
+  const isFirstLoad = lastArticlesFetchTime === 0;
+  if (!isFirstLoad && now - lastArticlesFetchTime < ARTICLES_FETCH_CACHE_TTL_MS) {
     return getCachedArticles();
   }
   if (activeArticlesFetchPromise) {
@@ -807,51 +810,51 @@ export function useLiveArticles() {
   }, []);
 
   useEffect(() => {
-    // Populate client cache immediately on client mount
-    const cached = getCachedArticles();
-    if (cached.length > 0) {
+    // On mount: always fetch fresh data from the server first.
+    // Do NOT pre-populate from localStorage cache — that would show stale data
+    // before the real server response arrives.
+    fetchArticlesFromServer().then((fresh) => {
+      setArticles(Array.isArray(fresh) ? fresh : []);
+      setLoading(false);
+      setTimeout(() => {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("dj_page_data_ready"));
+        }
+      }, 50);
+    }).catch(() => {
+      // On fetch failure, fall back to cache so page isn't blank
+      const cached = getCachedArticles();
       setArticles(cached);
       setLoading(false);
-    }
-
-    // Always fetch fresh data from server on mount
-    fetchArticlesFromServer().then((fresh) => {
-      if (Array.isArray(fresh) && fresh.length > 0) {
-        setArticles(fresh);
-      }
-      setLoading(false);
-    }).catch(() => {
-      setLoading(false);
+      setTimeout(() => {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("dj_page_data_ready"));
+        }
+      }, 50);
     });
 
-    // Event listeners for user action updates
+    // Listen for in-tab write events triggered by admin/writer actions
+    // (e.g. publishing, editing). These dispatch a window event — NOT a
+    // cross-tab storage event — so they are safe to listen to.
     const handleSync = () => {
-      const current = getCachedArticles();
-      if (current.length > 0) {
-        setArticles(current);
-      }
+      fetchArticlesFromServer().then((fresh) => {
+        setArticles(Array.isArray(fresh) ? fresh : []);
+      }).catch(() => {});
     };
 
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === null || e.key === STORAGE_KEY) {
-        const current = getCachedArticles();
-        if (current.length > 0) {
-          setArticles(current);
-        }
-      }
-    };
+    // NOTE: We intentionally do NOT listen to the native "storage" event here.
+    // That event fires when OTHER browser tabs modify localStorage, which would
+    // cause unrelated tabs to re-fetch/re-render — the cross-tab reload bug.
 
     if (typeof window !== "undefined") {
       window.addEventListener(SYNC_EVENT_NAME, handleSync);
       window.addEventListener("dj_articles_updated", handleSync);
-      window.addEventListener("storage", handleStorageChange);
     }
 
     return () => {
       if (typeof window !== "undefined") {
         window.removeEventListener(SYNC_EVENT_NAME, handleSync);
         window.removeEventListener("dj_articles_updated", handleSync);
-        window.removeEventListener("storage", handleStorageChange);
       }
     };
   }, []);

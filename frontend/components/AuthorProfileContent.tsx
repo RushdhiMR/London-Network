@@ -7,6 +7,7 @@ import Footer from "@/components/Footer";
 import { useLiveArticles, useLiveAdSlots, formatAdDimensions, isDuplicateAdImage } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
 import { getUserProfile, getAuthorAvatarByNameOrEmail, getAuthorFullProfileByNameOrEmail, resolveUserAvatar } from "@/lib/userProfiles";
+import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
 
 interface ArticleItem {
   category: string;
@@ -223,6 +224,12 @@ export default function AuthorProfileContent({
       setIsLoaded(true);
     }
   }, [slug, author, initialArticles, liveArticles]);
+
+  useEffect(() => {
+    if (isLoaded) {
+      dispatchPageDataReady();
+    }
+  }, [isLoaded]);
 
   useEffect(() => {
     const handleProfileUpdate = (e: any) => {

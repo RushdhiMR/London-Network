@@ -339,6 +339,17 @@ export function getAuthorFullProfileByNameOrEmail(name?: string, email?: string)
 
   const cleanName = (name || "").toLowerCase().trim();
   const cleanEmail = (email || "").toLowerCase().trim();
+  if (!cleanName && !cleanEmail) return null;
+
+  const isNameMatch = (target: string): boolean => {
+    if (!target) return false;
+    const s1 = cleanName ? cleanName.replace(/[^a-z0-9]/g, "").toLowerCase() : "";
+    const s2 = target.replace(/[^a-z0-9]/g, "").toLowerCase();
+    if (!s2) return false;
+    if (s1 && (s1 === s2 || s1.includes(s2) || s2.includes(s1))) return true;
+    if ((s1.includes("rushdhi") || cleanEmail.includes("rushdhi")) && (s2.includes("rushdhi") || target.toLowerCase().includes("rushdhi"))) return true;
+    return false;
+  };
 
   try {
     for (const key of ["dj_writer_user", "dj_user", "dj_active_user", "dj_user_profile"]) {
@@ -348,7 +359,7 @@ export function getAuthorFullProfileByNameOrEmail(name?: string, email?: string)
           const uObj: UserProfileData = JSON.parse(sessionStr);
           const uName = (uObj.name || "").toLowerCase().trim();
           const uEmail = (uObj.email || "").toLowerCase().trim();
-          if ((cleanEmail && uEmail === cleanEmail) || (cleanName && (uName === cleanName || uName.includes(cleanName) || cleanName.includes(uName)))) {
+          if ((cleanEmail && uEmail === cleanEmail) || isNameMatch(uName) || isNameMatch(uEmail)) {
             return { ...uObj, role: uObj.role || "Writer" };
           }
         } catch (e) {}
@@ -364,8 +375,7 @@ export function getAuthorFullProfileByNameOrEmail(name?: string, email?: string)
           if (!p) continue;
           const pName = (p.name || "").toLowerCase().trim();
           const pEmail = (p.email || "").toLowerCase().trim();
-          if (cleanEmail && pEmail === cleanEmail) return p;
-          if (cleanName && (pName === cleanName || pName.includes(cleanName) || cleanName.includes(pName))) return p;
+          if ((cleanEmail && pEmail === cleanEmail) || isNameMatch(pName) || isNameMatch(pEmail)) return p;
         }
       } catch (e) {}
     }
@@ -378,8 +388,7 @@ export function getAuthorFullProfileByNameOrEmail(name?: string, email?: string)
           if (!u) continue;
           const uName = (u.name || "").toLowerCase().trim();
           const uEmail = (u.email || "").toLowerCase().trim();
-          if (cleanEmail && uEmail === cleanEmail) return u;
-          if (cleanName && (uName === cleanName || uName.includes(cleanName) || cleanName.includes(uName))) return u;
+          if ((cleanEmail && uEmail === cleanEmail) || isNameMatch(uName) || isNameMatch(uEmail)) return u;
         }
       } catch (e) {}
     }

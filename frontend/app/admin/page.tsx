@@ -175,6 +175,25 @@ interface BackupFileItem {
   storage?: string;
 }
 
+interface TrendingWordItem {
+  id: string | number;
+  word: string;
+  category?: string;
+  searchVolume?: string | number;
+  addedDate: string;
+  status: "Active" | "Inactive";
+  url?: string;
+}
+
+const DEFAULT_TRENDING_WORDS: TrendingWordItem[] = [
+  { id: "1", word: "Cybersecurity Breach", category: "Technology", searchVolume: "142K", addedDate: "2026-09-20", status: "Active", url: "/search?q=Cybersecurity+Breach" },
+  { id: "2", word: "AI Regulation", category: "Politics", searchVolume: "98K", addedDate: "2026-09-19", status: "Active", url: "/search?q=AI+Regulation" },
+  { id: "3", word: "Global Markets", category: "Markets", searchVolume: "85K", addedDate: "2026-09-18", status: "Active", url: "/search?q=Global+Markets" },
+  { id: "4", word: "Clean Energy", category: "Economy", searchVolume: "64K", addedDate: "2026-09-17", status: "Active", url: "/search?q=Clean+Energy" },
+  { id: "5", word: "Space Economy", category: "Technology", searchVolume: "52K", addedDate: "2026-09-16", status: "Active", url: "/search?q=Space+Economy" },
+  { id: "6", word: "Inflation Rate", category: "Economy", searchVolume: "110K", addedDate: "2026-09-15", status: "Active", url: "/search?q=Inflation+Rate" }
+];
+
 interface Stats {
   totalArticles: number;
   totalAuthors: number;
@@ -298,7 +317,7 @@ export default function AdminDashboardPage() {
   const [lockError, setLockError] = useState("");
 
   const [activeTab, setActiveTab] = useState<
-    "overview" | "newsletter" | "articles" | "users" | "ads" | "contact_submissions" | "advertise_leads" | "backups"
+    "overview" | "newsletter" | "articles" | "users" | "ads" | "contact_submissions" | "advertise_leads" | "backups" | "trending_words"
   >("overview");
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -1024,6 +1043,86 @@ export default function AdminDashboardPage() {
         fileSize: "14.21 MB"
       }
     ];
+  });
+
+  // Trending Words Management State
+  const [trendingWords, setTrendingWords] = useState<TrendingWordItem[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("dj_trending_words");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {}
+    }
+    return DEFAULT_TRENDING_WORDS;
+  });
+  const [trendingSearchQuery, setTrendingSearchQuery] = useState("");
+  const [trendingCategoryFilter, setTrendingCategoryFilter] = useState("all");
+  const [isAddTrendingModalOpen, setIsAddTrendingModalOpen] = useState(false);
+  const [newTrendingWord, setNewTrendingWord] = useState("");
+  const [newTrendingCategory, setNewTrendingCategory] = useState("Technology");
+  const [newTrendingVolume, setNewTrendingVolume] = useState("");
+
+  const handleAddTrendingWord = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTrendingWord.trim()) return;
+    const newWordItem: TrendingWordItem = {
+      id: `tw-${Date.now()}`,
+      word: newTrendingWord.trim(),
+      category: newTrendingCategory || "Technology",
+      searchVolume: newTrendingVolume.trim() || "50K",
+      addedDate: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      status: "Active",
+      url: `/search?q=${encodeURIComponent(newTrendingWord.trim())}`
+    };
+    const updated = [newWordItem, ...trendingWords];
+    setTrendingWords(updated);
+    try {
+      localStorage.setItem("dj_trending_words", JSON.stringify(updated));
+      window.dispatchEvent(new Event("dj_trending_words_change"));
+    } catch (e) {}
+    setNewTrendingWord("");
+    setNewTrendingVolume("");
+    setIsAddTrendingModalOpen(false);
+    showNotification("✓ Trending word added successfully!");
+  };
+
+  const handleToggleTrendingStatus = (id: string | number) => {
+    const updated = trendingWords.map((tw) => {
+      if (tw.id === id) {
+        const newStatus: "Active" | "Inactive" = tw.status === "Active" ? "Inactive" : "Active";
+        return { ...tw, status: newStatus };
+      }
+      return tw;
+    });
+    setTrendingWords(updated);
+    try {
+      localStorage.setItem("dj_trending_words", JSON.stringify(updated));
+      window.dispatchEvent(new Event("dj_trending_words_change"));
+    } catch (e) {}
+    showNotification("✓ Trending word status updated!");
+  };
+
+  const handleDeleteTrendingWord = (id: string | number) => {
+    const updated = trendingWords.filter((tw) => tw.id !== id);
+    setTrendingWords(updated);
+    try {
+      localStorage.setItem("dj_trending_words", JSON.stringify(updated));
+      window.dispatchEvent(new Event("dj_trending_words_change"));
+    } catch (e) {}
+    showNotification("✓ Trending word removed!");
+  };
+
+  const filteredTrendingWords = trendingWords.filter((tw) => {
+    const matchesQuery =
+      tw.word.toLowerCase().includes(trendingSearchQuery.toLowerCase()) ||
+      (tw.category && tw.category.toLowerCase().includes(trendingSearchQuery.toLowerCase()));
+    const matchesCategory =
+      trendingCategoryFilter === "all" ||
+      (tw.category && tw.category.toLowerCase() === trendingCategoryFilter.toLowerCase());
+    return matchesQuery && matchesCategory;
   });
 
   const handleCreateB2Backup = async () => {
@@ -3480,6 +3579,27 @@ export default function AdminDashboardPage() {
             <Database className="w-4 h-4 flex-shrink-0" />
             <span className="font-sans">Database Backups</span>
           </button>
+
+          {/* 9. Trending words */}
+          <button
+            onClick={() => {
+              setActiveTab("trending_words");
+              setIsMobileSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === "trending_words"
+                ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
+                : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
+            }`}
+          >
+            <TrendingUp className="w-4 h-4 flex-shrink-0" />
+            <span className="font-sans">Trending words</span>
+            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
+              activeTab === "trending_words" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
+            }`}>
+              {trendingWords.length}
+            </span>
+          </button>
         </nav>
 
         {/* SIDEBAR FOOTER LOGOUT */}
@@ -5317,6 +5437,177 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
+        {/* TAB 9: TRENDING WORDS */}
+        {activeTab === "trending_words" && (
+          <div className="space-y-6">
+            
+            {/* Header & Search Toolbar */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-extrabold font-sans text-slate-900 tracking-tight flex items-center gap-2.5">
+                  <TrendingUp className="w-5 h-5 text-[#D31220]" />
+                  <span>Trending Words</span>
+                </h2>
+                <p className="text-xs font-mono text-slate-400 mt-0.5">
+                  Manage real-time keywords and trending topics featured in the website header ticker and search suggestions.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {/* Search Input */}
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search trending words..."
+                    value={trendingSearchQuery}
+                    onChange={(e) => setTrendingSearchQuery(e.target.value)}
+                    className="w-56 pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-[#D31220] shadow-sm font-sans"
+                  />
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                </div>
+
+                {/* Category Filter */}
+                <select
+                  value={trendingCategoryFilter}
+                  onChange={(e) => setTrendingCategoryFilter(e.target.value)}
+                  className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-[#D31220] cursor-pointer shadow-sm font-mono"
+                >
+                  <option value="all">All Categories</option>
+                  {ALL_MAIN_CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+
+                {/* ADD TRENDING WORD BUTTON */}
+                <button
+                  onClick={() => setIsAddTrendingModalOpen(true)}
+                  className="px-4 py-2 bg-[#D31220] hover:bg-[#b91522] text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer font-sans shadow-sm whitespace-nowrap"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>ADD TRENDING WORD</span>
+                </button>
+              </div>
+            </div>
+
+            {/* QUICK STATS CARDS */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] font-mono text-slate-400 uppercase font-bold">Total Trending Words</p>
+                  <p className="text-xl font-extrabold text-slate-900 mt-1 font-sans">{trendingWords.length}</p>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-red-50 text-[#D31220] flex items-center justify-center font-bold">
+                  <TrendingUp className="w-5 h-5" />
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] font-mono text-slate-400 uppercase font-bold">Active in Live Ticker</p>
+                  <p className="text-xl font-extrabold text-emerald-600 mt-1 font-sans">
+                    {trendingWords.filter(w => w.status === "Active").length}
+                  </p>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] font-mono text-slate-400 uppercase font-bold">Tracked Search Traffic</p>
+                  <p className="text-xl font-extrabold text-blue-600 mt-1 font-sans">550K+</p>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                  <BarChart3 className="w-5 h-5" />
+                </div>
+              </div>
+            </div>
+
+            {/* TRENDING WORDS TABLE */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200/60 bg-slate-50/80 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 font-mono">
+                      <th className="py-3.5 px-4 w-12 text-center">#</th>
+                      <th className="py-3.5 px-4">TRENDING WORD / TOPIC</th>
+                      <th className="py-3.5 px-4">CATEGORY</th>
+                      <th className="py-3.5 px-4">EST. SEARCH VOLUME</th>
+                      <th className="py-3.5 px-4">DATE ADDED</th>
+                      <th className="py-3.5 px-4">STATUS</th>
+                      <th className="py-3.5 px-4 text-right">ACTIONS</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredTrendingWords.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-12 text-center text-slate-400 font-mono">
+                          No trending words found.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredTrendingWords.map((tw, idx) => (
+                        <tr key={`tw-${tw.id}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-3.5 px-4 text-center font-mono text-slate-400 text-[11px] font-bold">
+                            {idx + 1}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-slate-900 text-xs">{tw.word}</span>
+                              <Link
+                                href={tw.url || `/search?q=${encodeURIComponent(tw.word)}`}
+                                target="_blank"
+                                title="View on Search"
+                                className="text-slate-400 hover:text-[#D31220] transition-colors"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </Link>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span className="px-2.5 py-0.5 bg-slate-100 text-slate-700 rounded-full font-mono text-[10px] font-bold">
+                              {tw.category || "General"}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 font-mono text-slate-600 font-bold text-[11px]">
+                            {tw.searchVolume || "—"}
+                          </td>
+                          <td className="py-3.5 px-4 font-mono text-slate-500 text-[11px]">
+                            {tw.addedDate}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <button
+                              onClick={() => handleToggleTrendingStatus(tw.id)}
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase font-mono cursor-pointer transition-all ${
+                                tw.status === "Active"
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
+                                  : "bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200"
+                              }`}
+                            >
+                              {tw.status}
+                            </button>
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            <button
+                              onClick={() => handleDeleteTrendingWord(tw.id)}
+                              title="Delete Trending Word"
+                              className="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 inline-flex items-center justify-center transition-colors cursor-pointer border border-rose-200"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        )}
+
       </main>
 
       {/* ADD USER OVERLAY MODAL */}
@@ -6381,6 +6672,77 @@ export default function AdminDashboardPage() {
                 Reject Article
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD TRENDING WORD MODAL */}
+      {isAddTrendingModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-base font-sans text-slate-900 flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-[#D31220]" />
+                <span>Add New Trending Word</span>
+              </h3>
+              <button onClick={() => setIsAddTrendingModalOpen(false)}>
+                <X className="w-5 h-5 text-slate-400 hover:text-slate-700" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddTrendingWord} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Trending Word / Topic</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Artificial Intelligence"
+                  value={newTrendingWord}
+                  onChange={(e) => setNewTrendingWord(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none focus:border-[#D31220]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Category</label>
+                <select
+                  value={newTrendingCategory}
+                  onChange={(e) => setNewTrendingCategory(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none focus:border-[#D31220]"
+                >
+                  {ALL_MAIN_CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Estimated Search Volume (optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 120K or 50,000"
+                  value={newTrendingVolume}
+                  onChange={(e) => setNewTrendingVolume(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none focus:border-[#D31220]"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddTrendingModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 text-xs font-extrabold bg-[#D31220] hover:bg-[#b91522] text-white rounded-xl transition-colors cursor-pointer shadow-sm"
+                >
+                  Add Trending Word
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { useLiveArticles, isHomePageAPlus, isTrendingNow } from "@/lib/articlesSync";
 import { getAuthorAvatarByNameOrEmail, resolveUserAvatar } from "@/lib/userProfiles";
+import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
+
 
 export default function HeroSection() {
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -13,7 +15,8 @@ export default function HeroSection() {
   const [userTrendingArticles, setUserTrendingArticles] = useState<any[]>([]);
   const [profileSyncTick, setProfileSyncTick] = useState(0);
   const [isMounted, setIsMounted] = useState(false);
-  const { articles: liveArticles } = useLiveArticles();
+  const { articles: liveArticles, loading } = useLiveArticles();
+
 
   useEffect(() => {
     setIsMounted(true);
@@ -155,6 +158,14 @@ export default function HeroSection() {
     }
   }, [liveArticles, profileSyncTick]);
 
+  // Signal the GlobalPageLoader that data is ready once loading resolves.
+  useEffect(() => {
+    if (!loading) {
+      dispatchPageDataReady();
+    }
+  }, [loading]);
+
+
   const carouselArticles = [
     {
       id: 1,
@@ -269,7 +280,11 @@ export default function HeroSection() {
     }
   ];
 
+  // Use only real DB articles — no hardcoded fallback while loading.
+  // While loading is true, allCarouselArticles will be [] which keeps the
+  // skeleton visible (GlobalPageLoader hasn't received data-ready yet).
   const allCarouselArticles = userPublishedArticles.length > 0 ? userPublishedArticles.slice(0, 6) : [];
+
 
   const handlePrevSlide = () => {
     if (allCarouselArticles.length <= 1) return;
