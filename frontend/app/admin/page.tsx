@@ -222,7 +222,6 @@ const ALL_MAIN_CATEGORIES = [
 ];
 
 const ALL_SUB_CATEGORIES = [
-  "World",
   "Politics",
   "Business",
   "Technology",
@@ -365,10 +364,15 @@ export default function AdminDashboardPage() {
   const [isReviewMetaDescCustom, setIsReviewMetaDescCustom] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
 
-  // Signal GlobalPageLoader that dashboard is mounted and ready
-  useEffect(() => {
-    dispatchPageDataReady();
-  }, []);
+  // Targeted Email Distribution State
+  const [isMailBoxModalOpen, setIsMailBoxModalOpen] = useState(false);
+  const [targetedRecipients, setTargetedRecipients] = useState<string[]>([]);
+  const [recipientEmailInput, setRecipientEmailInput] = useState("");
+  const [recipientEmailError, setRecipientEmailError] = useState("");
+  const [broadcastToSubscribers, setBroadcastToSubscribers] = useState(true);
+  const [distributionSentArticleIds, setDistributionSentArticleIds] = useState<Set<string>>(new Set());
+
+  // Note: dispatchPageDataReady is called after real data finishes loading in fetchDashboardData
 
   // Auto-sync Focus Keyword to Title unless customized (matching Author page behavior)
   useEffect(() => {
@@ -438,6 +442,17 @@ export default function AdminDashboardPage() {
     setReviewSeoDesc((sub as any).seo?.metaDescription || autoSummary || (bodyTextOnly ? autoSeoObj.metaDescription : ""));
     setReviewFocusKeyword(autoKw);
     setReviewCardSummary(autoSummary);
+
+    // Load existing targeted email distribution for this article
+    const existingRecipients = Array.isArray((sub as any).targetedRecipients)
+      ? (sub as any).targetedRecipients
+      : (Array.isArray((sub as any).targeted_recipients)
+        ? (sub as any).targeted_recipients
+        : (Array.isArray((sub as any).seo?.targetedRecipients) ? (sub as any).seo.targetedRecipients : []));
+    setTargetedRecipients(existingRecipients);
+    setRecipientEmailInput("");
+    setRecipientEmailError("");
+    setBroadcastToSubscribers((sub as any).broadcastToSubscribers !== undefined ? !!(sub as any).broadcastToSubscribers : false);
   };
 
   const handleAdminCategoryChange = (newCat: string) => {
@@ -576,8 +591,64 @@ export default function AdminDashboardPage() {
       totalArticles: prev.totalArticles + 1
     }));
 
+    // Targeted Email Distribution: send after successful publish, only once per article
+    const artId = String(newArt.id);
+    const recipientsToSend = targetedRecipients.length > 0
+      ? targetedRecipients
+      : (Array.isArray((reviewingSubmission as any)?.targetedRecipients)
+        ? (reviewingSubmission as any).targetedRecipients
+        : (Array.isArray((reviewingSubmission as any)?.targeted_recipients)
+          ? (reviewingSubmission as any).targeted_recipients
+          : (Array.isArray((reviewingSubmission as any)?.seo?.targetedRecipients) ? (reviewingSubmission as any).seo.targetedRecipients : [])));
+
+    const shouldBroadcast = broadcastToSubscribers || Boolean((reviewingSubmission as any)?.broadcastToSubscribers);
+    const isAlreadySent = Boolean((reviewingSubmission as any)?.distributionSent) || Boolean((newArt as any)?.distributionSent) || distributionSentArticleIds.has(artId);
+
+    if ((recipientsToSend.length > 0 || shouldBroadcast) && !isAlreadySent) {
+      setDistributionSentArticleIds(prev => new Set(prev).add(artId));
+      try {
+        const distRes = await fetch("/api/admin/articles/send-distribution", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-key": "dj_admin_portal_authenticated_2026",
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            recipients: recipientsToSend,
+            broadcastToSubscribers: shouldBroadcast,
+            article: {
+              title: newArt.title,
+              summary: reviewSummary.trim() || (newArt as any).summary || "",
+              category: reviewCategory,
+              authorName: authorName,
+              slug: newArt.slug || "",
+              imageUrl: newArt.imageUrl,
+              readTime: newArt.readTime,
+            },
+          }),
+        });
+
+        const distData = await distRes.json().catch(() => ({}));
+        if (distRes.ok && distData.sent > 0) {
+          showNotification(`🎉 Article Published Live & sent to ${distData.sent} targeted recipient${distData.sent > 1 ? "s" : ""}!`);
+          (newArt as any).distributionSent = true;
+          (newArt as any).distributedAt = new Date().toISOString();
+        } else if (distRes.ok && distData.total > 0 && distData.sent === 0) {
+          const errMsg = distData.error || distData.results?.[0]?.error || "Email delivery failed (check SMTP settings)";
+          showNotification(`⚠️ Article published, but targeted emails could not be delivered: ${errMsg}`);
+        } else if (!distRes.ok) {
+          showNotification(`⚠️ Article published, but email service error: ${distData.error || distRes.statusText}`);
+        }
+      } catch (emailErr: any) {
+        console.warn("[Distribution] Email send failed (non-blocking):", emailErr);
+        showNotification(`⚠️ Article published, but email delivery encountered a network error.`);
+      }
+    } else {
+      showNotification(`🎉 Article "${newArt.title.slice(0, 35)}..." Approved & Published Live!`);
+    }
+
     setReviewingSubmission(null);
-    showNotification(`🎉 Article "${newArt.title.slice(0, 35)}..." Approved & Published Live!`);
   };
 
   // Edit Article Modal State
@@ -624,189 +695,16 @@ export default function AdminDashboardPage() {
   });
 
   // Default fallback submissions
-  const DEFAULT_MOCK_SUBMISSIONS: SubmittedDraft[] = [
-    {
-      id: "sub-100",
-      title: "Why Latin America and Parts of Europe Are Moving Right While the American Left Gains Momentum",
-      category: "WORLD",
-      summary: "The apparent ideological contradiction reflects different economic experiences, political systems and voter priorities rather than a simple global shift from left to right.",
-      content: "<p>Politics on both sides of the Atlantic is undergoing a striking transformation. While much of Latin America has recently moved toward conservative, libertarian or right-wing governments, and several European countries have seen substantial gains by right-wing parties, the United States has simultaneously witnessed renewed interest in progressive economics and democratic socialism, particularly among younger voters.</p><p><br></p><p>At first glance, the trends appear contradictory. In reality, they reflect different political experiences. Voters in each region are responding to distinct combinations of inflation, crime, immigration, housing costs, and institutional trust.</p>",
-      imageUrl: "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=150&h=150&fit=crop",
-      status: "Submitted",
-      date: "Aug 13, 2026",
-      reads: 0,
-      authorName: "Rushdhi MR",
-      readTime: "5 min read"
-    },
-    {
-      id: "sub-101",
-      title: "Saudi Arabia Opens Talks to Purchase Westinghouse AP1000 Nuclear Reactors",
-      category: "BUSINESS",
-      summary: "Riyadh advances civil nuclear ambitions with high-capacity American reactor tech for power generation and industrial desalination...",
-      content: "Riyadh advances civil nuclear ambitions with high-capacity American reactor tech for clean power generation and industrial desalination infrastructure across the peninsula.",
-      imageUrl: "https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?w=150&h=150&fit=crop",
-      status: "Submitted",
-      date: "Aug 11, 2026",
-      reads: 0,
-      authorName: "Rushdhi MR",
-      readTime: "4 min read"
-    },
-    {
-      id: "sub-102",
-      title: "Next-Gen Quantum Computing Chips Achieve Room-Temperature Breakthrough",
-      category: "TECHNOLOGY",
-      summary: "Research labs confirm micro-architecture stability at ambient temperatures, unlocking massive parallel compute clusters...",
-      content: "Research labs confirm micro-architecture stability at ambient temperatures, unlocking massive parallel compute clusters for real-time cryptographic processing.",
-      imageUrl: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=150&h=150&fit=crop",
-      status: "Submitted",
-      date: "Aug 10, 2026",
-      reads: 0,
-      authorName: "Muba_kity",
-      readTime: "6 min read"
-    },
-    {
-      id: "sub-103",
-      title: "Autonomous Fleet Operating Networks Expand Regional Commercial Routes",
-      category: "INNOVATION",
-      summary: "Safety telematics report zero critical disruptions across 1.2 million autonomous miles driven on public highways...",
-      content: "Safety telematics report zero critical disruptions across 1.2 million autonomous miles driven on public highways, accelerating state regulatory approvals.",
-      imageUrl: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=150&h=150&fit=crop",
-      status: "Submitted",
-      date: "Aug 09, 2026",
-      reads: 0,
-      authorName: "Roomi",
-      readTime: "5 min read"
-    }
-  ];
+  const DEFAULT_MOCK_SUBMISSIONS: SubmittedDraft[] = [];
 
   // Submitted drafts awaiting admin approval
-  const [writerSubmissions, setWriterSubmissions] = useState<SubmittedDraft[]>(() => {
-    if (typeof window === "undefined") return DEFAULT_MOCK_SUBMISSIONS;
-    try {
-      const nonPendingIds = new Set<string>();
-      const nonPendingTitles = new Set<string>();
-      const cleanT = (t: string) => String(t || "").toLowerCase().replace(/[\u2018\u2019\u201A\u201B']/g, "'").replace(/[\u201C\u201D\u201E\u201F"]/g, '"').replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ').trim();
-      const subsStr = localStorage.getItem("dj_writer_submitted_articles");
-      if (subsStr) {
-        const parsed = JSON.parse(subsStr);
-        if (Array.isArray(parsed)) {
-          parsed.forEach((p: any) => {
-            const st = (p.status || "").toLowerCase().trim();
-            if (st === "rejected" || st === "published" || st === "trash" || st === "approved") {
-              if (p.id) nonPendingIds.add(String(p.id));
-              if (p.title) nonPendingTitles.add(cleanT(p.title));
-            }
-          });
-        }
-      }
-      return DEFAULT_MOCK_SUBMISSIONS.filter(m => !nonPendingIds.has(String(m.id)) && !nonPendingTitles.has(cleanT(m.title)));
-    } catch (e) {
-      return DEFAULT_MOCK_SUBMISSIONS;
-    }
-  });
+  const [writerSubmissions, setWriterSubmissions] = useState<SubmittedDraft[]>([]);
 
   // London BigBen Newsletter Subscribers Roster
   const [newsletterSubscribers, setNewsletterSubscribers] = useState<SubscriberItem[]>([]);
 
   // London BigBen Published Articles Catalog
-  const [articles, setArticles] = useState<Article[]>([
-    {
-      id: 2001,
-      title: "Review: Has AI been chasing the wrong dream since Alan Turing?",
-      slug: "review-has-ai-been-chasing-the-wrong-dream",
-      description: "The essential question, then, is not whether machines can imitate people, but whether neural architectures can discover novel principles of reasoning.",
-      category_name: "TECHNOLOGY",
-      author_name: "Dr. Tim Sandle",
-      readTime: "6 min read",
-      imageUrl: "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=500&h=300&fit=crop",
-      views: 2450,
-      comments: 34,
-      is_featured: true,
-      is_editors_pick: true,
-      placement: "Featured Story",
-      published_at: "2026-08-11 12:00:00"
-    },
-    {
-      id: 2002,
-      title: "Exclusive: Saudi Arabia opens talks to purchase Westinghouse AP1000 nuclear reactors",
-      slug: "exclusive-saudi-arabia-opens-talks-to-purchase-westinghouse-ap1000-nuclear-reactors",
-      description: "Riyadh advances civil nuclear ambitions with high-capacity American reactor tech for clean power generation and desalination.",
-      category_name: "BUSINESS",
-      author_name: "Rushdhi MR",
-      readTime: "4 min read",
-      imageUrl: "https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?w=500&h=300&fit=crop",
-      views: 1280,
-      comments: 14,
-      is_featured: true,
-      is_editors_pick: true,
-      placement: "Featured Story",
-      published_at: "2026-08-10 14:30:00"
-    },
-    {
-      id: 2003,
-      title: "US stocks end higher as SK Hynix debut & Meta AI momentum lift markets",
-      slug: "us-stocks-end-higher-as-sk-hynixs-wall-street-debut-and-metas-ai-momentum-lift-markets",
-      description: "Tech rally pushes S&P 500 near record highs as semiconductor demand remains robust across global trading hubs.",
-      category_name: "NEWS",
-      author_name: "Muba_kity",
-      readTime: "5 min read",
-      imageUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&h=300&fit=crop",
-      views: 3890,
-      comments: 42,
-      is_featured: false,
-      is_editors_pick: true,
-      placement: "Editor's Pick",
-      published_at: "2026-08-09 16:15:00"
-    },
-    {
-      id: 2004,
-      title: "Tesla earnings call key focus: Robotaxi progress, low-cost EV platform & FSD v13",
-      slug: "tesla-earnings-call-key-focus-robotaxi-progress-low-cost-ev-platform-fsd-v13",
-      description: "Investors await updates on autonomous fleet expansion and next-generation vehicle architecture.",
-      category_name: "INNOVATION",
-      author_name: "Roomi",
-      readTime: "5 min read",
-      imageUrl: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=500&h=300&fit=crop",
-      views: 1940,
-      comments: 21,
-      is_featured: true,
-      is_editors_pick: false,
-      placement: "Featured Story",
-      published_at: "2026-08-08 18:45:00"
-    },
-    {
-      id: 2005,
-      title: "Can AI give reliable mortgage advice? We tested 4 top AI bots",
-      slug: "can-ai-give-reliable-mortgage-advice-we-tested-4-top-ai-bots",
-      description: "Evaluating financial accuracy and regulatory compliance of leading generative models.",
-      category_name: "INNOVATION",
-      author_name: "Rushdhi MR",
-      readTime: "4 min read",
-      imageUrl: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=500&h=300&fit=crop",
-      views: 1120,
-      comments: 9,
-      is_featured: false,
-      is_editors_pick: true,
-      placement: "Editor's Pick",
-      published_at: "2026-08-07 09:20:00"
-    },
-    {
-      id: 2006,
-      title: "Global solar-powered mobile medical units deployed in emergency response zones",
-      slug: "global-solar-powered-mobile-medical-units-deployed-in-emergency-response-zones",
-      description: "Clean energy mobile clinics deliver off-grid medical care to remote disaster regions.",
-      category_name: "INDUSTRY INSIGHTS",
-      author_name: "Roomi",
-      readTime: "5 min read",
-      imageUrl: "https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=500&h=300&fit=crop",
-      views: 850,
-      comments: 6,
-      is_featured: false,
-      is_editors_pick: false,
-      placement: "Standard Post",
-      published_at: "2026-08-06 16:00:00"
-    }
-  ]);
+  const [articles, setArticles] = useState<Article[]>([]);
 
   // London BigBen Workspace Users (Strictly Real Registered Users)
   const [workspaceUsers, setWorkspaceUsers] = useState<WorkspaceUser[]>([
@@ -1058,18 +956,24 @@ export default function AdminDashboardPage() {
         const saved = localStorage.getItem("dj_trending_words");
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const sliced = parsed.slice(0, 6);
+            if (parsed.length > 6) {
+              try {
+                localStorage.setItem("dj_trending_words", JSON.stringify(sliced));
+                window.dispatchEvent(new Event("dj_trending_words_change"));
+              } catch (e) {}
+            }
+            return sliced;
+          }
         }
       } catch (e) {}
     }
-    return DEFAULT_TRENDING_WORDS;
+    return DEFAULT_TRENDING_WORDS.slice(0, 6);
   });
   const [trendingSearchQuery, setTrendingSearchQuery] = useState("");
-  const [trendingCategoryFilter, setTrendingCategoryFilter] = useState("all");
   const [isAddTrendingModalOpen, setIsAddTrendingModalOpen] = useState(false);
   const [newTrendingWord, setNewTrendingWord] = useState("");
-  const [newTrendingCategory, setNewTrendingCategory] = useState("Technology");
-  const [newTrendingVolume, setNewTrendingVolume] = useState("");
 
   const handleAddTrendingWord = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1077,20 +981,20 @@ export default function AdminDashboardPage() {
     const newWordItem: TrendingWordItem = {
       id: `tw-${Date.now()}`,
       word: newTrendingWord.trim(),
-      category: newTrendingCategory || "Technology",
-      searchVolume: newTrendingVolume.trim() || "50K",
+      category: "General",
+      searchVolume: "—",
       addedDate: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
       status: "Active",
       url: `/search?q=${encodeURIComponent(newTrendingWord.trim())}`
     };
-    const updated = [newWordItem, ...trendingWords];
+    // Maximum 6 words: add new word at the top, and keep only the latest 6 (removing the oldest if > 6)
+    const updated = [newWordItem, ...trendingWords].slice(0, 6);
     setTrendingWords(updated);
     try {
       localStorage.setItem("dj_trending_words", JSON.stringify(updated));
       window.dispatchEvent(new Event("dj_trending_words_change"));
     } catch (e) {}
     setNewTrendingWord("");
-    setNewTrendingVolume("");
     setIsAddTrendingModalOpen(false);
     showNotification("✓ Trending word added successfully!");
   };
@@ -1125,10 +1029,7 @@ export default function AdminDashboardPage() {
     const matchesQuery =
       tw.word.toLowerCase().includes(trendingSearchQuery.toLowerCase()) ||
       (tw.category && tw.category.toLowerCase().includes(trendingSearchQuery.toLowerCase()));
-    const matchesCategory =
-      trendingCategoryFilter === "all" ||
-      (tw.category && tw.category.toLowerCase() === trendingCategoryFilter.toLowerCase());
-    return matchesQuery && matchesCategory;
+    return matchesQuery;
   });
 
   const handleCreateB2Backup = async () => {
@@ -1423,6 +1324,11 @@ export default function AdminDashboardPage() {
 
       setAdminUser(resolvedAdmin);
       setIsAuthenticated(true);
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("dj_admin_user", JSON.stringify(resolvedAdmin));
+        } catch (e) {}
+      }
       await fetchDashboardData();
       setIsLoading(false);
     }
@@ -1437,17 +1343,19 @@ export default function AdminDashboardPage() {
       fetchDashboardData();
     };
 
-    window.addEventListener("storage", handleStorageChange);
+    // NOTE: Do NOT listen to the native "storage" event — it fires in OTHER
+    // browser tabs when localStorage changes, causing the admin dashboard
+    // to reload in every open tab (the cross-tab reload bug).
     window.addEventListener("dj_articles_updated", handleStorageChange);
     window.addEventListener("dj_contact_change", handleStorageChange);
     return () => {
-      window.removeEventListener("storage", handleStorageChange);
       window.removeEventListener("dj_articles_updated", handleStorageChange);
       window.removeEventListener("dj_contact_change", handleStorageChange);
     };
   }, []);
 
   const fetchDashboardData = async () => {
+    try {
     // 1. Synchronize Real Database Users
     try {
       const resUsers = await fetch("/api/admin/users", {
@@ -1623,10 +1531,8 @@ export default function AdminDashboardPage() {
           return st === "published" || st === "approved";
         });
 
-        if (publishedOnly.length > 0) {
-          setArticles(publishedOnly);
-          setStats(prev => ({ ...prev, totalArticles: publishedOnly.length }));
-        }
+        setArticles(publishedOnly);
+        setStats(prev => ({ ...prev, totalArticles: publishedOnly.length }));
 
         // 3. Synchronize All Writer Submissions (Pending review, Drafts, Rejected)
         const cleanKey = (val: any) => String(val || "").trim().toLowerCase();
@@ -1760,9 +1666,7 @@ export default function AdminDashboardPage() {
           }
         });
 
-        if (mergedSubsList.length > 0) {
-          setWriterSubmissions(mergedSubsList);
-        }
+        setWriterSubmissions(mergedSubsList);
       }
     } catch (err) {
       console.warn("Live articles sync notice:", err);
@@ -1913,6 +1817,9 @@ export default function AdminDashboardPage() {
       }
     } catch (err) {
       console.warn("Backblaze database backups sync notice:", err);
+    }
+    } finally {
+      dispatchPageDataReady();
     }
   };
 
@@ -2287,10 +2194,14 @@ export default function AdminDashboardPage() {
 
   // Article Edit & Delete Handlers
   const handleOpenEditModal = (art: Article) => {
+    handleOpenFullEditor(art);
+  };
+
+  const handleOpenFullEditor = (art: Article, navigate = true) => {
     let fullPost: any = { ...art };
     try {
       const submittedStr = localStorage.getItem("dj_writer_submitted_articles");
-      if (submittedStr) {
+      if (submittedStr && submittedStr.trim()) {
         const list: any[] = JSON.parse(submittedStr);
         const found = list.find((p: any) => String(p.id) === String(art.id) || (p.title && art.title && p.title.trim().toLowerCase() === art.title.trim().toLowerCase()));
         if (found) fullPost = { ...art, ...found };
@@ -2307,7 +2218,7 @@ export default function AdminDashboardPage() {
     const rawSubs = fullPost.subcategories || fullPost.subCategories || (art as any).subcategories || (art as any).subCategories || [];
     let parsedSubs: string[] = [];
     if (Array.isArray(rawSubs)) parsedSubs = rawSubs;
-    else if (typeof rawSubs === 'string') {
+    else if (typeof rawSubs === 'string' && rawSubs.trim()) {
       try { parsedSubs = JSON.parse(rawSubs); } catch (e) { parsedSubs = rawSubs.split(',').map((s: string) => s.trim()).filter(Boolean); }
     }
 
@@ -2333,8 +2244,14 @@ export default function AdminDashboardPage() {
     };
     try {
       localStorage.setItem("dj_editing_post", JSON.stringify(postToEdit));
+      const adminSessionUser = adminUser || { id: 1, name: "Admin", email: "geethliyanage979@gmail.com", role: "admin" };
+      localStorage.setItem("dj_admin_user", JSON.stringify(adminSessionUser));
+      sessionStorage.setItem("dj_tab_session", JSON.stringify(adminSessionUser));
     } catch (e) {}
-    router.push(`/writer/create?edit=${art.id}`);
+
+    if (navigate) {
+      router.push(`/writer/create?edit=${encodeURIComponent(String(art.id))}`);
+    }
   };
 
   const handleSaveArticleEdit = async (e: React.FormEvent) => {
@@ -2835,24 +2752,26 @@ export default function AdminDashboardPage() {
           }
 
           // 2. dj_user_profiles_db
-          const profStr = localStorage.getItem("dj_user_profiles_db");
-          if (profStr) {
-            const profDb = JSON.parse(profStr);
-            let profileObj = profDb[oldEmail] || profDb[editingUser.id] || null;
-            if (profileObj || oldEmail !== newEmail) {
-              if (oldEmail !== newEmail) {
-                delete profDb[oldEmail];
+          try {
+            const profStr = localStorage.getItem("dj_user_profiles_db");
+            if (profStr && profStr.trim()) {
+              const profDb = JSON.parse(profStr);
+              let profileObj = profDb[oldEmail] || profDb[editingUser.id] || null;
+              if (profileObj || oldEmail !== newEmail) {
+                if (oldEmail !== newEmail) {
+                  delete profDb[oldEmail];
+                }
+                profDb[newEmail] = {
+                  ...(profileObj || {}),
+                  id: resData.user?.id || profileObj?.id || editingUser.id,
+                  name: newName,
+                  email: newEmail,
+                  role: newRole.toLowerCase(),
+                };
+                localStorage.setItem("dj_user_profiles_db", JSON.stringify(profDb));
               }
-              profDb[newEmail] = {
-                ...(profileObj || {}),
-                id: resData.user?.id || profileObj?.id || editingUser.id,
-                name: newName,
-                email: newEmail,
-                role: newRole.toLowerCase(),
-              };
-              localStorage.setItem("dj_user_profiles_db", JSON.stringify(profDb));
             }
-          }
+          } catch (e) {}
 
           // 3. dj_user & dj_writer_user & dj_author_profile (active session storage)
           ["dj_user", "dj_writer_user", "dj_author_profile"].forEach((k) => {
@@ -3717,75 +3636,77 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* STAT CARDS ROW (Pinned at top of workspace) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
-          
-          {/* Card 1: ACTIVE REVIEWS */}
-          <div className="bg-[#EBF0F7] p-5 sm:p-6 rounded-3xl border border-white/80 shadow-[8px_8px_18px_#c8d2df,-8px_-8px_18px_#ffffff] hover:shadow-[10px_10px_22px_#becadb,-10px_-10px_22px_#ffffff] transition-all duration-300 group relative overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#D31220] to-red-400 opacity-90" />
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-500 font-sans mb-1">
-                  Active Reviews
-                </p>
-                <p className="text-3xl sm:text-4xl font-extrabold text-slate-900 font-sans tracking-tight group-hover:text-[#D31220] transition-colors">
-                  {activeReviewsCount}
-                </p>
-                <p className="text-[11px] font-medium text-slate-400 mt-1.5 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                  Submissions pending approval
-                </p>
-              </div>
-              <div className="w-12 h-12 rounded-2xl bg-[#EBF0F7] text-[#D31220] shadow-[inset_3px_3px_6px_#c8d2df,inset_-3px_-3px_6px_#ffffff] border border-white/60 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                <FileText className="w-6 h-6" />
+        {/* STAT CARDS ROW (Pinned at top of overview workspace) */}
+        {activeTab === "overview" && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+            
+            {/* Card 1: ACTIVE REVIEWS */}
+            <div className="bg-[#EBF0F7] p-5 sm:p-6 rounded-3xl border border-white/80 shadow-[8px_8px_18px_#c8d2df,-8px_-8px_18px_#ffffff] hover:shadow-[10px_10px_22px_#becadb,-10px_-10px_22px_#ffffff] transition-all duration-300 group relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#D31220] to-red-400 opacity-90" />
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500 font-sans mb-1">
+                    Active Reviews
+                  </p>
+                  <p className="text-3xl sm:text-4xl font-extrabold text-slate-900 font-sans tracking-tight group-hover:text-[#D31220] transition-colors">
+                    {activeReviewsCount}
+                  </p>
+                  <p className="text-[11px] font-medium text-slate-400 mt-1.5 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                    Submissions pending approval
+                  </p>
+                </div>
+                <div className="w-12 h-12 rounded-2xl bg-[#EBF0F7] text-[#D31220] shadow-[inset_3px_3px_6px_#c8d2df,inset_-3px_-3px_6px_#ffffff] border border-white/60 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                  <FileText className="w-6 h-6" />
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Card 2: COMPLETED RELEASES */}
-          <div className="bg-[#EBF0F7] p-5 sm:p-6 rounded-3xl border border-white/80 shadow-[8px_8px_18px_#c8d2df,-8px_-8px_18px_#ffffff] hover:shadow-[10px_10px_22px_#becadb,-10px_-10px_22px_#ffffff] transition-all duration-300 group relative overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-600 to-teal-400 opacity-90" />
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-500 font-sans mb-1">
-                  Completed Releases
-                </p>
-                <p className="text-3xl sm:text-4xl font-extrabold text-slate-900 font-sans tracking-tight group-hover:text-emerald-600 transition-colors">
-                  {completedReleasesCount}
-                </p>
-                <p className="text-[11px] font-medium text-slate-400 mt-1.5 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  Live published stories
-                </p>
-              </div>
-              <div className="w-12 h-12 rounded-2xl bg-[#EBF0F7] text-emerald-600 shadow-[inset_3px_3px_6px_#c8d2df,inset_-3px_-3px_6px_#ffffff] border border-white/60 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                <CheckCircle2 className="w-6 h-6" />
+            {/* Card 2: COMPLETED RELEASES */}
+            <div className="bg-[#EBF0F7] p-5 sm:p-6 rounded-3xl border border-white/80 shadow-[8px_8px_18px_#c8d2df,-8px_-8px_18px_#ffffff] hover:shadow-[10px_10px_22px_#becadb,-10px_-10px_22px_#ffffff] transition-all duration-300 group relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-600 to-teal-400 opacity-90" />
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500 font-sans mb-1">
+                    Completed Releases
+                  </p>
+                  <p className="text-3xl sm:text-4xl font-extrabold text-slate-900 font-sans tracking-tight group-hover:text-emerald-600 transition-colors">
+                    {completedReleasesCount}
+                  </p>
+                  <p className="text-[11px] font-medium text-slate-400 mt-1.5 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    Live published stories
+                  </p>
+                </div>
+                <div className="w-12 h-12 rounded-2xl bg-[#EBF0F7] text-emerald-600 shadow-[inset_3px_3px_6px_#c8d2df,inset_-3px_-3px_6px_#ffffff] border border-white/60 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Card 3: NEWSLETTER SUBS */}
-          <div className="bg-[#EBF0F7] p-5 sm:p-6 rounded-3xl border border-white/80 shadow-[8px_8px_18px_#c8d2df,-8px_-8px_18px_#ffffff] hover:shadow-[10px_10px_22px_#becadb,-10px_-10px_22px_#ffffff] sm:col-span-2 lg:col-span-1 transition-all duration-300 group relative overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 to-indigo-400 opacity-90" />
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-500 font-sans mb-1">
-                  Newsletter Subs
-                </p>
-                <p className="text-3xl sm:text-4xl font-extrabold text-slate-900 font-sans tracking-tight group-hover:text-blue-600 transition-colors">
-                  {newsletterSubsCount}
-                </p>
-                <p className="text-[11px] font-medium text-slate-400 mt-1.5 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                  Registered subscribers
-                </p>
-              </div>
-              <div className="w-12 h-12 rounded-2xl bg-[#EBF0F7] text-blue-600 shadow-[inset_3px_3px_6px_#c8d2df,inset_-3px_-3px_6px_#ffffff] border border-white/60 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                <Mail className="w-6 h-6" />
+            {/* Card 3: NEWSLETTER SUBS */}
+            <div className="bg-[#EBF0F7] p-5 sm:p-6 rounded-3xl border border-white/80 shadow-[8px_8px_18px_#c8d2df,-8px_-8px_18px_#ffffff] hover:shadow-[10px_10px_22px_#becadb,-10px_-10px_22px_#ffffff] sm:col-span-2 lg:col-span-1 transition-all duration-300 group relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 to-indigo-400 opacity-90" />
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500 font-sans mb-1">
+                    Newsletter Subs
+                  </p>
+                  <p className="text-3xl sm:text-4xl font-extrabold text-slate-900 font-sans tracking-tight group-hover:text-blue-600 transition-colors">
+                    {newsletterSubsCount}
+                  </p>
+                  <p className="text-[11px] font-medium text-slate-400 mt-1.5 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                    Registered subscribers
+                  </p>
+                </div>
+                <div className="w-12 h-12 rounded-2xl bg-[#EBF0F7] text-blue-600 shadow-[inset_3px_3px_6px_#c8d2df,inset_-3px_-3px_6px_#ffffff] border border-white/60 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                  <Mail className="w-6 h-6" />
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* TAB 1: OVERVIEW */}
         {activeTab === "overview" && (
@@ -4143,7 +4064,7 @@ export default function AdminDashboardPage() {
                 {/* PUBLISHED POSTS TABLE */}
                 <div className="bg-[#EBF0F7] rounded-3xl shadow-[10px_10px_24px_#c8d2df,-10px_-10px_24px_#ffffff] border border-white/80 overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full min-w-[680px] text-left border-collapse">
                       <thead>
                         <tr className="border-b border-[#c8d2df]/60 bg-[#EBF0F7] text-[10px] font-extrabold uppercase tracking-wider text-slate-500 font-mono">
                           <th className="py-3.5 px-6">TITLE</th>
@@ -4151,7 +4072,7 @@ export default function AdminDashboardPage() {
                           <th className="py-3.5 px-4">STATUS</th>
                           <th className="py-3.5 px-4">VIEWS</th>
                           <th className="py-3.5 px-4">DATE</th>
-                          <th className="py-3.5 px-6 text-right">ACTIONS</th>
+                          <th className="hidden sm:table-cell py-3.5 px-6 text-right">ACTIONS</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[#c8d2df]/30 text-xs">
@@ -4181,6 +4102,27 @@ export default function AdminDashboardPage() {
                                     <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 font-normal">
                                       {art.description}
                                     </p>
+
+                                    {/* Mobile Action Buttons (< sm) */}
+                                    <div className="flex sm:hidden items-center gap-2 mt-2 pt-1.5 border-t border-[#c8d2df]/50">
+                                      <button
+                                        onClick={() => handleOpenFullEditor(art)}
+                                        title="Edit Article"
+                                        className="flex items-center gap-1.5 bg-[#EBF0F7] shadow-[2px_2px_5px_#c8d2df,-2px_-2px_5px_#ffffff] active:shadow-[inset_2px_2px_4px_#c8d2df,inset_-2px_-2px_4px_#ffffff] border border-white/80 text-blue-700 hover:text-blue-800 text-[11px] font-bold px-2.5 py-1 rounded-lg transition-all cursor-pointer"
+                                      >
+                                        <Pencil className="w-3 h-3" />
+                                        Edit
+                                      </button>
+
+                                      <button
+                                        onClick={() => handleDeleteArticle(art.id, art.title)}
+                                        title="Move to Trash"
+                                        className="flex items-center gap-1.5 bg-[#EBF0F7] shadow-[2px_2px_5px_#c8d2df,-2px_-2px_5px_#ffffff] active:shadow-[inset_2px_2px_4px_#c8d2df,inset_-2px_-2px_4px_#ffffff] border border-white/80 text-slate-500 hover:text-rose-600 text-[11px] font-bold px-2.5 py-1 rounded-lg transition-all cursor-pointer"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                        Trash
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
                               </td>
@@ -4210,10 +4152,10 @@ export default function AdminDashboardPage() {
                                 {art.published_at ? new Date(art.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Aug 13, 2026"}
                               </td>
 
-                              <td className="py-4 px-6 whitespace-nowrap text-right">
+                              <td className="hidden sm:table-cell py-4 px-6 whitespace-nowrap text-right">
                                 <div className="flex items-center justify-end gap-2">
                                   <button
-                                    onClick={() => handleOpenEditModal(art)}
+                                    onClick={() => handleOpenFullEditor(art)}
                                     title="Edit Article"
                                     className="flex items-center gap-1.5 bg-[#EBF0F7] shadow-[3px_3px_7px_#c8d2df,-3px_-3px_7px_#ffffff] active:shadow-[inset_2px_2px_4px_#c8d2df,inset_-2px_-2px_4px_#ffffff] border border-white/80 text-blue-700 hover:text-blue-800 text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer"
                                   >
@@ -5472,18 +5414,6 @@ export default function AdminDashboardPage() {
                   <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
                 </div>
 
-                {/* Category Filter */}
-                <select
-                  value={trendingCategoryFilter}
-                  onChange={(e) => setTrendingCategoryFilter(e.target.value)}
-                  className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-[#D31220] cursor-pointer shadow-sm font-mono"
-                >
-                  <option value="all">All Categories</option>
-                  {ALL_MAIN_CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-
                 {/* ADD TRENDING WORD BUTTON */}
                 <button
                   onClick={() => setIsAddTrendingModalOpen(true)}
@@ -5538,8 +5468,6 @@ export default function AdminDashboardPage() {
                     <tr className="border-b border-slate-200/60 bg-slate-50/80 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 font-mono">
                       <th className="py-3.5 px-4 w-12 text-center">#</th>
                       <th className="py-3.5 px-4">TRENDING WORD / TOPIC</th>
-                      <th className="py-3.5 px-4">CATEGORY</th>
-                      <th className="py-3.5 px-4">EST. SEARCH VOLUME</th>
                       <th className="py-3.5 px-4">DATE ADDED</th>
                       <th className="py-3.5 px-4">STATUS</th>
                       <th className="py-3.5 px-4 text-right">ACTIONS</th>
@@ -5548,7 +5476,7 @@ export default function AdminDashboardPage() {
                   <tbody className="divide-y divide-slate-100">
                     {filteredTrendingWords.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="py-12 text-center text-slate-400 font-mono">
+                        <td colSpan={5} className="py-12 text-center text-slate-400 font-mono">
                           No trending words found.
                         </td>
                       </tr>
@@ -5570,14 +5498,6 @@ export default function AdminDashboardPage() {
                                 <ExternalLink className="w-3.5 h-3.5" />
                               </Link>
                             </div>
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <span className="px-2.5 py-0.5 bg-slate-100 text-slate-700 rounded-full font-mono text-[10px] font-bold">
-                              {tw.category || "General"}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 font-mono text-slate-600 font-bold text-[11px]">
-                            {tw.searchVolume || "—"}
                           </td>
                           <td className="py-3.5 px-4 font-mono text-slate-500 text-[11px]">
                             {tw.addedDate}
@@ -5866,11 +5786,11 @@ export default function AdminDashboardPage() {
                     onChange={(e) => setEditCategory(e.target.value)}
                     className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none focus:border-[#D31220]"
                   >
-                    <option value="TECHNOLOGY">Technology</option>
-                    <option value="BUSINESS">Business</option>
-                    <option value="NEWS">News</option>
-                    <option value="INNOVATION">Innovation</option>
-                    <option value="INDUSTRY INSIGHTS">Industry Insights</option>
+                    {ALL_MAIN_CATEGORIES.map((c) => (
+                      <option key={c} value={c.toUpperCase()}>
+                        {c}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -5896,20 +5816,32 @@ export default function AdminDashboardPage() {
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setIsEditArticleModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 border border-slate-300 rounded-xl"
+                  onClick={() => {
+                    setIsEditArticleModalOpen(false);
+                    if (editingArticle) handleOpenFullEditor(editingArticle);
+                  }}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-700 hover:underline flex items-center gap-1 cursor-pointer"
                 >
-                  Cancel
+                  Open in Full Studio Editor &rarr;
                 </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 text-xs font-extrabold text-white bg-[#D31220] hover:bg-[#BF1E2D] rounded-xl shadow"
-                >
-                  Save Changes
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditArticleModalOpen(false)}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 border border-slate-300 rounded-xl cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 text-xs font-extrabold text-white bg-[#D31220] hover:bg-[#BF1E2D] rounded-xl shadow cursor-pointer"
+                  >
+                    Save Changes
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -6060,22 +5992,60 @@ export default function AdminDashboardPage() {
       {reviewingSubmission && (
         <div className="fixed inset-0 z-50 bg-[#F8FAFC] overflow-y-auto flex flex-col min-h-screen">
           {/* TOP DARK NAVIGATION BAR */}
-          <div className="sticky top-0 z-50 bg-[#0B1426] border-b border-slate-800 text-white px-4 md:px-8 py-3 flex items-center justify-between gap-4 shadow-md font-sans">
-            <button
-              onClick={() => setReviewingSubmission(null)}
-              className="flex items-center gap-1.5 text-slate-300 hover:text-white font-mono text-xs uppercase tracking-wider font-extrabold cursor-pointer transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              CANCEL
-            </button>
+          <div className="sticky top-0 z-50 bg-[#0B1426] border-b border-slate-800 text-white shadow-md font-sans">
+            {/* Row 1: Cancel + Title */}
+            <div className="flex items-center justify-between gap-3 px-4 md:px-8 pt-3 pb-2">
+              <button
+                onClick={() => setReviewingSubmission(null)}
+                className="flex items-center gap-1.5 text-slate-300 hover:text-white font-mono text-xs uppercase tracking-wider font-extrabold cursor-pointer transition-colors flex-shrink-0"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                CANCEL
+              </button>
 
-            <div className="flex-1 max-w-2xl text-center truncate px-4">
-              <span className="font-mono text-xs text-slate-300 uppercase tracking-wider font-extrabold truncate block">
-                REVIEWING: {reviewTitle || reviewingSubmission.title}
-              </span>
+              <div className="flex-1 text-center truncate px-2">
+                <span className="font-mono text-xs text-slate-300 uppercase tracking-wider font-extrabold truncate block">
+                  REVIEWING: {reviewTitle || reviewingSubmission.title}
+                </span>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2.5 flex-shrink-0">
+            {/* Row 2 (mobile): Action buttons */}
+            <div className="flex items-center gap-2 px-4 pb-3 md:hidden">
+              <button
+                type="button"
+                onClick={() => setIsPreviewModalOpen(true)}
+                className="flex-1 border border-slate-700/80 bg-slate-900/60 hover:bg-slate-800 text-slate-200 hover:text-white text-xs font-bold px-2 py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase font-mono tracking-wider"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>PREVIEW</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (reviewingSubmission) {
+                    handleOpenRejectModal(reviewingSubmission);
+                  }
+                }}
+                className="flex-1 bg-[#8B0000] hover:bg-[#A00000] text-white text-xs font-bold px-2 py-2 rounded-xl flex items-center justify-center gap-1.5 uppercase font-mono tracking-wider transition-all cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+                <span>REJECT</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleApproveReviewStudio}
+                className="flex-1 bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold px-2 py-2 rounded-xl flex items-center justify-center gap-1.5 uppercase font-mono tracking-wider transition-all cursor-pointer"
+              >
+                <Check className="w-3.5 h-3.5" strokeWidth={3} />
+                <span>PUBLISH</span>
+              </button>
+            </div>
+
+            {/* Desktop: single row action buttons */}
+            <div className="hidden md:flex items-center gap-2.5 absolute top-3 right-8">
               <button
                 type="button"
                 onClick={() => setIsPreviewModalOpen(true)}
@@ -6143,7 +6113,7 @@ export default function AdminDashboardPage() {
                     onChange={(e) => setReviewTitle(e.target.value)}
                     placeholder="The Rise of Vertical Series: A New Opportunity or a Creative Trap for Emerging Filmmakers?"
                     rows={2}
-                    className="w-full font-serif text-3xl md:text-4xl font-extrabold text-slate-900 leading-tight focus:outline-none resize-none border-b border-transparent focus:border-slate-300 pb-2"
+                    className="w-full font-poppins text-3xl md:text-4xl font-extrabold text-slate-900 leading-tight focus:outline-none resize-none border-b border-transparent focus:border-slate-300 pb-2"
                   />
                 </div>
 
@@ -6154,7 +6124,7 @@ export default function AdminDashboardPage() {
                     onChange={(e) => setReviewSummary(e.target.value)}
                     placeholder="Vertical microdramas are transforming mobile entertainment, creating new opportunities for filmmakers while raising concerns about creative standardization, speed and artistic freedom."
                     rows={2}
-                    className="w-full font-serif text-lg text-slate-600 leading-relaxed focus:outline-none resize-none border-b border-transparent focus:border-slate-300 pb-2"
+                    className="w-full font-poppins text-lg text-slate-600 leading-relaxed focus:outline-none resize-none border-b border-transparent focus:border-slate-300 pb-2"
                   />
                 </div>
 
@@ -6182,7 +6152,7 @@ export default function AdminDashboardPage() {
                     onChange={(e) => setReviewContent(e.target.value)}
                     placeholder="Article body text content goes here..."
                     rows={12}
-                    className="w-full font-serif text-lg text-slate-800 leading-relaxed focus:outline-none resize-none border border-slate-100 p-4 rounded-xl focus:border-slate-300"
+                    className="w-full font-poppins article-body-poppins text-lg text-slate-800 leading-relaxed focus:outline-none resize-none border border-slate-100 p-4 rounded-xl focus:border-slate-300"
                   />
                 </div>
 
@@ -6477,6 +6447,34 @@ export default function AdminDashboardPage() {
                       </p>
                     </div>
 
+                    {/* TARGETED EMAIL DISTRIBUTION */}
+                    <div className="border border-blue-200 bg-blue-50/40 rounded-xl p-3.5 space-y-2.5">
+                      <div className="flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+                        <label className="block font-mono text-[10px] font-extrabold uppercase tracking-wider text-blue-700">
+                          TARGETED EMAIL DISTRIBUTION
+                        </label>
+                      </div>
+                      <p className="text-[10px] text-slate-500 leading-normal font-sans">
+                        Add specific VIP, partner, or client emails to receive this story upon publication.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsMailBoxModalOpen(true)}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2.5 border border-blue-200 bg-white hover:bg-blue-50 rounded-xl text-xs font-bold text-slate-600 hover:text-blue-700 transition-all cursor-pointer shadow-xs"
+                      >
+                        <Mail className="w-3.5 h-3.5 text-blue-500" />
+                        <span>Mail Box</span>
+                        {targetedRecipients.length > 0 ? (
+                          <span className="ml-auto bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                            {targetedRecipients.length}
+                          </span>
+                        ) : (
+                          <span className="ml-auto text-slate-400 text-[10px] font-mono">(Add Recipients)</span>
+                        )}
+                      </button>
+                    </div>
+
                   </div>
                 )}
 
@@ -6535,6 +6533,239 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
+      {/* ARTICLE MAIL BOX & TARGETED DISTRIBUTION MODAL */}
+      {isMailBoxModalOpen && (
+        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-start gap-4 p-6 border-b border-slate-100">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0">
+                <Mail className="w-6 h-6 text-blue-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-lg font-bold text-slate-900 leading-tight">Article Mail Box &amp; Targeted Distribution</h2>
+                <p className="text-sm text-slate-500 mt-0.5 leading-normal">Add specific emails (VIPs, clients, sponsors) to receive this article upon publication.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMailBoxModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 transition-colors cursor-pointer flex-shrink-0 mt-0.5"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              {/* Add Recipient Emails */}
+              <div className="space-y-2">
+                <label className="block text-sm font-bold text-slate-800">Add Recipient Emails</label>
+                <div className="flex gap-2">
+                  <input
+                    id="dist-email-input"
+                    type="text"
+                    value={recipientEmailInput}
+                    onChange={(e) => {
+                      setRecipientEmailInput(e.target.value);
+                      setRecipientEmailError("");
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === ",") {
+                        e.preventDefault();
+                        const emails = recipientEmailInput.split(/[,\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+                        const invalid = emails.find(em => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em));
+                        if (invalid) {
+                          setRecipientEmailError(`"${invalid}" is not a valid email address.`);
+                          return;
+                        }
+                        const toAdd = emails.filter(em => !targetedRecipients.includes(em));
+                        if (toAdd.length === 0) {
+                          setRecipientEmailError("Email already added.");
+                          return;
+                        }
+                        setTargetedRecipients(prev => [...prev, ...toAdd]);
+                        setRecipientEmailInput("");
+                        setRecipientEmailError("");
+                      }
+                    }}
+                    onPaste={(e) => {
+                      e.preventDefault();
+                      const pasted = e.clipboardData.getData("text");
+                      const emails = pasted.split(/[,\n\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+                      const invalid = emails.find(em => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em));
+                      if (invalid) {
+                        setRecipientEmailError(`"${invalid}" is not a valid email address.`);
+                        return;
+                      }
+                      const toAdd = emails.filter(em => !targetedRecipients.includes(em));
+                      setTargetedRecipients(prev => [...prev, ...toAdd]);
+                      setRecipientEmailInput("");
+                      setRecipientEmailError("");
+                    }}
+                    placeholder="e.g. client@company.com, editor@partner.com"
+                    className="flex-1 px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-blue-500 placeholder:text-slate-400 bg-slate-50/50"
+                  />
+                  <button
+                    type="button"
+                    id="dist-add-btn"
+                    onClick={() => {
+                      const emails = recipientEmailInput.split(/[,\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+                      if (emails.length === 0) return;
+                      const invalid = emails.find(em => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em));
+                      if (invalid) {
+                        setRecipientEmailError(`"${invalid}" is not a valid email address.`);
+                        return;
+                      }
+                      const toAdd = emails.filter(em => !targetedRecipients.includes(em));
+                      if (toAdd.length === 0) {
+                        setRecipientEmailError("Email already added.");
+                        return;
+                      }
+                      setTargetedRecipients(prev => [...prev, ...toAdd]);
+                      setRecipientEmailInput("");
+                      setRecipientEmailError("");
+                    }}
+                    className="bg-[#1d4ed8] hover:bg-[#1e40af] text-white text-sm font-bold px-5 py-2.5 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer flex-shrink-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add
+                  </button>
+                </div>
+                {recipientEmailError && (
+                  <p className="text-xs text-red-500 font-medium">{recipientEmailError}</p>
+                )}
+                <p className="text-xs text-amber-600">
+                  💡 Press <strong>Enter</strong> or <strong>comma (,)</strong> to add. You can also paste multiple comma-separated emails.
+                </p>
+              </div>
+
+              {/* Configured Recipients List */}
+              <div className="space-y-2">
+                <div className="text-xs font-mono font-extrabold uppercase tracking-wider text-slate-500">
+                  CONFIGURED RECIPIENTS ({targetedRecipients.length})
+                </div>
+                <div className="border border-slate-200 rounded-xl min-h-[80px] max-h-[180px] overflow-y-auto bg-slate-50/50 p-3">
+                  {targetedRecipients.length === 0 ? (
+                    <div className="flex items-center justify-center h-14">
+                      <p className="text-sm text-slate-400">No custom emails added yet.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {targetedRecipients.map((email) => (
+                        <div key={email} className="flex items-center justify-between gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs">
+                          <span className="text-slate-700 font-medium truncate">{email}</span>
+                          <button
+                            type="button"
+                            onClick={() => setTargetedRecipients(prev => prev.filter(e => e !== email))}
+                            className="text-slate-400 hover:text-red-500 transition-colors cursor-pointer flex-shrink-0"
+                            title="Remove recipient"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Broadcast to Newsletter Subscribers */}
+              <label className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl p-3.5 cursor-pointer hover:bg-blue-100/60 transition-colors select-none">
+                <input
+                  id="dist-broadcast-checkbox"
+                  type="checkbox"
+                  checked={broadcastToSubscribers}
+                  onChange={(e) => setBroadcastToSubscribers(e.target.checked)}
+                  className="mt-0.5 rounded text-blue-600 focus:ring-blue-500 cursor-pointer w-4 h-4 flex-shrink-0"
+                />
+                <div>
+                  <p className="text-sm font-bold text-slate-800 leading-tight">Broadcast to newsletter subscribers list</p>
+                  <p className="text-xs text-slate-500 mt-0.5 leading-normal">Send this article notification to all general newsletter subscribers matching this article category.</p>
+                </div>
+              </label>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+              <button
+                type="button"
+                onClick={() => setIsMailBoxModalOpen(false)}
+                className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-bold text-slate-700 transition-all cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                id="dist-save-btn"
+                onClick={() => {
+                  let finalRecipients = [...targetedRecipients];
+                  if (recipientEmailInput.trim()) {
+                    const emails = recipientEmailInput.split(/[,\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+                    const invalid = emails.find(em => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em));
+                    if (invalid) {
+                      setRecipientEmailError(`"${invalid}" is not a valid email address.`);
+                      return;
+                    }
+                    const toAdd = emails.filter(em => !finalRecipients.includes(em));
+                    finalRecipients = [...finalRecipients, ...toAdd];
+                    setTargetedRecipients(finalRecipients);
+                    setRecipientEmailInput("");
+                    setRecipientEmailError("");
+                  }
+
+                  // Store recipients persistently for this specific article
+                  if (reviewingSubmission) {
+                    const updatedSub = {
+                      ...reviewingSubmission,
+                      targetedRecipients: finalRecipients,
+                      targeted_recipients: finalRecipients,
+                      broadcastToSubscribers,
+                    };
+                    setReviewingSubmission(updatedSub);
+
+                    // Update submissions list in state
+                    setWriterSubmissions(prev =>
+                      prev.map(s =>
+                        String(s.id) === String(reviewingSubmission.id) || s.title === reviewingSubmission.title
+                          ? { ...s, targetedRecipients: finalRecipients, broadcastToSubscribers }
+                          : s
+                      )
+                    );
+
+                    // Persist to localStorage queue
+                    try {
+                      const rawSubs = localStorage.getItem("dj_writer_submitted_articles");
+                      if (rawSubs) {
+                        const subsList = JSON.parse(rawSubs);
+                        if (Array.isArray(subsList)) {
+                          const updatedList = subsList.map((s: any) =>
+                            String(s.id) === String(reviewingSubmission.id) || s.title === reviewingSubmission.title
+                              ? { ...s, targetedRecipients: finalRecipients, broadcastToSubscribers }
+                              : s
+                          );
+                          localStorage.setItem("dj_writer_submitted_articles", JSON.stringify(updatedList));
+                        }
+                      }
+                    } catch (e) {}
+
+                    // Save to server store
+                    import("@/lib/articlesSync").then(({ saveArticleToServer }) => {
+                      saveArticleToServer(updatedSub as any).catch(() => {});
+                    });
+                  }
+
+                  setIsMailBoxModalOpen(false);
+                  showNotification(`✅ Recipients saved: ${finalRecipients.length} email${finalRecipients.length !== 1 ? "s" : ""} configured for this article.`);
+                }}
+                className="bg-[#1d4ed8] hover:bg-[#1e40af] text-white text-sm font-bold px-5 py-2.5 rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-sm shadow-blue-900/20"
+              >
+                <Check className="w-4 h-4" strokeWidth={3} />
+                Save Recipients
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ARTICLE LIVE PREVIEW MODAL */}
       {isPreviewModalOpen && reviewingSubmission && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 md:p-8">
@@ -6550,10 +6781,10 @@ export default function AdminDashboardPage() {
               <span className="inline-block px-3 py-1 bg-red-50 text-[#D31220] border border-red-200 text-xs font-mono font-extrabold uppercase rounded-md">
                 {reviewCategory} • PREVIEW MODE
               </span>
-              <h1 className="font-serif text-3xl md:text-5xl font-bold text-slate-900 leading-tight">
+              <h1 className="font-poppins text-3xl md:text-5xl font-bold text-slate-900 leading-tight">
                 {reviewTitle}
               </h1>
-              <p className="font-serif text-lg text-slate-600 leading-relaxed italic">
+              <p className="font-poppins text-lg text-slate-600 leading-relaxed italic">
                 {reviewSummary}
               </p>
               <div className="flex items-center gap-3 text-xs font-mono text-slate-500 border-y border-slate-100 py-3">
@@ -6573,7 +6804,7 @@ export default function AdminDashboardPage() {
               />
             )}
 
-            <div className="font-serif text-slate-800 text-lg leading-relaxed whitespace-pre-wrap">
+            <div className="font-poppins article-body-poppins text-slate-800 text-lg leading-relaxed whitespace-pre-wrap">
               {reviewContent}
             </div>
 
@@ -6709,29 +6940,6 @@ export default function AdminDashboardPage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Category</label>
-                <select
-                  value={newTrendingCategory}
-                  onChange={(e) => setNewTrendingCategory(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none focus:border-[#D31220]"
-                >
-                  {ALL_MAIN_CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Estimated Search Volume (optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. 120K or 50,000"
-                  value={newTrendingVolume}
-                  onChange={(e) => setNewTrendingVolume(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none focus:border-[#D31220]"
-                />
-              </div>
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
