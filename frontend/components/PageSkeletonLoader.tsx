@@ -41,7 +41,7 @@ export default function PageSkeletonLoader() {
       </header>
 
       {/* 2. HERO SECTION SKELETON */}
-      <section className="max-w-[1400px] mx-auto px-4 md:px-6 py-6 border-b border-gray-200">
+      <section className="max-w-[1400px] mx-auto px-4 md:px-6 pt-6 pb-0">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Main Hero Story (Left ~67%) */}
           <div className="lg:col-span-8 flex flex-col md:flex-row gap-6 bg-white border border-gray-200 p-4 min-h-[360px]">
@@ -85,10 +85,11 @@ export default function PageSkeletonLoader() {
             </div>
           </div>
         </div>
+        <div className="border-b border-gray-200 mt-6 w-full" />
       </section>
 
       {/* 3. EDITOR'S PICKS SKELETON */}
-      <section className="max-w-[1400px] mx-auto px-4 md:px-6 py-8 border-b border-gray-200">
+      <section className="max-w-[1400px] mx-auto px-4 md:px-6 pt-8 pb-0">
         <div className="flex items-center gap-2 mb-6">
           <div className="w-1.5 h-5 bg-red-300 rounded-none" />
           <div className="h-5 w-36 bg-gray-200 rounded-none" />
@@ -104,10 +105,11 @@ export default function PageSkeletonLoader() {
             </div>
           ))}
         </div>
+        <div className="border-b border-gray-200 mt-8 w-full" />
       </section>
 
       {/* 4. LATEST NEWS SKELETON */}
-      <section className="max-w-[1400px] mx-auto px-4 md:px-6 py-8 border-b border-gray-200">
+      <section className="max-w-[1400px] mx-auto px-4 md:px-6 pt-8 pb-0">
         <div className="flex items-center gap-2 mb-6">
           <div className="w-1.5 h-6 bg-red-300 rounded-none" />
           <div className="h-6 w-32 bg-gray-200 rounded-none" />
@@ -153,6 +155,7 @@ export default function PageSkeletonLoader() {
             </div>
           </div>
         </div>
+        <div className="border-b border-gray-200 mt-8 w-full" />
       </section>
 
       {/* 5. BOTTOM CATEGORIES SKELETON */}

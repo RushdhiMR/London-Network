@@ -156,7 +156,10 @@ export default function NewslettersPage() {
             });
           }
           localStorage.setItem("dj_newsletter_subscribers", JSON.stringify(subsList));
-          window.dispatchEvent(new Event("storage"));
+          // Dispatch a tab-local custom event instead of the native "storage" event.
+          // Manually dispatching new Event("storage") can trigger unintended cross-tab
+          // listeners in the same browsing context. Use a specific custom event instead.
+          window.dispatchEvent(new Event("dj_newsletter_subscribers_updated"));
         } catch (e) {}
       }
     } catch (err) {

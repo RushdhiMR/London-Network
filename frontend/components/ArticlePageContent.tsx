@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useRef, useMemo, Suspense } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import Header from "@/components/Header";
@@ -8,7 +8,7 @@ import Footer from "@/components/Footer";
 import { CheckCircle2, Bookmark, Share2, ArrowLeft, Send, Trash2, MessageSquare, ThumbsUp, Heart, Reply, CornerDownRight, Smile, Plus, X, Image as ImageIcon, Edit3 } from "lucide-react";
 import { generateAutoSEO } from "@/lib/seo";
 import { getUserProfile, getAuthorAvatarByNameOrEmail, getAuthorFullProfileByNameOrEmail, resolveUserAvatar } from "@/lib/userProfiles";
-import { useLiveArticles, useLiveAdSlots, formatAdDimensions, isDuplicateAdImage } from "@/lib/articlesSync";
+import { useLiveArticles, useLiveAdSlots, formatAdDimensions, isDuplicateAdImage, isTrendingNow } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
 import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
 
@@ -143,6 +143,17 @@ function processContentLinks(html: string): string {
       newAttrs += ' rel="noopener noreferrer"';
     } else {
       newAttrs = newAttrs.replace(/rel=["'][^"']*["']/gi, 'rel="noopener noreferrer"');
+    }
+    // Enforce red color for hyperlink
+    if (/style\s*=/i.test(newAttrs)) {
+      newAttrs = newAttrs.replace(/style=(["'])(.*?)\1/i, (m: string, quote: string, styleVal: string) => {
+        let updatedStyle = styleVal.replace(/color\s*:\s*[^;]+;?/gi, '').trim();
+        if (updatedStyle && !updatedStyle.endsWith(';')) updatedStyle += ';';
+        updatedStyle += ' color: #BF1E2D;';
+        return `style=${quote}${updatedStyle}${quote}`;
+      });
+    } else {
+      newAttrs += ' style="color: #BF1E2D;"';
     }
     return `<a${newAttrs}>`;
   });
@@ -315,6 +326,49 @@ function ArticlePageContentInner({
   });
   const { articles: liveArticles, loading: liveArticlesLoading } = useLiveArticles();
 
+  const trendingArticles = useMemo(() => {
+    const getArticleTimestamp = (item: any): number => {
+      if (!item) return 0;
+      const d = item.updated_at || item.published_at || item.createdAt || item.date;
+      if (!d) return 0;
+      const parsed = new Date(d).getTime();
+      return isNaN(parsed) ? 0 : parsed;
+    };
+
+    let trendingPublished = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
+      if (!p || (p.status || "").toLowerCase() !== "published") return false;
+      return isTrendingNow(p);
+    });
+
+    trendingPublished.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
+
+    const sourceList = trendingPublished.length > 0
+      ? trendingPublished
+      : (Array.isArray(liveArticles) ? liveArticles : [])
+          .filter((p) => p && (p.status || "").toLowerCase() === "published")
+          .sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
+
+    return sourceList.slice(0, 4).map((post, index) => {
+      const cat = (post.category || post.category_name || "NEWS").toUpperCase();
+      const postSlug = (post.slug || post.title || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, "")
+        .trim()
+        .replace(/\s+/g, "-");
+
+      const displayDate = post.date || (post.updated_at ? new Date(post.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : (post.published_at ? new Date(post.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Just now"));
+
+      return {
+        number: `0${index + 1}`.slice(-2),
+        category: cat,
+        title: post.title,
+        time: displayDate,
+        image: post.imageUrl || post.image || (post as any).image_url || "https://images.unsplash.com/photo-1563206767-5b18f218e8de?w=200&h=140&fit=crop",
+        href: `/${cat.toLowerCase()}/news/${postSlug}?id=${post.id}`
+      };
+    });
+  }, [liveArticles]);
+
   useEffect(() => {
     // Only run the match once live articles have been fetched (not still loading)
     if (liveArticlesLoading) return;
@@ -456,13 +510,13 @@ function ArticlePageContentInner({
     if (typeof window !== "undefined") {
       window.addEventListener("dj_profile_updated", handleProfileUpdate);
       window.addEventListener("dj_auth_change", handleProfileUpdate);
-      window.addEventListener("storage", handleProfileUpdate);
+      // NOTE: Do NOT listen to the native "storage" event — it fires in OTHER
+      // browser tabs and causes cross-tab reloads.
     }
     return () => {
       if (typeof window !== "undefined") {
         window.removeEventListener("dj_profile_updated", handleProfileUpdate);
         window.removeEventListener("dj_auth_change", handleProfileUpdate);
-        window.removeEventListener("storage", handleProfileUpdate);
       }
     };
   }, [activeNewsData.authorName]);
@@ -577,6 +631,7 @@ function ArticlePageContentInner({
 
   const articleKey = (activeNewsData.title || newsData.title || "article").toLowerCase().replace(/[^a-z0-9]+/g, "-");
   const [comments, setComments] = useState<ArticleComment[]>([]);
+  const [showCommentsList, setShowCommentsList] = useState(false);
   const [newCommentText, setNewCommentText] = useState("");
   const [guestName, setGuestName] = useState("");
   const [isPostingComment, setIsPostingComment] = useState(false);
@@ -698,6 +753,7 @@ function ArticlePageContentInner({
     setCommentImage("");
     setGuestName("");
     setIsPostingComment(false);
+    setShowCommentsList(true);
     setCommentSuccess(true);
     setTimeout(() => setCommentSuccess(false), 3000);
   };
@@ -1334,13 +1390,13 @@ function ArticlePageContentInner({
             })()}
 
             {/* Main Title */}
-            <h1 className="font-serif text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 leading-tight mb-3 tracking-tight">
+            <h1 className="font-poppins text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 leading-tight mb-3 tracking-tight">
               {activeNewsData.title}
             </h1>
 
             {/* Subheadline */}
             {activeNewsData.caption && (
-              <p className="font-serif text-lg sm:text-xl text-slate-600 italic mb-6 sm:mb-8 leading-relaxed">
+              <p className="font-poppins text-lg sm:text-xl text-slate-600 italic mb-6 sm:mb-8 leading-relaxed">
                 {activeNewsData.caption.split('.')[0] + '.'}
               </p>
             )}
@@ -1364,7 +1420,7 @@ function ArticlePageContentInner({
                       <p className="text-[14px] font-bold text-black font-sans leading-tight">
                         By <Link href={`/author/${authorSlug}`} className="underline hover:text-[#BF1E2D] transition-colors">{cleanAuth.name}</Link>
                       </p>
-                      <svg className="w-4 h-4 text-[#1D9BF0]" fill="currentColor" viewBox="0 0 24 24" aria-label="Verified Journalist">
+                      <svg className="w-4 h-4 text-[#BF1E2D]" fill="currentColor" viewBox="0 0 24 24" aria-label="Verified Journalist">
                         <title>Verified Journalist</title>
                         <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.34-1.89-4.24-4.23-4.24-.496 0-.966.084-1.4.238C14.31 2.225 12.94 1.35 11.36 1.35c-1.58 0-2.95.875-3.6 2.148-.435-.154-.905-.238-1.4-.238-2.34 0-4.24 1.89-4.24 4.23 0 .496.084.966.238 1.4C1.225 9.55.35 10.92.35 12.5c0 1.58.875 2.95 2.148 3.6-.154.435-.238.905-.238 1.4 0 2.34 1.89 4.24 4.23 4.24.496 0 .966-.084 1.4-.238.65 1.273 2.02 2.148 3.6 2.148 1.58 0 2.95-.875 3.6-2.148.435.154.905.238 1.4.238 2.34 0 4.24-1.89 4.24-4.23 0-.496-.084-.966-.238-1.4 1.273-.65 2.148-2.02 2.148-3.6zm-12.28 4.29l-4.11-4.11 1.41-1.41 2.7 2.7 6.44-6.44 1.41 1.41-7.85 7.85z"/>
                       </svg>
@@ -1402,7 +1458,7 @@ function ArticlePageContentInner({
 
             {/* News Body Content */}
             {activeNewsData.rawContent ? (
-              <div className="prose prose-slate max-w-none text-zinc-900 leading-[1.8] font-serif text-[17px] md:text-[18px] space-y-4 flow-root [&_figure]:my-5 [&_figure]:max-w-full [&_figcaption]:flex [&_figcaption]:items-center [&_figcaption]:justify-between [&_figcaption]:gap-3 [&_figcaption]:text-xs [&_figcaption]:text-slate-500 [&_figcaption]:mt-1.5 [&_a]:text-[#BF1E2D] [&_a]:font-semibold [&_a]:underline hover:[&_a]:text-[#901320] [&_b]:font-bold [&_strong]:font-bold [&_blockquote]:border-l-4 [&_blockquote]:border-[#F97316] [&_blockquote]:pl-4 [&_blockquote]:py-2.5 [&_blockquote]:my-4 [&_blockquote]:italic [&_blockquote]:text-slate-700 [&_blockquote]:bg-slate-50/80 [&_blockquote]:rounded-r-xl [&_pre]:bg-slate-100/90 [&_pre]:p-3.5 [&_pre]:my-4 [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-slate-200/80 [&_pre]:overflow-x-auto [&_pre]:font-mono [&_pre]:text-sm [&_pre]:text-slate-800 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6">
+              <div className="prose prose-slate max-w-none text-zinc-900 leading-[1.8] font-poppins article-body-poppins text-[17px] md:text-[18px] space-y-4 flow-root [&_figure]:my-5 [&_figure]:max-w-full [&_figcaption]:flex [&_figcaption]:items-center [&_figcaption]:justify-between [&_figcaption]:gap-3 [&_figcaption]:text-xs [&_figcaption]:text-slate-500 [&_figcaption]:mt-1.5 [&_a]:text-[#BF1E2D] [&_a]:font-semibold [&_a]:underline hover:[&_a]:text-[#901320] [&_b]:font-bold [&_strong]:font-bold [&_blockquote]:border-l-4 [&_blockquote]:border-[#F97316] [&_blockquote]:pl-4 [&_blockquote]:py-2.5 [&_blockquote]:my-4 [&_blockquote]:italic [&_blockquote]:text-slate-700 [&_blockquote]:bg-slate-50/80 [&_blockquote]:rounded-r-xl [&_pre]:bg-slate-100/90 [&_pre]:p-3.5 [&_pre]:my-4 [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-slate-200/80 [&_pre]:overflow-x-auto [&_pre]:font-mono [&_pre]:text-sm [&_pre]:text-slate-800 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6">
                 {(() => {
                   let rawHtml = activeNewsData.rawContent;
                   if (rawHtml.startsWith("<") && rawHtml.includes("&lt;")) {
@@ -1415,27 +1471,27 @@ function ArticlePageContentInner({
                   }
                   rawHtml = processContentLinks(rawHtml);
 
-                  return <div dangerouslySetInnerHTML={{ __html: rawHtml }} />;
+                  return <div className="font-poppins article-body-poppins" dangerouslySetInnerHTML={{ __html: rawHtml }} />;
                 })()}
               </div>
             ) : (
               /* Fallback for static legacy articles */
-              <div className="space-y-4 font-serif text-[17px] md:text-[18px] text-zinc-900 leading-[1.8] tracking-normal mt-0">
+              <div className="space-y-4 font-poppins article-body-poppins text-[17px] md:text-[18px] text-zinc-900 leading-[1.8] tracking-normal mt-0">
                 {activeNewsData.sections.map((sec, secIdx) => {
                   const cleanHeading = (sec.heading || "").trim();
                   const isOverview = cleanHeading.toLowerCase() === "overview" || cleanHeading.toLowerCase() === (activeNewsData.caption || "").toLowerCase().trim();
 
                   return (
-                    <div key={secIdx} className="space-y-4">
+                    <div key={secIdx} className="space-y-4 font-poppins article-body-poppins">
                       {cleanHeading && !isOverview && (
-                        <h2 className="font-serif text-[22px] md:text-[24px] font-bold text-black mt-4 mb-2 leading-snug">
+                        <h2 className="font-poppins text-[22px] md:text-[24px] font-bold text-black mt-4 mb-2 leading-snug">
                           {sec.heading}
                         </h2>
                       )}
                       {sec.paragraphs.map((p, pIdx) => (
                         <div key={pIdx} className="space-y-5">
                           <p 
-                            className="text-zinc-900 [&_a]:text-[#BF1E2D] [&_a]:underline [&_a]:font-semibold hover:[&_a]:text-[#901320] transition-colors"
+                            className="font-poppins text-zinc-900 [&_a]:text-[#BF1E2D] [&_a]:underline [&_a]:font-semibold hover:[&_a]:text-[#901320] transition-colors"
                             dangerouslySetInnerHTML={{ __html: processContentLinks(p) }}
                           />
                         </div>
@@ -1500,7 +1556,7 @@ function ArticlePageContentInner({
                       >
                         {cleanAuth.name}
                       </Link>
-                      <svg className="w-4 h-4 text-[#1D9BF0] shrink-0" fill="currentColor" viewBox="0 0 24 24" aria-label="Verified Journalist">
+                      <svg className="w-4 h-4 text-[#BF1E2D] shrink-0" fill="currentColor" viewBox="0 0 24 24" aria-label="Verified Journalist">
                         <title>Verified Journalist</title>
                         <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.34-1.89-4.24-4.23-4.24-.496 0-.966.084-1.4.238C14.31 2.225 12.94 1.35 11.36 1.35c-1.58 0-2.95.875-3.6 2.148-.435-.154-.905-.238-1.4-.238-2.34 0-4.24 1.89-4.24 4.23 0 .496.084.966.238 1.4C1.225 9.55.35 10.92.35 12.5c0 1.58.875 2.95 2.148 3.6-.154.435-.238.905-.238 1.4 0 2.34 1.89 4.24 4.23 4.24.496 0 .966-.084 1.4-.238.65 1.273 2.02 2.148 3.6 2.148 1.58 0 2.95-.875 3.6-2.148.435.154.905.238 1.4.238 2.34 0 4.24-1.89 4.24-4.23 0-.496-.084-.966-.238-1.4 1.273-.65 2.148-2.02 2.148-3.6zm-12.28 4.29l-4.11-4.11 1.41-1.41 2.7 2.7 6.44-6.44 1.41 1.41-7.85 7.85z"/>
                       </svg>
@@ -1544,19 +1600,10 @@ function ArticlePageContentInner({
               const totalCommentsCount = comments.length + comments.reduce((acc, c) => acc + (c.replies?.length || 0), 0);
               return (
                 <>
-                  <div className="space-y-2 font-sans my-6 text-[12px] text-zinc-500">
+                  <div className="font-sans my-6 text-[12px] text-zinc-500">
                     <div className="flex items-center gap-2 font-bold text-black uppercase tracking-wider text-[11.5px]">
                       <span>💬 COMMENTS ({totalCommentsCount})</span>
                     </div>
-                    <button
-                      onClick={toggleBookmark}
-                      className="text-[#BF1E2D] font-bold hover:underline cursor-pointer text-[13px] flex items-center gap-1.5 text-left"
-                    >
-                      <Bookmark size={16} className={isBookmarked ? "fill-[#BF1E2D]" : ""} />
-                      <span>
-                        {isBookmarked ? "✓ Saved in your Reader Reading List (Click to Remove)" : "+ Add to your saved stories"}
-                      </span>
-                    </button>
                   </div>
 
                   {/* INTERACTIVE COMMENTS & OPINIONS SECTION */}
@@ -1569,11 +1616,22 @@ function ArticlePageContentInner({
                           {totalCommentsCount}
                         </span>
                       </h3>
-                      {isAdmin && (
-                        <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md font-mono">
-                          🛡️ Admin Moderation
-                        </span>
-                      )}
+                      <div className="flex items-center gap-3">
+                        {comments.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowCommentsList(!showCommentsList)}
+                            className="text-xs font-bold text-[#BF1E2D] hover:underline cursor-pointer flex items-center gap-1"
+                          >
+                            <span>{showCommentsList ? "Hide Comments" : `View Comments (${totalCommentsCount})`}</span>
+                          </button>
+                        )}
+                        {isAdmin && (
+                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md font-mono">
+                            🛡️ Admin Moderation
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Write Opinion / Comment Box */}
@@ -1657,13 +1715,24 @@ function ArticlePageContentInner({
                     )}
 
                     {/* Comments Feed List */}
-                    <div className="space-y-4">
-                      {comments.length === 0 ? (
-                        <div className="text-center py-6 text-zinc-400 text-xs italic bg-slate-50/50 rounded-xl border border-dashed border-zinc-200">
-                          No opinions shared yet. Be the first to share your thoughts on this story!
-                        </div>
-                      ) : (
-                        comments.map((comment) => {
+                    {comments.length === 0 ? (
+                      <div className="text-center py-6 text-zinc-400 text-xs italic bg-slate-50/50 rounded-xl border border-dashed border-zinc-200">
+                        No opinions shared yet. Be the first to share your thoughts on this story!
+                      </div>
+                    ) : !showCommentsList ? (
+                      <div className="text-center py-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowCommentsList(true)}
+                          className="w-full py-3.5 px-4 bg-slate-50 hover:bg-slate-100 active:scale-[0.99] border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs hover:border-slate-300"
+                        >
+                          <MessageSquare size={16} className="text-[#BF1E2D]" />
+                          <span>View Comments ({totalCommentsCount})</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {comments.map((comment) => {
                           const isCommentAuthor = comment.isArticleAuthor || isUserArticleAuthor(comment.email, comment.name);
                           return (
                             <div
@@ -2165,9 +2234,18 @@ function ArticlePageContentInner({
                               )}
                             </div>
                           );
-                        })
-                      )}
-                    </div>
+                        })}
+                        <div className="pt-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => setShowCommentsList(false)}
+                            className="py-2 px-5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 inline-flex items-center gap-1.5 transition-all cursor-pointer"
+                          >
+                            <span>Hide Comments</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </>
               );
@@ -2308,6 +2386,57 @@ function ArticlePageContentInner({
           </div>
 
         </div>
+
+        {/* Trending Now Section (Big and Fit to Screen Across All Columns) */}
+        {trendingArticles.length > 0 && (
+          <div className="mt-14 pt-10 border-t border-zinc-200 font-sans w-full">
+            <div className="flex items-center gap-2 mb-6">
+              <div className="w-1.5 h-6 bg-[#D31220]" />
+              <h2 className="text-xl font-extrabold text-gray-900 tracking-tight uppercase font-sans">
+                Trending Now
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {trendingArticles.map((item, idx) => (
+                <Link
+                  key={`trending-col-${idx}-${item.href}`}
+                  href={item.href}
+                  className="group flex flex-col cursor-pointer bg-white border border-gray-200 hover:border-gray-300 hover:shadow-md p-3.5 rounded-sm transition-all"
+                >
+                  <div className="relative w-full aspect-[16/10] bg-gray-100 overflow-hidden mb-3 rounded-xs border border-gray-100">
+                    <img
+                      src={item.image}
+                      alt={item.title}
+                      onError={(e) => {
+                        const fallbacks = [
+                          "https://images.unsplash.com/photo-1563206767-5b18f218e8de?w=600&h=400&fit=crop",
+                          "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=600&h=400&fit=crop",
+                          "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&h=400&fit=crop",
+                          "https://images.unsplash.com/photo-1547683905-f686c993aae5?w=600&h=400&fit=crop"
+                        ];
+                        const fallback = fallbacks[idx % fallbacks.length];
+                        if (e.currentTarget.src !== fallback) {
+                          e.currentTarget.src = fallback;
+                        }
+                      }}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-[10px] sm:text-[10.5px] font-extrabold text-[#D31220] uppercase tracking-wider">
+                      {item.category}
+                    </span>
+                    <span className="text-[10px] text-gray-400">• {item.time}</span>
+                  </div>
+                  <h3 className="text-[13.5px] sm:text-[14.5px] font-bold text-gray-900 group-hover:text-[#D31220] transition-colors line-clamp-2 leading-snug font-serif">
+                    {item.title}
+                  </h3>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
       </div>
 

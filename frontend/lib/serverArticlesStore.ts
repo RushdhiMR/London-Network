@@ -3,14 +3,39 @@ import fs from 'fs';
 import path from 'path';
 
 const DB_JSON_PATH = path.join(process.cwd(), 'data', 'digital_journal_db.json');
+const TMP_JSON_PATH = path.join('/tmp', 'digital_journal_db.json');
+
+const globalForArticlesStore = globalThis as unknown as {
+  __serverArticlesCache?: ArticleRecord[];
+};
 
 function readJsonArticles(): ArticleRecord[] {
+  // Check in-memory store for active lambda container
+  if (Array.isArray(globalForArticlesStore.__serverArticlesCache) && globalForArticlesStore.__serverArticlesCache.length > 0) {
+    return globalForArticlesStore.__serverArticlesCache;
+  }
+
+  // Check /tmp first (written during runtime on serverless like Vercel)
+  try {
+    if (fs.existsSync(TMP_JSON_PATH)) {
+      const raw = fs.readFileSync(TMP_JSON_PATH, 'utf-8');
+      if (raw && raw.trim()) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed.articles) && parsed.articles.length > 0) {
+          globalForArticlesStore.__serverArticlesCache = parsed.articles;
+          return parsed.articles;
+        }
+      }
+    }
+  } catch (err) {}
+
   try {
     if (fs.existsSync(DB_JSON_PATH)) {
       const raw = fs.readFileSync(DB_JSON_PATH, 'utf-8');
       if (raw && raw.trim()) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed.articles)) {
+          globalForArticlesStore.__serverArticlesCache = parsed.articles;
           return parsed.articles;
         }
       }
@@ -22,6 +47,10 @@ function readJsonArticles(): ArticleRecord[] {
 }
 
 function writeJsonArticles(articles: ArticleRecord[]) {
+  globalForArticlesStore.__serverArticlesCache = articles;
+
+  // Try writing to primary DB path
+  let writeSuccess = false;
   try {
     let fullDb: any = {};
     if (fs.existsSync(DB_JSON_PATH)) {
@@ -36,8 +65,26 @@ function writeJsonArticles(articles: ArticleRecord[]) {
       fs.mkdirSync(dir, { recursive: true });
     }
     fs.writeFileSync(DB_JSON_PATH, JSON.stringify(fullDb, null, 2), 'utf-8');
+    writeSuccess = true;
   } catch (err) {
-    console.warn('[serverArticlesStore] JSON fallback write warning:', err);
+    // Expected on Vercel production: process.cwd() is read-only
+  }
+
+  // Also write to /tmp on serverless so subsequent lambda requests can read updated articles
+  try {
+    let tmpDb: any = {};
+    if (fs.existsSync(TMP_JSON_PATH)) {
+      const raw = fs.readFileSync(TMP_JSON_PATH, 'utf-8');
+      if (raw && raw.trim()) tmpDb = JSON.parse(raw);
+    }
+    tmpDb.articles = articles;
+    const tmpDir = path.dirname(TMP_JSON_PATH);
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+    fs.writeFileSync(TMP_JSON_PATH, JSON.stringify(tmpDb, null, 2), 'utf-8');
+  } catch (tmpErr) {
+    if (!writeSuccess) {
+      console.warn('[serverArticlesStore] /tmp fallback write warning:', tmpErr);
+    }
   }
 }
 
@@ -181,7 +228,19 @@ export async function readArticlesStore(): Promise<ArticleRecord[]> {
           authorEmail: r.author_email || 'writer@digitaljournal.com',
           authorAvatar,
           authorBio,
-          seo: parsedSeo
+          seo: parsedSeo,
+          targetedRecipients: (() => {
+            if ((r as any).targeted_recipients) {
+              try {
+                const parsed = typeof (r as any).targeted_recipients === 'string' ? JSON.parse((r as any).targeted_recipients) : (r as any).targeted_recipients;
+                if (Array.isArray(parsed)) return parsed;
+              } catch (e) {}
+            }
+            if (parsedSeo?.targetedRecipients && Array.isArray(parsedSeo.targetedRecipients)) {
+              return parsedSeo.targetedRecipients;
+            }
+            return [];
+          })(),
         };
       });
 
@@ -216,9 +275,11 @@ export async function readArticlesStore(): Promise<ArticleRecord[]> {
             finalCombined.push(item);
           }
         });
+        globalForArticlesStore.__serverArticlesCache = finalCombined;
         return finalCombined;
       }
 
+      globalForArticlesStore.__serverArticlesCache = sqlArticles;
       return sqlArticles;
     }
   } catch (err) {
@@ -325,6 +386,9 @@ export async function upsertArticleStore(article: ArticleRecord): Promise<Articl
       finalSeo = { ...finalSeo, rejectionReason: sanitizedArticle.rejectionReason };
     } else {
       delete finalSeo.rejectionReason;
+    }
+    if (sanitizedArticle.targetedRecipients || sanitizedArticle.targeted_recipients) {
+      finalSeo.targetedRecipients = sanitizedArticle.targetedRecipients || sanitizedArticle.targeted_recipients;
     }
     const seoJson = Object.keys(finalSeo).length > 0 ? JSON.stringify(finalSeo) : (sanitizedArticle.seo ? JSON.stringify(sanitizedArticle.seo) : null);
 
@@ -433,7 +497,7 @@ export async function upsertArticleStore(article: ArticleRecord): Promise<Articl
         targetId
       ]);
     } else {
-      await db.query(`
+      const [insertRes]: any = await db.query(`
         INSERT INTO articles (
           category_id,
           title,
@@ -479,6 +543,9 @@ export async function upsertArticleStore(article: ArticleRecord): Promise<Articl
         isFeatured,
         isEditorsPick
       ]);
+      if (insertRes && insertRes.insertId) {
+        sanitizedArticle.id = insertRes.insertId;
+      }
     }
   } catch (err) {
     console.warn('[serverArticlesStore] MySQL upsert notice:', err);

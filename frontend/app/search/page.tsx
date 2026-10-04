@@ -139,9 +139,14 @@ function SearchResultsContent() {
   }, []);
 
   useEffect(() => {
-    const list = getAllSearchableArticles();
-    setAllArticles(list);
-  }, [liveArticles]);
+    // Only rebuild the article list once real data has loaded from the server.
+    // Calling getAllSearchableArticles() when liveArticles is still empty would
+    // populate the list from stale localStorage data and show it before real data arrives.
+    if (!loading) {
+      const list = getAllSearchableArticles();
+      setAllArticles(list);
+    }
+  }, [liveArticles, loading]);
 
   // Extract unique authors across all published articles (strictly authors/journalists, excluding readers and admins)
   const availableAuthors = useMemo(() => {

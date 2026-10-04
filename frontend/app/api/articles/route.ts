@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { requireRole } from '@/lib/rbac';
 import {
   readArticlesStore,
@@ -9,6 +10,36 @@ import {
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+function revalidatePublicPages(article?: ArticleRecord) {
+  try {
+    revalidatePath('/', 'layout');
+    revalidatePath('/');
+    revalidatePath('/api/articles');
+    revalidatePath('/search');
+    if (article) {
+      const cat = (article.category_slug || article.category || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
+      if (cat) {
+        revalidatePath(`/${cat}`);
+        revalidatePath(`/${cat}/[subcategory]`);
+        revalidatePath(`/${cat}/[subcategory]/[article]`);
+      }
+      if (article.slug) {
+        if (cat) {
+          revalidatePath(`/${cat}/${article.slug}`);
+          revalidatePath(`/${cat}/companies/${article.slug}`);
+          revalidatePath(`/${cat}/corporate-news/${article.slug}`);
+        }
+        revalidatePath(`/news/${article.slug}`);
+        revalidatePath(`/news/world/${article.slug}`);
+        revalidatePath(`/news/markets/${article.slug}`);
+        revalidatePath(`/news/politics/${article.slug}`);
+      }
+    }
+  } catch (err) {
+    console.warn('[api/articles] revalidate notice:', err);
+  }
+}
 
 export async function GET(request: Request) {
   try {
@@ -37,7 +68,7 @@ export async function GET(request: Request) {
       articles,
     }, {
       headers: {
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
         'Pragma': 'no-cache',
         'Expires': '0'
       }
@@ -58,10 +89,17 @@ export async function POST(request: Request) {
     if (Array.isArray(body.articles)) {
       const { writeArticlesStore } = await import('@/lib/serverArticlesStore');
       await writeArticlesStore(body.articles);
+      revalidatePublicPages();
       return NextResponse.json({
         success: true,
         message: 'Bulk articles updated successfully',
         articles: body.articles
+      }, {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
       });
     }
 
@@ -103,12 +141,19 @@ export async function POST(request: Request) {
     };
 
     const updatedList = await upsertArticleStore(articleRecord);
+    revalidatePublicPages(articleRecord);
 
     return NextResponse.json({
       success: true,
       message: 'Article saved successfully to server store',
       article: articleRecord,
       articles: updatedList
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -151,12 +196,19 @@ export async function PUT(request: Request) {
     };
 
     const updatedList = await upsertArticleStore(updatedRecord);
+    revalidatePublicPages(updatedRecord);
 
     return NextResponse.json({
       success: true,
       message: 'Article updated successfully',
       article: updatedRecord,
       articles: updatedList
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -184,10 +236,18 @@ export async function DELETE(request: Request) {
       updatedList = await updateArticleStatusStore(id, 'Trash');
     }
 
+    revalidatePublicPages();
+
     return NextResponse.json({
       success: true,
       message: permanent ? 'Article permanently deleted' : 'Article moved to Trash',
       articles: updatedList
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
     });
   } catch (error: any) {
     return NextResponse.json(

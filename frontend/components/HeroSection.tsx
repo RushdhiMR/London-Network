@@ -11,6 +11,10 @@ import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
 export default function HeroSection() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const isPaused = useRef(false);
+  // Track whether we have completed at least one full data processing cycle
+  // after the server fetch resolved. Used to gate the dispatchPageDataReady call
+  // so the skeleton only dismisses once all derived states are computed.
+  const heroDataInitialized = useRef(false);
   const [userPublishedArticles, setUserPublishedArticles] = useState<any[]>([]);
   const [userTrendingArticles, setUserTrendingArticles] = useState<any[]>([]);
   const [profileSyncTick, setProfileSyncTick] = useState(0);
@@ -30,13 +34,14 @@ export default function HeroSection() {
     if (typeof window !== "undefined") {
       window.addEventListener("dj_profile_updated", handleProfileSync);
       window.addEventListener("dj_articles_updated", handleProfileSync);
-      window.addEventListener("storage", handleProfileSync);
+      // NOTE: Do NOT listen to the native "storage" event here.
+      // That event fires in OTHER browser tabs when localStorage changes,
+      // causing unrelated tabs to re-render — the cross-tab reload bug.
     }
     return () => {
       if (typeof window !== "undefined") {
         window.removeEventListener("dj_profile_updated", handleProfileSync);
         window.removeEventListener("dj_articles_updated", handleProfileSync);
-        window.removeEventListener("storage", handleProfileSync);
       }
     };
   }, []);
@@ -153,17 +158,27 @@ export default function HeroSection() {
         };
       });
       setUserTrendingArticles(formattedTrending);
+
+      // Signal GlobalPageLoader that this component's data is ready.
+      // We dispatch here — inside the effect that processes liveArticles — so
+      // the skeleton is only dismissed AFTER userPublishedArticles and
+      // userTrendingArticles have been set in this same synchronous execution.
+      // Only fire once loading is complete (liveArticles is non-empty or server
+      // returned an empty result). The `loading` variable is from the closure.
+      if (!loading) {
+        heroDataInitialized.current = true;
+        dispatchPageDataReady();
+      }
     } catch (e) {
       console.warn("Error reading published articles for Hero:", e);
+      // Even on error, dismiss the skeleton if fetch is done
+      if (!loading) {
+        heroDataInitialized.current = true;
+        dispatchPageDataReady();
+      }
     }
-  }, [liveArticles, profileSyncTick]);
+  }, [liveArticles, profileSyncTick, loading]);
 
-  // Signal the GlobalPageLoader that data is ready once loading resolves.
-  useEffect(() => {
-    if (!loading) {
-      dispatchPageDataReady();
-    }
-  }, [loading]);
 
 
   const carouselArticles = [
@@ -329,7 +344,7 @@ export default function HeroSection() {
       }));
 
   return (
-    <section className="max-w-[1400px] mx-auto px-4 md:px-6 py-6 border-b border-gray-200 font-sans">
+    <section className="max-w-[1400px] mx-auto px-4 md:px-6 pt-6 pb-0 font-sans">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
         
         {/* LEFT CARD: FEATURED ARTICLE CAROUSEL (~67% GRID WIDTH, FIXED HEIGHT FOR EXACT SAME IMAGE SIZE) */}
@@ -468,7 +483,7 @@ export default function HeroSection() {
         {/* RIGHT CARD: TRENDING NOW BOX (~33% GRID WIDTH, MATCHES LEFT CARD EXACT HEIGHT) */}
         <div className="w-full lg:col-span-4 bg-white border border-gray-200 rounded-none p-3.5 sm:p-4 flex flex-col justify-between h-auto lg:h-[360px]">
           <div className="flex flex-col justify-between h-full">
-            {/* Header with Small View All Link on Top */}
+            {/* Header */}
             <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-gray-100">
               <div className="flex items-center gap-1.5">
                 <div className="w-1.5 h-4 bg-[#D31220]" />
@@ -476,13 +491,6 @@ export default function HeroSection() {
                   Trending Now
                 </h2>
               </div>
-              <Link 
-                href="/news" 
-                className="text-[10.5px] font-extrabold text-gray-500 hover:text-[#D31220] uppercase tracking-wider flex items-center gap-1 group transition-colors font-sans"
-              >
-                <span>View All</span>
-                <span className="group-hover:translate-x-0.5 transition-transform text-xs">→</span>
-              </Link>
             </div>
 
             {/* List */}
@@ -533,6 +541,9 @@ export default function HeroSection() {
         </div>
 
       </div>
+
+      {/* SECTION DIVIDER LINE MATCHING CONTENT WIDTH */}
+      <div className="border-b border-gray-200 mt-6 w-full" />
     </section>
   );
 }

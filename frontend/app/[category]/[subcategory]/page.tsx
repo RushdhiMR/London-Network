@@ -9,6 +9,8 @@ import Link from 'next/link';
 import { Metadata } from 'next';
 import { generateSocialMetadata } from '@/lib/seoHelper';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 export const dynamicParams = true;
 
 interface PageProps {
@@ -1313,9 +1315,30 @@ function getTopicMatchingImage(slug: string, title: string): string {
   return "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200&h=750&fit=crop";
 }
 
-function getNewsContent(slug: string) {
+async function getNewsContent(slug: string) {
+  let dbArticle: any = null;
+  try {
+    const { readArticlesStore } = await import("@/lib/serverArticlesStore");
+    const allArticles = await readArticlesStore();
+    const clean = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const targetClean = clean(slug);
+    dbArticle = allArticles.find((a: any) => {
+      const aSlug = clean(a.slug || "");
+      const aTitle = clean(a.title || "");
+      const aId = String(a.id || "");
+      return (
+        (aSlug && aSlug === targetClean) ||
+        (aTitle && aTitle === targetClean) ||
+        (aId && aId === String(slug)) ||
+        (targetClean.length > 8 && aSlug && (aSlug.includes(targetClean) || targetClean.includes(aSlug)))
+      );
+    });
+  } catch (e) {
+    console.warn("[getNewsContent] Error reading articles store:", e);
+  }
+
   let localArticle: any = null;
-  if (typeof window !== "undefined") {
+  if (!dbArticle && typeof window !== "undefined") {
     try {
       const stored = localStorage.getItem("dj_writer_submitted_articles");
       if (stored) {
@@ -1333,7 +1356,7 @@ function getNewsContent(slug: string) {
   }
 
   let serverArticle: any = null;
-  if (!localArticle) {
+  if (!dbArticle && !localArticle) {
     try {
       const fs = require("fs");
       const path = require("path");
@@ -1354,7 +1377,7 @@ function getNewsContent(slug: string) {
     } catch (e) {}
   }
 
-  const artSource = localArticle || serverArticle;
+  const artSource = dbArticle || localArticle || serverArticle;
 
   const existing = artSource
     ? {
@@ -1520,7 +1543,7 @@ export default async function SubcategoryPage({ params }: PageProps) {
   const isNewsArticle = !diveDeeperShortlist.includes(subcategory);
 
   if (isNewsArticle) {
-    const newsData = getNewsContent(subcategory);
+    const newsData = await getNewsContent(subcategory);
 
     const sidebarPicks = [
       {

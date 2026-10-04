@@ -42,6 +42,9 @@ const STATIC_PREFIXES = [
   "/subscribe",
   "/newsletters",
   "/journal-of-record",
+  // NOTE: /writer and /admin are intentionally NOT in this list.
+  // They are dynamic pages that fetch real data; they call dispatchPageDataReady()
+  // once their data is loaded, so GlobalPageLoader must wait for that signal.
 ];
 
 function isStaticRoute(path: string): boolean {

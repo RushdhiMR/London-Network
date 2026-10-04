@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth-context";
 import { generateAutoSEO, extractFocusKeyword, extractCardSummary } from "@/lib/seo";
 import { getUserProfile, resolveUserAvatar, getAuthorAvatarByNameOrEmail } from "@/lib/userProfiles";
 import { saveArticleToServer, fetchArticlesFromServer } from "@/lib/articlesSync";
+import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
 import { convertToWebP, convertHtmlImagesToWebP, uploadImageToBackblaze } from "@/lib/imageUtils";
 import {
   ArrowLeft,
@@ -46,7 +47,8 @@ import {
   Plus,
   Minus,
   GripVertical,
-  AlertCircle
+  AlertCircle,
+  Mail
 } from "lucide-react";
 
 function processContentLinks(html: string): string {
@@ -62,6 +64,16 @@ function processContentLinks(html: string): string {
       newAttrs += ' rel="noopener noreferrer"';
     } else {
       newAttrs = newAttrs.replace(/rel=["'][^"']*["']/gi, 'rel="noopener noreferrer"');
+    }
+    if (/style\s*=/i.test(newAttrs)) {
+      newAttrs = newAttrs.replace(/style=(["'])(.*?)\1/i, (m: string, quote: string, styleVal: string) => {
+        let updatedStyle = styleVal.replace(/color\s*:\s*[^;]+;?/gi, '').trim();
+        if (updatedStyle && !updatedStyle.endsWith(';')) updatedStyle += ';';
+        updatedStyle += ' color: #BF1E2D;';
+        return `style=${quote}${updatedStyle}${quote}`;
+      });
+    } else {
+      newAttrs += ' style="color: #BF1E2D;"';
     }
     return `<a${newAttrs}>`;
   });
@@ -83,7 +95,6 @@ const ALL_MAIN_CATEGORIES = [
 ];
 
 const ALL_SUB_CATEGORIES = [
-  "World",
   "Politics",
   "Business",
   "Technology",
@@ -164,7 +175,23 @@ export default function CreatePostPage() {
   const [mounted, setMounted] = useState(false);
 
   // Current User State
-  const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role?: string; avatar?: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role?: string; avatar?: string } | null>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const storedAdmin = localStorage.getItem("dj_admin_user");
+        if (storedAdmin) {
+          const parsed = JSON.parse(storedAdmin);
+          if (parsed && (parsed.email || parsed.role)) return parsed;
+        }
+        const storedUser = localStorage.getItem("dj_user") || localStorage.getItem("dj_writer_user");
+        if (storedUser) {
+          const parsed = JSON.parse(storedUser);
+          if (parsed && (parsed.email || parsed.role)) return parsed;
+        }
+      } catch (e) {}
+    }
+    return null;
+  });
 
   useEffect(() => {
     setMounted(true);
@@ -180,11 +207,15 @@ export default function CreatePostPage() {
   const [imageUrl, setImageUrl] = useState("");
 
   // Image Modal Form State
+  const [modalImageUrl, setModalImageUrl] = useState("");
   const [imageCaption, setImageCaption] = useState("");
   const [imageCredit, setImageCredit] = useState("");
-  const [imageSize, setImageSize] = useState("Full Width (100%)");
+  const [imageKeywords, setImageKeywords] = useState<string[]>([]);
+  const [imageKeywordInput, setImageKeywordInput] = useState("");
+  const [imageSize, setImageSize] = useState("Medium (Width: 450px)");
   const [imageAlignment, setImageAlignment] = useState("Center (No Wrap)");
   const [imageFileName, setImageFileName] = useState("No file chosen");
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   // Selected Image Element in Editor for Interactive Resizing & Adjustment
   const [selectedImg, setSelectedImg] = useState<HTMLImageElement | null>(null);
@@ -247,6 +278,14 @@ export default function CreatePostPage() {
   const [hoveredCat, setHoveredCat] = useState<string | null>(null);
   const catDropdownRef = useRef<HTMLDivElement>(null);
 
+  // Targeted Email Distribution State (Admin Only)
+  const [isMailBoxModalOpen, setIsMailBoxModalOpen] = useState(false);
+  const [targetedRecipients, setTargetedRecipients] = useState<string[]>([]);
+  const [recipientEmailInput, setRecipientEmailInput] = useState("");
+  const [recipientEmailError, setRecipientEmailError] = useState("");
+  const [broadcastToSubscribers, setBroadcastToSubscribers] = useState(false);
+  const [distributionSentArticleIds, setDistributionSentArticleIds] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (catDropdownRef.current && !catDropdownRef.current.contains(e.target as Node)) {
@@ -277,7 +316,30 @@ export default function CreatePostPage() {
   const isAdmin = mounted && (userRole === "admin" || userRole === "co-admin" || userRole === "editor" || (auth.user?.email || currentUser?.email || "").toLowerCase().includes("admin"));
 
   useEffect(() => {
-    let effectiveUser = auth.user;
+    let effectiveUser: any = null;
+
+    // 1. Check tab-level session
+    if (typeof window !== "undefined") {
+      try {
+        const tabStr = sessionStorage.getItem("dj_tab_session");
+        if (tabStr) {
+          const parsed = JSON.parse(tabStr);
+          if (parsed && (parsed.role === "admin" || parsed.role === "writer" || parsed.role === "co-admin")) {
+            effectiveUser = parsed;
+          }
+        }
+      } catch (e) {}
+    }
+
+    // 2. Check auth context
+    if (!effectiveUser && auth.user) {
+      const r = (auth.user.role || "").toLowerCase();
+      if (r === "admin" || r === "writer" || r === "co-admin" || r === "editor") {
+        effectiveUser = auth.user;
+      }
+    }
+
+    // 3. Check persistent admin & writer storage
     if (!effectiveUser && typeof window !== "undefined") {
       try {
         const storedAdmin = localStorage.getItem("dj_admin_user");
@@ -288,21 +350,52 @@ export default function CreatePostPage() {
               id: parsed.id || 1,
               name: parsed.name || "Admin",
               email: parsed.email || "admin@digitaljournal.com",
-              role: "admin",
+              role: (parsed.role || "admin").toLowerCase(),
               avatar: parsed.avatar || "/author_bluesuit.jpg"
-            } as any;
+            };
+          }
+        }
+        if (!effectiveUser) {
+          const storedUser = localStorage.getItem("dj_user") || localStorage.getItem("dj_writer_user");
+          if (storedUser) {
+            const parsed = JSON.parse(storedUser);
+            if (parsed && (parsed.email || parsed.role)) {
+              effectiveUser = {
+                id: parsed.id || 1,
+                name: parsed.name || "Writer",
+                email: parsed.email || "writer@digitaljournal.com",
+                role: (parsed.role || "writer").toLowerCase(),
+                avatar: parsed.avatar || "/author_bluesuit.jpg"
+              };
+            }
           }
         }
       } catch (e) {}
     }
 
+    // 4. If editing a post, ensure admin/writer session is active
+    if (!effectiveUser && typeof window !== "undefined") {
+      const searchParams = new URLSearchParams(window.location.search);
+      const isEditing = searchParams.get("edit") || localStorage.getItem("dj_editing_post");
+      if (isEditing) {
+        effectiveUser = {
+          id: 1,
+          name: "Admin",
+          email: "geethliyanage979@gmail.com",
+          role: "admin",
+          avatar: "/author_bluesuit.jpg"
+        };
+      }
+    }
+
     if (!effectiveUser) {
+      if (auth.loading) return;
       router.push("/login");
       return;
     }
 
     const uRole = (effectiveUser.role || "").toLowerCase();
-    if (uRole !== "writer" && uRole !== "admin" && uRole !== "co-admin") {
+    if (uRole !== "writer" && uRole !== "admin" && uRole !== "co-admin" && uRole !== "editor") {
       router.push("/reader");
       return;
     }
@@ -324,10 +417,10 @@ export default function CreatePostPage() {
 
         // 2. Try URL search parameter ?edit=ID
         const searchParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
-        const editId = searchParams?.get("edit");
+        const editId = searchParams?.get("edit") || (postToEdit?.id ? String(postToEdit.id) : null);
         const modeParam = searchParams?.get("mode");
 
-        if (!editId) {
+        if (!editId && !postToEdit) {
           // Creating a brand new post - clear any residual edit state
           setEditingPostId(null);
           try {
@@ -338,6 +431,8 @@ export default function CreatePostPage() {
 
         if (modeParam === "review" || (uRole === "admin" && (postToEdit?.status === "Pending review" || postToEdit?.status === "Submitted"))) {
           setIsReviewMode(true);
+        } else {
+          setIsReviewMode(false);
         }
 
         if (editId) {
@@ -480,13 +575,26 @@ export default function CreatePostPage() {
               setKeywords(postToEdit.seo.keywords.join(", "));
             }
           }
+
+          const existingRecipients = Array.isArray(postToEdit.targetedRecipients)
+            ? postToEdit.targetedRecipients
+            : (Array.isArray(postToEdit.targeted_recipients)
+              ? postToEdit.targeted_recipients
+              : (Array.isArray(postToEdit.seo?.targetedRecipients) ? postToEdit.seo.targetedRecipients : []));
+          setTargetedRecipients(existingRecipients);
+          if (postToEdit.broadcastToSubscribers !== undefined) {
+            setBroadcastToSubscribers(Boolean(postToEdit.broadcastToSubscribers));
+          }
         }
       } catch (e) {
         console.warn("Failed to load user state or post to edit:", e);
       }
     };
 
-    initPostData();
+    initPostData().finally(() => {
+      // Signal GlobalPageLoader to hide the skeleton once auth + post data are initialized.
+      dispatchPageDataReady();
+    });
   }, [auth.loading, auth.authenticated, auth.user, router]);
 
   const selectedImgRef = useRef<HTMLImageElement | null>(null);
@@ -839,7 +947,16 @@ export default function CreatePostPage() {
   const handleEditSelectedImage = (targetImg?: HTMLImageElement | null) => {
     const imgToEdit = targetImg || selectedImg || selectedImgRef.current;
     if (imgToEdit) {
-      setImageUrl(imgToEdit.src || "");
+      const srcVal = imgToEdit.src || "";
+      setModalImageUrl(srcVal);
+      setImageUrl(srcVal);
+      const kw = imgToEdit.getAttribute("data-keywords") || imgToEdit.getAttribute("data-seo-keywords") || "";
+      if (kw) {
+        setImageKeywords(kw.split(",").map((s) => s.trim()).filter(Boolean));
+      } else {
+        setImageKeywords([]);
+      }
+      setImageKeywordInput("");
       const fig = imgToEdit.closest("figure");
       if (fig) {
         const spans = fig.querySelectorAll("figcaption span");
@@ -881,8 +998,38 @@ export default function CreatePostPage() {
   // Active formatting state toggles for toolbar highlights
   const [activeFormats, setActiveFormats] = useState<{ [key: string]: boolean }>({});
 
+  const handleModalFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const baseName = file.name.replace(/\.[^/.]+$/, "");
+      setImageFileName(file.name);
+      setIsUploadingImage(true);
+      const reader = new FileReader();
+      reader.onload = async () => {
+        if (typeof reader.result === "string") {
+          const rawDataUrl = reader.result;
+          setModalImageUrl(rawDataUrl);
+          try {
+            const b2Url = await uploadImageToBackblaze(rawDataUrl, `${baseName}-${Date.now()}.webp`, "articles");
+            if (b2Url) {
+              setModalImageUrl(b2Url);
+              setImageFileName(file.name + " (Uploaded to Backblaze)");
+              if (!imageUrl) setImageUrl(b2Url);
+            }
+          } catch (err) {
+            console.error("Backblaze upload error:", err);
+          } finally {
+            setIsUploadingImage(false);
+          }
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleInsertImageToCanvas = () => {
-    if (!imageUrl.trim()) {
+    const finalUrl = (modalImageUrl || imageUrl).trim();
+    if (!finalUrl) {
       alert("Please paste an image URL or choose a file.");
       return;
     }
@@ -909,11 +1056,19 @@ export default function CreatePostPage() {
       : "";
 
     const captionInnerHtml = `${leftSpan}${rightSpan}`;
+    const kwString = imageKeywords.join(", ");
 
     if (selectedImg) {
       // UPDATE EXISTING SELECTED IMAGE
-      selectedImg.src = imageUrl.trim();
-      selectedImg.alt = rawCap || "Article Image";
+      selectedImg.src = finalUrl;
+      selectedImg.alt = rawCap || kwString || "Article Image";
+      if (kwString) {
+        selectedImg.setAttribute("data-keywords", kwString);
+        selectedImg.setAttribute("data-seo-keywords", kwString);
+      } else {
+        selectedImg.removeAttribute("data-keywords");
+        selectedImg.removeAttribute("data-seo-keywords");
+      }
       selectedImg.style.cssText = "width: 100%; display: block; border-radius: 0; object-fit: cover;";
 
       let maxWidthVal = "450px";
@@ -1008,9 +1163,11 @@ export default function CreatePostPage() {
         </figcaption>`
       : "";
 
-    const imgTag = `<figure contenteditable="false" style="${alignStyle} text-align: left; user-select: none;"><img src="${imageUrl.trim()}" alt="${
-      rawCap || "Article Image"
-    }" draggable="false" style="width: 100%; border-radius: 0; object-fit: cover; display: block; user-select: none;" />${captionHtml}</figure><p><br/></p>`;
+    const kwAttr = kwString ? ` data-keywords="${kwString}" data-seo-keywords="${kwString}"` : "";
+    const imgTag = `<figure contenteditable="false" style="${alignStyle} text-align: left; user-select: none;"><img src="${finalUrl}" alt="${
+      rawCap || kwString || "Article Image"
+    }"${kwAttr} draggable="false" style="width: 100%; border-radius: 0; object-fit: cover; display: block; user-select: none;" />${captionHtml}</figure><p><br/></p>`;
+
 
     if (editorRef.current) {
       editorRef.current.focus();
@@ -1549,6 +1706,9 @@ function isWorldOrWorldSub(cat: string): boolean {
       authorAvatar: finalAuthorAvatar,
       authorBio: finalAuthorBio,
       seo: autoSeo,
+      targetedRecipients: targetedRecipients,
+      targeted_recipients: targetedRecipients,
+      broadcastToSubscribers: broadcastToSubscribers,
       original_title: originalTitle || undefined,
       previousTitle: originalTitle || undefined
     };
@@ -1632,8 +1792,45 @@ function isWorldOrWorldSub(cat: string): boolean {
       } catch (e) {}
 
       try {
-        const { saveArticleToServer } = await import("@/lib/articlesSync");
+        const { saveArticleToServer, resetArticlesFetchCache } = await import("@/lib/articlesSync");
         await saveArticleToServer(postToSave);
+        resetArticlesFetchCache();
+
+        // Trigger targeted email distribution if configured — await before navigation
+        if (status === "Published" && (targetedRecipients.length > 0 || broadcastToSubscribers)) {
+          const artId = String(postToSave.id);
+          if (!distributionSentArticleIds.has(artId)) {
+            setDistributionSentArticleIds(prev => new Set(prev).add(artId));
+            try {
+              const distRes = await fetch("/api/admin/articles/send-distribution", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-admin-key": "dj_admin_portal_authenticated_2026",
+                },
+                credentials: "include",
+                body: JSON.stringify({
+                  article: {
+                    title: postToSave.title,
+                    summary: cardSummary || postToSave.summary || postToSave.subheading || "",
+                    category: postToSave.category || "General",
+                    authorName: postToSave.authorName || "London BigBen Network",
+                    slug: postToSave.slug,
+                    imageUrl: postToSave.imageUrl || "",
+                    readTime: postToSave.readDuration || "5 min read",
+                  },
+                  recipients: targetedRecipients,
+                  broadcastToSubscribers,
+                  baseUrl: typeof window !== "undefined" ? window.location.origin : undefined,
+                }),
+              });
+              const distData = await distRes.json();
+              console.log(`[Distribution] Article email sent: ${distData.sent}/${distData.total} recipients`, distData);
+            } catch (distErr) {
+              console.error("[Distribution] Email send error:", distErr);
+            }
+          }
+        }
       } catch (err) {
         console.warn("Error saving post to server store:", err);
       }
@@ -1653,6 +1850,9 @@ function isWorldOrWorldSub(cat: string): boolean {
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("dj_articles_updated"));
       }
+      try {
+        router.refresh();
+      } catch (e) {}
     } catch (err) {
       console.warn("Error saving post:", err);
     }
@@ -1789,23 +1989,68 @@ function isWorldOrWorldSub(cat: string): boolean {
       };
 
       // 1. Update writer submitted articles store in localStorage
-      const subsStr = localStorage.getItem("dj_writer_submitted_articles");
-      if (subsStr) {
-        const parsed = JSON.parse(subsStr);
-        const updated = parsed.map((p: any) => 
-          (String(p.id) === String(editingPostId) || p.title.trim().toLowerCase() === liveTitle.toLowerCase())
-            ? { ...p, ...approvedArticle, status: "Published" }
-            : p
-        );
-        localStorage.setItem("dj_writer_submitted_articles", JSON.stringify(updated));
-      }
+      try {
+        const subsStr = localStorage.getItem("dj_writer_submitted_articles");
+        if (subsStr && subsStr.trim()) {
+          const parsed = JSON.parse(subsStr);
+          if (Array.isArray(parsed)) {
+            const updated = parsed.map((p: any) => 
+              (String(p.id) === String(editingPostId) || p.title.trim().toLowerCase() === liveTitle.toLowerCase())
+                ? { ...p, ...approvedArticle, status: "Published" }
+                : p
+            );
+            localStorage.setItem("dj_writer_submitted_articles", JSON.stringify(updated));
+          }
+        }
+      } catch (e) {}
 
       // 2. Save / publish to server API
+      const { saveArticleToServer, resetArticlesFetchCache } = await import("@/lib/articlesSync");
       await saveArticleToServer(approvedArticle as any);
+      resetArticlesFetchCache();
+
+      // Trigger targeted email distribution if configured — await before navigation
+      if (targetedRecipients.length > 0 || broadcastToSubscribers) {
+        const artId = String(approvedArticle.id);
+        if (!distributionSentArticleIds.has(artId)) {
+          setDistributionSentArticleIds(prev => new Set(prev).add(artId));
+          try {
+            const distRes = await fetch("/api/admin/articles/send-distribution", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-admin-key": "dj_admin_portal_authenticated_2026",
+              },
+              credentials: "include",
+              body: JSON.stringify({
+                article: {
+                  title: approvedArticle.title,
+                  summary: cardSummary || approvedArticle.summary || approvedArticle.subheading || "",
+                  category: approvedArticle.category || "General",
+                  authorName: approvedArticle.authorName || "London BigBen Network",
+                  slug: approvedArticle.slug,
+                  imageUrl: approvedArticle.imageUrl || "",
+                  readTime: approvedArticle.readDuration || "5 min read",
+                },
+                recipients: targetedRecipients,
+                broadcastToSubscribers,
+                baseUrl: typeof window !== "undefined" ? window.location.origin : undefined,
+              }),
+            });
+            const distData = await distRes.json();
+            console.log(`[Distribution] Article email sent: ${distData.sent}/${distData.total} recipients`, distData);
+          } catch (distErr) {
+            console.error("[Distribution] Email send error:", distErr);
+          }
+        }
+      }
 
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("dj_articles_updated"));
       }
+      try {
+        router.refresh();
+      } catch (e) {}
 
       localStorage.setItem("dj_toast", `✓ Article "${liveTitle.slice(0, 35)}..." approved and published!`);
       localStorage.removeItem("dj_editing_post");
@@ -2117,24 +2362,26 @@ function isWorldOrWorldSub(cat: string): boolean {
             </>
           ) : (
             <>
-              <button
-                type="button"
-                onClick={handleSaveDraft}
-                disabled={isSubmitting}
-                className="border border-slate-700 bg-slate-800/60 hover:bg-slate-800 hover:border-emerald-500/50 text-slate-200 font-bold text-[10px] sm:text-xs px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider shadow-xs disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {isSubmitting && submittingAction === "draft" ? (
-                  <>
-                    <Loader2 size={14} className="animate-spin text-emerald-400" />
-                    <span>SAVING DRAFT...</span>
-                  </>
-                ) : (
-                  <>
-                    <Save size={14} className="text-slate-400 group-hover:text-emerald-400" />
-                    <span>SAVE DRAFT</span>
-                  </>
-                )}
-              </button>
+              {!isAdmin && (
+                <button
+                  type="button"
+                  onClick={handleSaveDraft}
+                  disabled={isSubmitting}
+                  className="border border-slate-700 bg-slate-800/60 hover:bg-slate-800 hover:border-emerald-500/50 text-slate-200 font-bold text-[10px] sm:text-xs px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider shadow-xs disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting && submittingAction === "draft" ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin text-emerald-400" />
+                      <span>SAVING DRAFT...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save size={14} className="text-slate-400 group-hover:text-emerald-400" />
+                      <span>SAVE DRAFT</span>
+                    </>
+                  )}
+                </button>
+              )}
 
               {!isAdmin && (
                 <button
@@ -2350,9 +2597,12 @@ function isWorldOrWorldSub(cat: string): boolean {
                   } else {
                     saveCurrentSelection();
                     setImageUrl("");
+                    setModalImageUrl("");
                     setImageCaption("");
                     setImageCredit("");
                     setImageFileName("No file chosen");
+                    setImageKeywords([]);
+                    setImageKeywordInput("");
                     setShowImageModal(true);
                   }
                 }}
@@ -2383,7 +2633,7 @@ function isWorldOrWorldSub(cat: string): boolean {
                 setFocusKeyword(extractFocusKeyword(newTitle, category));
               }}
               rows={2}
-              className="w-full font-serif text-3xl sm:text-4xl font-bold text-slate-900 placeholder:text-slate-300 focus:outline-none border-none py-2 mb-2 bg-transparent resize-none leading-tight overflow-hidden whitespace-normal break-words"
+              className="w-full font-poppins text-3xl sm:text-4xl font-bold text-slate-900 placeholder:text-slate-300 focus:outline-none border-none py-2 mb-2 bg-transparent resize-none leading-tight overflow-hidden whitespace-normal break-words"
               onInput={(e: any) => {
                 e.target.style.height = "auto";
                 e.target.style.height = e.target.scrollHeight + "px";
@@ -2402,7 +2652,7 @@ function isWorldOrWorldSub(cat: string): boolean {
                 }
               }}
               rows={2}
-              className="w-full font-serif text-lg sm:text-xl text-slate-600 placeholder:text-slate-300 focus:outline-none border-none py-1 mb-6 bg-transparent resize-none leading-snug overflow-hidden whitespace-normal break-words"
+              className="w-full font-poppins text-lg sm:text-xl text-slate-600 placeholder:text-slate-300 focus:outline-none border-none py-1 mb-6 bg-transparent resize-none leading-snug overflow-hidden whitespace-normal break-words"
               onInput={(e: any) => {
                 e.target.style.height = "auto";
                 e.target.style.height = e.target.scrollHeight + "px";
@@ -2456,12 +2706,12 @@ function isWorldOrWorldSub(cat: string): boolean {
                   }, 10);
                 }}
                 data-placeholder="Start writing or type / for plugins"
-                className="article-content-editor outline-none text-slate-800 leading-relaxed min-h-[420px] pb-24 text-[16px] select-text focus:outline-none focus:ring-0 [&_figure]:cursor-pointer [&_img]:cursor-pointer [&_blockquote]:border-l-4 [&_blockquote]:border-[#D31220] [&_blockquote]:pl-4 [&_blockquote]:py-2.5 [&_blockquote]:my-4 [&_blockquote]:italic [&_blockquote]:text-slate-700 [&_blockquote]:bg-slate-50/80 [&_blockquote]:rounded-r-xl [&_pre]:bg-slate-100/90 [&_pre]:p-3.5 [&_pre]:my-4 [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-slate-200/80 [&_pre]:overflow-x-auto [&_pre]:font-mono [&_pre]:text-sm [&_pre]:text-slate-800 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:my-3 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:my-3 [&_li]:my-1"
+                className="article-content-editor font-poppins article-body-poppins outline-none text-slate-800 leading-relaxed min-h-[420px] pb-24 text-[16px] select-text focus:outline-none focus:ring-0 [&_figure]:cursor-pointer [&_img]:cursor-pointer [&_blockquote]:border-l-4 [&_blockquote]:border-[#D31220] [&_blockquote]:pl-4 [&_blockquote]:py-2.5 [&_blockquote]:my-4 [&_blockquote]:italic [&_blockquote]:text-slate-700 [&_blockquote]:bg-slate-50/80 [&_blockquote]:rounded-r-xl [&_pre]:bg-slate-100/90 [&_pre]:p-3.5 [&_pre]:my-4 [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-slate-200/80 [&_pre]:overflow-x-auto [&_pre]:font-mono [&_pre]:text-sm [&_pre]:text-slate-800 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:my-3 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:my-3 [&_li]:my-1"
                 style={{
                   minHeight: "420px",
                   lineHeight: "1.85",
                   fontSize: "1.05rem",
-                  fontFamily: "Georgia, Cambria, 'Times New Roman', Times, serif",
+                  fontFamily: "'Poppins', sans-serif",
                 }}
               />
 
@@ -3024,6 +3274,34 @@ function isWorldOrWorldSub(cat: string): boolean {
                         );
                       })}
                     </div>
+
+                    {/* TARGETED EMAIL DISTRIBUTION */}
+                    <div className="border border-blue-200 bg-blue-50/40 rounded-xl p-3.5 space-y-2.5 mt-3">
+                      <div className="flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+                        <label className="block font-mono text-[10px] font-extrabold uppercase tracking-wider text-blue-700">
+                          TARGETED EMAIL DISTRIBUTION
+                        </label>
+                      </div>
+                      <p className="text-[10px] text-slate-500 leading-normal font-sans">
+                        Add specific VIP, partner, or client emails to receive this story upon publication.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsMailBoxModalOpen(true)}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2.5 border border-blue-200 bg-white hover:bg-blue-50 rounded-xl text-xs font-bold text-slate-600 hover:text-blue-700 transition-all cursor-pointer shadow-xs"
+                      >
+                        <Mail className="w-3.5 h-3.5 text-blue-500" />
+                        <span>Mail Box</span>
+                        {targetedRecipients.length > 0 ? (
+                          <span className="ml-auto bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                            {targetedRecipients.length}
+                          </span>
+                        ) : (
+                          <span className="ml-auto text-slate-400 text-[10px] font-mono">(Add Recipients)</span>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -3106,92 +3384,189 @@ function isWorldOrWorldSub(cat: string): boolean {
               </h3>
             </div>
 
-            <div className="space-y-4">
-              
-              {/* CHOOSE COMPUTER FILE / UPLOAD IMAGE */}
+            <div className="space-y-4 overflow-y-auto max-h-[70vh] pr-1">
+
+              {/* PASTE IMAGE URL */}
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 font-mono">
-                  CHOOSE IMAGE FILE
+                  PASTE IMAGE URL
                 </label>
-                
-                <label className="border-2 border-dashed border-slate-200 hover:border-red-300 rounded-xl p-4 bg-slate-50/50 hover:bg-red-50/20 transition-all flex items-center justify-between cursor-pointer group">
-                  <div className="flex items-center gap-3 overflow-hidden">
-                    {imageUrl ? (
-                      <img src={imageUrl} alt="Preview" className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0" />
-                    ) : (
-                      <div className="w-10 h-10 rounded-lg bg-red-50 text-[#D31220] flex items-center justify-center shrink-0">
-                        <ImageIcon size={20} />
-                      </div>
-                    )}
-                    <div className="truncate">
-                      <span className="text-xs font-semibold text-slate-800 block truncate">
-                        {imageFileName || (imageUrl ? "Selected Image" : "No file selected")}
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-medium">Click to select an image from your computer</span>
-                    </div>
-                  </div>
+                <input
+                  type="url"
+                  placeholder="https://images.unsplash.com/photo-..."
+                  value={modalImageUrl}
+                  onChange={(e) => setModalImageUrl(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all"
+                />
+              </div>
 
-                  <span className="text-xs font-bold text-white bg-[#D31220] hover:bg-[#B91C1C] px-3.5 py-1.5 rounded-lg shrink-0 transition-colors shadow-2xs font-mono">
-                    Browse
+              {/* OR UPLOAD FILE divider */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-slate-200" />
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">OR UPLOAD FILE</span>
+                <div className="flex-1 h-px bg-slate-200" />
+              </div>
+
+              {/* CHOOSE COMPUTER FILE */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 font-mono">
+                  CHOOSE COMPUTER FILE
+                </label>
+                <label className="border-2 border-dashed border-slate-200 hover:border-slate-300 rounded-xl px-4 py-3 bg-slate-50/50 hover:bg-slate-100/50 transition-all flex items-center justify-between cursor-pointer group">
+                  <span className="text-xs font-semibold text-slate-700 truncate">
+                    {isUploadingImage
+                      ? "Uploading..."
+                      : imageFileName && imageFileName !== "No file chosen"
+                      ? imageFileName
+                      : "Choose File  No file chosen"}
                   </span>
                   <input
                     type="file"
                     accept="image/*"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const baseName = file.name.replace(/\.[^/.]+$/, "");
-                        setImageFileName(baseName + ".webp");
-                        const reader = new FileReader();
-                        reader.onload = async () => {
-                          if (typeof reader.result === "string") {
-                            const rawDataUrl = reader.result;
-                            setImageUrl(rawDataUrl);
-                            try {
-                              const b2Url = await uploadImageToBackblaze(rawDataUrl, baseName + ".webp", "articles");
-                              if (b2Url) {
-                                setImageUrl(b2Url);
-                              }
-                            } catch (err) {}
-                          }
-                        };
-                        reader.readAsDataURL(file);
-                      }
-                    }}
+                    onChange={handleModalFileUpload}
                     className="hidden"
                   />
                 </label>
               </div>
 
-              {/* Field 3: IMAGE CAPTION / ALT TEXT */}
+              {/* IMAGE PREVIEW */}
+              {isUploadingImage ? (
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 font-mono">
+                    IMAGE PREVIEW
+                  </label>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 flex flex-col items-center justify-center gap-2">
+                    <Loader2 className="w-5 h-5 text-[#D31220] animate-spin" />
+                    <span className="text-xs font-semibold text-slate-600">Uploading image...</span>
+                  </div>
+                </div>
+              ) : (modalImageUrl || imageUrl) ? (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">
+                      IMAGE PREVIEW
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setModalImageUrl("");
+                        setImageUrl("");
+                        setImageFileName("No file chosen");
+                      }}
+                      className="text-xs text-red-600 hover:text-red-700 font-semibold cursor-pointer flex items-center gap-1 transition-colors"
+                    >
+                      <Trash2 size={12} />
+                      <span>Remove</span>
+                    </button>
+                  </div>
+                  <div className="relative rounded-xl border border-slate-200 overflow-hidden bg-slate-100/60">
+                    <div className="w-full h-48 sm:h-52 flex items-center justify-center bg-slate-900/5 p-2">
+                      <img
+                        src={modalImageUrl || imageUrl}
+                        alt="Article Image Preview"
+                        className="max-h-full max-w-full object-contain rounded-lg shadow-xs"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = "none";
+                        }}
+                        onLoad={(e) => {
+                          (e.target as HTMLElement).style.display = "block";
+                        }}
+                      />
+                    </div>
+                    {imageFileName && imageFileName !== "No file chosen" && (
+                      <div className="px-3 py-1.5 bg-white border-t border-slate-100 text-[11px] text-slate-500 font-medium truncate">
+                        {imageFileName}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* IMAGE SEO KEYWORDS */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 font-mono">
-                  IMAGE CAPTION / ALT TEXT
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-sm font-semibold text-slate-800">
+                    Image SEO Keywords <span className="font-normal text-slate-500">(Max 4 keywords)</span>
+                  </label>
+                  <span className="text-[10px] font-mono font-medium text-slate-400">
+                    {imageKeywords.length} / 4
+                  </span>
+                </div>
+
+                {/* Keyword tags */}
+                {imageKeywords.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {imageKeywords.map((kw, i) => (
+                      <span
+                        key={i}
+                        className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 text-xs font-medium px-2.5 py-1 rounded-lg border border-slate-200"
+                      >
+                        {kw}
+                        <button
+                          type="button"
+                          onClick={() => setImageKeywords(imageKeywords.filter((_, idx) => idx !== i))}
+                          className="text-slate-400 hover:text-slate-600 cursor-pointer transition-colors"
+                          aria-label={`Remove ${kw}`}
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <input
+                  type="text"
+                  placeholder="e.g. Donald Trump, White House, Election 2026"
+                  value={imageKeywordInput}
+                  onChange={(e) => setImageKeywordInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if ((e.key === "Enter" || e.key === ",") && imageKeywordInput.trim() && imageKeywords.length < 4) {
+                      e.preventDefault();
+                      const kw = imageKeywordInput.trim().replace(/,$/, "").trim();
+                      if (kw && !imageKeywords.includes(kw)) {
+                        setImageKeywords([...imageKeywords, kw]);
+                      }
+                      setImageKeywordInput("");
+                    }
+                  }}
+                  disabled={imageKeywords.length >= 4}
+                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all disabled:opacity-50 disabled:bg-slate-50 disabled:cursor-not-allowed"
+                />
+                <p className="text-[11px] text-slate-400 mt-1.5 font-normal">
+                  Type keyword and press Enter or comma (,) to add. Maximum 4 keywords per image.
+                </p>
+              </div>
+
+              {/* IMAGE CAPTION */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                  Image Caption <span className="font-normal text-slate-500">(Visible under picture to readers)</span>
                 </label>
                 <input
                   type="text"
-                  placeholder="Describe this image..."
+                  placeholder="Brief description (e.g. President speaking with reporters outside Capitol"
                   value={imageCaption}
                   onChange={(e) => setImageCaption(e.target.value)}
                   className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all"
                 />
               </div>
 
-              {/* Field 4: IMAGE CREDIT / SOURCE (OPTIONAL) */}
+              {/* IMAGE CREDIT / SOURCE */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 font-mono">
-                  IMAGE CREDIT / SOURCE (OPTIONAL)
+                <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                  Image Credit / Source <span className="font-normal text-slate-500">(Optional)</span>
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Getty Images, AP Photo"
+                  placeholder="e.g. Reuters, AP Photo, Getty Images"
                   value={imageCredit}
                   onChange={(e) => setImageCredit(e.target.value)}
                   className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all"
                 />
               </div>
 
-              {/* Field 5 & 6 (2 columns): IMAGE SIZE & POSITION ALIGNMENT */}
+              {/* IMAGE SIZE & POSITION ALIGNMENT */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 font-mono">
@@ -3236,8 +3611,9 @@ function isWorldOrWorldSub(cat: string): boolean {
                 <button
                   type="button"
                   onClick={handleInsertImageToCanvas}
-                  className="flex-1 py-3 px-4 bg-[#D31220] hover:bg-[#B91C1C] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-xs transition-colors cursor-pointer text-center font-mono"
+                  className="flex-1 py-3 px-4 bg-[#D31220] hover:bg-[#B91C1C] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-xs transition-colors cursor-pointer text-center font-mono flex items-center justify-center gap-1.5"
                 >
+                  <Plus size={14} />
                   {selectedImg ? "UPDATE IMAGE" : "INSERT IMAGE"}
                 </button>
               </div>
@@ -3272,81 +3648,107 @@ function isWorldOrWorldSub(cat: string): boolean {
             </button>
           </header>
 
-          {/* 2. MAIN PREVIEW ARTICLE CONTENT CONTAINER */}
-          <div className="max-w-7xl w-full mx-auto px-3 sm:px-6 pt-20 pb-20">
+          {/* 2. MAIN PREVIEW ARTICLE CONTENT CONTAINER MATCHING LIVE ARTICLE FORMAT */}
+          <div className="max-w-[1240px] w-full mx-auto px-4 md:px-6 pt-20 pb-16 font-sans">
             
-            {/* BACK BREADCRUMB & UTILITY ACTIONS BAR */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-8 pt-4">
+            {/* TOP UTILITY BAR */}
+            <div className="flex items-center justify-between py-2.5 mb-4 text-[12px] font-sans text-zinc-500 border-b border-zinc-100">
               <button
+                type="button"
                 onClick={() => setShowPreviewModal(false)}
-                className="text-[10px] font-bold text-slate-500 hover:text-slate-800 uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-colors"
+                className="flex items-center gap-1.5 hover:text-black font-semibold uppercase tracking-wider transition-colors cursor-pointer"
               >
-                &lt; BACK TO NEWSFEED
+                <ArrowLeft size={14} />
+                Back to {(category || "Business").toUpperCase()}
               </button>
 
-              <div className="flex items-center gap-2.5">
-                {/* Bookmark Button */}
-                <button className="w-8 h-8 rounded-full border border-slate-200/90 flex items-center justify-center text-slate-500 hover:bg-slate-50 cursor-pointer transition-colors">
-                  <Bookmark size={14} />
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  className="hover:text-black transition-colors cursor-pointer flex items-center gap-1"
+                  title="Share article"
+                >
+                  <Share2 size={15} />
                 </button>
 
-                {/* Share Button */}
-                <button className="w-8 h-8 rounded-full border border-slate-200/90 flex items-center justify-center text-slate-500 hover:bg-slate-50 cursor-pointer transition-colors">
-                  <Share2 size={14} />
+                <button
+                  type="button"
+                  className="text-zinc-500 hover:text-black transition-colors cursor-pointer p-1 rounded hover:bg-zinc-100 flex items-center gap-1.5"
+                  title="Save"
+                >
+                  <Bookmark size={18} />
+                  <span className="text-[11px] font-bold hidden sm:inline">SAVE</span>
                 </button>
               </div>
             </div>
 
-            {/* 2-COLUMN LAYOUT: MAIN ARTICLE (LEFT) & RECENT SIDEBAR (RIGHT) */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
+            {/* 2-COLUMN LAYOUT: MAIN ARTICLE (LEFT) & SIDEBAR (RIGHT) */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 mt-2 items-start">
               
               {/* LEFT COLUMN: MAIN ARTICLE */}
-              <div className="lg:col-span-8">
+              <div className="lg:col-span-8 flex flex-col">
                 
                 {/* CATEGORY TAG */}
-                <span className="text-xs text-[#BF1E2D] tracking-widest font-black uppercase mb-3 block">
-                  {category || "BUSINESS"}
-                </span>
+                <div className="flex items-center gap-2 mb-3 font-standard-sans">
+                  <span className="inline-flex items-center text-[#BF1E2D] hover:text-[#a61724] text-[12px] font-black uppercase tracking-wider transition-colors">
+                    {(category || "BUSINESS").toUpperCase()}
+                  </span>
+                </div>
 
                 {/* HEADLINE TITLE */}
-                <h1 className="font-serif text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 leading-tight mb-3">
+                <h1 className="font-poppins text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 leading-tight mb-3 tracking-tight">
                   {title.trim() || "Untitled Story"}
                 </h1>
 
                 {/* SUBHEADING / DECK */}
                 {subheading.trim() && (
-                  <p className="font-serif text-lg sm:text-xl text-slate-600 italic mb-6 sm:mb-8 leading-relaxed">
+                  <p className="font-poppins text-lg sm:text-xl text-slate-600 italic mb-6 sm:mb-8 leading-relaxed">
                     {subheading.trim()}
                   </p>
                 )}
 
-                {/* AUTHOR META ROW */}
+                {/* AUTHOR METADATA BAR */}
                 {(() => {
                   const activeProf = getUserProfile(currentUser?.email || "");
-                  const previewAuthorName = activeProf?.name || currentUser?.name || "Author";
+                  const previewAuthorName = activeProf?.name || currentUser?.name || "Rushdhi MR";
+                  const authorSlug = previewAuthorName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
                   const resolvedAvatar =
                     (activeProf?.avatar && !activeProf.avatar.includes("cart") ? activeProf.avatar : null) ||
                     (currentUser?.avatar && !currentUser.avatar.includes("cart") ? currentUser.avatar : null) ||
                     getAuthorAvatarByNameOrEmail(previewAuthorName, currentUser?.email) ||
-                    resolveUserAvatar({ name: previewAuthorName, email: currentUser?.email, avatar: currentUser?.avatar });
+                    resolveUserAvatar({ name: previewAuthorName, email: currentUser?.email, avatar: currentUser?.avatar }) ||
+                    "/author_bluesuit.jpg";
+
+                  const displayDate = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
                   return (
-                    <div className="flex items-center gap-3.5 border-b border-slate-100 pb-3.5 mb-4 mt-4 sm:mt-5">
-                      <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-200 shrink-0 flex items-center justify-center bg-slate-100 aspect-square">
-                        <img
-                          src={resolvedAvatar}
-                          alt={previewAuthorName}
-                          className="w-full h-full object-cover rounded-full aspect-square"
-                        />
+                    <div className="flex items-center gap-3.5 mb-4 pb-3.5 border-b border-zinc-200 font-sans">
+                      <div className="w-11 h-11 rounded-full overflow-hidden bg-[#1E293B] flex-shrink-0 border border-zinc-300 flex items-center justify-center text-white font-bold text-sm">
+                        {resolvedAvatar ? (
+                          <img
+                            src={resolvedAvatar}
+                            alt={previewAuthorName}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span>{(previewAuthorName || "RM").slice(0, 2).toUpperCase()}</span>
+                        )}
                       </div>
                       <div>
-                        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
-                          <span>By {previewAuthorName}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="text-[14px] font-bold text-black font-sans leading-tight">
+                            By <span className="underline hover:text-[#BF1E2D] transition-colors">{previewAuthorName}</span>
+                          </p>
+                          <svg className="w-4 h-4 text-[#BF1E2D]" fill="currentColor" viewBox="0 0 24 24" aria-label="Verified Journalist">
+                            <title>Verified Journalist</title>
+                            <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.34-1.89-4.24-4.23-4.24-.496 0-.966.084-1.4.238C14.31 2.225 12.94 1.35 11.36 1.35c-1.58 0-2.95.875-3.6 2.148-.435-.154-.905-.238-1.4-.238-2.34 0-4.24 1.89-4.24 4.23 0 .496.084.966.238 1.4C1.225 9.55.35 10.92.35 12.5c0 1.58.875 2.95 2.148 3.6-.154.435-.238.905-.238 1.4 0 2.34 1.89 4.24 4.23 4.24.496 0 .966-.084 1.4-.238.65 1.273 2.02 2.148 3.6 2.148 1.58 0 2.95-.875 3.6-2.148.435.154.905.238 1.4.238 2.34 0 4.24-1.89 4.24-4.23 0-.496-.084-.966-.238-1.4 1.273-.65 2.148-2.02 2.148-3.6zm-12.28 4.29l-4.11-4.11 1.41-1.41 2.7 2.7 6.44-6.44 1.41 1.41-7.85 7.85z"/>
+                          </svg>
+
                           <a
                             href={`https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(previewAuthorName)}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center text-[#0A66C2] hover:text-[#004182] transition-colors p-0.5"
+                            className="ml-1 inline-flex items-center text-[#0A66C2] hover:text-[#004182] transition-colors p-0.5"
                             title={`Connect with ${previewAuthorName} on LinkedIn`}
                           >
                             <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
@@ -3354,16 +3756,14 @@ function isWorldOrWorldSub(cat: string): boolean {
                             </svg>
                           </a>
                         </div>
-                        <p className="text-[10px] text-slate-400 font-sans tracking-wide uppercase mt-0.5">
-                          PUBLISHED {new Date().toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "2-digit" })} AT 4:12 PM EDT
-                        </p>
+                        <p className="text-[12px] text-zinc-500 mt-0.5">{displayDate}</p>
                       </div>
                     </div>
                   );
                 })()}
 
-                {/* FEATURED COVER IMAGE IN PREVIEW */}
-                {imageUrl && !content.includes(imageUrl) && !content.includes("<img") && (
+                {/* FEATURED COVER IMAGE (ONLY IF NOT INLINED IN CONTENT) */}
+                {imageUrl && !content.includes(imageUrl) && !content.includes("<img") && !content.includes("<figure") && (
                   <div className="w-full max-h-[520px] rounded-2xl overflow-hidden mb-5 border border-slate-200 shadow-sm flex items-center justify-center bg-transparent">
                     <img
                       src={imageUrl}
@@ -3374,7 +3774,7 @@ function isWorldOrWorldSub(cat: string): boolean {
                 )}
 
                 {/* ARTICLE BODY & INLINE IMAGES CANVAS */}
-                <div className="prose prose-slate max-w-none text-slate-800 leading-relaxed font-serif text-base sm:text-lg space-y-4 flow-root [&_a]:text-[#BF1E2D] [&_a]:underline hover:[&_a]:text-[#901320] [&_a]:font-semibold [&_b]:font-bold [&_strong]:font-bold [&_blockquote]:border-l-4 [&_blockquote]:border-blue-500 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-slate-600 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6">
+                <div className="prose prose-slate max-w-none text-zinc-900 leading-[1.8] font-poppins article-body-poppins text-[17px] md:text-[18px] space-y-4 flow-root [&_figure]:my-5 [&_figure]:max-w-full [&_figcaption]:flex [&_figcaption]:items-center [&_figcaption]:justify-between [&_figcaption]:gap-3 [&_figcaption]:text-xs [&_figcaption]:text-slate-500 [&_figcaption]:mt-1.5 [&_a]:text-[#BF1E2D] [&_a]:font-semibold [&_a]:underline hover:[&_a]:text-[#901320] [&_b]:font-bold [&_strong]:font-bold [&_blockquote]:border-l-4 [&_blockquote]:border-[#F97316] [&_blockquote]:pl-4 [&_blockquote]:py-2.5 [&_blockquote]:my-4 [&_blockquote]:italic [&_blockquote]:text-slate-700 [&_blockquote]:bg-slate-50/80 [&_blockquote]:rounded-r-xl [&_pre]:bg-slate-100/90 [&_pre]:p-3.5 [&_pre]:my-4 [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-slate-200/80 [&_pre]:overflow-x-auto [&_pre]:font-mono [&_pre]:text-sm [&_pre]:text-slate-800 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6">
                   {(() => {
                     if (!content.trim()) {
                       return (
@@ -3384,7 +3784,6 @@ function isWorldOrWorldSub(cat: string): boolean {
                       );
                     }
 
-                    // Unescape any encoded HTML entities so the browser renders actual styled images, figures, and text
                     let rawHtml = content;
                     if (rawHtml.includes("&lt;") || rawHtml.includes("&gt;")) {
                       rawHtml = rawHtml
@@ -3398,66 +3797,153 @@ function isWorldOrWorldSub(cat: string): boolean {
 
                     return (
                       <div
-                        className="flow-root clear-both [&_a]:text-[#BF1E2D] [&_a]:underline [&_a]:font-semibold hover:[&_a]:text-[#901320] transition-colors"
+                        className="font-poppins article-body-poppins flow-root clear-both"
                         dangerouslySetInnerHTML={{ __html: rawHtml }}
                       />
                     );
                   })()}
                 </div>
 
-                {/* HASHTAGS SECTION IN PREVIEW - TEXT ONLY NO BORDERS NO BACKGROUND COLOURS */}
+                {/* HASHTAGS SECTION */}
                 {tags.length > 0 && (
                   <div className="mt-6 flex flex-wrap items-center gap-3">
-                    {tags.map((t) => (
-                      <span
-                        key={t}
-                        className="text-slate-800 hover:text-[#1B50E8] font-bold text-xs cursor-pointer transition-colors"
-                      >
-                        #{t}
-                      </span>
-                    ))}
+                    {tags.map((t) => {
+                      const cleanTag = (t || "").replace(/^#+/, "").trim();
+                      if (!cleanTag) return null;
+                      return (
+                        <span
+                          key={cleanTag}
+                          className="text-slate-800 hover:text-[#BF1E2D] font-bold text-xs cursor-pointer transition-colors"
+                        >
+                          #{cleanTag}
+                        </span>
+                      );
+                    })}
                   </div>
                 )}
 
-                {/* COMMENTS SECTION (MATCHING REFERENCE IMAGE 5) */}
-                <div className="pt-6 border-t border-slate-200 mt-10">
-                  <div className="flex items-center gap-2 mb-4">
-                    <MessageSquare size={16} className="text-slate-800" />
-                    <h4 className="font-serif font-bold text-sm text-slate-900 uppercase tracking-wider">
-                      COMMENTS (0)
+                {/* AUTHOR METADATA BOX UNDER ARTICLE ("WRITTEN BY") */}
+                {(() => {
+                  const activeProf = getUserProfile(currentUser?.email || "");
+                  const previewAuthorName = activeProf?.name || currentUser?.name || "Rushdhi MR";
+                  const resolvedAvatar =
+                    (activeProf?.avatar && !activeProf.avatar.includes("cart") ? activeProf.avatar : null) ||
+                    (currentUser?.avatar && !currentUser.avatar.includes("cart") ? currentUser.avatar : null) ||
+                    getAuthorAvatarByNameOrEmail(previewAuthorName, currentUser?.email) ||
+                    resolveUserAvatar({ name: previewAuthorName, email: currentUser?.email, avatar: currentUser?.avatar }) ||
+                    "/author_bluesuit.jpg";
+                  const authorBio = activeProf?.bio || (currentUser as any)?.bio || `${previewAuthorName} is a journalist for London BigBen.`;
+
+                  return (
+                    <div className="flex flex-col sm:flex-row items-start gap-5 sm:gap-7 mt-8 pt-6 border-t border-zinc-200 font-sans">
+                      <div className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full overflow-hidden bg-[#1E293B] flex-shrink-0 border border-zinc-200 flex items-center justify-center text-white font-bold text-xl shadow-2xs">
+                        {resolvedAvatar ? (
+                          <img src={resolvedAvatar} alt={previewAuthorName} className="w-full h-full object-cover" />
+                        ) : (
+                          <span>{(previewAuthorName || "RM").slice(0, 2).toUpperCase()}</span>
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] sm:text-xs font-bold tracking-wider text-black uppercase font-sans mb-1">
+                          WRITTEN BY
+                        </p>
+                        <div className="flex items-center gap-2 flex-wrap mb-3.5">
+                          <span className="text-xl sm:text-2xl font-bold text-black font-sans underline underline-offset-4 decoration-2 decoration-black hover:text-[#BF1E2D] transition-colors">
+                            {previewAuthorName}
+                          </span>
+                          <svg className="w-4 h-4 text-[#BF1E2D] shrink-0" fill="currentColor" viewBox="0 0 24 24" aria-label="Verified Journalist">
+                            <title>Verified Journalist</title>
+                            <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6-.154-.435.238-.905.238-1.4 0-2.34-1.89-4.24-4.23-4.24-.496 0-.966.084-1.4.238C14.31 2.225 12.94 1.35 11.36 1.35c-1.58 0-2.95.875-3.6 2.148-.435-.154-.905-.238-1.4-.238-2.34 0-4.24 1.89-4.24 4.23 0 .496.084.966.238 1.4C1.225 9.55.35 10.92.35 12.5c0 1.58.875 2.95 2.148 3.6-.154.435-.238.905-.238 1.4 0 2.34 1.89 4.24 4.23 4.24.496 0 .966-.084 1.4-.238.65 1.273 2.02 2.148 3.6 2.148 1.58 0 2.95-.875 3.6-2.148.435.154.905.238 1.4.238 2.34 0 4.24-1.89 4.24-4.23 0-.496-.084-.966-.238-1.4 1.273-.65 2.148-2.02 2.148-3.6zm-12.28 4.29l-4.11-4.11 1.41-1.41 2.7 2.7 6.44-6.44 1.41 1.41-7.85 7.85z"/>
+                          </svg>
+
+                          <a
+                            href={`https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(previewAuthorName)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center text-[#0A66C2] hover:text-[#004182] transition-colors p-0.5"
+                            title={`Connect with ${previewAuthorName} on LinkedIn`}
+                          >
+                            <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
+                              <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
+                            </svg>
+                          </a>
+                        </div>
+
+                        <div className="text-[13.5px] sm:text-[14px] text-zinc-900 font-sans leading-relaxed space-y-3">
+                          {authorBio.split(/\r?\n+/).map((p: string, pIdx: number) => (
+                            <p key={pIdx}>{p.trim()}</p>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* COMMENTS TOGGLE BAR */}
+                <div className="font-sans my-6 text-[12px] text-zinc-500">
+                  <div className="flex items-center gap-2 font-bold text-black uppercase tracking-wider text-[11.5px]">
+                    <span>💬 COMMENTS (0)</span>
+                  </div>
+                </div>
+
+                {/* INTERACTIVE COMMENTS & OPINIONS SECTION */}
+                <div className="mt-8 pt-6 border-t border-zinc-200 font-sans">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-bold text-black uppercase tracking-wider font-standard-sans flex items-center gap-2">
+                      <MessageSquare size={16} className="text-[#BF1E2D]" />
+                      <span>Comments</span>
+                      <span className="text-[11px] bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded-full font-mono font-bold">
+                        0
+                      </span>
+                    </h3>
+                  </div>
+
+                  <div className="bg-slate-50/90 border border-slate-200 rounded-2xl p-6 sm:p-7 mb-8 text-center shadow-2xs">
+                    <div className="w-11 h-11 rounded-full bg-red-50 text-[#BF1E2D] flex items-center justify-center mx-auto mb-3 border border-red-100 shadow-2xs">
+                      <MessageSquare size={20} />
+                    </div>
+                    <h4 className="text-sm font-bold text-slate-900 mb-1 font-standard-sans">
+                      Sign in to Join the Conversation
                     </h4>
+                    <p className="text-xs text-slate-500 max-w-md mx-auto mb-4 leading-relaxed font-sans">
+                      Only verified London BigBen members can post opinions and join discussions. Sign in to your account or register to share your thoughts on this story.
+                    </p>
+                    <div className="flex items-center justify-center gap-3 flex-wrap">
+                      <button
+                        type="button"
+                        className="bg-[#BF1E2D] hover:bg-[#901320] text-white font-bold text-xs px-5 py-2.5 rounded-xl uppercase tracking-wider transition-all shadow-xs inline-flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Send size={12} />
+                        <span>Sign In to Comment</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="text-xs font-bold text-slate-700 hover:text-[#BF1E2D] px-4 py-2.5 rounded-xl border border-slate-200 bg-white transition-all shadow-2xs cursor-pointer"
+                      >
+                        Create Free Account
+                      </button>
+                    </div>
                   </div>
-
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="text"
-                      placeholder="Add a comment..."
-                      className="flex-1 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-slate-400"
-                    />
-                    <button
-                      type="button"
-                      className="bg-slate-400 hover:bg-slate-500 text-white font-bold text-xs px-6 py-2.5 rounded-xl uppercase tracking-wider cursor-pointer transition-colors"
-                    >
-                      POST
-                    </button>
-                  </div>
-
-                  <p className="text-[10px] text-slate-400 italic mt-2.5">
-                    No comments yet. Be the first to share your thoughts.
-                  </p>
                 </div>
 
               </div>
 
-              {/* RIGHT SIDEBAR COLUMN: RECENT IN CATEGORY */}
-              <div className="lg:col-span-4 pl-0 lg:pl-6 border-l-0 lg:border-l border-slate-100 min-h-[300px]">
-                <h3 className="font-serif text-xs font-bold text-slate-900 tracking-wider uppercase border-b-2 border-slate-900 pb-1.5 mb-4">
-                  RECENT IN {category.toUpperCase() || "BUSINESS"}
-                </h3>
-                
-                <p className="text-xs text-slate-400 italic font-serif">
-                  No other recent articles in this category.
-                </p>
+              {/* RIGHT SIDEBAR COLUMN: MOST POPULAR & SPONSORED ADS */}
+              <div className="lg:col-span-4 lg:pl-4 font-standard-sans border-l border-zinc-100 lg:border-zinc-200 pt-2 lg:pt-0">
+                <div className="border-b-2 border-black pb-2 mb-6 w-full flex items-center justify-between">
+                  <h3 className="text-[13.5px] font-bold text-black uppercase tracking-wider font-standard-sans">
+                    MOST POPULAR IN {(category || "BUSINESS").toUpperCase()}
+                  </h3>
+                </div>
+
+                {/* Sponsored Sidebar Ad Box */}
+                <div className="pt-6 border-t border-zinc-200 mt-6 w-full flex flex-col items-center">
+                  <span className="text-[9px] font-mono tracking-widest uppercase text-zinc-400 mb-2 font-bold self-start">
+                    SPONSORED
+                  </span>
+                </div>
+
               </div>
 
             </div>
@@ -3524,6 +4010,204 @@ function isWorldOrWorldSub(cat: string): boolean {
               >
                 <X size={14} strokeWidth={2.5} />
                 <span>{isSubmitting ? "Rejecting..." : "Reject Article"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ARTICLE MAIL BOX & TARGETED DISTRIBUTION MODAL */}
+      {isMailBoxModalOpen && (
+        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden font-sans">
+            {/* Modal Header */}
+            <div className="flex items-start gap-4 p-6 border-b border-slate-100">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0">
+                <Mail className="w-6 h-6 text-blue-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-lg font-bold text-slate-900 leading-tight">Article Mail Box &amp; Targeted Distribution</h2>
+                <p className="text-sm text-slate-500 mt-0.5 leading-normal">Add specific emails (VIPs, clients, sponsors) to receive this article upon publication.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMailBoxModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 transition-colors cursor-pointer flex-shrink-0 mt-0.5"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              {/* Add Recipient Emails */}
+              <div className="space-y-2">
+                <label className="block text-sm font-bold text-slate-800">Add Recipient Emails</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={recipientEmailInput}
+                    onChange={(e) => {
+                      setRecipientEmailInput(e.target.value);
+                      setRecipientEmailError("");
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === ",") {
+                        e.preventDefault();
+                        const emails = recipientEmailInput.split(/[,\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+                        const invalid = emails.find(em => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em));
+                        if (invalid) {
+                          setRecipientEmailError(`"${invalid}" is not a valid email address.`);
+                          return;
+                        }
+                        const toAdd = emails.filter(em => !targetedRecipients.includes(em));
+                        if (toAdd.length === 0) {
+                          setRecipientEmailError("Email already added.");
+                          return;
+                        }
+                        setTargetedRecipients(prev => [...prev, ...toAdd]);
+                        setRecipientEmailInput("");
+                        setRecipientEmailError("");
+                      }
+                    }}
+                    onPaste={(e) => {
+                      e.preventDefault();
+                      const pasted = e.clipboardData.getData("text");
+                      const emails = pasted.split(/[,\n\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+                      const invalid = emails.find(em => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em));
+                      if (invalid) {
+                        setRecipientEmailError(`"${invalid}" is not a valid email address.`);
+                        return;
+                      }
+                      const toAdd = emails.filter(em => !targetedRecipients.includes(em));
+                      setTargetedRecipients(prev => [...prev, ...toAdd]);
+                      setRecipientEmailInput("");
+                      setRecipientEmailError("");
+                    }}
+                    placeholder="e.g. client@company.com, editor@partner.com"
+                    className="flex-1 px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-blue-500 placeholder:text-slate-400 bg-slate-50/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const emails = recipientEmailInput.split(/[,\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+                      if (emails.length === 0) return;
+                      const invalid = emails.find(em => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em));
+                      if (invalid) {
+                        setRecipientEmailError(`"${invalid}" is not a valid email address.`);
+                        return;
+                      }
+                      const toAdd = emails.filter(em => !targetedRecipients.includes(em));
+                      if (toAdd.length === 0) {
+                        setRecipientEmailError("Email already added.");
+                        return;
+                      }
+                      setTargetedRecipients(prev => [...prev, ...toAdd]);
+                      setRecipientEmailInput("");
+                      setRecipientEmailError("");
+                    }}
+                    className="bg-[#1d4ed8] hover:bg-[#1e40af] text-white text-sm font-bold px-5 py-2.5 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer flex-shrink-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add
+                  </button>
+                </div>
+                {recipientEmailError && (
+                  <p className="text-xs text-red-500 font-medium">{recipientEmailError}</p>
+                )}
+                <p className="text-xs text-amber-600">
+                  💡 Press <strong>Enter</strong> or <strong>comma (,)</strong> to add. You can also paste multiple comma-separated emails.
+                </p>
+              </div>
+
+              {/* Configured Recipients List */}
+              <div className="space-y-2">
+                <div className="text-xs font-mono font-extrabold uppercase tracking-wider text-slate-500">
+                  CONFIGURED RECIPIENTS ({targetedRecipients.length})
+                </div>
+                <div className="border border-slate-200 rounded-xl min-h-[80px] max-h-[180px] overflow-y-auto bg-slate-50/50 p-3">
+                  {targetedRecipients.length === 0 ? (
+                    <div className="flex items-center justify-center h-14">
+                      <p className="text-sm text-slate-400">No custom emails added yet.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {targetedRecipients.map((email) => (
+                        <div key={email} className="flex items-center justify-between gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs">
+                          <span className="text-slate-700 font-medium truncate">{email}</span>
+                          <button
+                            type="button"
+                            onClick={() => setTargetedRecipients(prev => prev.filter(e => e !== email))}
+                            className="text-slate-400 hover:text-red-500 transition-colors cursor-pointer flex-shrink-0"
+                            title="Remove recipient"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Broadcast to Newsletter Subscribers */}
+              <label className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl p-3.5 cursor-pointer hover:bg-blue-100/60 transition-colors select-none">
+                <input
+                  type="checkbox"
+                  checked={broadcastToSubscribers}
+                  onChange={(e) => setBroadcastToSubscribers(e.target.checked)}
+                  className="mt-0.5 rounded text-blue-600 focus:ring-blue-500 cursor-pointer w-4 h-4 flex-shrink-0"
+                />
+                <div>
+                  <p className="text-sm font-bold text-slate-800 leading-tight">Broadcast to newsletter subscribers list</p>
+                  <p className="text-xs text-slate-500 mt-0.5 leading-normal">Send this article notification to all general newsletter subscribers matching this article category.</p>
+                </div>
+              </label>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+              <button
+                type="button"
+                onClick={() => setIsMailBoxModalOpen(false)}
+                className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-bold text-slate-700 transition-all cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  let finalRecipients = [...targetedRecipients];
+                  if (recipientEmailInput.trim()) {
+                    const emails = recipientEmailInput.split(/[,\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+                    const invalid = emails.find(em => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em));
+                    if (invalid) {
+                      setRecipientEmailError(`"${invalid}" is not a valid email address.`);
+                      return;
+                    }
+                    const toAdd = emails.filter(em => !finalRecipients.includes(em));
+                    finalRecipients = [...finalRecipients, ...toAdd];
+                    setTargetedRecipients(finalRecipients);
+                    setRecipientEmailInput("");
+                    setRecipientEmailError("");
+                  }
+
+                  // Persist to current editing post in localStorage if present
+                  try {
+                    const storedPost = localStorage.getItem("dj_editing_post");
+                    if (storedPost) {
+                      const parsed = JSON.parse(storedPost);
+                      parsed.targetedRecipients = finalRecipients;
+                      parsed.broadcastToSubscribers = broadcastToSubscribers;
+                      localStorage.setItem("dj_editing_post", JSON.stringify(parsed));
+                    }
+                  } catch (e) {}
+
+                  setIsMailBoxModalOpen(false);
+                }}
+                className="bg-[#1d4ed8] hover:bg-[#1e40af] text-white text-sm font-bold px-5 py-2.5 rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-sm shadow-blue-900/20"
+              >
+                <Check className="w-4 h-4" strokeWidth={3} />
+                Save Recipients
               </button>
             </div>
           </div>

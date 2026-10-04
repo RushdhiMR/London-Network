@@ -142,3 +142,133 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string) {
   }
 }
 
+export async function sendArticleDistributionEmail(
+  recipientEmail: string,
+  article: {
+    title: string;
+    summary: string;
+    category: string;
+    authorName: string;
+    slug: string;
+    imageUrl?: string;
+    readTime?: string;
+  },
+  baseUrl?: string
+): Promise<{ success: boolean; error?: string; messageId?: string }> {
+  const smtpUser = (process.env.SMTP_USER || process.env.EMAIL_USER || '').trim();
+  const smtpPass = (process.env.SMTP_PASS || process.env.EMAIL_PASS || '').replace(/\s+/g, '');
+
+  if (!smtpUser || !smtpPass) {
+    const errorMsg = 'SMTP credentials missing. Please set SMTP_USER and SMTP_PASS in frontend/.env.local';
+    console.error(`[Email Service Error] Cannot send to ${recipientEmail}: ${errorMsg}`);
+    return { success: false, error: errorMsg };
+  }
+
+  const rawBase = (
+    baseUrl ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.FRONTEND_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+  ).trim();
+  const appUrl = rawBase.replace(/\/+$/, '');
+  const categorySlug = (article.category || 'news').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
+  const articleSlug = (article.slug || '').trim().replace(/[^a-z0-9-]+/g, '-');
+  const articleUrl = `${appUrl}/${categorySlug}/${articleSlug}`;
+  const year = new Date().getFullYear();
+
+  const formattedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase();
+  const categoryLabel = (article.category || 'News').toUpperCase();
+  const excerpt = (article.summary || '').slice(0, 220) + ((article.summary || '').length > 220 ? '...' : '');
+  const authorDisplay = article.authorName ? `By ${article.authorName}` : 'By Staff Journalist';
+  const appDomain = appUrl.replace(/^https?:\/\//, '');
+  const logoUrl = (
+    process.env.EMAIL_LOGO_URL ||
+    (process.env.NEXT_PUBLIC_SITE_URL && process.env.NEXT_PUBLIC_SITE_URL.startsWith('https://') && !process.env.NEXT_PUBLIC_SITE_URL.includes('localhost') ? `${process.env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, '')}/header_logo.png` : null) ||
+    'https://f005.backblazeb2.com/file/LondonNetwork/media/header_logo.png'
+  );
+
+  const htmlContent = `
+    <div style="font-family: Georgia, 'Times New Roman', serif; max-width: 620px; margin: 0 auto; background-color: #f5f4f0;">
+
+      <div style="background-color: #ffffff; border: 1px solid #ddd;">
+
+        <!-- Top domain bar -->
+        <div style="text-align: center; padding: 14px 32px 0 32px;">
+          <p style="margin: 0; font-size: 11px; color: #9ca3af; letter-spacing: 1px; font-family: Arial, sans-serif;">${appDomain}</p>
+        </div>
+
+        <!-- Brand logo masthead -->
+        <div style="text-align: center; padding: 10px 32px 0 32px;">
+          <img src="${logoUrl}" alt="London BigBen Network" width="200" style="display: inline-block; max-width: 200px; height: auto;" />
+          <div style="margin: 6px auto 14px auto; text-align: center;">
+            <div style="display: inline-block; width: 30px; height: 2px; background-color: #BF1E2D; vertical-align: middle;"></div>
+            <div style="display: inline-block; width: 80px; height: 1px; background-color: #BF1E2D; vertical-align: middle; margin: 0 3px;"></div>
+            <div style="display: inline-block; width: 30px; height: 2px; background-color: #BF1E2D; vertical-align: middle;"></div>
+          </div>
+        </div>
+
+        <!-- Category + Date -->
+        <div style="text-align: center; padding: 4px 32px 16px 32px; border-bottom: 1px solid #ddd;">
+          <p style="margin: 0 0 5px 0; font-size: 24px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; color: #111827; font-family: Arial, sans-serif;">${categoryLabel}</p>
+          <p style="margin: 0; font-size: 10px; color: #9ca3af; letter-spacing: 2px; font-family: Arial, sans-serif; text-transform: uppercase;">${formattedDate}</p>
+        </div>
+
+        <!-- Article row: image left, text right -->
+        <div style="padding: 22px 28px; border-bottom: 1px solid #ddd;">
+          <table cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse;">
+            <tr>
+              ${(article.imageUrl && (article.imageUrl.startsWith('https://') || article.imageUrl.startsWith('http://'))) ? `<td width="180" valign="top" style="padding-right: 20px;"><img src="${article.imageUrl}" alt="${article.title}" width="180" style="display: block; width: 180px; max-width: 180px; height: auto;" /></td>` : ''}
+              <td valign="top">
+                <p style="margin: 0 0 10px 0; font-size: 17px; font-weight: 800; line-height: 1.4; color: #111827; font-family: Georgia, serif;">${article.title}</p>
+                <p style="margin: 0 0 12px 0; font-size: 13px; color: #4b5563; line-height: 1.65; font-family: Arial, sans-serif;">${excerpt}</p>
+                <p style="margin: 0 0 10px 0; font-size: 12px; color: #6b7280; font-family: Arial, sans-serif;">${authorDisplay}</p>
+                <a href="${articleUrl}" style="font-size: 13px; font-weight: 700; color: #BF1E2D; text-decoration: underline; font-family: Arial, sans-serif; letter-spacing: 0.5px; text-transform: uppercase;">READ FULL ARTICLE &raquo;</a>
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- Footer -->
+        <div style="padding: 14px 32px; text-align: center; font-size: 11px; color: #9ca3af; font-family: Arial, sans-serif; background-color: #f9f9f7;">
+          <p style="margin: 0;">You are receiving this because you were added as a targeted recipient for this article.</p>
+          <p style="margin: 6px 0 0 0;">&copy; ${year} London BigBen Network. All rights reserved.</p>
+        </div>
+
+      </div>
+
+    </div>
+  `;
+
+  try {
+    const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+    const port = Number(process.env.SMTP_PORT) || 587;
+    const isSecure = port === 465 || process.env.SMTP_SECURE === 'true';
+
+    const clientTransporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: isSecure,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
+    });
+
+    const info = await clientTransporter.sendMail({
+      from: `"London BigBen Network" <${smtpUser}>`,
+      to: recipientEmail,
+      subject: `[London BigBen] ${article.title}`,
+      html: htmlContent,
+    });
+
+    console.log(`[Email Service] Sent article distribution email to ${recipientEmail} (messageId: ${info.messageId})`);
+    return { success: true, messageId: info.messageId };
+  } catch (error: any) {
+    const errorMsg = error?.message || 'SMTP delivery failed';
+    console.error(`[Email Service Error] Failed to send article distribution email to ${recipientEmail}:`, errorMsg);
+    return { success: false, error: errorMsg };
+  }
+}

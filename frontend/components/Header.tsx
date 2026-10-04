@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Search, ChevronDown, User, Mail, Menu, X, PenTool, LogOut, Settings, BookOpen, ShieldCheck, Bell } from "lucide-react";
+import { Search, ChevronDown, User, Mail, Menu, X, PenTool, LogOut, Settings, BookOpen, ShieldCheck, Bell, Globe } from "lucide-react";
 import { saveUserProfile, getUserProfile, resolveUserAvatar, isUploadedAvatar } from "@/lib/userProfiles";
 import { uploadImageToBackblaze } from "@/lib/imageUtils";
 import { useLiveArticles } from "@/lib/articlesSync";
@@ -79,9 +79,82 @@ export default function Header() {
   const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role?: string; avatar?: string; bio?: string; linkedin?: string } | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+  const [isMobileUserDropdownOpen, setIsMobileUserDropdownOpen] = useState(false);
+  const [isMobileWorldOpen, setIsMobileWorldOpen] = useState(false);
+  const [isMobileLanguagesOpen, setIsMobileLanguagesOpen] = useState(false);
   const [isProfileSettingsOpen, setIsProfileSettingsOpen] = useState(false);
   const [isLangOpen, setIsLangOpen] = useState(false);
   const langDropdownRef = useRef<HTMLDivElement>(null);
+  const row2ContainerRef = useRef<HTMLDivElement>(null);
+  const worldBtnRef = useRef<HTMLDivElement>(null);
+  const worldDropdownRef = useRef<HTMLDivElement>(null);
+  const worldCloseTimer = useRef<NodeJS.Timeout | null>(null);
+  const [worldDropdownLeft, setWorldDropdownLeft] = useState<number | null>(null);
+
+  const updateWorldPos = useCallback(() => {
+    if (worldBtnRef.current && row2ContainerRef.current) {
+      const btnRect = worldBtnRef.current.getBoundingClientRect();
+      const containerRect = row2ContainerRef.current.getBoundingClientRect();
+      const calculatedLeft = btnRect.left - containerRect.left;
+      const maxLeft = Math.max(8, (containerRect.width || window.innerWidth) - 240);
+      setWorldDropdownLeft(Math.min(Math.max(8, calculatedLeft), maxLeft));
+    }
+  }, []);
+
+  const handleWorldOpen = useCallback(() => {
+    if (worldCloseTimer.current) {
+      clearTimeout(worldCloseTimer.current);
+      worldCloseTimer.current = null;
+    }
+    updateWorldPos();
+    setActiveMenu("WORLD");
+  }, [updateWorldPos]);
+
+  const handleWorldClose = useCallback(() => {
+    if (worldCloseTimer.current) {
+      clearTimeout(worldCloseTimer.current);
+    }
+    worldCloseTimer.current = setTimeout(() => {
+      setActiveMenu(null);
+    }, 150);
+  }, []);
+
+  const toggleWorldMenu = useCallback((e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (worldCloseTimer.current) {
+      clearTimeout(worldCloseTimer.current);
+      worldCloseTimer.current = null;
+    }
+    setActiveMenu((prev) => {
+      if (prev === "WORLD") {
+        return null;
+      } else {
+        updateWorldPos();
+        return "WORLD";
+      }
+    });
+  }, [updateWorldPos]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (activeMenu === "WORLD") {
+        updateWorldPos();
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [activeMenu, updateWorldPos]);
+
+  useEffect(() => {
+    return () => {
+      if (worldCloseTimer.current) {
+        clearTimeout(worldCloseTimer.current);
+      }
+    };
+  }, []);
 
   // ── Real-time date / location / weather ──────────────────────────────────
   const [currentDate, setCurrentDate] = useState("");
@@ -189,6 +262,21 @@ export default function Header() {
   const userDropdownRef = useRef<HTMLDivElement>(null);
   const notifDropdownRef = useRef<HTMLDivElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
+  const row1Ref = useRef<HTMLDivElement>(null);
+  const [row1Height, setRow1Height] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!row1Ref.current) return;
+    const updateHeight = () => {
+      if (row1Ref.current) {
+        setRow1Height(row1Ref.current.offsetHeight);
+      }
+    };
+    updateHeight();
+    const ro = new ResizeObserver(updateHeight);
+    ro.observe(row1Ref.current);
+    return () => ro.disconnect();
+  }, []);
 
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [allSearchArticles, setAllSearchArticles] = useState<SearchableArticle[]>([]);
@@ -210,24 +298,37 @@ export default function Header() {
   useEffect(() => {
     setActiveMenu(null);
     setIsMobileMenuOpen(false);
+    setIsMobileWorldOpen(false);
     setIsUserDropdownOpen(false);
     setIsNotificationsOpen(false);
     setIsLangOpen(false);
     setIsSearchFocused(false);
   }, [pathname]);
 
-  // Close notifications & search dropdown on click outside
+  // Close notifications, search dropdown, & world menu on click/touch outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
       if (notifDropdownRef.current && !notifDropdownRef.current.contains(event.target as Node)) {
         setIsNotificationsOpen(false);
       }
       if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
         setIsSearchFocused(false);
       }
+      if (
+        worldDropdownRef.current &&
+        !worldDropdownRef.current.contains(event.target as Node) &&
+        worldBtnRef.current &&
+        !worldBtnRef.current.contains(event.target as Node)
+      ) {
+        setActiveMenu(null);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
   }, []);
 
   // Sync profile state when currentUser or modal opens
@@ -470,10 +571,11 @@ export default function Header() {
       } catch (e) {}
     };
     syncTrending();
-    window.addEventListener("storage", syncTrending);
+    // NOTE: Do NOT listen to the native "storage" event — it fires in OTHER
+    // browser tabs and would cause cross-tab reloads. Only use the tab-local
+    // custom event for in-tab trending updates.
     window.addEventListener("dj_trending_words_change", syncTrending);
     return () => {
-      window.removeEventListener("storage", syncTrending);
       window.removeEventListener("dj_trending_words_change", syncTrending);
     };
   }, []);
@@ -502,7 +604,7 @@ export default function Header() {
       )}
 
       {/* ================= ROW 1 (FIXED TOP): BRAND LOGO, SEARCH, & ACTION BUTTONS ================= */}
-      <div className="fixed top-0 left-0 right-0 z-50 w-full bg-white border-b border-gray-200 shadow-xs">
+      <div ref={row1Ref} className="fixed top-0 left-0 right-0 z-50 w-full bg-white border-b border-gray-200 shadow-xs">
         <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-2.5 sm:py-4 flex items-center justify-between gap-2 sm:gap-6 relative z-50 w-full min-w-0">
         
         {/* LOGO & BRAND */}
@@ -550,9 +652,17 @@ export default function Header() {
             <span>Newsletter Signup</span>
           </Link>
 
-          {/* User Sign In / Profile Dropdown (BOTH MOBILE & DESKTOP) */}
+          {/* Red Subscribe Button */}
+          <Link
+            href="/subscribe"
+            className="hidden md:flex bg-[#BF1E2D] hover:bg-red-700 text-white font-bold text-[10px] sm:text-[12px] px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md transition-colors whitespace-nowrap shadow-xs uppercase tracking-wider items-center justify-center shrink-0"
+          >
+            Subscribe
+          </Link>
+
+          {/* User Sign In / Profile Dropdown */}
           {currentUser ? (
-            <div className="relative block z-[100]" ref={userDropdownRef}>
+            <div className="relative hidden md:block z-[100]" ref={userDropdownRef}>
               <button
                 type="button"
                 onClick={() => setIsUserDropdownOpen((prev) => !prev)}
@@ -606,7 +716,8 @@ export default function Header() {
                   )}
 
                   {/* Author Workspace Option */}
-                  {((currentUser.role || "").toLowerCase() === "writer" || (currentUser.role || "").toLowerCase() === "editor" || (currentUser.email || "").toLowerCase().includes("writer")) && (
+                  {!((currentUser.role || "").toLowerCase() === "admin" || (currentUser.role || "").toLowerCase() === "co-admin" || (currentUser.email || "").toLowerCase().includes("admin")) &&
+                    ((currentUser.role || "").toLowerCase() === "writer" || (currentUser.role || "").toLowerCase() === "editor" || (currentUser.email || "").toLowerCase().includes("writer")) && (
                     <Link
                       href="/writer"
                       onClick={() => setIsUserDropdownOpen(false)}
@@ -664,24 +775,19 @@ export default function Header() {
           ) : (
             <Link 
               href={loginHref} 
-              className="flex items-center gap-1.5 text-gray-800 hover:text-[#BF1E2D] font-bold text-xs sm:text-sm px-2.5 py-1.5 rounded-md hover:bg-gray-100 transition-colors"
+              className="hidden md:flex items-center gap-1.5 text-gray-800 hover:text-[#BF1E2D] font-bold text-xs sm:text-sm px-2.5 py-1.5 rounded-md hover:bg-gray-100 transition-colors"
             >
               <User size={17} strokeWidth={2.2} className="text-[#BF1E2D]" />
               <span className="hidden sm:inline">Sign In</span>
             </Link>
           )}
 
-          {/* Red Subscribe Button */}
-          <Link
-            href="/subscribe"
-            className="bg-[#BF1E2D] hover:bg-red-700 text-white font-bold text-[10px] sm:text-[12px] px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md transition-colors whitespace-nowrap shadow-xs uppercase tracking-wider flex items-center justify-center shrink-0"
-          >
-            Subscribe
-          </Link>
-
           {/* Mobile Menu Toggle */}
           <button
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            onClick={() => {
+              setActiveMenu(null);
+              setIsMobileMenuOpen(!isMobileMenuOpen);
+            }}
             className="md:hidden text-gray-800 hover:text-[#BF1E2D] p-1 rounded-md hover:bg-gray-100 transition-colors shrink-0 cursor-pointer"
             aria-label="Toggle menu"
           >
@@ -694,15 +800,18 @@ export default function Header() {
     </div>
 
       {/* Spacer placeholder matching fixed Row 1 height */}
-      <div className="h-[58px] sm:h-[68px] w-full" aria-hidden="true" />
+      <div style={{ height: row1Height ? `${row1Height}px` : undefined }} className="h-[58px] sm:h-[68px] md:h-[76px] w-full" aria-hidden="true" />
 
       {/* ================= ROW 2: CATEGORY NAVIGATION BAR ================= */}
       <div className="w-full border-b border-gray-200 bg-white relative z-40 overflow-visible">
-        <div className="max-w-[1400px] mx-auto px-3 sm:px-6 flex items-center justify-between gap-4 w-full min-w-0 overflow-visible">
+        <div ref={row2ContainerRef} className="max-w-[1400px] mx-auto px-3 sm:px-6 flex items-center justify-between gap-4 w-full min-w-0 relative overflow-visible">
           
           {/* Main Horizontal Category Nav Items */}
-          <nav className="flex items-center gap-4 sm:gap-5 md:gap-6 lg:gap-6 xl:gap-7 py-2.5 sm:py-3 text-[12px] sm:text-[13.5px] font-bold overflow-x-auto md:overflow-visible scrollbar-none flex-1 min-w-0 pr-4">
-            {navCategories.map((cat) => {
+          <nav
+            onScroll={updateWorldPos}
+            className="flex items-center justify-center md:justify-start gap-3.5 sm:gap-5 md:gap-6 lg:gap-6 xl:gap-7 py-2.5 sm:py-3 text-[12px] sm:text-[13.5px] font-bold overflow-x-auto md:overflow-visible scrollbar-none flex-1 min-w-0 md:pr-4"
+          >
+            {navCategories.map((cat, index) => {
               const isWorld = cat.name === "World";
               const isWorldActive = isWorld && activeMenu === "WORLD";
               const isActive = isCurrentCategoryActive(cat);
@@ -710,23 +819,20 @@ export default function Header() {
               return (
                 <div
                   key={cat.name}
-                  className="relative flex items-center group shrink-0"
-                  onMouseEnter={() => {
-                    if (isWorld) {
-                      setActiveMenu("WORLD");
-                    } else {
-                      setActiveMenu(null);
-                    }
-                  }}
-                  onMouseLeave={() => setActiveMenu(null)}
+                  ref={isWorld ? worldBtnRef : undefined}
+                  className={`relative flex items-center group shrink-0 ${index >= 5 ? "hidden md:flex" : ""}`}
                 >
                   <Link
                     href={cat.href}
-                    onClick={() => {
+                    onClick={(e) => {
+                      if (isWorld) {
+                        toggleWorldMenu(e);
+                        return;
+                      }
                       setActiveMenu(null);
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`flex items-center gap-1 pb-0.5 px-1 sm:px-1.5 transition-colors font-bold whitespace-nowrap ${
+                    className={`flex items-center gap-1 py-1 px-1 sm:px-1.5 transition-colors font-bold whitespace-nowrap border-t-2 border-transparent cursor-pointer ${
                       isActive
                         ? "text-gray-900 border-b-2 border-[#BF1E2D]"
                         : "text-gray-800 hover:text-[#BF1E2D] border-b-2 border-transparent"
@@ -737,56 +843,14 @@ export default function Header() {
                       <ChevronDown
                         size={12}
                         strokeWidth={2.5}
-                        className="text-gray-500 group-hover:text-[#BF1E2D] transition-transform duration-200 group-hover:rotate-180"
+                        className={`text-gray-500 transition-transform duration-200 ${
+                          isWorldActive
+                            ? "rotate-180 text-[#BF1E2D]"
+                            : "group-hover:text-[#BF1E2D]"
+                        }`}
                       />
                     )}
                   </Link>
-
-                  {/* Dropdown Menu on Hover for World (Countries & Regions List) */}
-                  {isWorld && (
-                    <div 
-                      onMouseEnter={() => setActiveMenu("WORLD")}
-                      onMouseLeave={() => setActiveMenu(null)}
-                      className={`absolute top-full left-0 pt-2 w-[230px] sm:w-[250px] z-[100] transition-all duration-200 before:content-[''] before:absolute before:-top-3 before:left-0 before:right-0 before:h-5 ${
-                        isWorldActive
-                          ? "opacity-100 visible pointer-events-auto translate-y-0"
-                          : "opacity-0 invisible pointer-events-none -translate-y-1 group-hover:opacity-100 group-hover:visible group-hover:pointer-events-auto group-hover:translate-y-0"
-                      }`}
-                    >
-                      <div className="bg-white border border-gray-200/90 shadow-2xl rounded-2xl p-3.5 text-left font-sans ring-1 ring-black/5">
-                        <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-150">
-                          <h4 className="text-[11px] font-extrabold uppercase text-[#BF1E2D] tracking-wider">
-                            World Categories
-                          </h4>
-                          <span className="text-[9.5px] text-gray-400 font-bold uppercase tracking-wider">Regions</span>
-                        </div>
-
-                        <div className="space-y-0.5">
-                          {worldRegionsList.map((region, i) => (
-                            <Link
-                              key={i}
-                              href={region.href}
-                              onClick={() => setActiveMenu(null)}
-                              className="flex items-center justify-between py-2 px-3 rounded-xl text-[12.5px] font-bold text-gray-800 hover:bg-red-50/80 hover:text-[#BF1E2D] group/item cursor-pointer transition-colors"
-                            >
-                              <span className="group-hover/item:text-[#BF1E2D]">{region.name}</span>
-                              <span className="text-gray-300 group-hover/item:text-[#BF1E2D] text-[11px] font-bold transition-colors">›</span>
-                            </Link>
-                          ))}
-                        </div>
-
-                        <div className="pt-2 mt-2 border-t border-gray-150 flex items-center justify-between">
-                          <Link
-                            href="/news/world"
-                            onClick={() => setActiveMenu(null)}
-                            className="text-[11px] font-extrabold text-[#BF1E2D] hover:underline flex items-center gap-1"
-                          >
-                            <span>View all World coverage →</span>
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
               );
             })}
@@ -798,7 +862,7 @@ export default function Header() {
               onClick={() => setIsLangOpen(!isLangOpen)}
               className="flex items-center gap-1.5 text-[12.5px] font-bold text-gray-700 hover:text-[#BF1E2D] cursor-pointer py-1 px-2 rounded-md hover:bg-gray-50 transition-colors"
             >
-              <span>🌐</span>
+              <Globe size={14} className="text-black shrink-0" strokeWidth={2} />
               <span>{selectedLang}</span>
               <ChevronDown size={12} strokeWidth={2.5} className="text-gray-400" />
             </button>
@@ -820,6 +884,52 @@ export default function Header() {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* World Dropdown Menu: rendered outside <nav> so mobile overflow-x-auto does NOT clip it */}
+          <div 
+            ref={worldDropdownRef}
+            style={{
+              left: worldDropdownLeft !== null ? `${worldDropdownLeft}px` : undefined,
+            }}
+            className={`absolute top-full left-3 sm:left-6 pt-2 w-[230px] sm:w-[250px] z-[100] transition-all duration-200 ${
+              activeMenu === "WORLD"
+                ? "opacity-100 visible pointer-events-auto translate-y-0"
+                : "opacity-0 invisible pointer-events-none -translate-y-1"
+            }`}
+          >
+            <div className="bg-white border border-gray-200/90 shadow-2xl rounded-2xl p-3.5 text-left font-sans ring-1 ring-black/5">
+              <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-150">
+                <h4 className="text-[11px] font-extrabold uppercase text-[#BF1E2D] tracking-wider">
+                  World Categories
+                </h4>
+                <span className="text-[9.5px] text-gray-400 font-bold uppercase tracking-wider">Regions</span>
+              </div>
+
+              <div className="space-y-0.5">
+                {worldRegionsList.map((region, i) => (
+                  <Link
+                    key={i}
+                    href={region.href}
+                    onClick={() => setActiveMenu(null)}
+                    className="flex items-center justify-between py-2 px-3 rounded-xl text-[12.5px] font-bold text-gray-800 hover:bg-red-50/80 hover:text-[#BF1E2D] group/item cursor-pointer transition-colors"
+                  >
+                    <span className="group-hover/item:text-[#BF1E2D]">{region.name}</span>
+                    <span className="text-gray-300 group-hover/item:text-[#BF1E2D] text-[11px] font-bold transition-colors">›</span>
+                  </Link>
+                ))}
+              </div>
+
+              <div className="pt-2 mt-2 border-t border-gray-150 flex items-center justify-between">
+                <Link
+                  href="/news/world"
+                  onClick={() => setActiveMenu(null)}
+                  className="text-[11px] font-extrabold text-[#BF1E2D] hover:underline flex items-center gap-1"
+                >
+                  <span>View all World coverage →</span>
+                </Link>
+              </div>
+            </div>
           </div>
 
         </div>
@@ -859,34 +969,40 @@ export default function Header() {
               <div className="flex items-center gap-1 text-gray-800 font-semibold cursor-pointer hover:text-[#BF1E2D] bg-white px-2 py-0.5 rounded border border-gray-200 shadow-2xs transition-colors">
                 <span className="text-xs">{getWeatherIcon(weatherCode)}</span>
                 <span>{weatherTemp}°C</span>
-                <ChevronDown size={11} strokeWidth={2.5} className="text-gray-400" />
               </div>
             )}
           </div>
 
-          {/* MOBILE: Compact weather pill only (right side of trending bar) */}
-          {weatherTemp !== null && (
-            <div className="lg:hidden flex items-center gap-1 text-gray-800 font-semibold bg-white px-2 py-0.5 rounded border border-gray-200 shadow-2xs shrink-0">
-              <span className="text-xs">{getWeatherIcon(weatherCode)}</span>
-              <span className="text-[11px]">{weatherTemp}°C</span>
-            </div>
-          )}
-
         </div>
 
-        {/* MOBILE/TABLET ONLY: Date & Location row below trending strip */}
-        {(currentDate || locationName) && (
-          <div className="lg:hidden max-w-[1400px] mx-auto px-3 sm:px-6 pb-1 flex items-center gap-1.5 text-[10.5px] text-gray-400 font-medium flex-wrap">
-            {currentDate && <span>{currentDate}</span>}
-            {currentDate && locationName && <span className="text-gray-300">•</span>}
-            {locationName && <span>{locationName}</span>}
+        {/* MOBILE/TABLET ONLY: Date, Location & Weather row */}
+        {(currentDate || locationName || weatherTemp !== null) && (
+          <div className="lg:hidden max-w-[1400px] mx-auto px-3 sm:px-6 pb-1 pt-0.5 flex items-center justify-between gap-2 text-[10.5px] text-gray-500 font-medium">
+            <div className="flex items-center gap-1.5 truncate min-w-0">
+              {currentDate && <span className="truncate">{currentDate}</span>}
+              {currentDate && locationName && <span className="text-gray-300 shrink-0">•</span>}
+              {locationName && <span className="truncate text-gray-500">{locationName}</span>}
+            </div>
+
+            {weatherTemp !== null && (
+              <div className="flex items-center gap-1 text-gray-800 font-semibold bg-white px-2 py-0.5 rounded border border-gray-200 shadow-2xs shrink-0">
+                <span className="text-xs">{getWeatherIcon(weatherCode)}</span>
+                <span className="text-[11px]">{weatherTemp}°C</span>
+              </div>
+            )}
           </div>
         )}
       </div>
 
       {/* MOBILE DRAWER */}
       {isMobileMenuOpen && (
-        <div className="md:hidden bg-white text-gray-900 border-t border-gray-200 py-4 px-4 space-y-4 shadow-2xl animate-in slide-in-from-top-2 duration-200 max-h-[calc(100vh-65px)] overflow-y-auto">
+        <div
+          style={{
+            top: row1Height ? `${row1Height}px` : undefined,
+            maxHeight: row1Height ? `calc(100dvh - ${row1Height}px)` : undefined,
+          }}
+          className="md:hidden fixed top-[58px] sm:top-[68px] left-0 right-0 z-40 bg-white text-gray-900 border-t border-b border-gray-200 py-4 px-4 space-y-4 shadow-2xl animate-in slide-in-from-top-2 duration-200 max-h-[calc(100dvh-58px)] sm:max-h-[calc(100dvh-68px)] overflow-y-auto"
+        >
           
           {/* Mobile Search Button (Instant navigation link to /search, hidden on /search page) */}
           {pathname !== "/search" && (
@@ -923,119 +1039,141 @@ export default function Header() {
 
           {/* User Profile Section in Mobile Drawer */}
           {currentUser ? (
-            <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-200 space-y-3 font-sans">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#BF1E2D] text-white font-bold flex items-center justify-center text-sm shadow-xs uppercase overflow-hidden shrink-0">
-                  {currentUser.avatar && (currentUser.avatar.startsWith("/") || currentUser.avatar.startsWith("data:") || currentUser.avatar.startsWith("http")) ? (
-                    <img src={currentUser.avatar} alt={currentUser.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <span>{(currentUser.name || "U").charAt(0)}</span>
+            <div className="rounded-xl border border-gray-200 bg-white shadow-2xs overflow-hidden font-sans transition-all">
+              {/* Dropdown Toggle Button */}
+              <button
+                type="button"
+                onClick={() => setIsMobileUserDropdownOpen((prev) => !prev)}
+                className="w-full p-3 flex items-center justify-between gap-3 text-left hover:bg-gray-50/80 transition-colors cursor-pointer"
+                aria-expanded={isMobileUserDropdownOpen}
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="relative w-10 h-10 rounded-full bg-[#BF1E2D] text-white font-bold flex items-center justify-center text-sm shadow-xs uppercase overflow-hidden shrink-0 border border-gray-200">
+                    {currentUser.avatar && (currentUser.avatar.startsWith("/") || currentUser.avatar.startsWith("data:") || currentUser.avatar.startsWith("http")) ? (
+                      <img src={currentUser.avatar} alt={currentUser.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <span>{(currentUser.name || "U").charAt(0)}</span>
+                    )}
+                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white absolute bottom-0 right-0 shadow-xs"></span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="text-xs font-bold text-gray-900 truncate">
+                        {currentUser.name || "User"}
+                      </p>
+                      <span className="inline-flex items-center px-1.5 py-0.5 bg-red-50 text-[#BF1E2D] border border-red-100 font-extrabold text-[8.5px] uppercase tracking-wider rounded-md">
+                        {currentUser.role || "READER"}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-gray-500 truncate font-mono mt-0.5">
+                      {currentUser.email || ""}
+                    </p>
+                  </div>
+                </div>
+
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center bg-gray-100 text-gray-500 transition-transform duration-200 shrink-0 ${isMobileUserDropdownOpen ? "rotate-180 bg-red-50 text-[#BF1E2D]" : ""}`}>
+                  <ChevronDown size={15} />
+                </div>
+              </button>
+
+              {/* Collapsible Dropdown Menu */}
+              {isMobileUserDropdownOpen && (
+                <div className="px-2.5 pb-2.5 pt-1 space-y-1.5 border-t border-gray-100 bg-gray-50/50 animate-in fade-in slide-in-from-top-1 duration-150">
+                  {(currentUser.role === "Admin" || currentUser.role === "Co-Admin" || (currentUser.email || "").toLowerCase().includes("admin")) && (
+                    <Link
+                      href="/admin"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="flex items-center gap-2.5 py-2 px-3 bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold transition-colors"
+                    >
+                      <ShieldCheck size={15} className="text-emerald-600 shrink-0" />
+                      <span>Admin Dashboard</span>
+                    </Link>
                   )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold text-gray-900 truncate">
-                    {currentUser.name || "rushdhi"}
-                  </p>
-                  <p className="text-[10px] text-gray-500 truncate font-mono">
-                    {currentUser.email || "rushdhiriyaj2005@gmail.com"}
-                  </p>
-                  <span className="inline-block mt-0.5 px-2 py-0.2 bg-red-100 text-[#BF1E2D] font-extrabold text-[8.5px] uppercase tracking-wider rounded">
-                    {currentUser.role || "READER"}
-                  </span>
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 gap-2 pt-2 border-t border-gray-200">
-                {(currentUser.role === "Admin" || currentUser.role === "Co-Admin" || (currentUser.email || "").toLowerCase().includes("admin")) && (
-                  <Link
-                    href="/admin"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className="flex items-center gap-2.5 py-2.5 px-3 bg-emerald-50 text-emerald-800 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors"
-                  >
-                    <ShieldCheck size={16} className="text-emerald-600" />
-                    <span>Admin Dashboard</span>
-                  </Link>
-                )}
+                  {(() => {
+                    const email = (currentUser.email || "").toLowerCase().trim();
+                    const userRole = (currentUser.role || "").toLowerCase().trim();
+                    const isAdmin =
+                      userRole === "admin" ||
+                      userRole === "co-admin" ||
+                      email.includes("admin");
 
-                {(() => {
-                  const email = (currentUser.email || "").toLowerCase().trim();
-                  const userRole = (currentUser.role || "").toLowerCase().trim();
-                  const isSystemWriterOrAdmin =
-                    userRole === "writer" ||
-                    userRole === "editor" ||
-                    userRole === "admin" ||
-                    userRole === "co-admin" ||
-                    email === "writer@digitaljournal.com" ||
-                    email === "coadmin@digitaljournal.com" ||
-                    email.includes("admin") ||
-                    email.includes("writer");
+                    if (isAdmin) {
+                      return null;
+                    }
 
-                  let isApproved = isSystemWriterOrAdmin;
-                  if (!isApproved && email && typeof window !== "undefined") {
-                    const savedProfile = getUserProfile(email);
-                    const profileRole = (savedProfile?.role || "").toLowerCase().trim();
-                    if (profileRole === "writer" || profileRole === "editor" || profileRole === "admin" || profileRole === "co-admin") {
-                      isApproved = true;
-                    } else {
-                      const writersListStr = localStorage.getItem("dj_writers_list");
-                      if (writersListStr) {
-                        try {
-                          const wList: any[] = JSON.parse(writersListStr);
-                          isApproved = wList.some((w: any) => w.email && w.email.toLowerCase().trim() === email && (w.status === "Active" || !w.status));
-                        } catch (e) {
-                          console.warn(e);
+                    const isSystemWriter =
+                      userRole === "writer" ||
+                      userRole === "editor" ||
+                      email === "writer@digitaljournal.com" ||
+                      email.includes("writer");
+
+                    let isApproved = isSystemWriter;
+                    if (!isApproved && email && typeof window !== "undefined") {
+                      const savedProfile = getUserProfile(email);
+                      const profileRole = (savedProfile?.role || "").toLowerCase().trim();
+                      if (profileRole === "writer" || profileRole === "editor") {
+                        isApproved = true;
+                      } else {
+                        const writersListStr = localStorage.getItem("dj_writers_list");
+                        if (writersListStr) {
+                          try {
+                            const wList: any[] = JSON.parse(writersListStr);
+                            isApproved = wList.some((w: any) => w.email && w.email.toLowerCase().trim() === email && (w.status === "Active" || !w.status));
+                          } catch (e) {
+                            console.warn(e);
+                          }
                         }
                       }
                     }
-                  }
 
-                  if (isApproved) {
+                    if (isApproved) {
+                      return (
+                        <Link
+                          href="/writer"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className="flex items-center gap-2.5 py-2 px-3 bg-blue-50/80 hover:bg-blue-100 text-[#1B50E8] rounded-lg text-xs font-bold transition-colors"
+                        >
+                          <PenTool size={15} className="text-[#1B50E8] shrink-0" />
+                          <span>Author Workspace</span>
+                        </Link>
+                      );
+                    }
                     return (
                       <Link
-                        href="/writer"
+                        href="/reader"
                         onClick={() => setIsMobileMenuOpen(false)}
-                        className="flex items-center gap-2.5 py-2.5 px-3 bg-blue-50/80 text-[#1B50E8] rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors"
+                        className="flex items-center gap-2.5 py-2 px-3 bg-red-50/80 hover:bg-red-100 text-[#BF1E2D] rounded-lg text-xs font-bold transition-colors"
                       >
-                        <PenTool size={16} className="text-[#1B50E8]" />
-                        <span>Author Workspace</span>
+                        <BookOpen size={15} className="text-[#BF1E2D] shrink-0" />
+                        <span>Reader Dashboard</span>
                       </Link>
                     );
-                  }
-                  return (
-                    <Link
-                      href="/reader"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                      className="flex items-center gap-2.5 py-2.5 px-3 bg-red-50/80 text-[#BF1E2D] rounded-lg text-xs font-bold hover:bg-red-100 transition-colors"
-                    >
-                      <BookOpen size={16} className="text-[#BF1E2D]" />
-                      <span>Reader Dashboard</span>
-                    </Link>
-                  );
-                })()}
+                  })()}
 
-                <button
-                  onClick={() => {
-                    setIsMobileMenuOpen(false);
-                    setIsProfileSettingsOpen(true);
-                  }}
-                  className="w-full flex items-center gap-2.5 py-2.5 px-3 bg-white text-slate-800 border border-slate-200 rounded-lg text-xs font-bold hover:bg-slate-100 transition-colors text-left"
-                >
-                  <User size={16} className="text-slate-500" />
-                  <span>Profile Settings</span>
-                </button>
+                  <button
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      setIsProfileSettingsOpen(true);
+                    }}
+                    className="w-full flex items-center gap-2.5 py-2 px-3 bg-white hover:bg-gray-100 text-slate-800 border border-gray-200/80 rounded-lg text-xs font-bold transition-colors text-left cursor-pointer"
+                  >
+                    <User size={15} className="text-slate-500 shrink-0" />
+                    <span>Profile Settings</span>
+                  </button>
 
-                <button
-                  onClick={() => {
-                    setIsMobileMenuOpen(false);
-                    handleSignOut();
-                  }}
-                  className="w-full flex items-center gap-2.5 py-2.5 px-3 bg-red-50 text-red-700 border border-red-100 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors text-left"
-                >
-                  <LogOut size={16} className="text-red-500" />
-                  <span>Sign Out</span>
-                </button>
-              </div>
-
+                  <button
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      handleSignOut();
+                    }}
+                    className="w-full flex items-center gap-2.5 py-2 px-3 bg-red-50/80 hover:bg-red-100 text-red-700 border border-red-100 rounded-lg text-xs font-bold transition-colors text-left cursor-pointer"
+                  >
+                    <LogOut size={15} className="text-red-500 shrink-0" />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-2 pt-1 pb-2 border-b border-gray-100">
@@ -1057,45 +1195,126 @@ export default function Header() {
             </div>
           )}
 
-          {/* Category Navigation Links */}
-          <div className="pt-1">
-            <h5 className="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider mb-2">
-              Browse Categories
-            </h5>
-            <div className="grid grid-cols-2 gap-2">
-              {navCategories.map((cat) => (
-                <Link
-                  key={cat.name}
-                  href={cat.href}
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="block py-2 px-3 text-xs font-bold text-gray-800 bg-gray-50 hover:bg-red-50 hover:text-[#BF1E2D] rounded-md transition-colors"
+          {/* Category Navigation (Always open in Mobile Drawer) */}
+          <div className="rounded-xl border border-gray-200 bg-white shadow-2xs overflow-hidden font-sans transition-all">
+            <div className="p-3 flex items-center justify-between border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-gray-800">
+                  Browse Categories
+                </span>
+                <span className="text-[10px] font-semibold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
+                  {navCategories.length}
+                </span>
+              </div>
+            </div>
+
+            <div className="px-2.5 pb-2.5 pt-2 space-y-2 bg-gray-50/50">
+              {/* World category with dropdown */}
+              <div className="space-y-1.5">
+                <button
+                  type="button"
+                  onClick={() => setIsMobileWorldOpen((prev) => !prev)}
+                  className="w-full flex items-center justify-between py-2.5 px-3 text-xs font-bold text-gray-800 bg-white hover:bg-red-50 hover:text-[#BF1E2D] border border-gray-200/70 rounded-lg transition-colors shadow-2xs cursor-pointer"
+                  aria-expanded={isMobileWorldOpen}
                 >
-                  {cat.name}
-                </Link>
-              ))}
+                  <span className="flex items-center gap-1.5">
+                    <span>World</span>
+                    <span className="text-[9.5px] font-semibold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
+                      {worldRegionsList.length}
+                    </span>
+                  </span>
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center transition-transform duration-200 ${isMobileWorldOpen ? "rotate-180 text-[#BF1E2D]" : "text-gray-400"}`}>
+                    <ChevronDown size={14} />
+                  </div>
+                </button>
+
+                {isMobileWorldOpen && (
+                  <div className="p-2 space-y-1.5 bg-gray-50/80 rounded-lg border border-gray-200/70 animate-in fade-in slide-in-from-top-1 duration-150">
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {worldRegionsList.map((region, i) => (
+                        <Link
+                          key={i}
+                          href={region.href}
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className="flex items-center justify-between py-1.5 px-2.5 rounded-md text-[11.5px] font-semibold text-gray-700 bg-white hover:bg-red-50 hover:text-[#BF1E2D] border border-gray-200/50 transition-colors shadow-2xs"
+                        >
+                          <span>{region.name}</span>
+                          <span className="text-gray-300 text-[10px]">›</span>
+                        </Link>
+                      ))}
+                    </div>
+                    <div className="pt-1.5 border-t border-gray-200/60">
+                      <Link
+                        href="/news/world"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="block py-1 px-2 text-[11px] font-extrabold text-[#BF1E2D] hover:underline"
+                      >
+                        View all World coverage →
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Rest of categories in 2-column format */}
+              <div className="grid grid-cols-2 gap-2">
+                {navCategories
+                  .filter((cat) => cat.name !== "World")
+                  .map((cat) => (
+                    <Link
+                      key={cat.name}
+                      href={cat.href}
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="block py-2 px-3 text-xs font-bold text-gray-800 bg-white hover:bg-red-50 hover:text-[#BF1E2D] border border-gray-200/70 rounded-lg transition-colors shadow-2xs"
+                    >
+                      {cat.name}
+                    </Link>
+                  ))}
+              </div>
             </div>
           </div>
 
-          {/* Mobile Language Selector */}
-          <div className="pt-1 border-t border-gray-100">
-            <h5 className="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider mb-2">
-              Language
-            </h5>
-            <div className="grid grid-cols-2 gap-2">
-              {languages.map((lang) => (
-                <button
-                  key={lang.code}
-                  onClick={() => { applyLanguage(lang.code, lang.label); setIsMobileMenuOpen(false); }}
-                  className={`text-left py-2 px-3 text-xs font-bold rounded-md transition-colors ${
-                    selectedLang === lang.label
-                      ? "bg-red-50 text-[#BF1E2D]"
-                      : "text-gray-800 bg-gray-50 hover:bg-red-50 hover:text-[#BF1E2D]"
-                  }`}
-                >
-                  {lang.label}
-                </button>
-              ))}
-            </div>
+          {/* Mobile Language Dropdown */}
+          <div className="rounded-xl border border-gray-200 bg-white shadow-2xs overflow-hidden font-sans transition-all">
+            <button
+              type="button"
+              onClick={() => setIsMobileLanguagesOpen((prev) => !prev)}
+              className="w-full p-3 flex items-center justify-between gap-3 text-left hover:bg-gray-50/80 transition-colors cursor-pointer"
+              aria-expanded={isMobileLanguagesOpen}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-xs font-bold uppercase tracking-wider text-gray-800">
+                  Language
+                </span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-[#BF1E2D] border border-red-100 font-bold text-[10px] rounded-md truncate">
+                  <Globe size={11} className="text-black shrink-0" strokeWidth={2} />
+                  <span>{selectedLang}</span>
+                </span>
+              </div>
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center bg-gray-100 text-gray-500 transition-transform duration-200 shrink-0 ${isMobileLanguagesOpen ? "rotate-180 bg-red-50 text-[#BF1E2D]" : ""}`}>
+                <ChevronDown size={15} />
+              </div>
+            </button>
+
+            {isMobileLanguagesOpen && (
+              <div className="px-2.5 pb-2.5 pt-1 border-t border-gray-100 bg-gray-50/50 animate-in fade-in slide-in-from-top-1 duration-150">
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  {languages.map((lang) => (
+                    <button
+                      key={lang.code}
+                      onClick={() => { applyLanguage(lang.code, lang.label); setIsMobileMenuOpen(false); }}
+                      className={`text-left py-2 px-3 text-xs font-bold rounded-lg border transition-colors cursor-pointer ${
+                        selectedLang === lang.label
+                          ? "bg-red-50 text-[#BF1E2D] border-red-200 font-extrabold shadow-2xs"
+                          : "text-gray-800 bg-white border-gray-200/70 hover:bg-red-50 hover:text-[#BF1E2D]"
+                      }`}
+                    >
+                      {lang.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

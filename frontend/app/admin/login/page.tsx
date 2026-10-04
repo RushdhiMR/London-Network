@@ -7,6 +7,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useAuth } from "@/lib/auth-context";
 import { ShieldCheck, Lock, Mail, Eye, EyeOff, ArrowRight } from "lucide-react";
+import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -17,6 +18,12 @@ export default function AdminLoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+
+  useEffect(() => {
+    // This is a static login form — no dynamic data to load.
+    // Signal GlobalPageLoader to hide the skeleton immediately.
+    dispatchPageDataReady();
+  }, []);
 
   useEffect(() => {
     if (!auth.loading && auth.authenticated && auth.user) {

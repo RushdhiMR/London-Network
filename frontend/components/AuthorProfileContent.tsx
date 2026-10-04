@@ -255,12 +255,12 @@ export default function AuthorProfileContent({
 
     if (typeof window !== "undefined") {
       window.addEventListener("dj_profile_updated", handleProfileUpdate);
-      window.addEventListener("storage", handleProfileUpdate);
+      // NOTE: Do NOT listen to the native "storage" event — it fires in OTHER
+      // browser tabs and causes cross-tab reloads.
     }
     return () => {
       if (typeof window !== "undefined") {
         window.removeEventListener("dj_profile_updated", handleProfileUpdate);
-        window.removeEventListener("storage", handleProfileUpdate);
       }
     };
   }, [slug, authorProfile.name]);

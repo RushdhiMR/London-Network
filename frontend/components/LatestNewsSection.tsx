@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Share2, Bookmark } from "lucide-react";
 import { useLiveArticles, isLatestNews } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
@@ -84,8 +84,8 @@ export default function LatestNewsSection() {
   const displayStacked = publishedNews.length > 1 ? publishedNews.slice(1, 4) : [];
 
   return (
-    <section className="max-w-[1400px] mx-auto px-4 md:px-6 py-10 border-b border-gray-200 font-sans">
-      
+    <section className="max-w-[1400px] mx-auto px-4 md:px-6 pt-10 pb-0 font-sans">
+
       {/* SECTION HEADER */}
       <div className="flex items-center gap-2 mb-8">
         <div className="w-1.5 h-6 bg-[#D31220]" />
@@ -94,30 +94,31 @@ export default function LatestNewsSection() {
         </h2>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
-        
-        {/* COLUMN 1: FEATURED ARTICLE CARD (~52%) */}
-        <div className="lg:col-span-6 bg-white flex flex-col md:flex-row gap-6 items-center">
-          
-          {/* Featured Image (Left side) */}
-          <Link
-            href={mainFeatured.href}
-            className="w-full md:w-1/2 aspect-[4/3] overflow-hidden rounded-none bg-gray-100 flex-shrink-0 group block"
-          >
-            <img
-              src={mainFeatured.image}
-              alt={mainFeatured.title}
-              onError={(e) => {
-                if (e.currentTarget.src !== "https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=700&h=525&fit=crop") {
-                  e.currentTarget.src = "https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=700&h=525&fit=crop";
-                }
-              }}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            />
-          </Link>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
 
-          {/* Featured Details (Right side) */}
-          <div className="w-full md:w-1/2 flex flex-col justify-between h-full py-1">
+        {/* COLUMN 1 & 2: FEATURED ARTICLE (IMAGE & TEXT SYNCHRONIZED) */}
+        <div className="lg:col-span-6 grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
+          {/* FEATURED IMAGE */}
+          <div className="w-full">
+            <Link
+              href={mainFeatured.href}
+              className="block w-full overflow-hidden group"
+            >
+              <img
+                src={mainFeatured.image}
+                alt={mainFeatured.title}
+                onError={(e) => {
+                  if (e.currentTarget.src !== "https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=700&h=525&fit=crop") {
+                    e.currentTarget.src = "https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=700&h=525&fit=crop";
+                  }
+                }}
+                className="w-full h-auto block object-contain group-hover:scale-105 transition-transform duration-300"
+              />
+            </Link>
+          </div>
+
+          {/* FEATURED ARTICLE TEXT */}
+          <div className="flex flex-col justify-between h-full pt-1 pb-0">
             <div>
               <span className="text-[#D31220] text-[11px] font-extrabold uppercase tracking-wider block mb-2">
                 {mainFeatured.category}
@@ -134,11 +135,11 @@ export default function LatestNewsSection() {
               </p>
             </div>
 
-            {/* Metadata Footer: Timestamp & Action Icons */}
+            {/* Metadata Footer */}
             <div className="flex items-center justify-between text-[11px] text-gray-400 font-medium pt-3 border-t border-gray-100 mt-auto">
-              <span>{mainFeatured.time} • 4 MIN READ</span>
+              <span>{mainFeatured.time} · 6 MIN READ</span>
               <div className="flex items-center gap-3 text-gray-400">
-                <button 
+                <button
                   onClick={() => {
                     if (navigator.share) {
                       navigator.share({ title: mainFeatured.title, url: window.location.href });
@@ -149,7 +150,7 @@ export default function LatestNewsSection() {
                 >
                   <Share2 size={15} strokeWidth={2} />
                 </button>
-                <button 
+                <button
                   onClick={() => {
                     try {
                       if (auth.user) {
@@ -162,7 +163,7 @@ export default function LatestNewsSection() {
                       }
                     } catch (e) {}
                     setBookmarked(!bookmarked);
-                  }} 
+                  }}
                   className={`cursor-pointer p-1 transition-colors ${bookmarked ? "text-[#D31220]" : "hover:text-gray-700"}`}
                   aria-label="Bookmark article"
                 >
@@ -171,14 +172,13 @@ export default function LatestNewsSection() {
               </div>
             </div>
           </div>
-
         </div>
 
-        {/* COLUMN 2: STACKED ARTICLE LIST (~33%) */}
-        <div className="lg:col-span-3 lg:border-l border-gray-100 lg:pl-8 flex flex-col justify-between space-y-4">
+        {/* COLUMN 3: STACKED ARTICLE LIST */}
+        <div className="lg:col-span-3 flex flex-col justify-between space-y-4">
           {displayStacked.map((item, idx) => (
-            <div key={item.id} className={`flex items-start gap-4 ${idx < displayStacked.length - 1 ? "pb-4 border-b border-gray-100" : ""}`}>
-              <Link href={item.href} className="w-[85px] h-[65px] rounded-none overflow-hidden bg-gray-100 flex-shrink-0 group block">
+            <div key={item.id} className={`flex items-start gap-3 ${idx < displayStacked.length - 1 ? "pb-4 border-b border-gray-100" : ""}`}>
+              <Link href={item.href} className="w-[85px] h-[65px] rounded-sm overflow-hidden bg-gray-100 flex-shrink-0 group block">
                 <img
                   src={item.image}
                   alt={item.title}
@@ -202,7 +202,7 @@ export default function LatestNewsSection() {
                   <span className="text-[#D31220] text-[10px] font-extrabold uppercase tracking-wider block mb-0.5">
                     {item.category}
                   </span>
-                  <h4 className="text-[12.5px] font-bold leading-snug text-gray-900 hover:text-[#D31220] transition-colors line-clamp-2">
+                  <h4 className="text-[12.5px] font-bold leading-snug text-gray-900 hover:text-[#D31220] transition-colors line-clamp-3">
                     <Link href={item.href}>
                       {item.title}
                     </Link>
@@ -215,22 +215,17 @@ export default function LatestNewsSection() {
             </div>
           ))}
         </div>
+        {/* COLUMN 4: NEWSLETTER CARD */}
+        <div className="lg:col-span-3 bg-transparent rounded-2xl p-6 pb-9 flex flex-col justify-between border border-red-100 shadow-sm min-h-[320px]">
 
-        {/* COLUMN 3: STAY INFORMED NEWSLETTER CARD (~33%) */}
-        <div className="lg:col-span-3 bg-[#FFF5F5] rounded-2xl p-6 flex flex-col justify-between border border-red-100 shadow-sm">
-          
-          {/* Header Row & Pink Envelope Graphic */}
+          {/* Header Row & Envelope Graphic */}
           <div className="flex items-start justify-between gap-2 mb-4">
             <div>
-              <h3 className="text-lg font-bold text-gray-900 mb-1">
-                Stay Informed
-              </h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">Stay Informed</h3>
               <p className="text-[12.5px] text-gray-600 leading-normal">
                 Get our top stories delivered straight to your inbox.
               </p>
             </div>
-
-            {/* Pink Envelope Graphic */}
             <div className="w-14 h-14 bg-red-100/70 rounded-xl flex items-center justify-center flex-shrink-0 text-red-500">
               <svg className="w-8 h-8 text-[#D31220]" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
@@ -261,10 +256,12 @@ export default function LatestNewsSection() {
               </button>
             </form>
           )}
-
         </div>
 
       </div>
+
+      {/* SECTION DIVIDER LINE MATCHING CONTENT WIDTH */}
+      <div className="border-b border-gray-200 mt-10 w-full" />
     </section>
   );
 }

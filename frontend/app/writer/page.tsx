@@ -927,7 +927,7 @@ export default function WriterDashboardPage() {
               activeBorder: "ring-2 ring-emerald-500/40 border-emerald-300"
             },
             {
-              label: "Editorial Review",
+              label: "Pending Review",
               count: pendingCount,
               sub: "Awaiting approval",
               tab: "Pending review" as const,
@@ -945,7 +945,7 @@ export default function WriterDashboardPage() {
               activeBorder: "ring-2 ring-slate-400/40 border-slate-300"
             },
             {
-              label: "Revision Required",
+              label: "Rejected",
               count: rejectedCount,
               sub: "Editorial feedback",
               tab: "Rejected" as const,
@@ -1490,7 +1490,7 @@ export default function WriterDashboardPage() {
                 <span className="px-2.5 py-1 bg-[#BF1E2D]/10 text-[#BF1E2D] border border-[#BF1E2D]/20 text-[10px] font-mono font-black uppercase rounded-lg">
                   {previewArticle.category || "GENERAL"}
                 </span>
-                <h2 className="text-xl sm:text-2xl font-black font-serif text-gray-900 mt-2 leading-snug">
+                <h2 className="text-xl sm:text-2xl font-black font-poppins text-gray-900 mt-2 leading-snug">
                   {previewArticle.title}
                 </h2>
                 <div className="flex items-center gap-2 text-xs text-gray-500 font-mono mt-1">
@@ -1518,7 +1518,7 @@ export default function WriterDashboardPage() {
             {/* Modal Scrollable Article Body */}
             <div className="overflow-y-auto my-4 pr-1 sm:pr-2 space-y-5 text-left flex-1 min-h-0">
               {previewArticle.summary && (
-                <div className="font-serif text-slate-700 text-sm sm:text-base italic border-l-4 border-[#BF1E2D] pl-4 py-2.5 bg-slate-50/90 rounded-r-xl leading-relaxed">
+                <div className="font-poppins text-slate-700 text-sm sm:text-base italic border-l-4 border-[#BF1E2D] pl-4 py-2.5 bg-slate-50/90 rounded-r-xl leading-relaxed">
                   {previewArticle.summary}
                 </div>
               )}
@@ -1540,11 +1540,11 @@ export default function WriterDashboardPage() {
               {previewArticle.content ? (
                 (previewArticle.content.trim().startsWith("<") || previewArticle.content.includes("<p") || previewArticle.content.includes("<figure") || previewArticle.content.includes("<div") || previewArticle.content.includes("<h")) ? (
                   <div
-                    className="prose prose-slate max-w-none text-slate-800 leading-relaxed font-serif text-[15px] sm:text-[16px] [&_p]:mb-4 [&_figure]:my-4 [&_img]:rounded-xl [&_img]:max-h-[400px] [&_img]:w-full [&_img]:object-cover [&_h2]:font-bold [&_h2]:text-xl [&_h2]:mt-6 [&_h2]:mb-2 [&_h3]:font-bold [&_h3]:text-lg [&_h3]:mt-4 [&_h3]:mb-2 [&_blockquote]:border-l-4 [&_blockquote]:border-[#BF1E2D] [&_blockquote]:pl-4 [&_blockquote]:italic"
+                    className="prose prose-slate max-w-none text-slate-800 leading-relaxed font-poppins article-body-poppins text-[15px] sm:text-[16px] [&_p]:mb-4 [&_figure]:my-4 [&_img]:rounded-xl [&_img]:max-h-[400px] [&_img]:w-full [&_img]:object-cover [&_h2]:font-bold [&_h2]:text-xl [&_h2]:mt-6 [&_h2]:mb-2 [&_h3]:font-bold [&_h3]:text-lg [&_h3]:mt-4 [&_h3]:mb-2 [&_blockquote]:border-l-4 [&_blockquote]:border-[#BF1E2D] [&_blockquote]:pl-4 [&_blockquote]:italic"
                     dangerouslySetInnerHTML={{ __html: previewArticle.content }}
                   />
                 ) : (
-                  <div className="prose prose-slate max-w-none text-slate-800 leading-relaxed font-serif text-[15px] sm:text-[16px] space-y-4">
+                  <div className="prose prose-slate max-w-none text-slate-800 leading-relaxed font-poppins article-body-poppins text-[15px] sm:text-[16px] space-y-4">
                     {previewArticle.content.split("\n\n").map((para, i) => (
                       <p key={i}>{para}</p>
                     ))}

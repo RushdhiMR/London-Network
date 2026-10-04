@@ -102,13 +102,18 @@ export default function RootLayout({
           .goog-tooltip, .goog-tooltip:hover { display: none !important; }
           .goog-text-highlight { background-color: transparent !important; box-shadow: none !important; }
         `}</style>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300;1,400;1,600;1,700&display=swap" rel="stylesheet" />
       </head>
       <body suppressHydrationWarning className="font-sans antialiased bg-white text-gray-900 w-full max-w-full overflow-x-clip">
         {/* Google Translate hidden container */}
         <div id="google_translate_element" style={{ display: "none" }} />
 
         {/* Early inline script: hide toolbar and keep body at top */}
-        <script
+        <Script
+          id="hide-gt-toolbar"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `
               (function() {

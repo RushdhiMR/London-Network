@@ -91,7 +91,7 @@ export default function EditorsPicks() {
   };
 
   return (
-    <section className="max-w-[1400px] mx-auto px-4 md:px-6 py-8 border-b border-gray-200 font-sans">
+    <section className="max-w-[1400px] mx-auto px-4 md:px-6 pt-8 pb-0 font-sans">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
         
         {/* LEFT 4-CARD GRID (~75%) */}
@@ -220,6 +220,9 @@ export default function EditorsPicks() {
         </div>
 
       </div>
+
+      {/* SECTION DIVIDER LINE MATCHING CONTENT WIDTH */}
+      <div className="border-b border-gray-200 mt-8 w-full" />
     </section>
   );
 }

@@ -1,4 +1,5 @@
 /* Global styles for London BigBen */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300;1,400;1,600;1,700&display=swap');
 @import "tailwindcss";
 
 @layer base {
@@ -34,17 +35,83 @@
   .font-standard-sans {
     font-family: Arial, Helvetica, sans-serif !important;
   }
+  .font-poppins {
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif !important;
+  }
+  .article-body-poppins,
+  .article-body-poppins *,
+  .article-content-editor,
+  .article-content-editor * {
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif !important;
+  }
 }
 
-/* ENFORCE SHARP 90-DEGREE EDGES ON ALL IMAGES ACROSS THE ENTIRE WEBSITE */
-img, 
-picture, 
-video, 
+.font-poppins,
+.article-body-poppins,
+.article-body-poppins *,
+.article-content-editor,
+.article-content-editor * {
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
+
+.article-body-poppins a,
+.article-content-editor a,
+.prose a {
+  color: #BF1E2D !important;
+  text-decoration: underline !important;
+}
+.article-body-poppins a:hover,
+.article-content-editor a:hover,
+.prose a:hover {
+  color: #901320 !important;
+}
+
+
+/* ENFORCE SHARP 90-DEGREE EDGES ON ALL ELEMENTS ACROSS THE ENTIRE WEBSITE */
+*,
+*::before,
+*::after,
+img,
+picture,
+video,
+button,
+input,
+select,
+textarea,
+a,
+div,
+section,
+article,
+aside,
+nav,
+header,
+footer,
+form,
+ul,
+li,
+span,
 .image-container,
 [class*="aspect-"],
-next-image-wrapper {
-  border-radius: 0px !important;
+[class*="rounded"] {
+  border-radius: 0 !important;
 }
+
+/* Re-assert drop-cap box which intentionally uses a small radius */
+.has-drop-cap-box::first-letter,
+.drop-cap-box::first-letter,
+p.has-drop-cap-box::first-letter {
+  border-radius: 4px !important;
+}
+
+/* PROFILE & AUTHOR AVATARS — restore circular shape */
+/* These are square-dimension containers that hold user/author profile images */
+.rounded-full.overflow-hidden,
+img.rounded-full,
+a.rounded-full.overflow-hidden,
+div.rounded-full.overflow-hidden {
+  border-radius: 50% !important;
+}
+
 
 /* RESPONSIVE MEDIA & FLUID CONTAINER SAFEGUARDS */
 img, 

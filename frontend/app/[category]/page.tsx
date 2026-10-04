@@ -3,6 +3,9 @@ import { getCategoryData } from "@/lib/categoryData";
 import { Metadata } from "next";
 import { generateSocialMetadata } from "@/lib/seoHelper";
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 interface DynamicCategoryPageProps {
   params: Promise<{
     category: string;

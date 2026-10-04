@@ -136,14 +136,13 @@ export function useLiveAdSlots() {
 
   useEffect(() => {
     loadSlots();
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === null || e.key === AD_STORAGE_KEY) loadSlots();
-    };
+    // NOTE: Do NOT listen to the native "storage" event here.
+    // That event fires in OTHER browser tabs when localStorage changes,
+    // causing ad slots to reload in every open tab (the cross-tab reload bug).
+    // Only listen to the tab-local custom event dispatched by saveAdSlots.
     window.addEventListener(AD_SYNC_EVENT, loadSlots);
-    window.addEventListener("storage", handleStorageChange);
     return () => {
       window.removeEventListener(AD_SYNC_EVENT, loadSlots);
-      window.removeEventListener("storage", handleStorageChange);
     };
   }, [loadSlots]);
 
@@ -469,7 +468,7 @@ export async function fetchArticlesFromServer(): Promise<ArticleItem[]> {
 
   activeArticlesFetchPromise = (async () => {
     try {
-      const res = await fetch("/api/articles", {
+      const res = await fetch(`/api/articles?_t=${Date.now()}`, {
         cache: "no-store",
         headers: {
           "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -477,8 +476,14 @@ export async function fetchArticlesFromServer(): Promise<ArticleItem[]> {
         }
       });
       if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.articles)) {
+        let data: any = null;
+        try {
+          const text = await res.text();
+          data = text && text.trim() ? JSON.parse(text) : null;
+        } catch {
+          data = null;
+        }
+        if (data && data.success && Array.isArray(data.articles)) {
           const activeArticles = data.articles.filter((a: any) => !isArticleDeleted(a));
           const localCached = getCachedArticles();
           const mergedMap = new Map<string, ArticleItem>();
@@ -495,9 +500,17 @@ export async function fetchArticlesFromServer(): Promise<ArticleItem[]> {
           });
 
           localCached.forEach((a: any) => {
-            if (!mergedMap.has(String(a.id))) {
-              // Only retain local unpublished drafts or pending reviews
-              if (a.status === "Draft" || a.status === "Pending review") {
+            const cleanT = (t: string) => (t || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+            const aTitle = cleanT(a.title);
+            let matchingServer = mergedMap.get(String(a.id));
+            if (!matchingServer && aTitle) {
+              matchingServer = Array.from(mergedMap.values()).find(sa => cleanT(sa.title) === aTitle);
+            }
+
+            if (!matchingServer) {
+              // Retain local articles ONLY if it is an unsaved local draft.
+              // Never retain deleted, outdated, or duplicate published/pending/trashed records that do not exist on the server database.
+              if (a.status === "Draft") {
                 const resolvedImg = resolveArticleImageUrl(a.imageUrl || a.image || a.image_url || "");
                 mergedMap.set(String(a.id), {
                   ...a,
@@ -508,11 +521,11 @@ export async function fetchArticlesFromServer(): Promise<ArticleItem[]> {
               }
             } else {
               // Server database is the single source of truth for published articles
-              const serverVersion = mergedMap.get(String(a.id))!;
+              const serverVersion = matchingServer;
               const mergedSubcategories = (Array.isArray(serverVersion.subcategories) && serverVersion.subcategories.length > 0)
                 ? serverVersion.subcategories
                 : (Array.isArray(a.subcategories) && a.subcategories.length > 0 ? a.subcategories : (a.subCategories || []));
-              mergedMap.set(String(a.id), { ...serverVersion, subcategories: mergedSubcategories });
+              mergedMap.set(String(serverVersion.id), { ...serverVersion, subcategories: mergedSubcategories });
             }
           });
 
@@ -608,8 +621,14 @@ export async function saveArticleToServer(article: ArticleItem): Promise<Article
       body: JSON.stringify(articleWithTimestamps)
     });
     if (res.ok) {
-      const data = await res.json();
-      if (data.articles && Array.isArray(data.articles)) {
+      let data: any = null;
+      try {
+        const text = await res.text();
+        data = text && text.trim() ? JSON.parse(text) : null;
+      } catch {
+        data = null;
+      }
+      if (data && data.articles && Array.isArray(data.articles)) {
         const serverList = data.articles;
         const mergedMap = new Map<string, ArticleItem>();
 
@@ -650,6 +669,7 @@ export async function saveArticleToServer(article: ArticleItem): Promise<Article
             mergedList.push(item);
           }
         }
+        resetArticlesFetchCache();
         setCachedArticles(mergedList, true);
         return mergedList;
       }
@@ -658,11 +678,13 @@ export async function saveArticleToServer(article: ArticleItem): Promise<Article
     console.error("[articlesSync] Error saving article to server:", e);
   }
 
+  resetArticlesFetchCache();
   return updated;
 }
 
 export async function updateArticleStatusOnServer(id: string | number, status: string): Promise<ArticleItem[]> {
   const nowIso = new Date().toISOString();
+  resetArticlesFetchCache();
   try {
     const res = await fetch("/api/articles", {
       method: "PUT",
@@ -680,8 +702,14 @@ export async function updateArticleStatusOnServer(id: string | number, status: s
       })
     });
     if (res.ok) {
-      const data = await res.json();
-      if (data.articles) {
+      let data: any = null;
+      try {
+        const text = await res.text();
+        data = text && text.trim() ? JSON.parse(text) : null;
+      } catch {
+        data = null;
+      }
+      if (data && data.articles) {
         setCachedArticles(data.articles);
         return data.articles;
       }
@@ -738,7 +766,13 @@ export async function moveArticleToTrashOnServer(id: string | number, title?: st
       headers: { "Content-Type": "application/json" }
     });
     if (res && res.ok) {
-      const data = await res.json();
+      let data: any = null;
+      try {
+        const text = await res.text();
+        data = text && text.trim() ? JSON.parse(text) : null;
+      } catch {
+        data = null;
+      }
       if (data && data.articles) {
         setCachedArticles(data.articles, false);
         return data.articles;
@@ -792,7 +826,13 @@ export async function deletePermanentlyOnServer(id: string | number, title?: str
       headers: { "Content-Type": "application/json" }
     });
     if (res && res.ok) {
-      const data = await res.json();
+      let data: any = null;
+      try {
+        const text = await res.text();
+        data = text && text.trim() ? JSON.parse(text) : null;
+      } catch {
+        data = null;
+      }
       if (data && data.articles) {
         const filtered = data.articles.filter((a: any) => !isArticleDeleted(a));
         setCachedArticles(filtered, false);
@@ -824,28 +864,17 @@ export function useLiveArticles() {
     // On mount: always fetch fresh data from the server first.
     // Do NOT pre-populate from localStorage cache — that would show stale data
     // before the real server response arrives.
+    // NOTE: dispatchPageDataReady is NOT called here. Each page-level component
+    // (HeroSection, CategoryPageLayout, ArticlePageContent, etc.) calls it
+    // only after its own derived state is fully computed and ready to display.
     fetchArticlesFromServer().then((fresh) => {
       setArticles(Array.isArray(fresh) ? fresh : []);
       setLoading(false);
-      setTimeout(() => {
-        if (typeof window !== "undefined") {
-          // Set the path flag before dispatching so GlobalPageLoader can detect
-          // a missed event if it hasn't registered its listener yet (production race fix).
-          window.__djPageDataReadyPath = window.location.pathname;
-          window.dispatchEvent(new Event("dj_page_data_ready"));
-        }
-      }, 50);
     }).catch(() => {
       // On fetch failure, fall back to cache so page isn't blank
       const cached = getCachedArticles();
       setArticles(cached);
       setLoading(false);
-      setTimeout(() => {
-        if (typeof window !== "undefined") {
-          window.__djPageDataReadyPath = window.location.pathname;
-          window.dispatchEvent(new Event("dj_page_data_ready"));
-        }
-      }, 50);
     });
 
     // Listen for in-tab write events triggered by admin/writer actions

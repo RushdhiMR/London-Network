@@ -59,7 +59,7 @@ export default function TechnologyGrid() {
   }
 
   return (
-    <section className="max-w-[1400px] mx-auto px-4 md:px-6 py-10 border-b border-gray-200 font-sans">
+    <section className="max-w-[1400px] mx-auto px-4 md:px-6 pt-10 pb-0 font-sans">
       {/* Red Bar Title */}
       <div className="flex items-center gap-2 mb-6">
         <div className="w-1.5 h-6 bg-[#D31220]" />
@@ -95,6 +95,9 @@ export default function TechnologyGrid() {
           </article>
         ))}
       </div>
+
+      {/* SECTION DIVIDER LINE MATCHING CONTENT WIDTH */}
+      <div className="border-b border-gray-200 mt-10 w-full" />
     </section>
   );
 }
