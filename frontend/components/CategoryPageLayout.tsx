@@ -166,7 +166,7 @@ export default function CategoryPageLayout({
         author: resolveLiveAuthorName(matchingLive[0].authorName || (matchingLive[0] as any).author_name || (matchingLive[0] as any).author) || featured.author,
         date: matchingLive[0].date || (matchingLive[0].published_at ? new Date(matchingLive[0].published_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : featured.date)
       }
-    : featured;
+    : (!loading ? featured : null);
 
   // The older articles (relative to the brand new featured hero article) show top-to-bottom in order newest to oldest:
   const liveSecondaryFormatted: Article[] = matchingLive.slice(1, 5).map((a: any) => ({
@@ -176,10 +176,10 @@ export default function CategoryPageLayout({
     description: a.summary || a.description || (a.content ? a.content.replace(/<[^>]+>/g, "").slice(0, 140) + "..." : "")
   }));
 
-  const sideBoxArticles = [
-    ...liveSecondaryFormatted,
-    ...secondaryArticles.filter(sa => !liveSecondaryFormatted.some(la => la.title.toLowerCase().trim() === sa.title.toLowerCase().trim()))
-  ].slice(0, 4);
+  // If live articles exist, show ONLY live articles — never mix in fake mock articles
+  const sideBoxArticles = matchingLive.length > 1
+    ? liveSecondaryFormatted
+    : (!loading && matchingLive.length === 0 ? secondaryArticles.slice(0, 4) : []);
 
   const activeSecondaryArticles = sideBoxArticles;
 
@@ -191,13 +191,10 @@ export default function CategoryPageLayout({
     description: a.summary || a.description || (a.content ? a.content.replace(/<[^>]+>/g, "").slice(0, 140) + "..." : "")
   }));
 
-  // Combine live articles with existing newsArticles (deduplicated by title)
-  // Also exclude any static article whose title matches any live article (including featured/side-box)
-  const allLiveTitles = new Set(matchingLive.map((a: any) => a.title.toLowerCase().trim()));
-  const combinedNewsArticles = [
-    ...liveFormattedArticles,
-    ...newsArticles.filter(na => !allLiveTitles.has(na.title.toLowerCase().trim()))
-  ];
+  // When live articles exist, show ONLY real database articles in the news feed
+  const combinedNewsArticles = matchingLive.length > 5
+    ? liveFormattedArticles
+    : (!loading && matchingLive.length === 0 ? newsArticles : []);
 
   const finalNewsTitle = (() => {
     const raw = (newsTitle || '').trim();
@@ -272,45 +269,49 @@ export default function CategoryPageLayout({
       .trim()
       .replace(/[^a-z0-9]+/g, '-');
 
-    return `/${mainCat}/${artSlug}`;
+    return `/article/${artSlug}`;
   };
 
   return (
     <main className="min-h-screen bg-white">
       <Header />
 
-      <section className="max-w-[1400px] mx-auto px-4 md:px-8 py-8">
+      <section className="max-w-[1400px] mx-auto px-4 md:px-8 py-5 md:py-6">
         
         {/* HERO SECTION + CATEGORY INFO BOX */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-12 items-stretch">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 mb-8 items-stretch">
           {/* Left Column (8 cols): Big Featured Image with Title, Excerpt & Byline Below */}
-          <div className="lg:col-span-8 flex flex-col group">
-            <Link href={getArticleHref(activeFeatured.title)} className="block">
-              <div className="relative w-full aspect-[16/11] md:aspect-[16/10.5] max-h-[500px] min-h-[370px] md:min-h-[445px] overflow-hidden bg-white mb-4 rounded-sm flex items-center justify-center">
-                <img
-                  src={activeFeatured.image}
-                  alt={activeFeatured.title}
-                  onError={(e) => { e.currentTarget.src = "/ai_hero.png"; }}
-                  className="w-full h-full object-cover group-hover:opacity-95 transition-opacity mx-auto block"
-                />
-              </div>
-              <h2 className="text-[22px] md:text-[25px] font-bold leading-snug text-black group-hover:text-[#BF1E2D] transition-colors mb-2 font-standard-sans">
-                {activeFeatured.title}
-              </h2>
-            </Link>
-            <p className="text-[13px] md:text-[13.5px] text-zinc-700 leading-relaxed font-sans mb-3">
-              {activeFeatured.description}
-            </p>
-            <p className="text-[11.5px] text-zinc-500 font-sans">
-              By <Link href={`/author/${activeFeatured.author.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`} className="underline hover:text-[#BF1E2D] cursor-pointer text-black font-normal">{activeFeatured.author}</Link> {activeFeatured.date}
-            </p>
-          </div>
+          {activeFeatured ? (
+            <div className="lg:col-span-8 flex flex-col group">
+              <Link href={getArticleHref(activeFeatured.title)} className="block">
+                <div className="relative w-full aspect-[16/9.5] md:aspect-[16/9] max-h-[370px] min-h-[240px] md:min-h-[290px] overflow-hidden bg-white mb-3 rounded-sm flex items-center justify-center">
+                  <img
+                    src={activeFeatured.image}
+                    alt={activeFeatured.title}
+                    onError={(e) => { e.currentTarget.src = "/ai_hero.png"; }}
+                    className="w-full h-full object-cover group-hover:opacity-95 transition-opacity mx-auto block"
+                  />
+                </div>
+                <h2 className="text-[19px] md:text-[22px] font-bold leading-snug text-black group-hover:text-[#BF1E2D] transition-colors mb-1.5 font-standard-sans">
+                  {activeFeatured.title}
+                </h2>
+              </Link>
+              <p className="text-[12.5px] md:text-[13px] text-zinc-700 leading-relaxed font-sans mb-2">
+                {activeFeatured.description}
+              </p>
+              <p className="text-[11px] text-zinc-500 font-sans">
+                By <Link href={`/author/${activeFeatured.author.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`} className="underline hover:text-[#BF1E2D] cursor-pointer text-black font-normal">{activeFeatured.author}</Link> {activeFeatured.date}
+              </p>
+            </div>
+          ) : (
+            <div className="lg:col-span-8 min-h-[260px]" />
+          )}
 
           {/* Right Column (4 cols): Category Header + Break + Articles Box */}
           <div className="lg:col-span-4 flex flex-col justify-start">
             {/* Category Heading with Underline */}
-            <div className="border-b-2 border-black pb-2 mb-4">
-              <h1 className="text-[28px] md:text-[32px] font-bold leading-[1.05] tracking-tight text-black font-standard-sans">
+            <div className="border-b-2 border-black pb-1.5 mb-3">
+              <h1 className="text-[22px] md:text-[25px] font-bold leading-[1.05] tracking-tight text-black font-standard-sans">
                 {categoryName}
               </h1>
             </div>
@@ -318,15 +319,15 @@ export default function CategoryPageLayout({
             {/* Articles Box / Section - Plain Background */}
             <div className="w-full bg-transparent flex flex-col justify-start text-black font-standard-sans">
               {/* 3 Articles inside the Section */}
-              <div className="space-y-4 flex flex-col justify-start">
+              <div className="space-y-3 flex flex-col justify-start">
                 {sideBoxArticles.map((article, idx) => (
                   <Link
                     key={idx}
                     href={getArticleHref(article.title)}
-                    className="group/side flex gap-4 items-start pb-4 border-b border-zinc-200 last:border-b-0 last:pb-0 cursor-pointer"
+                    className="group/side flex gap-3.5 items-start pb-3 border-b border-zinc-200 last:border-b-0 last:pb-0 cursor-pointer"
                   >
                     {article.image && (
-                      <div className="relative w-[110px] h-[88px] shrink-0 overflow-hidden bg-zinc-100 rounded-xs">
+                      <div className="relative w-[96px] h-[72px] shrink-0 overflow-hidden bg-zinc-100 rounded-xs">
                         <img
                           src={article.image}
                           alt={article.title}
@@ -336,10 +337,10 @@ export default function CategoryPageLayout({
                       </div>
                     )}
                     <div className="flex flex-col justify-start min-w-0">
-                      <h3 className="text-[15px] md:text-[15.5px] font-normal leading-[1.35] text-black group-hover/side:text-[#BF1E2D] transition-colors line-clamp-2 mb-1.5 font-sans">
+                      <h3 className="text-[13.5px] md:text-[14px] font-normal leading-[1.35] text-black group-hover/side:text-[#BF1E2D] transition-colors line-clamp-2 mb-1 font-sans">
                         {article.title}
                       </h3>
-                      <p className="text-[12px] text-zinc-500 font-sans">
+                      <p className="text-[11px] text-zinc-500 font-sans">
                         {article.date || "Latest Update"}
                       </p>
                     </div>
@@ -422,15 +423,12 @@ export default function CategoryPageLayout({
                 const isExternal = (adSlot5.actionType || "").toLowerCase().includes("external") || (adSlot5.targetUrl || "").startsWith("http");
                 return (
                   <div className="flex flex-col items-center w-full">
-                    <span className="text-[10px] font-mono tracking-widest uppercase text-zinc-400 mb-2 font-bold">
-                      ADVERTISEMENT
-                    </span>
                     {hasSlot5Image ? (
                       <a
                         href={adSlot5.targetUrl || "#"}
                         target={isExternal ? "_blank" : "_self"}
                         rel={isExternal ? "noopener noreferrer" : undefined}
-                        className="block group relative overflow-hidden rounded-xs border border-zinc-200 bg-black w-[300px] h-[600px]"
+                        className="block group relative overflow-hidden rounded-xs border border-zinc-200 bg-black w-full max-w-[360px] h-[600px]"
                       >
                         <img
                           src={adSlot5.imageUrl}
@@ -442,7 +440,7 @@ export default function CategoryPageLayout({
                         </div>
                       </a>
                     ) : (
-                      <div className="w-[300px] h-[600px] bg-[#111827] border border-dashed border-gray-700 rounded-xs flex flex-col items-center justify-center p-6 text-center">
+                      <div className="w-full max-w-[360px] h-[600px] bg-[#111827] border border-dashed border-gray-700 rounded-xs flex flex-col items-center justify-center p-6 text-center">
                         <span className="text-[10px] font-mono tracking-widest uppercase text-[#D31220] font-bold mb-2">
                           ADVERTISEMENT
                         </span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
@@ -19,11 +19,14 @@ import {
   Lock,
   ExternalLink
 } from "lucide-react";
-import { getUserProfile, saveUserProfile, resolveUserAvatar, isUploadedAvatar } from "@/lib/userProfiles";
+import { getUserProfile, saveUserProfile, resolveUserAvatar, isUploadedAvatar, safeSaveBookmarksToStorage, safeGetBookmarksFromStorage } from "@/lib/userProfiles";
 import { uploadImageToBackblaze } from "@/lib/imageUtils";
 import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
+import { useLiveArticles } from "@/lib/articlesSync";
+import { getAllSearchableArticles } from "@/lib/searchArticles";
 
 export default function ReaderDashboardPage() {
+  const { articles: liveArticles = [] } = useLiveArticles();
   const [currentUser, setCurrentUser] = useState<{
     name: string;
     email: string;
@@ -125,15 +128,13 @@ export default function ReaderDashboardPage() {
 
       // Load Saved Articles for this user
       const key = getUserBookmarkStorageKey(activeEmail);
-      const bookmarksStr = localStorage.getItem(key);
-      if (bookmarksStr) {
-        setSavedArticles(JSON.parse(bookmarksStr));
-      } else {
-        setSavedArticles([]);
-      }
+      const parsedBookmarks = safeGetBookmarksFromStorage(key);
+      setSavedArticles(parsedBookmarks);
+      // Clean up any historical duplicates in storage
+      safeSaveBookmarksToStorage(key, parsedBookmarks);
       dispatchPageDataReady();
     } catch (e) {
-      console.error(e);
+      console.warn("[ReaderPage] Error resolving reader session:", e);
       dispatchPageDataReady();
     }
   }, [auth.loading, auth.authenticated, auth.user, router]);
@@ -149,11 +150,117 @@ export default function ReaderDashboardPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleRemoveBookmark = (titleToRemove: string) => {
-    const userKey = getUserBookmarkStorageKey();
-    const updated = savedArticles.filter((art) => art.title !== titleToRemove);
+  // Listen for bookmark updates across the site & tabs
+  useEffect(() => {
+    const handleBookmarkSync = () => {
+      const activeEmail = currentUser?.email || auth.user?.email;
+      if (!activeEmail) return;
+      const key = getUserBookmarkStorageKey(activeEmail);
+      const parsed = safeGetBookmarksFromStorage(key);
+      setSavedArticles(parsed);
+    };
+
+    window.addEventListener("dj_bookmarks_updated", handleBookmarkSync);
+    window.addEventListener("storage", handleBookmarkSync);
+    window.addEventListener("focus", handleBookmarkSync);
+    document.addEventListener("visibilitychange", handleBookmarkSync);
+    return () => {
+      window.removeEventListener("dj_bookmarks_updated", handleBookmarkSync);
+      window.removeEventListener("storage", handleBookmarkSync);
+      window.removeEventListener("focus", handleBookmarkSync);
+      document.removeEventListener("visibilitychange", handleBookmarkSync);
+    };
+  }, [currentUser?.email, auth.user?.email]);
+
+  // Dynamically resolve and enrich bookmarks in memory without writing heavy data to localStorage
+  const displayArticles = useMemo(() => {
+    if (!savedArticles || savedArticles.length === 0) return [];
+
+    const searchable = getAllSearchableArticles();
+
+    // Deduplicate in displayArticles so duplicates NEVER render under any circumstance
+    const seenIds = new Set<string>();
+    const seenTitles = new Set<string>();
+    const uniqueSaved = savedArticles.filter((art) => {
+      if (!art) return false;
+      const artId = String(art.id || art.article_id || "").trim();
+      const artTitle = (art.title || "").trim().toLowerCase();
+
+      if (artId && seenIds.has(artId)) return false;
+      if (artTitle && artTitle !== "untitled article" && seenTitles.has(artTitle)) return false;
+
+      if (artId) seenIds.add(artId);
+      if (artTitle && artTitle !== "untitled article") seenTitles.add(artTitle);
+      return true;
+    });
+
+    return uniqueSaved.map((art) => {
+      const artId = String(art.id || art.article_id || "");
+      const artTitle = (art.title || "").trim();
+
+      // Match against liveArticles and searchable catalog
+      const match =
+        (artId ? liveArticles.find((a: any) => String(a.id) === artId) : null) ||
+        (artTitle && artTitle !== "Untitled Article"
+          ? liveArticles.find((a: any) => (a.title || "").trim().toLowerCase() === artTitle.toLowerCase())
+          : null) ||
+        (artId ? searchable.find((a: any) => String(a.id) === artId) : null) ||
+        (artTitle && artTitle !== "Untitled Article"
+          ? searchable.find((a: any) => (a.title || "").trim().toLowerCase() === artTitle.toLowerCase())
+          : null);
+
+      const matchAny = match as any;
+      const cat = (match?.category || art.category || "WORLD").toUpperCase();
+
+      const href =
+        art.href && art.href !== "/" && art.href !== "#" && !art.href.includes("?id=")
+          ? art.href
+          : `/article/${matchAny?.slug || artId || match?.id || ""}`;
+
+      const rawImage = art.image || matchAny?.imageUrl || matchAny?.image || "/header_logo.png";
+      const image = typeof rawImage === "string" && rawImage.length > 5000 && rawImage.startsWith("data:") ? "/header_logo.png" : rawImage;
+
+      let date = art.date || match?.date || matchAny?.published_at;
+      if (!date || date.includes("T")) {
+        if (art.savedAt) {
+          const d = new Date(art.savedAt);
+          date = !isNaN(d.getTime())
+            ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+            : "Saved Article";
+        } else {
+          date = "Saved Article";
+        }
+      } else {
+        date = String(date).split("•")[0].trim();
+      }
+
+      return {
+        ...art,
+        id: art.id || match?.id || artId,
+        title: (artTitle && artTitle !== "Untitled Article") ? artTitle : (match?.title || "Untitled Article"),
+        category: cat,
+        href: href || "/",
+        image: image || "/header_logo.png",
+        date,
+      };
+    });
+  }, [savedArticles, liveArticles]);
+
+  const handleRemoveBookmark = (targetItem: any) => {
+    const activeEmail = currentUser?.email || auth.user?.email;
+    const userKey = getUserBookmarkStorageKey(activeEmail);
+    const updated = savedArticles.filter((item) => {
+      if (targetItem?.id && item?.id) return String(item.id) !== String(targetItem.id);
+      if (targetItem?.title && item?.title && targetItem.title !== "Untitled Article") {
+        return item.title !== targetItem.title;
+      }
+      return false;
+    });
     setSavedArticles(updated);
-    localStorage.setItem(userKey, JSON.stringify(updated));
+    safeSaveBookmarksToStorage(userKey, updated);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("dj_bookmarks_updated"));
+    }
     showToast("Article removed from your Saved Articles.");
   };
 
@@ -208,7 +315,6 @@ export default function ReaderDashboardPage() {
 
     saveUserProfile(updatedUser);
     setCurrentUser(updatedUser);
-    localStorage.setItem("dj_user", JSON.stringify(updatedUser));
     setIsProfileModalOpen(false);
     setNewPassword("");
     setConfirmPassword("");
@@ -334,7 +440,7 @@ export default function ReaderDashboardPage() {
 
           {/* Right: "X ARTICLES" Count Pill */}
           <div className="bg-slate-100/90 border border-slate-200/90 text-slate-500 text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider font-sans">
-            {savedArticles.length} ARTICLES
+            {displayArticles.length} ARTICLES
           </div>
 
         </div>
@@ -342,7 +448,7 @@ export default function ReaderDashboardPage() {
         {/* ================= LARGE WHITE ROUNDED CARD CONTAINER MATCHING SCREENSHOT ================= */}
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-8 sm:p-12 md:p-16 min-h-[420px] flex items-center justify-center transition-all">
           
-          {savedArticles.length === 0 ? (
+          {displayArticles.length === 0 ? (
             /* EMPTY STATE DISPLAY MATCHING SCREENSHOT EXACTLY */
             <div className="text-center max-w-md mx-auto py-8">
               
@@ -378,7 +484,7 @@ export default function ReaderDashboardPage() {
             <div className="w-full space-y-6">
               <div className="flex items-center justify-between pb-4 border-b border-slate-100">
                 <h3 className="font-serif text-[18px] font-bold text-slate-900">
-                  Your Reading List ({savedArticles.length})
+                  Your Reading List ({displayArticles.length})
                 </h3>
                 <span className="text-[12px] text-slate-400 font-sans">
                   Account synced
@@ -386,56 +492,69 @@ export default function ReaderDashboardPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {savedArticles.map((art, idx) => (
-                  <div
-                    key={idx}
-                    className="flex flex-col sm:flex-row gap-4 p-4 rounded-xl border border-slate-200/80 hover:border-slate-300 bg-white hover:shadow-sm transition-all group relative"
-                  >
-                    <Link
-                      href={art.href}
-                      className="relative w-full sm:w-[150px] h-[100px] flex-shrink-0 overflow-hidden bg-slate-100 rounded-lg border border-slate-200 block"
+                {displayArticles.map((art, idx) => {
+                  const articleHref =
+                    (typeof art?.href === "string" && art.href.trim())
+                      ? art.href
+                      : (typeof art?.url === "string" && art.url.trim())
+                      ? art.url
+                      : (typeof art?.link === "string" && art.link.trim())
+                      ? art.link
+                      : art?.slug
+                      ? `/${encodeURIComponent(String(art?.category || "world").toLowerCase())}/${encodeURIComponent(art.slug)}`
+                      : "/";
+
+                  return (
+                    <div
+                      key={idx}
+                      className="flex flex-col sm:flex-row gap-4 p-4 rounded-xl border border-slate-200/80 hover:border-slate-300 bg-white hover:shadow-sm transition-all group relative"
                     >
-                      <img
-                        src={art.image}
-                        alt={art.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    </Link>
+                      <Link
+                        href={articleHref}
+                        className="relative w-full sm:w-[150px] h-[100px] flex-shrink-0 overflow-hidden bg-slate-100 rounded-lg border border-slate-200 block"
+                      >
+                        <img
+                          src={art?.image || "/header_logo.png"}
+                          alt={art?.title || "Saved article"}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      </Link>
 
-                    <div className="flex flex-col justify-between flex-1 pr-6">
-                      <div>
-                        <span className="text-[10px] font-bold text-[#BF1E2D] uppercase tracking-wider block mb-1">
-                          {art.category}
-                        </span>
-                        <Link
-                          href={art.href}
-                          className="font-serif text-[15px] font-bold text-slate-900 hover:text-[#BF1E2D] transition-colors leading-snug line-clamp-2"
-                        >
-                          {art.title}
-                        </Link>
+                      <div className="flex flex-col justify-between flex-1 pr-6">
+                        <div>
+                          <span className="text-[10px] font-bold text-[#BF1E2D] uppercase tracking-wider block mb-1">
+                            {art?.category || "General"}
+                          </span>
+                          <Link
+                            href={articleHref}
+                            className="font-serif text-[15px] font-bold text-slate-900 hover:text-[#BF1E2D] transition-colors leading-snug line-clamp-2"
+                          >
+                            {art?.title || "Untitled Article"}
+                          </Link>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] text-slate-400 font-sans mt-3">
+                          <span>{art?.date || art?.savedAt || "Saved"}</span>
+                          <Link
+                            href={articleHref}
+                            className="text-[#BF1E2D] font-bold hover:underline flex items-center gap-1"
+                          >
+                            Read Article →
+                          </Link>
+                        </div>
                       </div>
 
-                      <div className="flex items-center justify-between text-[11px] text-slate-400 font-sans mt-3">
-                        <span>{art.date}</span>
-                        <Link
-                          href={art.href}
-                          className="text-[#BF1E2D] font-bold hover:underline flex items-center gap-1"
-                        >
-                          Read Article →
-                        </Link>
-                      </div>
+                      {/* Trash remove button */}
+                      <button
+                        onClick={() => handleRemoveBookmark(art)}
+                        className="absolute top-3 right-3 text-slate-400 hover:text-red-600 transition-colors p-1.5 rounded-full hover:bg-slate-100 cursor-pointer"
+                        title="Remove article"
+                      >
+                        <Trash2 size={15} />
+                      </button>
                     </div>
-
-                    {/* Trash remove button */}
-                    <button
-                      onClick={() => handleRemoveBookmark(art.title)}
-                      className="absolute top-3 right-3 text-slate-400 hover:text-red-600 transition-colors p-1.5 rounded-full hover:bg-slate-100 cursor-pointer"
-                      title="Remove article"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

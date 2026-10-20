@@ -46,6 +46,17 @@ export interface AdSlotItem {
 
 export const DEFAULT_AD_SLOTS: AdSlotItem[] = [
   {
+    id: "slot-technology",
+    dimensions: "728X250",
+    title: "Homepage — Above Videos Section Leaderboard Banner (728x250)",
+    description: "Full-width 728x250 leaderboard banner displayed directly above the Videos section on homepage",
+    categoryGroup: "HOMEPAGE",
+    imageUrl: "",
+    actionType: "External Link (URL)",
+    targetUrl: "https://www.google.com",
+    isActive: true
+  },
+  {
     id: "slot-1",
     dimensions: "728X250",
     title: "Homepage — Mid Leaderboard Banner (Slot 2)",
@@ -79,10 +90,21 @@ export const DEFAULT_AD_SLOTS: AdSlotItem[] = [
     isActive: true
   },
   {
+    id: "slot-homepage-7",
+    dimensions: "300X600",
+    title: "Homepage — Videos Section Sidebar Long Ad Banner",
+    description: "Vertical 300x600 skyscraper ad banner beside the Videos panel on homepage",
+    categoryGroup: "HOMEPAGE",
+    imageUrl: "https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=600&h=400&fit=crop",
+    actionType: "External Link (URL)",
+    targetUrl: "https://www.apple.com/apple-podcasts/",
+    isActive: true
+  },
+  {
     id: "slot-4",
     dimensions: "300X250",
     title: "Category Pages — Sidebar Top Ad Box",
-    description: "Right sidebar top box on Category news feeds (Politics, Tech, etc.)",
+    description: "Right sidebar top box on Category news feeds (Politics, Tech, etc.) & Article pages",
     categoryGroup: "CATEGORY",
     imageUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&h=300&fit=crop",
     actionType: "External Link (URL)",
@@ -93,7 +115,7 @@ export const DEFAULT_AD_SLOTS: AdSlotItem[] = [
     id: "slot-5",
     dimensions: "300X600",
     title: "Category Pages — Sidebar Bottom Tall Ad Box",
-    description: "Vertical 300x600 tall skyscraper ad box on category sidebars",
+    description: "Vertical 300x600 tall skyscraper ad box on category sidebars & Article pages",
     categoryGroup: "CATEGORY",
     imageUrl: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=600&h=300&fit=crop",
     actionType: "External Link (URL)",
@@ -123,7 +145,7 @@ export function useLiveAdSlots() {
     if (typeof window === "undefined") return;
     try {
       const stored = localStorage.getItem(AD_STORAGE_KEY);
-      if (stored) {
+      if (stored && stored.trim()) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setAdSlots(parsed);
@@ -136,13 +158,34 @@ export function useLiveAdSlots() {
 
   useEffect(() => {
     loadSlots();
-    // NOTE: Do NOT listen to the native "storage" event here.
-    // That event fires in OTHER browser tabs when localStorage changes,
-    // causing ad slots to reload in every open tab (the cross-tab reload bug).
-    // Only listen to the tab-local custom event dispatched by saveAdSlots.
+    if (typeof window !== "undefined") {
+      fetch("/api/ads", { cache: "no-store" })
+        .then(res => (res && res.ok ? res.json().catch(() => null) : null))
+        .then(data => {
+          if (data && data.success && Array.isArray(data.adSlots) && data.adSlots.length > 0) {
+            setAdSlots(data.adSlots);
+            try {
+              localStorage.setItem(AD_STORAGE_KEY, JSON.stringify(data.adSlots));
+            } catch (e) {}
+          }
+        })
+        .catch(() => {});
+    }
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === AD_STORAGE_KEY && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setAdSlots(parsed);
+          }
+        } catch {}
+      }
+    };
     window.addEventListener(AD_SYNC_EVENT, loadSlots);
+    window.addEventListener("storage", handleStorage);
     return () => {
       window.removeEventListener(AD_SYNC_EVENT, loadSlots);
+      window.removeEventListener("storage", handleStorage);
     };
   }, [loadSlots]);
 
@@ -175,7 +218,7 @@ export function isDuplicateAdImage(url: string, currentSlotId?: string, allSlots
 export function isHomePageAPlus(post: any): boolean {
   if (!post) return false;
   const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
-  if (pl.includes("section 2") || pl.includes("a+ 2") || pl.includes("a+2")) return false;
+  if (pl.includes("section 2") || pl.includes("a+ 2") || pl.includes("a+2") || pl.includes("section 3") || pl.includes("a+ 3") || pl.includes("a+3")) return false;
   if (pl.includes("trending") || pl.includes("editor") || pl.includes("latest") || pl.includes("category")) return false;
   return (
     pl === "home page a+ section" ||
@@ -190,7 +233,7 @@ export function isHomePageAPlus(post: any): boolean {
 export function isTrendingNow(post: any): boolean {
   if (!post) return false;
   const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
-  if (pl.includes("section 2") || pl.includes("a+ 2") || pl.includes("a+2") || pl.includes("home page a+")) return false;
+  if (pl.includes("section 2") || pl.includes("a+ 2") || pl.includes("a+2") || pl.includes("section 3") || pl.includes("a+ 3") || pl.includes("a+3") || pl.includes("home page a+")) return false;
   if (pl.includes("editor") || pl.includes("latest") || pl.includes("category")) return false;
   return (
     pl === "trending now section" ||
@@ -203,7 +246,7 @@ export function isTrendingNow(post: any): boolean {
 export function isEditorsPick(post: any): boolean {
   if (!post) return false;
   const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
-  if (pl.includes("section 2") || pl.includes("a+ 2") || pl.includes("a+2") || pl.includes("home page a+") || pl.includes("trending") || pl.includes("latest") || pl.includes("category")) return false;
+  if (pl.includes("section 2") || pl.includes("a+ 2") || pl.includes("a+2") || pl.includes("section 3") || pl.includes("a+ 3") || pl.includes("a+3") || pl.includes("home page a+") || pl.includes("trending") || pl.includes("latest") || pl.includes("category")) return false;
   return (
     pl === "editor's picks section" ||
     pl === "editor's pick" ||
@@ -218,7 +261,7 @@ export function isEditorsPick(post: any): boolean {
 export function isLatestNews(post: any): boolean {
   if (!post) return false;
   const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
-  if (pl.includes("section 2") || pl.includes("a+ 2") || pl.includes("a+2") || pl.includes("home page a+") || pl.includes("trending") || pl.includes("editor") || pl.includes("category")) return false;
+  if (pl.includes("section 2") || pl.includes("a+ 2") || pl.includes("a+2") || pl.includes("section 3") || pl.includes("a+ 3") || pl.includes("a+3") || pl.includes("home page a+") || pl.includes("trending") || pl.includes("editor") || pl.includes("category")) return false;
   return (
     pl === "latest news section" ||
     pl === "latest news" ||
@@ -230,6 +273,7 @@ export function isLatestNews(post: any): boolean {
 export function isHomePageAPlus2(post: any): boolean {
   if (!post) return false;
   const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
+  if (pl.includes("section 3") || pl.includes("a+ 3") || pl.includes("a+3")) return false;
   if (pl.includes("trending") || pl.includes("editor") || pl.includes("latest") || pl.includes("category")) return false;
   return (
     pl === "home page a+ section 2" ||
@@ -237,7 +281,24 @@ export function isHomePageAPlus2(post: any): boolean {
     pl === "a+2" ||
     pl.includes("a+ section 2") ||
     pl.includes("section 2") ||
-    pl === "middle dark spotlight banner"
+    pl === "middle dark spotlight banner" ||
+    pl.includes("main news 2") ||
+    pl.includes("main news section 2") ||
+    pl === "main news 2"
+  );
+}
+
+export function isHomePageAPlus3(post: any): boolean {
+  if (!post) return false;
+  const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
+  if (pl.includes("trending") || pl.includes("editor") || pl.includes("latest") || pl.includes("category")) return false;
+  return (
+    pl === "home page a+ section 3" ||
+    pl === "a+ section 3" ||
+    pl === "a+3" ||
+    pl.includes("a+ section 3") ||
+    pl.includes("section 3") ||
+    pl.includes("main news 3")
   );
 }
 
@@ -260,7 +321,8 @@ export function isCategorySectionOnly(post: any): boolean {
     !isTrendingNow(post) &&
     !isEditorsPick(post) &&
     !isLatestNews(post) &&
-    !isHomePageAPlus2(post)
+    !isHomePageAPlus2(post) &&
+    !isHomePageAPlus3(post)
   );
 }
 
@@ -392,7 +454,7 @@ export function isArticleDeleted(post: any): boolean {
   if (typeof window === "undefined") return false;
   try {
     const deletedStr = localStorage.getItem("dj_deleted_articles");
-    if (!deletedStr) return false;
+    if (!deletedStr || !deletedStr.trim()) return false;
     const deletedList: string[] = JSON.parse(deletedStr);
     const pId = String(post.id || "");
     const pTitle = (post.title || "").trim().toLowerCase();
@@ -417,7 +479,7 @@ export function getCachedArticles(): ArticleItem[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
+    if (raw && raw.trim()) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
         return parsed.filter(a => !isArticleDeleted(a)).map(a => {
@@ -508,9 +570,9 @@ export async function fetchArticlesFromServer(): Promise<ArticleItem[]> {
             }
 
             if (!matchingServer) {
-              // Retain local articles ONLY if it is an unsaved local draft.
+              // Retain local articles if it is an unsaved local draft or rejected.
               // Never retain deleted, outdated, or duplicate published/pending/trashed records that do not exist on the server database.
-              if (a.status === "Draft") {
+              if (a.status === "Draft" || a.status === "Rejected") {
                 const resolvedImg = resolveArticleImageUrl(a.imageUrl || a.image || a.image_url || "");
                 mergedMap.set(String(a.id), {
                   ...a,
@@ -520,12 +582,18 @@ export async function fetchArticlesFromServer(): Promise<ArticleItem[]> {
                 });
               }
             } else {
-              // Server database is the single source of truth for published articles
+              // Server database is the single source of truth for published and updated articles.
+              // Stale local cached status must never override the server's current status.
               const serverVersion = matchingServer;
               const mergedSubcategories = (Array.isArray(serverVersion.subcategories) && serverVersion.subcategories.length > 0)
                 ? serverVersion.subcategories
                 : (Array.isArray(a.subcategories) && a.subcategories.length > 0 ? a.subcategories : (a.subCategories || []));
-              mergedMap.set(String(serverVersion.id), { ...serverVersion, subcategories: mergedSubcategories });
+              mergedMap.set(String(serverVersion.id), { 
+                ...serverVersion, 
+                authorEmail: serverVersion.authorEmail || (serverVersion as any).author_email || a.authorEmail || (a as any).author_email,
+                authorName: serverVersion.authorName || (serverVersion as any).author_name || a.authorName || (a as any).author_name,
+                subcategories: mergedSubcategories 
+              });
             }
           });
 
@@ -596,18 +664,20 @@ export async function saveArticleToServer(article: ArticleItem): Promise<Article
   if (typeof window !== "undefined") {
     try {
       const subsStr = localStorage.getItem(STORAGE_KEY);
-      let subsList: any[] = subsStr ? JSON.parse(subsStr) : [];
-      if (!Array.isArray(subsList)) subsList = [];
-      const sIdx = subsList.findIndex((p: any) => 
-        String(p.id) === String(article.id) || 
-        (cleanTitleKey(p.title) && cleanTitleKey(article.title) && cleanTitleKey(p.title) === cleanTitleKey(article.title)) ||
-        (origTitleKey && cleanTitleKey(p.title) === origTitleKey)
-      );
-      if (sIdx >= 0) {
-        subsList[sIdx] = { ...subsList[sIdx], ...articleWithTimestamps };
-      } else {
-        subsList.unshift(articleWithTimestamps);
+      let subsList: any[] = [];
+      if (subsStr && subsStr.trim()) {
+        try {
+          const parsed = JSON.parse(subsStr);
+          if (Array.isArray(parsed)) subsList = parsed;
+        } catch {}
       }
+      if (!Array.isArray(subsList)) subsList = [];
+      subsList = subsList.filter((p: any) => 
+        !(String(p.id) === String(article.id) || 
+        (cleanTitleKey(p.title) && cleanTitleKey(article.title) && cleanTitleKey(p.title) === cleanTitleKey(article.title)) ||
+        (origTitleKey && cleanTitleKey(p.title) === origTitleKey))
+      );
+      subsList.unshift(articleWithTimestamps);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(subsList));
       window.dispatchEvent(new Event(SYNC_EVENT_NAME));
       window.dispatchEvent(new Event("dj_articles_updated"));
@@ -649,11 +719,13 @@ export async function saveArticleToServer(article: ArticleItem): Promise<Article
           const isCurrentSaved = String(item.id) === artIdKey || (titleKey && titleKey === artTitleKey) || (origTitleKey && titleKey === origTitleKey);
           const serverMatch = (titleKey && mergedMap.get(`t_${titleKey}`)) || (origTitleKey && mergedMap.get(`t_${origTitleKey}`)) || mergedMap.get(String(item.id));
           if (serverMatch) {
-            const merged = isCurrentSaved ? { ...serverMatch, ...articleWithTimestamps, id: serverMatch.id || articleWithTimestamps.id } : { ...serverMatch, ...item, id: serverMatch.id };
+            const merged = isCurrentSaved ? { ...serverMatch, ...articleWithTimestamps, id: serverMatch.id || articleWithTimestamps.id } : serverMatch;
             mergedMap.set(String(serverMatch.id), merged);
             if (titleKey) mergedMap.set(`t_${titleKey}`, merged);
           } else {
-            mergedMap.set(String(item.id), isCurrentSaved ? articleWithTimestamps : item);
+            if (isCurrentSaved || item.status === "Draft") {
+              mergedMap.set(String(item.id), isCurrentSaved ? articleWithTimestamps : item);
+            }
           }
         });
 
@@ -738,7 +810,7 @@ export async function moveArticleToTrashOnServer(id: string | number, title?: st
   if (typeof window !== "undefined") {
     try {
       const subsStr = localStorage.getItem(STORAGE_KEY);
-      if (subsStr) {
+      if (subsStr && subsStr.trim()) {
         const parsed: any[] = JSON.parse(subsStr);
         const updated = parsed.map(a => 
           (String(a.id) === String(id) || (title && (a.title || "").trim().toLowerCase() === title.trim().toLowerCase()))
@@ -749,7 +821,7 @@ export async function moveArticleToTrashOnServer(id: string | number, title?: st
       }
 
       const trashedStr = localStorage.getItem("dj_trashed_articles");
-      const trashedList: any[] = trashedStr ? JSON.parse(trashedStr) : [];
+      const trashedList: any[] = (trashedStr && trashedStr.trim()) ? JSON.parse(trashedStr) : [];
       const cached = getCachedArticles();
       const target = cached.find(a => String(a.id) === String(id) || (title && a.title === title));
       if (target) {
@@ -794,7 +866,7 @@ export async function deletePermanentlyOnServer(id: string | number, title?: str
   if (typeof window !== "undefined") {
     try {
       const deletedStr = localStorage.getItem("dj_deleted_articles");
-      const deletedList: string[] = deletedStr ? JSON.parse(deletedStr) : [];
+      const deletedList: string[] = (deletedStr && deletedStr.trim()) ? JSON.parse(deletedStr) : [];
       const keys = [String(id)];
       if (title) keys.push(title.trim().toLowerCase());
       if (slug) keys.push(slug.trim().toLowerCase());
@@ -805,14 +877,14 @@ export async function deletePermanentlyOnServer(id: string | number, title?: str
       localStorage.setItem("dj_deleted_articles", JSON.stringify(deletedList));
 
       const subsStr = localStorage.getItem(STORAGE_KEY);
-      if (subsStr) {
+      if (subsStr && subsStr.trim()) {
         const parsed: any[] = JSON.parse(subsStr);
         const filtered = parsed.filter(a => String(a.id) !== String(id) && (title ? (a.title || "").trim().toLowerCase() !== title.trim().toLowerCase() : true));
         localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
       }
 
       const trashedStr = localStorage.getItem("dj_trashed_articles");
-      if (trashedStr) {
+      if (trashedStr && trashedStr.trim()) {
         const parsed: any[] = JSON.parse(trashedStr);
         const filtered = parsed.filter(a => String(a.id) !== String(id) && (title ? (a.title || "").trim().toLowerCase() !== title.trim().toLowerCase() : true));
         localStorage.setItem("dj_trashed_articles", JSON.stringify(filtered));

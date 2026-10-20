@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { Mail, Check, CheckCircle2, ArrowRight, ShieldCheck, Sparkles, Filter, X } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import NewsletterBanner from "@/components/NewsletterBanner";
+import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
 
 interface NewsletterItem {
   id: string;
@@ -14,7 +16,14 @@ interface NewsletterItem {
   subcategories: string[];
 }
 
-export default function NewslettersPage() {
+function NewslettersContent() {
+  const searchParams = useSearchParams();
+  const formRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    dispatchPageDataReady();
+  }, []);
+
   const newsletters: NewsletterItem[] = [
     {
       id: "world",
@@ -59,6 +68,13 @@ export default function NewslettersPage() {
       subcategories: ["Stocks & Indices", "Commodities", "Currencies", "Crypto & Digital Assets"]
     },
     {
+      id: "interview",
+      title: "Interviews",
+      schedule: "Weekly conversations",
+      description: "Candid, high-impact conversations with global leaders, founders, policymakers, and industry architects shaping modern commerce and society.",
+      subcategories: ["Global Leaders", "Founders", "Policymakers", "Leadership", "Innovators"]
+    },
+    {
       id: "lifestyle",
       title: "Lifestyle",
       schedule: "Weekly summary",
@@ -99,6 +115,19 @@ export default function NewslettersPage() {
   const [email, setEmail] = useState("");
   const [subscribed, setSubscribed] = useState(false);
 
+  useEffect(() => {
+    const qEmail = searchParams?.get("email");
+    if (qEmail) {
+      setEmail(qEmail);
+    } else if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlEmail = urlParams.get("email");
+      if (urlEmail) {
+        setEmail(urlEmail);
+      }
+    }
+  }, [searchParams]);
+
   const toggleSelect = (id: string) => {
     if (selectedIds.includes(id)) {
       setSelectedIds(selectedIds.filter((item) => item !== id));
@@ -115,12 +144,16 @@ export default function NewslettersPage() {
     }
   };
 
+  const scrollToForm = () => {
+    formRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !email.includes("@")) return;
 
-    const chosenTopics = selectedIds.map(id => {
-      const found = newsletters.find(n => n.id === id);
+    const chosenTopics = selectedIds.map((id) => {
+      const found = newsletters.find((n) => n.id === id);
       return found ? found.title.toUpperCase() : id.toUpperCase();
     });
 
@@ -138,13 +171,25 @@ export default function NewslettersPage() {
         try {
           const subsStr = localStorage.getItem("dj_newsletter_subscribers");
           let subsList: any[] = [];
-          if (subsStr) subsList = JSON.parse(subsStr);
+          if (subsStr && subsStr.trim()) {
+            try {
+              subsList = JSON.parse(subsStr);
+            } catch {}
+          }
           if (!Array.isArray(subsList)) subsList = [];
 
-          const existingIdx = subsList.findIndex((s: any) => s.email.toLowerCase() === email.trim().toLowerCase());
-          const dateFormatted = new Date().toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
+          const existingIdx = subsList.findIndex(
+            (s: any) => s.email.toLowerCase() === email.trim().toLowerCase()
+          );
+          const dateFormatted = new Date().toLocaleDateString("en-US", {
+            month: "short",
+            day: "2-digit",
+            year: "numeric"
+          });
           if (existingIdx >= 0) {
-            subsList[existingIdx].topics = Array.from(new Set([...(subsList[existingIdx].topics || []), ...finalTopics]));
+            subsList[existingIdx].topics = Array.from(
+              new Set([...(subsList[existingIdx].topics || []), ...finalTopics])
+            );
             subsList[existingIdx].date = dateFormatted;
           } else {
             subsList.unshift({
@@ -156,9 +201,6 @@ export default function NewslettersPage() {
             });
           }
           localStorage.setItem("dj_newsletter_subscribers", JSON.stringify(subsList));
-          // Dispatch a tab-local custom event instead of the native "storage" event.
-          // Manually dispatching new Event("storage") can trigger unintended cross-tab
-          // listeners in the same browsing context. Use a specific custom event instead.
           window.dispatchEvent(new Event("dj_newsletter_subscribers_updated"));
         } catch (e) {}
       }
@@ -171,92 +213,358 @@ export default function NewslettersPage() {
       setSubscribed(false);
       setEmail("");
       setSelectedIds([]);
-    }, 4000);
+    }, 4500);
   };
 
+  const isAllSelected = selectedIds.length === newsletters.length;
+
   return (
-    <main className="min-h-screen bg-white">
+    <main className="min-h-screen bg-[#FDFDFD] font-sans text-gray-900 selection:bg-red-100 selection:text-red-900">
       <Header />
 
-      {/* Top Banner section */}
-      <section className="bg-zinc-50 border-b border-zinc-200 py-12 text-center font-standard-sans">
-        <h1 className="text-[28px] md:text-[34px] font-bold text-[#BF1E2D] uppercase tracking-[2px]">
-          NEWSLETTERS
-        </h1>
-        <p className="text-[12px] text-zinc-500 mt-2">
-          Stay up to date with our daily newsletters.
-        </p>
-      </section>
+      {/* ── TOP HERO HEADER SECTION (Human-Crafted Editorial Masthead - White Background) ── */}
+      <section className="relative bg-white text-zinc-900 border-t-4 border-[#BF1E2D] border-b border-zinc-200 py-14 sm:py-16 md:py-20 px-4 sm:px-6">
+        <div className="relative max-w-[1240px] mx-auto text-center">
+          {/* Authentic Newsroom Kicker & Dateline */}
+          <div className="flex items-center justify-center gap-2 sm:gap-3 text-[11px] sm:text-xs font-serif uppercase tracking-[0.22em] text-zinc-500 mb-5">
+            <span className="h-px w-6 sm:w-12 bg-zinc-300" />
+            <span className="text-[#BF1E2D] font-bold tracking-[0.25em]">London BigBen</span>
+            <span className="text-zinc-300">•</span>
+            <span className="text-zinc-700 font-sans tracking-widest text-[10.5px]">Editorial Briefings</span>
+            <span className="text-zinc-300 hidden sm:inline">•</span>
+            <span className="text-zinc-500 font-sans tracking-wider text-[10px] hidden sm:inline">Delivered to Inbox</span>
+            <span className="h-px w-6 sm:w-12 bg-zinc-300" />
+          </div>
 
-      {/* Main Body block */}
-      <div className="max-w-[840px] mx-auto px-4 py-16 font-standard-sans">
-        
-        {/* Intro */}
-        <div className="text-center mb-12">
-          <h2 className="text-[24px] md:text-[28px] font-semibold text-zinc-900 leading-tight mb-4">
-            Let the best of London BigBen news come to you.
-          </h2>
-          <p className="text-[13px] text-zinc-600 leading-relaxed max-w-2xl mx-auto font-normal">
-            Select any of the free newsletters below. Then, enter your email address and click &quot;Sign Up Now.&quot;<br />
-            Your newsletter subscriptions with us are subject to London BigBen&apos;s{" "}
-            <Link href="#" className="underline text-[#BF1E2D] font-bold">Terms and Conditions</Link> and{" "}
-            <Link href="#" className="underline text-[#BF1E2D] font-bold">Privacy Policy</Link>.
+          {/* Editorial Display Headline with High-Craft Typography */}
+          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-[54px] font-extrabold tracking-tight font-serif leading-[1.15] text-zinc-950 max-w-4xl mx-auto">
+            Let the Best of London BigBen{" "}
+            <span className="font-serif italic font-normal text-[#BF1E2D]">
+              Come to You
+            </span>
+          </h1>
+
+          {/* Subdeck with Editorial Authority */}
+          <p className="mt-4 text-sm sm:text-[15.5px] text-zinc-600 max-w-2xl mx-auto leading-relaxed font-sans">
+            Select from our 12 specialized daily and weekly briefings. Receive objective geopolitical analysis, financial intelligence, breakthrough technology reporting, and candid executive interviews.
           </p>
 
+          {/* Editorial Trust Markers */}
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-y-2 gap-x-5 text-xs text-zinc-600 font-medium">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#BF1E2D]" />
+              12 Specialized Editions
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+              100% Free • No Paywalls
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
+              Written by Journalists
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
+              One-Click Unsubscribe
+            </span>
+          </div>
+
+          {/* Interactive Curation Toolbar */}
+          <div className="mt-8 pt-6 border-t border-zinc-200 max-w-xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-xs text-zinc-600 text-center sm:text-left">
+              {selectedIds.length === 0 ? (
+                <div>
+                  <p className="font-semibold text-zinc-900">Curate your personal reading list</p>
+                  <p className="text-[11px] text-zinc-500">Click any card below or select all 12 at once</p>
+                </div>
+              ) : (
+                <div>
+                  <p className="font-semibold text-zinc-900">
+                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-600 mr-2 animate-pulse" />
+                    {selectedIds.length} of {newsletters.length} briefings chosen
+                  </p>
+                  <p className="text-[11px] text-zinc-500 truncate max-w-xs">
+                    {newsletters.filter(n => selectedIds.includes(n.id)).map(n => n.title).join(", ")}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={selectAll}
+                className={`px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer border ${
+                  isAllSelected
+                    ? "bg-zinc-100 border-zinc-300 text-zinc-800 hover:bg-zinc-200"
+                    : "bg-[#BF1E2D] border-[#BF1E2D] hover:bg-red-700 text-white shadow-sm"
+                }`}
+              >
+                {isAllSelected ? "Clear Selections" : `Select All (${newsletters.length})`}
+              </button>
+
+              {selectedIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={scrollToForm}
+                  className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-800 bg-white border border-zinc-300 hover:border-zinc-400 hover:bg-zinc-50 transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+                >
+                  <span>Subscribe ({selectedIds.length})</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-[#BF1E2D]" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── MAIN NEWSLETTERS GRID ── */}
+      <section className="max-w-[1240px] mx-auto px-4 sm:px-6 py-12 md:py-16">
+        {/* Section Heading Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-8 pb-4 border-b border-zinc-200">
+          <div>
+            <h2 className="text-xl sm:text-2xl font-bold text-zinc-900 font-serif tracking-tight">
+              Choose Your Briefings
+            </h2>
+            <p className="text-xs text-zinc-500 mt-1">
+              Customize your daily digest. You can adjust your subscription preferences at any time.
+            </p>
+          </div>
+
           <button
+            type="button"
             onClick={selectAll}
-            className="mt-8 bg-[#BF1E2D] hover:bg-red-800 text-white font-bold text-[12px] px-6 py-3 tracking-wider uppercase cursor-pointer transition-colors rounded-none"
+            className="self-start sm:self-auto text-xs font-bold text-[#BF1E2D] hover:text-red-800 transition-colors uppercase tracking-wider cursor-pointer"
           >
-            {selectedIds.length === newsletters.length ? "DESELECT ALL NEWSLETTERS" : "SELECT ALL NEWSLETTERS"}
+            {isAllSelected ? "Clear All" : `Select All (${newsletters.length})`}
           </button>
         </div>
 
-        {/* Checkbox grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-10 border-t border-b border-zinc-200 py-12 my-12">
+        {/* Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch">
           {newsletters.map((n) => {
             const isChecked = selectedIds.includes(n.id);
             return (
               <div
                 key={n.id}
                 onClick={() => toggleSelect(n.id)}
-                className="flex items-start gap-4 cursor-pointer group"
+                className={`relative p-5 rounded-xl border transition-all duration-200 cursor-pointer flex flex-col justify-between group select-none ${
+                  isChecked
+                    ? "border-[#BF1E2D] bg-red-50/20 shadow-md ring-2 ring-[#BF1E2D]/30"
+                    : "border-zinc-200 bg-white hover:border-zinc-300 hover:shadow-sm"
+                }`}
               >
-                {/* Custom Checkbox */}
-                <div className="pt-1">
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={() => {}} // handled by div click
-                    className="w-4.5 h-4.5 accent-[#BF1E2D] cursor-pointer"
-                  />
-                </div>
-                {/* Content */}
-                <div className="flex flex-col w-full">
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-bold text-[16px] text-zinc-900 group-hover:text-[#BF1E2D] transition-colors leading-none">
-                      {n.title}
-                    </span>
-                    <span className="text-[11px] italic text-zinc-400 font-sans font-normal">
+                {/* Top Row: Schedule Pill & Custom Checkbox */}
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <span className="text-[11px] font-semibold text-zinc-500 bg-zinc-100 px-2.5 py-0.5 rounded-full font-mono">
                       {n.schedule}
                     </span>
+
+                    {/* Checkbox Indicator */}
+                    <div
+                      className={`w-5 h-5 rounded-md flex items-center justify-center transition-all duration-200 ${
+                        isChecked
+                          ? "bg-[#BF1E2D] text-white shadow-xs"
+                          : "border-2 border-zinc-300 group-hover:border-zinc-400 bg-white"
+                      }`}
+                    >
+                      {isChecked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                    </div>
                   </div>
-                  
-                  {/* Brief description */}
-                  <p className="text-[12.5px] text-zinc-500 leading-relaxed font-sans font-normal mt-2">
+
+                  {/* Title */}
+                  <h3 className="font-serif font-bold text-[19px] text-zinc-900 group-hover:text-[#BF1E2D] transition-colors leading-snug mb-2">
+                    {n.title}
+                  </h3>
+
+                  {/* Description */}
+                  <p className="text-[13px] text-zinc-600 leading-relaxed font-sans mb-4">
                     {n.description}
                   </p>
+                </div>
+
+                {/* Subcategory Tag Pills */}
+                <div className="pt-3 border-t border-zinc-100 flex flex-wrap gap-1.5 mt-auto">
+                  {n.subcategories.map((sub) => (
+                    <span
+                      key={sub}
+                      className="text-[10px] text-zinc-500 bg-zinc-50 px-2 py-0.5 rounded border border-zinc-200/70 font-sans group-hover:border-zinc-300 transition-colors"
+                    >
+                      {sub}
+                    </span>
+                  ))}
                 </div>
               </div>
             );
           })}
         </div>
 
-        {/* Bottom high-fidelity signup form */}
-        <NewsletterBanner />
+        {/* ── HIGH-FIDELITY EDITORIAL REGISTRATION PASS (White Background) ── */}
+        <div
+          ref={formRef}
+          className="mt-14 bg-white text-zinc-900 border-t-4 border-[#BF1E2D] border-x border-b border-zinc-200 p-6 sm:p-10 shadow-sm relative"
+        >
+          {/* Header Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-5 mb-6 border-b border-zinc-200">
+            <div className="flex items-center gap-3">
+              <span className="w-8 h-8 bg-[#BF1E2D] text-white flex items-center justify-center font-serif font-black text-xs tracking-wider">
+                LBN
+              </span>
+              <div>
+                <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-700 block leading-none">
+                  London BigBen Dispatch Desk
+                </span>
+                <span className="text-[10px] text-zinc-500 font-sans">
+                  Subscriber Registry • Direct Delivery Edition
+                </span>
+              </div>
+            </div>
 
-      </div>
+            <div className="flex items-center gap-2 text-[11px] font-sans text-zinc-600 bg-zinc-50 px-3 py-1.5 border border-zinc-200">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>Verified Editorial Transmission</span>
+            </div>
+          </div>
+
+          {/* Two-Column Editorial Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            {/* Left Column: Context & Live Selection Chips */}
+            <div className="lg:col-span-6 space-y-4">
+              <div>
+                <h3 className="text-2xl sm:text-3xl font-bold font-serif text-zinc-900 tracking-tight leading-snug">
+                  Complete Your Subscription
+                </h3>
+                <p className="text-xs sm:text-[13px] text-zinc-600 mt-2 leading-relaxed font-sans">
+                  Join over 140,000 discerning readers. Your selected editions are hand-curated and dispatched at 06:00 GMT with zero editorial compromise.
+                </p>
+              </div>
+
+              {/* Dynamic Live Selected Briefings Box */}
+              {selectedIds.length === 0 ? (
+                <div className="p-4 bg-zinc-50 border border-zinc-200 text-xs text-zinc-700 leading-relaxed font-sans">
+                  <div className="flex items-center gap-2 font-semibold text-zinc-900 mb-1">
+                    <span className="w-2 h-2 rounded-full bg-[#BF1E2D]" />
+                    <span>Default: Flagship All-News Daily Briefing</span>
+                  </div>
+                  <p className="text-zinc-500 text-[11.5px]">
+                    No specific briefings selected above. Entering your email will subscribe you to our comprehensive flagship morning edition covering all major topics.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-4 bg-zinc-50 border border-zinc-200 text-xs font-sans">
+                  <div className="flex items-center justify-between text-xs text-zinc-700 mb-2.5">
+                    <span className="font-semibold text-zinc-900 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-600" />
+                      <span>{selectedIds.length} of {newsletters.length} Briefings Selected</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedIds([])}
+                      className="text-[11px] text-[#BF1E2D] hover:text-red-800 underline cursor-pointer font-medium"
+                    >
+                      Clear & use Flagship
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
+                    {newsletters
+                      .filter((n) => selectedIds.includes(n.id))
+                      .map((n) => (
+                        <span
+                          key={n.id}
+                          className="inline-flex items-center gap-1.5 text-[11px] bg-red-50 border border-red-200 text-[#BF1E2D] px-2.5 py-1 font-medium"
+                        >
+                          <span>{n.title}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleSelect(n.id);
+                            }}
+                            className="text-red-400 hover:text-[#BF1E2D] cursor-pointer"
+                            title={`Remove ${n.title}`}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              <p className="text-[11px] text-zinc-500 font-sans">
+                ✦ Unsubscribe or modify preferences with 1 click in any newsletter footer.
+              </p>
+            </div>
+
+            {/* Right Column: Form & Confirmation */}
+            <div className="lg:col-span-6 bg-zinc-50/80 border border-zinc-200 p-5 sm:p-6 flex flex-col justify-between">
+              <form onSubmit={handleSignUp} className="space-y-3.5">
+                <div>
+                  <label className="block text-[11px] font-mono uppercase tracking-wider text-zinc-600 mb-2">
+                    Enter Your Email Address
+                  </label>
+                  <div className="flex items-center gap-3 px-4 py-3.5 bg-white border border-zinc-300 focus-within:border-[#BF1E2D] focus-within:ring-1 focus-within:ring-[#BF1E2D] transition-all">
+                    <Mail className="w-5 h-5 text-zinc-400 shrink-0" />
+                    <input
+                      type="email"
+                      required
+                      placeholder="name@organization.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full bg-transparent text-zinc-900 placeholder-zinc-400 focus:outline-none text-sm font-sans"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-[#BF1E2D] hover:bg-red-700 active:scale-[0.99] text-white font-bold text-xs uppercase tracking-wider py-3.5 px-6 transition-all cursor-pointer shadow-sm flex items-center justify-center gap-2 font-sans"
+                >
+                  <span>
+                    {selectedIds.length > 0
+                      ? `Sign Up Now (${selectedIds.length} Briefing${selectedIds.length > 1 ? "s" : ""})`
+                      : "Sign Up Now (Flagship All-News)"}
+                  </span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </form>
+
+              {/* Success alert message */}
+              {subscribed && (
+                <div className="mt-4 p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>✓ Subscribed successfully! Thank you for subscribing to London BigBen.</span>
+                </div>
+              )}
+
+              {/* Terms and conditions notice */}
+              <p className="text-[11.5px] text-zinc-500 mt-4 leading-relaxed font-sans">
+                You can unsubscribe at any time. By signing up, you agree to London BigBen&apos;s{" "}
+                <Link href="/terms" className="underline text-zinc-700 hover:text-zinc-900 font-semibold">
+                  Terms and Conditions
+                </Link>{" "}
+                and{" "}
+                <Link href="/privacy" className="underline text-zinc-700 hover:text-zinc-900 font-semibold">
+                  Privacy Policy
+                </Link>
+                .
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <Footer />
     </main>
+  );
+}
+
+export default function NewslettersPage() {
+  return (
+    <Suspense fallback={null}>
+      <NewslettersContent />
+    </Suspense>
   );
 }

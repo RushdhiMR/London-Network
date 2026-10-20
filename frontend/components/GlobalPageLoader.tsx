@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import PageSkeletonLoader from "@/components/PageSkeletonLoader";
 import { resetArticlesFetchCache } from "@/lib/articlesSync";
@@ -39,12 +39,9 @@ const STATIC_PREFIXES = [
   "/editorial-policy",
   "/advertise",
   "/advertise-with-us",
-  "/subscribe",
-  "/newsletters",
   "/journal-of-record",
-  // NOTE: /writer and /admin are intentionally NOT in this list.
-  // They are dynamic pages that fetch real data; they call dispatchPageDataReady()
-  // once their data is loaded, so GlobalPageLoader must wait for that signal.
+  // Dynamic routes (/, /news, /business, /newsletters, /subscribe, /reader, /writer, /admin, etc.)
+  // must wait for real database/API data and dispatchPageDataReady().
 ];
 
 function isStaticRoute(path: string): boolean {
@@ -56,48 +53,51 @@ function isStaticRoute(path: string): boolean {
 export default function GlobalPageLoader({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
-  const [lastPathname, setLastPathname] = useState(pathname);
   const [dataReady, setDataReady] = useState(false);
-
-  // Synchronous route change reset during render:
-  // If pathname has changed, immediately reset dataReady to false BEFORE any child paints!
-  if (pathname !== lastPathname) {
-    setLastPathname(pathname);
-    setDataReady(isStaticRoute(pathname));
-    resetArticlesFetchCache();
-    // Clear the window flag so the new route starts fresh.
-    if (typeof window !== "undefined") window.__djPageDataReadyPath = null;
-  }
+  // Ref to track the pathname for which the effect has already been run,
+  // avoiding setState calls during the render phase (React 18 anti-pattern for side-effects).
+  const effectPathRef = useRef<string | null>(null);
 
   // On first render (SSR → client hydration), mark mounted
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Manage dataReady event listener and safety timeout on route changes
+  // Reset and re-register data-ready listener on each pathname change.
   useEffect(() => {
     if (!mounted) return;
 
+    const isStatic = isStaticRoute(pathname);
+
+    // Reset fetch cache and window flag when navigating to a new route.
+    // Only do this when the pathname actually changes to avoid double-running.
+    if (effectPathRef.current !== pathname) {
+      effectPathRef.current = pathname;
+      resetArticlesFetchCache();
+      if (typeof window !== "undefined") window.__djPageDataReadyPath = null;
+    }
+
     // For static routes (login, terms, etc.), content is ready immediately
-    if (isStaticRoute(pathname)) {
+    if (isStatic) {
       setDataReady(true);
       return;
     }
 
-    // Production race-condition fix: if the ready event already fired before
-    // this effect had a chance to register its listener, detect it here and
-    // immediately mark data as ready without waiting for a future event.
-    if (typeof window !== "undefined" && window.__djPageDataReadyPath === pathname) {
-      setDataReady(true);
-      // Still attach the listener below in case the component re-runs this effect.
-    }
+    // Dynamic data route: show skeleton until dispatchPageDataReady() is called.
+    setDataReady(false);
 
-    // Dynamic data route: wait for real database/API data to arrive
     const handleDataReady = () => {
       setDataReady(true);
     };
 
     window.addEventListener(PAGE_DATA_READY_EVENT, handleDataReady);
+
+    // If dispatchPageDataReady() was already called before this effect ran
+    // (Vercel production race: fast server resolves data during hydration tick),
+    // the window flag will already match the current pathname.
+    if (typeof window !== "undefined" && window.__djPageDataReadyPath === pathname) {
+      setDataReady(true);
+    }
 
     // Safety fallback: only if the network completely hangs (12 seconds),
     // show the page so it never stays permanently stuck on the skeleton.
@@ -132,7 +132,7 @@ export default function GlobalPageLoader({ children }: { children: React.ReactNo
  * Call this from any page-level component once its real data has been loaded
  * and set into state. This signals GlobalPageLoader to hide the skeleton.
  *
- * Also sets the module-level flag so GlobalPageLoader can detect the event
+ * Also sets the window flag so GlobalPageLoader can detect the event
  * even if it fired before the window listener was registered (production race fix).
  */
 export function dispatchPageDataReady() {

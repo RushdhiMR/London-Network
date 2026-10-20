@@ -1,4 +1,4 @@
-import { getDbPool } from '@/lib/db';
+import { getDbPool, isMysqlAvailable, recordMysqlFailure } from '@/lib/db';
 import fs from 'fs';
 import path from 'path';
 
@@ -20,8 +20,13 @@ function readJsonArticles(): ArticleRecord[] {
     if (fs.existsSync(TMP_JSON_PATH)) {
       const raw = fs.readFileSync(TMP_JSON_PATH, 'utf-8');
       if (raw && raw.trim()) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed.articles) && parsed.articles.length > 0) {
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          parsed = null;
+        }
+        if (parsed && Array.isArray(parsed.articles) && parsed.articles.length > 0) {
           globalForArticlesStore.__serverArticlesCache = parsed.articles;
           return parsed.articles;
         }
@@ -33,8 +38,13 @@ function readJsonArticles(): ArticleRecord[] {
     if (fs.existsSync(DB_JSON_PATH)) {
       const raw = fs.readFileSync(DB_JSON_PATH, 'utf-8');
       if (raw && raw.trim()) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed.articles)) {
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          parsed = null;
+        }
+        if (parsed && Array.isArray(parsed.articles)) {
           globalForArticlesStore.__serverArticlesCache = parsed.articles;
           return parsed.articles;
         }
@@ -56,7 +66,11 @@ function writeJsonArticles(articles: ArticleRecord[]) {
     if (fs.existsSync(DB_JSON_PATH)) {
       const raw = fs.readFileSync(DB_JSON_PATH, 'utf-8');
       if (raw && raw.trim()) {
-        fullDb = JSON.parse(raw);
+        try {
+          fullDb = JSON.parse(raw);
+        } catch {
+          fullDb = {};
+        }
       }
     }
     fullDb.articles = articles;
@@ -64,7 +78,14 @@ function writeJsonArticles(articles: ArticleRecord[]) {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    fs.writeFileSync(DB_JSON_PATH, JSON.stringify(fullDb, null, 2), 'utf-8');
+    const tmpFile = `${DB_JSON_PATH}.tmp.${Date.now()}`;
+    fs.writeFileSync(tmpFile, JSON.stringify(fullDb, null, 2), 'utf-8');
+    try {
+      fs.renameSync(tmpFile, DB_JSON_PATH);
+    } catch {
+      fs.writeFileSync(DB_JSON_PATH, JSON.stringify(fullDb, null, 2), 'utf-8');
+      if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
+    }
     writeSuccess = true;
   } catch (err) {
     // Expected on Vercel production: process.cwd() is read-only
@@ -75,7 +96,13 @@ function writeJsonArticles(articles: ArticleRecord[]) {
     let tmpDb: any = {};
     if (fs.existsSync(TMP_JSON_PATH)) {
       const raw = fs.readFileSync(TMP_JSON_PATH, 'utf-8');
-      if (raw && raw.trim()) tmpDb = JSON.parse(raw);
+      if (raw && raw.trim()) {
+        try {
+          tmpDb = JSON.parse(raw);
+        } catch {
+          tmpDb = {};
+        }
+      }
     }
     tmpDb.articles = articles;
     const tmpDir = path.dirname(TMP_JSON_PATH);
@@ -124,9 +151,10 @@ export interface ArticleRecord {
 }
 
 export async function readArticlesStore(): Promise<ArticleRecord[]> {
-  try {
-    const db = getDbPool();
-    const [rows]: any = await db.query(`
+  if (isMysqlAvailable()) {
+    try {
+      const db = getDbPool();
+      const [rows]: any = await db.query(`
       SELECT 
         a.*,
         c.name AS category_name,
@@ -211,6 +239,7 @@ export async function readArticlesStore(): Promise<ArticleRecord[]> {
           is_editors_pick: Boolean(r.is_editors_pick),
           status: r.status || 'Published',
           rejectionReason: r.rejection_reason || r.rejectionReason || parsedSeo?.rejectionReason || undefined,
+          rejectedAt: r.rejected_at || r.rejectedAt || parsedSeo?.rejectedAt || undefined,
           date: pubDate,
           published_at: r.published_at,
           publishedAt: r.published_at,
@@ -244,7 +273,7 @@ export async function readArticlesStore(): Promise<ArticleRecord[]> {
         };
       });
 
-      // Seamlessly merge with JSON store so articles are never lost if saved during DB state changes
+      // Seamlessly merge with JSON store so articles that only exist in JSON are not lost
       const jsonArticles = readJsonArticles();
       if (jsonArticles.length > 0) {
         const cleanT = (t: any) => String(t || '').toLowerCase().replace(/[\u2018\u2019\u201A\u201B']/g, "'").replace(/[\u201C\u201D\u201E\u201F"]/g, '"').replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ').trim();
@@ -255,6 +284,8 @@ export async function readArticlesStore(): Promise<ArticleRecord[]> {
           if (tk) mergedMap.set(`t_${tk}`, a);
         });
 
+        // Only add JSON articles if they don't already exist in MySQL.
+        // MySQL records are the authoritative live state and must never be overwritten by stale JSON entries.
         jsonArticles.forEach((ja: any) => {
           const tk = cleanT(ja.title);
           const match = (tk && mergedMap.get(`t_${tk}`)) || mergedMap.get(String(ja.id));
@@ -283,7 +314,9 @@ export async function readArticlesStore(): Promise<ArticleRecord[]> {
       return sqlArticles;
     }
   } catch (err) {
+    recordMysqlFailure();
     console.warn('[serverArticlesStore] MySQL read notice, checking JSON fallback:', err);
+  }
   }
 
   // Fallback to JSON Database
@@ -303,9 +336,9 @@ export async function upsertArticleStore(article: ArticleRecord): Promise<Articl
   const isPendingOrPublished = article.status === "Pending review" || article.status === "Published";
   const sanitizedArticle: ArticleRecord = {
     ...article,
-    rejectionReason: isPendingOrPublished ? undefined : article.rejectionReason,
-    rejection_reason: isPendingOrPublished ? undefined : article.rejection_reason,
-    rejectedAt: isPendingOrPublished ? undefined : article.rejectedAt,
+    rejectionReason: isPendingOrPublished ? undefined : (article.rejectionReason || (article as any).rejection_reason),
+    rejection_reason: isPendingOrPublished ? undefined : ((article as any).rejection_reason || article.rejectionReason),
+    rejectedAt: isPendingOrPublished ? undefined : (article.rejectedAt || (article as any).rejected_at),
   };
 
   // Sync to JSON DB first for robust local persistence
@@ -326,7 +359,13 @@ export async function upsertArticleStore(article: ArticleRecord): Promise<Articl
         (origTitleKey && aTitleKey === origTitleKey)
       ) {
         foundInJson = true;
-        const merged = { ...a, ...sanitizedArticle, id: a.id || sanitizedArticle.id };
+        const merged = { 
+          ...a, 
+          ...sanitizedArticle, 
+          id: a.id || sanitizedArticle.id,
+          authorEmail: sanitizedArticle.authorEmail || sanitizedArticle.author_email || a.authorEmail || a.author_email,
+          authorName: sanitizedArticle.authorName || sanitizedArticle.author_name || sanitizedArticle.author || a.authorName || a.author_name || a.author
+        };
         if (isPendingOrPublished) {
           delete merged.rejectionReason;
           delete merged.rejection_reason;
@@ -387,15 +426,20 @@ export async function upsertArticleStore(article: ArticleRecord): Promise<Articl
     } else {
       delete finalSeo.rejectionReason;
     }
+    if (sanitizedArticle.rejectedAt && !isPendingOrPublished) {
+      finalSeo = { ...finalSeo, rejectedAt: sanitizedArticle.rejectedAt };
+    } else if (isPendingOrPublished) {
+      delete finalSeo.rejectedAt;
+    }
     if (sanitizedArticle.targetedRecipients || sanitizedArticle.targeted_recipients) {
       finalSeo.targetedRecipients = sanitizedArticle.targetedRecipients || sanitizedArticle.targeted_recipients;
     }
     const seoJson = Object.keys(finalSeo).length > 0 ? JSON.stringify(finalSeo) : (sanitizedArticle.seo ? JSON.stringify(sanitizedArticle.seo) : null);
 
-    const authorName = sanitizedArticle.authorName || sanitizedArticle.author || 'Staff Journalist';
-    const authorAvatar = sanitizedArticle.authorAvatar || '/author_bluesuit.jpg';
-    const authorBio = sanitizedArticle.authorBio || `${authorName} is a journalist for Digital Journal.`;
-    const authorEmail = sanitizedArticle.authorEmail || sanitizedArticle.author_email || 'writer@digitaljournal.com';
+    let authorName = sanitizedArticle.authorName || sanitizedArticle.author;
+    let authorAvatar = sanitizedArticle.authorAvatar || '/author_bluesuit.jpg';
+    let authorBio = sanitizedArticle.authorBio;
+    let authorEmail = sanitizedArticle.authorEmail || sanitizedArticle.author_email;
     let rawUpsertImg = (sanitizedArticle.imageUrl || sanitizedArticle.image || sanitizedArticle.image_url || '/ai_hero.png').trim();
     if (rawUpsertImg.includes('f005.backblazeb2.com/file/LondonNetwork/')) {
       rawUpsertImg = rawUpsertImg.replace(/https?:\/\/f005\.backblazeb2\.com\/file\/LondonNetwork\//g, 'https://LondonNetwork.s3.us-east-005.backblazeb2.com/');
@@ -425,28 +469,62 @@ export async function upsertArticleStore(article: ArticleRecord): Promise<Articl
     }
     if (!isExisting && sanitizedArticle.title) {
       const cleanTitle = sanitizedArticle.title.trim();
-      const normTitle = cleanTitle.replace(/[\u2018\u2019\u201A\u201B']/g, "'").replace(/[\u201C\u201D\u201E\u201F"]/g, '"');
+      const straightTitle = cleanTitle.replace(/[\u2018\u2019\u201A\u201B']/g, "'").replace(/[\u201C\u201D\u201E\u201F"]/g, '"');
+      const curlyTitle = cleanTitle.replace(/[\u2018\u2019\u201A\u201B']/g, "’").replace(/[\u201C\u201D\u201E\u201F"]/g, '”');
       const [chkTitle]: any = await db.query(
-        'SELECT id FROM articles WHERE LOWER(TRIM(title)) = LOWER(TRIM(?)) OR LOWER(TRIM(title)) = LOWER(TRIM(?)) LIMIT 1',
-        [cleanTitle, normTitle]
+        'SELECT id FROM articles WHERE LOWER(TRIM(title)) = LOWER(TRIM(?)) OR LOWER(TRIM(title)) = LOWER(TRIM(?)) OR LOWER(TRIM(title)) = LOWER(TRIM(?)) LIMIT 1',
+        [cleanTitle, straightTitle, curlyTitle]
       );
       if (chkTitle && chkTitle.length > 0) {
         isExisting = true;
         targetId = chkTitle[0].id;
+      } else {
+        const cleanAlpha = (t: string) => (t || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const targetAlpha = cleanAlpha(cleanTitle);
+        if (targetAlpha) {
+          const [allRows]: any = await db.query('SELECT id, title, slug FROM articles ORDER BY id DESC LIMIT 200');
+          if (Array.isArray(allRows)) {
+            const matchedRow = allRows.find((r: any) => cleanAlpha(r.title) === targetAlpha);
+            if (matchedRow) {
+              isExisting = true;
+              targetId = matchedRow.id;
+            }
+          }
+        }
       }
     }
     if (!isExisting && (sanitizedArticle.original_title || sanitizedArticle.previousTitle)) {
       const origT = String(sanitizedArticle.original_title || sanitizedArticle.previousTitle).trim();
-      const normOrigT = origT.replace(/[\u2018\u2019\u201A\u201B']/g, "'").replace(/[\u201C\u201D\u201E\u201F"]/g, '"');
+      const straightOrigT = origT.replace(/[\u2018\u2019\u201A\u201B']/g, "'").replace(/[\u201C\u201D\u201E\u201F"]/g, '"');
+      const curlyOrigT = origT.replace(/[\u2018\u2019\u201A\u201B']/g, "’").replace(/[\u201C\u201D\u201E\u201F"]/g, '”');
       const [chkOrig]: any = await db.query(
-        'SELECT id FROM articles WHERE LOWER(TRIM(title)) = LOWER(TRIM(?)) OR LOWER(TRIM(title)) = LOWER(TRIM(?)) LIMIT 1',
-        [origT, normOrigT]
+        'SELECT id FROM articles WHERE LOWER(TRIM(title)) = LOWER(TRIM(?)) OR LOWER(TRIM(title)) = LOWER(TRIM(?)) OR LOWER(TRIM(title)) = LOWER(TRIM(?)) LIMIT 1',
+        [origT, straightOrigT, curlyOrigT]
       );
       if (chkOrig && chkOrig.length > 0) {
         isExisting = true;
         targetId = chkOrig[0].id;
       }
     }
+
+    if (isExisting) {
+      try {
+        const [existingRow]: any = await db.query('SELECT author_name, author_email, author_avatar, author_bio FROM articles WHERE id = ? LIMIT 1', [targetId]);
+        if (existingRow && existingRow[0]) {
+          if (!authorEmail || authorEmail === 'writer@digitaljournal.com') {
+            if (existingRow[0].author_email) authorEmail = existingRow[0].author_email;
+          }
+          if (!authorName || authorName === 'Staff Journalist') {
+            if (existingRow[0].author_name) authorName = existingRow[0].author_name;
+          }
+          if (!authorBio && existingRow[0].author_bio) authorBio = existingRow[0].author_bio;
+          if ((!authorAvatar || authorAvatar === '/author_bluesuit.jpg') && existingRow[0].author_avatar) authorAvatar = existingRow[0].author_avatar;
+        }
+      } catch (e) {}
+    }
+    if (!authorName) authorName = 'Staff Journalist';
+    if (!authorEmail) authorEmail = 'writer@digitaljournal.com';
+    if (!authorBio) authorBio = `${authorName} is a journalist for Digital Journal.`;
 
     if (isExisting) {
       await db.query(`
@@ -470,7 +548,7 @@ export async function upsertArticleStore(article: ArticleRecord): Promise<Articl
           seo = ?,
           is_featured = ?,
           is_editors_pick = ?,
-          published_at = IF(? = 'Published', NOW(), published_at),
+          published_at = COALESCE(?, IF(? = 'Published', COALESCE(published_at, NOW()), published_at)),
           updated_at = NOW()
         WHERE id = ?
       `, [
@@ -493,6 +571,7 @@ export async function upsertArticleStore(article: ArticleRecord): Promise<Articl
         seoJson,
         isFeatured,
         isEditorsPick,
+        sanitizedArticle.published_at || sanitizedArticle.publishedAt || null,
         status,
         targetId
       ]);
@@ -585,16 +664,27 @@ export async function updateArticleStatusStore(id: string | number, status: stri
   return readArticlesStore();
 }
 
-export async function deleteArticleStore(id: string | number): Promise<ArticleRecord[]> {
+export async function deleteArticleStore(id: string | number, title?: string, slug?: string): Promise<ArticleRecord[]> {
   try {
     const jsonArticles = readJsonArticles();
-    const filtered = jsonArticles.filter(a => String(a.id) !== String(id) && String(a.slug) !== String(id));
+    const cleanT = (t: any) => String(t || '').trim().toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ');
+    const targetTitle = title ? cleanT(title) : '';
+    const filtered = jsonArticles.filter(a => 
+      String(a.id) !== String(id) && 
+      String(a.slug) !== String(id) &&
+      (!slug || String(a.slug) !== String(slug)) &&
+      (!targetTitle || cleanT(a.title) !== targetTitle)
+    );
     writeJsonArticles(filtered);
   } catch (e) {}
 
   try {
     const db = getDbPool();
-    await db.query('DELETE FROM articles WHERE id = ? OR slug = ?', [id, String(id)]);
+    if (title && title.trim()) {
+      await db.query('DELETE FROM articles WHERE id = ? OR slug = ? OR LOWER(TRIM(title)) = LOWER(TRIM(?))', [id, String(id), title.trim()]);
+    } else {
+      await db.query('DELETE FROM articles WHERE id = ? OR slug = ?', [id, String(id)]);
+    }
   } catch (err) {
     console.warn('[serverArticlesStore] MySQL delete notice:', err);
   }

@@ -296,55 +296,63 @@ export function formatArticleHref(post: any): string {
     .replace(/[^a-z0-9\s-]/g, "")
     .trim()
     .replace(/\s+/g, "-");
-  return `/${cat}/${slug}`;
+  return `/article/${slug}`;
+}
+
+export function articlesToSearchable(items: ArticleItem[]): SearchableArticle[] {
+  const map = new Map<string, SearchableArticle>();
+  if (!Array.isArray(items)) return [];
+
+  items.forEach((item: ArticleItem) => {
+    if (!item || !item.id) return;
+    if (isArticleDeleted(item)) return;
+    const st = (item.status || "").toLowerCase().trim();
+    if (st !== "published" && st !== "approved") return;
+
+    const cleanDesc = item.summary || item.subheading || extractPlainText(item.content || "").slice(0, 160) + "...";
+    const cat = item.category || (item as any).category_name || "News";
+    const subcats = Array.isArray(item.subcategories)
+      ? item.subcategories
+      : (item.subcategories ? [item.subcategories] : (item.subCategories || []));
+    const tags = Array.isArray(item.tags) ? item.tags : [];
+    const company = (item as any).company || (item as any).companyName || (item as any).company_name || "";
+
+    map.set(String(item.id), {
+      id: item.id,
+      title: item.title || "Untitled Article",
+      description: cleanDesc,
+      content: extractPlainText(item.content || ""),
+      category: cat,
+      subcategories: subcats,
+      tags: company ? [...tags, company] : tags,
+      href: formatArticleHref(item),
+      date: item.date || (item.published_at ? new Date(item.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Recently Published"),
+      image: item.imageUrl || item.image || (item as any).image_url || "/argentina_vs_switzerland.png",
+      author: item.authorName || (item as any).author_name || (item as any).author || "Staff Writer",
+      readDuration: item.readDuration || "4 min read"
+    });
+  });
+
+  return Array.from(map.values());
 }
 
 export function getAllSearchableArticles(): SearchableArticle[] {
-  const dynamicMap = new Map<string, SearchableArticle>();
-
-  // 1. Add static defaults first
-  DEFAULT_SEARCHABLE_ARTICLES.forEach((item) => {
-    dynamicMap.set(String(item.id), item);
-  });
-
-  // 2. Fetch and merge published articles from local storage cache
-  if (typeof window !== "undefined") {
-    try {
-      const cached = getCachedArticles();
-      cached.forEach((item: ArticleItem) => {
-        if (!isArticleDeleted(item) && (item.status || "").toLowerCase() === "published") {
-          const cleanDesc = item.summary || item.subheading || extractPlainText(item.content || "").slice(0, 160) + "...";
-          const cat = item.category || item.category_name || "General";
-          const subcats = Array.isArray(item.subcategories) ? item.subcategories : (item.subcategories ? [item.subcategories] : []);
-          const tags = Array.isArray(item.tags) ? item.tags : [];
-          
-          dynamicMap.set(String(item.id), {
-            id: item.id,
-            title: item.title,
-            description: cleanDesc,
-            content: extractPlainText(item.content || ""),
-            category: cat,
-            subcategories: subcats,
-            tags: tags,
-            href: formatArticleHref(item),
-            date: item.date || "Recently Published",
-            image: item.imageUrl || item.image || "/argentina_vs_switzerland.png",
-            author: item.authorName || "Staff Writer",
-            readDuration: item.readDuration || "4 min read"
-          });
-        }
-      });
-    } catch (e) {
-      console.warn("Could not read local articles for search catalog:", e);
-    }
+  if (typeof window === "undefined") return [];
+  try {
+    const cached = getCachedArticles();
+    return articlesToSearchable(cached);
+  } catch (e) {
+    console.warn("Could not read local articles for search catalog:", e);
+    return [];
   }
-
-  return Array.from(dynamicMap.values());
 }
 
 export async function fetchAllSearchableArticlesAsync(): Promise<SearchableArticle[]> {
   try {
-    await fetchArticlesFromServer();
+    const fresh = await fetchArticlesFromServer();
+    if (Array.isArray(fresh) && fresh.length > 0) {
+      return articlesToSearchable(fresh);
+    }
   } catch (e) {}
   return getAllSearchableArticles();
 }
@@ -361,7 +369,7 @@ export function searchArticlesByQuery(
   if (categoryFilter && categoryFilter.toLowerCase() !== "all") {
     const filterCat = categoryFilter.toLowerCase().replace(/[^a-z0-9]/g, "");
     list = list.filter((art) => {
-      const artCat = art.category.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const artCat = (art.category || "").toLowerCase().replace(/[^a-z0-9]/g, "");
       const artSubs = (art.subcategories || []).map((s) => s.toLowerCase().replace(/[^a-z0-9]/g, ""));
       return artCat === filterCat || artSubs.includes(filterCat) || artCat.includes(filterCat) || filterCat.includes(artCat);
     });
@@ -376,40 +384,54 @@ export function searchArticlesByQuery(
   const scored = list
     .map((art) => {
       let score = 0;
-      const lowerTitle = art.title.toLowerCase();
-      const lowerDesc = art.description.toLowerCase();
+      const lowerTitle = (art.title || "").toLowerCase();
+      const lowerDesc = (art.description || "").toLowerCase();
       const lowerContent = (art.content || "").toLowerCase();
-      const lowerCategory = art.category.toLowerCase();
+      const lowerCategory = (art.category || "").toLowerCase();
       const lowerSubs = (art.subcategories || []).join(" ").toLowerCase();
       const lowerTags = (art.tags || []).join(" ").toLowerCase();
       const lowerAuthor = (art.author || "").toLowerCase();
 
       // Exact title match (highest weight)
-      if (lowerTitle === trimmed) score += 100;
-      else if (lowerTitle.includes(trimmed)) score += 50;
+      if (lowerTitle === trimmed) score += 250;
+      else if (lowerTitle.startsWith(trimmed)) score += 150;
+      else if (lowerTitle.includes(trimmed)) score += 80;
 
-      // Category / Tag match
-      if (lowerCategory.includes(trimmed) || lowerSubs.includes(trimmed)) score += 30;
-      if (lowerTags.includes(trimmed)) score += 25;
+      // Category / Subcategory / Topic / Company match
+      if (lowerCategory === trimmed || lowerSubs === trimmed) score += 70;
+      else if (lowerCategory.includes(trimmed) || lowerSubs.includes(trimmed)) score += 40;
 
-      // Description / Author match
+      if (lowerTags.includes(trimmed)) score += 35;
+      if (lowerAuthor.includes(trimmed)) score += 25;
       if (lowerDesc.includes(trimmed)) score += 20;
-      if (lowerAuthor.includes(trimmed)) score += 15;
       if (lowerContent.includes(trimmed)) score += 10;
 
       // Multi-term token matching
+      let allTermsMatch = queryTerms.length > 1;
       queryTerms.forEach((term) => {
-        if (lowerTitle.includes(term)) score += 15;
-        if (lowerCategory.includes(term) || lowerSubs.includes(term)) score += 10;
-        if (lowerTags.includes(term)) score += 8;
-        if (lowerDesc.includes(term)) score += 5;
-        if (lowerContent.includes(term)) score += 2;
+        let termMatched = false;
+        if (lowerTitle.includes(term)) { score += 25; termMatched = true; }
+        if (lowerCategory.includes(term) || lowerSubs.includes(term)) { score += 15; termMatched = true; }
+        if (lowerTags.includes(term)) { score += 12; termMatched = true; }
+        if (lowerDesc.includes(term)) { score += 8; termMatched = true; }
+        if (lowerAuthor.includes(term)) { score += 5; termMatched = true; }
+        if (lowerContent.includes(term)) { score += 2; termMatched = true; }
+        if (!termMatched) allTermsMatch = false;
       });
+
+      if (allTermsMatch && queryTerms.length > 1) {
+        score += 35;
+      }
 
       return { article: art, score };
     })
     .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      const idA = Number(a.article.id) || 0;
+      const idB = Number(b.article.id) || 0;
+      return idB - idA;
+    })
     .map((item) => item.article);
 
   return scored;

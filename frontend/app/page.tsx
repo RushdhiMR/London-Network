@@ -8,6 +8,9 @@ import PromoBanner from '@/components/PromoBanner';
 import PoliticsSection from '@/components/PoliticsSection';
 import BusinessGrid from '@/components/BusinessGrid';
 import TechnologyGrid from '@/components/TechnologyGrid';
+import VideoSection from '@/components/VideoSection';
+import InterviewSection from '@/components/InterviewSection';
+import MostReadSection from '@/components/MostReadSection';
 import MarketsSection from '@/components/MarketsSection';
 import LifeStyleSection from '@/components/LifeStyleSection';
 import BottomCategoryGrid from '@/components/BottomCategoryGrid';
@@ -38,11 +41,23 @@ export default function Home() {
       {/* 7. Section 6: Business Section */}
       <BusinessGrid />
 
+      {/* Advertisement Banner Above Videos Section */}
+      <AdBanner label="ADVERTISEMENT" slotId="slot-technology" maxWidth="max-w-[728px]" />
+
+      {/* Video Panel: Videos / Reels */}
+      <VideoSection />
+
       {/* 8. Section 7: Technology Section */}
       <TechnologyGrid />
 
-      {/* 10. Ad Slot 2 */}
+      {/* 9. Ad Slot 2 */}
       <AdBanner label="ADVERTISEMENT - SLOT 2" />
+
+      {/* 10. Interview Section */}
+      <InterviewSection />
+
+      {/* Most Read Section */}
+      <MostReadSection />
 
       {/* 11. Section 8: Markets Section */}
       <MarketsSection />

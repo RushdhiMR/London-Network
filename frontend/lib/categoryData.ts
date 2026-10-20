@@ -37,6 +37,91 @@ export interface CategoryData {
 export function getCategoryData(slug: string): CategoryData {
   const norm = slug.toLowerCase().replace(/[^a-z0-9]/g, "");
 
+  if (norm.includes("interview")) {
+    return {
+      categoryName: "Interviews",
+      categoryColor: "bg-amber-50",
+      infoBoxText: `London BigBen's Interviews deliver candid, high-impact conversations with global leaders, founders, policymakers, and industry architects shaping modern commerce and society.\nOur journalists explore the ideas, strategies, and personal journeys redefining our world.`,
+      featured: {
+        category: "INTERVIEW • LEADERSHIP & INNOVATION",
+        title: "Inside the AI Revolution: A Candid Conversation on the Future of Enterprise Intelligence",
+        description: "Industry pioneers share candid insights on agentic workflows, computational bottlenecks, and the fundamental shift redefining global technology infrastructure.",
+        image: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=1200&h=800&fit=crop",
+        author: "Rushdhi MR",
+        date: "July 24, 2026"
+      },
+      secondaryArticles: [
+        {
+          title: "Navigating Global Economic Shifts: An Exclusive Dialogue with Leading FinTech Innovators",
+          image: "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=150&h=150&fit=crop",
+          date: "July 23, 2026"
+        },
+        {
+          title: "Building Resilient Supply Chains: In Conversation with Manufacturing Executives",
+          image: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=150&h=150&fit=crop",
+          date: "July 22, 2026"
+        },
+        {
+          title: "The Next Decade of Sustainable Energy: A Dialogue with Clean Tech Pioneers",
+          image: "https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=150&h=150&fit=crop",
+          date: "July 21, 2026"
+        },
+        {
+          title: "From Startup to Scaleup: How Modern Founders Navigate Capital Constraints",
+          image: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150&h=150&fit=crop",
+          date: "July 20, 2026"
+        }
+      ],
+      guidesTitle: "INTERVIEW ARCHIVES & HIGHLIGHTS",
+      guidesDescription: "Curated discussions and key takeaways from visionary executives and thought leaders.",
+      guides: [
+        {
+          title: "Leadership in times of rapid technological disruption",
+          description: "Key principles shared by Fortune 500 executives on leading technical transformations...",
+          author: "By Marcus Vance • July 20, 2026"
+        },
+        {
+          title: "The founder mindset: Building enduring companies in volatile markets",
+          description: "Venture-backed entrepreneurs discuss risk management, hiring culture, and product vision...",
+          author: "By Sarah Miller • July 19, 2026"
+        },
+        {
+          title: "Policy perspectives: How regulatory architects balance innovation with public safety",
+          description: "Former commissioners discuss the delicate balance of tech governance and growth...",
+          author: "By David Chen • July 18, 2026"
+        }
+      ],
+      newsTitle: "More Interview Highlights",
+      newsDescription: "Recent dialogues, Q&As, and discussions across business, technology, and governance.",
+      newsArticles: [
+        {
+          title: "Decentralized Finance and Sovereign Currencies: Q&A with Central Bank Advisors",
+          image: "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=300&h=200&fit=crop",
+          description: "Exploring the integration of institutional digital assets into traditional banking rails.",
+          date: "July 18, 2026"
+        },
+        {
+          title: "Cyber Resilience at Scale: Discussion with Chief Information Security Officers",
+          image: "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=300&h=200&fit=crop",
+          description: "How enterprises protect cloud infrastructure against autonomous threat vectors.",
+          date: "July 17, 2026"
+        },
+        {
+          title: "Venture Allocation Trends: Roundtable with Leading Angel Syndicates",
+          image: "https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=300&h=200&fit=crop",
+          description: "Where seed-stage capital is flowing across AI, robotics, and clean infrastructure.",
+          date: "July 16, 2026"
+        },
+        {
+          title: "Biotech Breakthroughs: A Dialogue with Oncology Researchers",
+          image: "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=300&h=200&fit=crop",
+          description: "Accelerating clinical discovery pipelines through targeted mRNA therapeutic models.",
+          date: "July 15, 2026"
+        }
+      ]
+    };
+  }
+
   if (norm.includes("politic")) {
     return {
       categoryName: "Politics & Policy",
@@ -843,6 +928,186 @@ export function getCategoryData(slug: string): CategoryData {
           image: "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=300&h=200&fit=crop",
           description: "Interoperable settlement rails reduce cross-border wire transaction times from days to milliseconds.",
           date: "July 14, 2026"
+        }
+      ]
+    };
+  }
+
+  if (norm.includes("business")) {
+    return {
+      categoryName: "Business",
+      categoryColor: "bg-[#FFE9D6]",
+      infoBoxText: `Business covers corporations, startups, leadership dynamics, and entrepreneurship. We track corporate policy changes, strategic pivots, venture capital funding, and market directions that affect modern business organizations.\n\nWe verify and report on developments in real time. Essential details and updates to keep you informed of global impacts.`,
+      featured: {
+        category: "STARTUPS & VENTURE • TECH & BUSINESS FUTURE",
+        title: "Startup funds AI — and a better future",
+        description: "Venture capital funding and corporate investments continue to flow into automated pipelines, backing developers and system architects.",
+        image: "https://images.unsplash.com/photo-1616469829581-73993eb86b02?w=1200&h=800&fit=crop",
+        author: "Sarah Mitchell",
+        date: "3 hours ago"
+      },
+      secondaryArticles: [
+        {
+          title: "Video: Alteryx found when it posted Git credentials in raw code",
+          image: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=150&h=150&fit=crop",
+          date: "July 15, 2026 12:44 PM EST"
+        },
+        {
+          title: "Canada's Conexiom bets that the future of AI lies in automation, not experimentation",
+          image: "https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=150&h=150&fit=crop",
+          date: "July 15, 2026"
+        },
+        {
+          title: "Tunnel tech to survey the state of leaving framework",
+          image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=150&h=150&fit=crop",
+          date: "July 14, 2026"
+        },
+        {
+          title: "Lightworks, Scotiabank, Sun Life and TELUS launch AI Consortium",
+          image: "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=150&h=150&fit=crop",
+          date: "July 14, 2026"
+        }
+      ],
+      guidesTitle: "Business Guides",
+      guidesDescription: "Background context and practical insights on challenging topics and what to do about it.",
+      guides: [
+        {
+          title: "Your complete guide to sparking innovation in a digital age",
+          description: "Remember when setting up custom modules was the norm? Today, developers rely on unified frameworks...",
+          author: "By Jennifer Abbott • July 15, 2026"
+        },
+        {
+          title: "The urgent manual to successful innovation: standard setup or hybrid custom",
+          description: "Successful innovation is not a one-size-fits-all. Organizations must choose between standardized modules...",
+          author: "By Jane Smith • July 15, 2026"
+        },
+        {
+          title: "Want to keep customers at the heart of your innovation project?",
+          description: "How do you build a product that is not only functional but also loved by users? Focus on the feedback...",
+          author: "By Sarah Miller • July 15, 2026"
+        },
+        {
+          title: "You can't execute successfully without the right company culture and mindset",
+          description: "Testing and building frameworks is easy compared to alignment. Mindset determines which projects scale...",
+          author: "By Jennifer Abbott • July 15, 2026"
+        }
+      ],
+      newsTitle: "Business More News",
+      newsDescription: "Everything happening now that you need to know to find new ideas.",
+      newsArticles: [
+        {
+          title: "Op-Ed: Rethinking humanity as automation rewrites human realities",
+          description: "Automation is not just about replacing jobs; it's about redefining what it means to be human and finding focus areas that leverage empathy and critical oversight.",
+          date: "By Sarah Miller • 8 hours ago",
+          image: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=220&h=150&fit=crop"
+        },
+        {
+          title: "'Indispensable' Xiaohongshu app fuels a Chinese tourism boom",
+          description: "The social and e-commerce app has become the go-to guide for Chinese tourists planning overseas trips and discovering local hubs.",
+          date: "By David Chen • 12 hours ago",
+          image: "https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=220&h=150&fit=crop"
+        },
+        {
+          title: "Growing list of countries move to ban social media for children",
+          description: "The UK is considering joining a growing list of nations enacting strict bans on social media usage for minors due to mental health concerns.",
+          date: "By Sarah Mitchell • 14 hours ago",
+          image: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=220&h=150&fit=crop"
+        },
+        {
+          title: "Op-Ed: Canada rewrites the rules on AI privacy with Bill C-27, and this is just the start",
+          description: "With commitment to protecting digital rights, Bill C-27 may well become a benchmark for AI regulations and compliance audits globally.",
+          date: "By Pramod Asu • 18 hours ago",
+          image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=220&h=150&fit=crop"
+        }
+      ]
+    };
+  }
+
+  if (norm.includes("technol")) {
+    return {
+      categoryName: "Technology",
+      categoryColor: "bg-[#FFE9D6]",
+      infoBoxText: `Technology is changing how organizations work, build, and compete. The main parts of influence, insight, and competitive advantage.\n\nFiguring out details in data nodes, and what it takes to get them working, makes technology builders working every day.`,
+      featured: {
+        category: "REVIEW • BUSINESS & FINANCE • TECH & SCIENCE FUTURE",
+        title: "Review: Has AI been chasing the wrong dream since Alan Turing?",
+        description: "The search for true artificial intelligence is in a critical transition. Experts ask if we're chasing the wrong goals by emphasizing statistical prediction over symbolic reasoning models.",
+        image: "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=1200&h=800&fit=crop",
+        author: "Dr. Andrew Forde",
+        date: "July 13, 2026"
+      },
+      secondaryArticles: [
+        {
+          title: "Silicon photonics breakthrough promises 10x faster data center interconnects",
+          image: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=150&h=150&fit=crop",
+          date: "July 16, 2026"
+        },
+        {
+          title: "Alberta puts $50 million behind Amii's AI research",
+          image: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=150&h=150&fit=crop",
+          date: "July 9, 2026"
+        },
+        {
+          title: "Why governance lets Thomson Reuters move faster on AI",
+          image: "https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=150&h=150&fit=crop",
+          date: "July 2, 2026"
+        },
+        {
+          title: "The AI procurement question hiding in your doctor's office",
+          image: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=150&h=150&fit=crop",
+          date: "June 26, 2026"
+        }
+      ],
+      guidesTitle: "Technology Guides",
+      guidesDescription: "Background context and practical insights on challenging topics and what to do about it.",
+      guides: [
+        {
+          title: "The key technologies innovators use to drive digital transformation",
+          description: "Digital transformation is reshaping industries by integrating advanced computing, automation, and intelligent workflows...",
+          author: "By Pramod Asu • July 15, 2026"
+        },
+        {
+          title: "How to keep your customers throughout your digital transformation",
+          description: "Learn the best strategies to maintain client relationships and user retention during complex migration phases...",
+          author: "By Pramod Asu • July 15, 2026"
+        },
+        {
+          title: "Dialing into the future: How digital innovation is reshaping telecoms",
+          description: "Telecom providers are redesigning core routing systems to accommodate massive 5G/6G data loads and Edge computation...",
+          author: "By Pramod Asu • July 15, 2026"
+        },
+        {
+          title: "How digital transformation is revolutionizing manufacturing",
+          description: "Smart factory floor networks utilize real-time diagnostics and neural modules to increase production throughput...",
+          author: "By Pramod Asu • July 15, 2026"
+        }
+      ],
+      newsTitle: "Technology More News",
+      newsDescription: "Things happening now that you need to know to find new ideas.",
+      newsArticles: [
+        {
+          title: "The era of the generalist board director is over",
+          description: "As technologies scale, company boards require specialized expertise in cybersecurity, AI ethics, and systems engineering to mitigate multi-vector enterprise risks.",
+          date: "By Emily Hart • 4 hours ago",
+          image: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=220&h=150&fit=crop"
+        },
+        {
+          title: "China's Moonshot AI chases 'DeepSeek' moment with math-focused model",
+          description: "The Beijing-based startup is releasing a specialized reasoning framework designed to tackle complex mathematical algorithms and system designs dynamically.",
+          date: "By Sarah Mitchell • 8 hours ago",
+          image: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=220&h=150&fit=crop"
+        },
+        {
+          title: "Startups bet on AI, and a lesser future",
+          description: "Venture pipelines are increasingly targeted at automation modules that require minimal oversight, prompting labor debates across major economies.",
+          date: "By David Chen • 12 hours ago",
+          image: "https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=220&h=150&fit=crop"
+        },
+        {
+          title: "Opposition to data centres grows in cramped urban Japan",
+          description: "Local councils are voicing concerns over massive energy demands and water-cooling consumption in dense municipal sectors near high-density power grids.",
+          date: "By Pramod Asu • 14 hours ago",
+          image: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=220&h=150&fit=crop"
         }
       ]
     };

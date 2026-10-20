@@ -1,7 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isB2Configured, uploadToB2 } from "@/lib/backblaze";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const fetchUrl = searchParams.get("fetchUrl");
+  if (fetchUrl) {
+    try {
+      const res = await fetch(fetchUrl);
+      if (res.ok) {
+        const arrayBuffer = await res.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const mime = res.headers.get("content-type") || "image/jpeg";
+        const base64 = `data:${mime};base64,${buffer.toString("base64")}`;
+        return NextResponse.json({ success: true, dataUrl: base64 });
+      }
+      return NextResponse.json({ success: false, error: "Failed to fetch remote image" }, { status: 502 });
+    } catch (e: any) {
+      return NextResponse.json({ success: false, error: e?.message || "Error fetching remote image" }, { status: 500 });
+    }
+  }
+
   const configured = isB2Configured();
   return NextResponse.json({
     status: "ok",

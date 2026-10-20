@@ -3,8 +3,6 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { triggerGoogleOAuth } from "@/lib/googleAuth";
 import { useAuth, dispatchTabLogin } from "@/lib/auth-context";
 import { UserPlus } from "lucide-react";
@@ -26,16 +24,40 @@ export default function RegisterPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [googleError, setGoogleError] = useState("");
 
+  const getRedirectDestination = (userRole?: string) => {
+    let dest: string | null = null;
+    if (typeof window !== "undefined") {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        dest = params.get("redirect") || params.get("callbackUrl") || params.get("from") || params.get("next");
+        if (!dest && document.referrer) {
+          const refUrl = new URL(document.referrer);
+          if (refUrl.origin === window.location.origin) {
+            const path = refUrl.pathname;
+            if (path && path !== "/login" && path !== "/register" && path !== "/forgot-password") {
+              dest = path;
+            }
+          }
+        }
+      } catch (e) {}
+    }
+    const role = (userRole || "").toLowerCase();
+    const isAdmin = role === "admin" || role === "co-admin";
+    const isWriter = role === "writer" || role === "editor" || isAdmin;
+
+    if (dest && dest.startsWith("/") && !dest.startsWith("//") && dest !== "/login" && dest !== "/register") {
+      if (dest.startsWith("/admin") && !isAdmin) return isWriter ? "/writer" : "/reader";
+      if (dest.startsWith("/writer") && !isWriter) return "/reader";
+      return dest;
+    }
+    if (isAdmin) return "/admin";
+    if (isWriter) return "/writer";
+    return "/reader";
+  };
+
   useEffect(() => {
     if (!auth.loading && auth.authenticated && auth.user) {
-      const role = (auth.user.role || "").toLowerCase();
-      if (role === "admin" || role === "co-admin") {
-        router.replace("/admin");
-      } else if (role === "writer" || role === "editor") {
-        router.replace("/writer");
-      } else {
-        router.replace("/reader");
-      }
+      router.replace(getRedirectDestination(auth.user.role));
     }
   }, [auth.loading, auth.authenticated, auth.user, router]);
 
@@ -71,13 +93,14 @@ export default function RegisterPage() {
         role: userObj.role,
         provider: userObj.provider || "google",
         avatar: userObj.avatar,
-      });
+      }, data.token);
 
       localStorage.setItem("dj_toast", `Welcome to London BigBen, ${userObj.name}! Your account is ready.`);
 
-      setSuccessMessage(`✓ Authenticated as ${userObj.name} (${userObj.email}) with Google! Setting up Reader Hub...`);
+      const targetDest = getRedirectDestination(userObj.role);
+      setSuccessMessage(`✓ Authenticated as ${userObj.name} (${userObj.email}) with Google! Opening ${targetDest}...`);
       setTimeout(() => {
-        window.location.href = "/reader";
+        window.location.href = targetDest;
       }, 500);
     } catch (err: any) {
       setGoogleError("Google registration failed. Please try again.");
@@ -147,13 +170,14 @@ export default function RegisterPage() {
         email: registeredUser.email,
         role: registeredUser.role,
         provider: registeredUser.provider || 'local',
-      });
+      }, data.token);
 
       localStorage.setItem("dj_toast", `Welcome to London BigBen, ${registeredUser.name}! Account created.`);
 
-      setSuccessMessage(`✓ Account successfully created for ${registeredUser.name}! Opening Reader Hub...`);
+      const targetDest = getRedirectDestination(registeredUser.role);
+      setSuccessMessage(`✓ Account successfully created for ${registeredUser.name}! Opening ${targetDest}...`);
       setTimeout(() => {
-        window.location.href = "/reader";
+        window.location.href = targetDest;
       }, 500);
     } catch (err: any) {
       setErrorMessage("Registration process failed. Please try again.");
@@ -164,23 +188,18 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col font-sans text-slate-900 selection:bg-red-100 selection:text-red-900">
-      <Header />
-
       {/* MAIN PLAIN PAGE CONTAINER */}
       <main className="flex-1 bg-white py-12 lg:py-16 flex items-center justify-center">
         <div className="w-full max-w-[440px] mx-auto px-4 font-sans text-slate-900">
           
           {/* Logo & Corporate Title */}
           <div className="flex flex-col items-center mb-8 text-center">
-            <Link href="/" className="flex items-center gap-2.5 hover:opacity-90 transition-opacity mb-2 group">
+            <Link href="/" className="inline-block hover:opacity-90 transition-opacity mb-4">
               <img
-                src="/logo.png"
-                alt="London BigBen Logo"
-                className="w-9 h-9 object-contain"
+                src="/header_logo.png"
+                alt="London BigBen Network"
+                className="h-9 sm:h-10 w-auto object-contain"
               />
-              <span className="text-2xl font-serif font-black tracking-tight text-slate-900 group-hover:text-[#BF1E2D] transition-colors">
-                LONDON BIGBEN
-              </span>
             </Link>
 
             <h1 className="text-xl font-bold text-slate-900">Create your account</h1>
@@ -278,7 +297,7 @@ export default function RegisterPage() {
                 type="text"
                 name="dj_register_name_no_autofill"
                 autoComplete="off"
-                placeholder="e.g. Rushdhi Riyaj"
+                placeholder="e.g. John Doe"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/50 focus:bg-white font-medium"
@@ -294,7 +313,7 @@ export default function RegisterPage() {
                 type="email"
                 name="dj_register_email_no_autofill"
                 autoComplete="off"
-                placeholder="e.g. reader@digitaljournal.com"
+                placeholder="e.g. yourname@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/50 focus:bg-white font-medium"
@@ -404,8 +423,6 @@ export default function RegisterPage() {
 
         </div>
       </main>
-
-      <Footer />
     </div>
   );
 }

@@ -83,7 +83,13 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    let body: any = {};
+    try {
+      const text = await request.text();
+      body = text && text.trim() ? JSON.parse(text) : {};
+    } catch {
+      body = {};
+    }
 
     // If body contains full array sync
     if (Array.isArray(body.articles)) {
@@ -165,7 +171,13 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const body = await request.json();
+    let body: any = {};
+    try {
+      const text = await request.text();
+      body = text && text.trim() ? JSON.parse(text) : {};
+    } catch {
+      body = {};
+    }
     const { id, status, ...updates } = body;
 
     if (!id) {
@@ -181,6 +193,8 @@ export async function PUT(request: Request) {
 
     const nowIso = new Date().toISOString();
     const targetStatus = status !== undefined ? status : existing?.status || 'Published';
+    const targetPublishedAt = updates.published_at || updates.publishedAt || existing?.published_at || existing?.publishedAt || (targetStatus === 'Published' ? nowIso : undefined);
+    const targetDate = updates.date || existing?.date || (targetStatus === 'Published' ? new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : undefined);
     const updatedRecord: ArticleRecord = {
       ...(existing || {}),
       ...updates,
@@ -188,10 +202,10 @@ export async function PUT(request: Request) {
       status: targetStatus,
       updated_at: nowIso,
       updatedAt: nowIso,
-      ...(targetStatus === 'Published' ? {
-        published_at: nowIso,
-        publishedAt: nowIso,
-        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      ...(targetPublishedAt ? {
+        published_at: targetPublishedAt,
+        publishedAt: targetPublishedAt,
+        date: targetDate
       } : {})
     };
 

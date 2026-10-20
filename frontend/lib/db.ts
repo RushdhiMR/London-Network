@@ -63,6 +63,28 @@ export interface AdvertiseLeadRow {
   created_at?: string;
 }
 
+export type SubscriptionPlanId = 'digital' | 'bundle';
+export type SubscriptionStatus = 'Free Trial' | 'Active Paid' | 'Expired' | 'Cancelled' | 'Payment Pending';
+
+export interface SiteSubscriptionRow {
+  id: string | number;
+  userId?: number | string | null;
+  name: string;
+  email: string;
+  phone?: string | null;
+  plan: SubscriptionPlanId;
+  planName: string;
+  price: string;
+  startDate: string;
+  trialExpiryDate: string;
+  status: SubscriptionStatus;
+  paymentStatus: 'Free Trial' | 'Paid' | 'Pending' | 'None';
+  paymentAmount: string;
+  renewalDate: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 const DEFAULT_ADVERTISE_LEADS: AdvertiseLeadRow[] = [
   {
     id: "lead-5001",
@@ -179,40 +201,67 @@ interface DeletedUserProfile {
   deleted_at: string;
 }
 
-function readJsonDb(): { users: UserRow[]; articles: any[]; deleted_emails: string[]; deleted_user_profiles: Record<string, DeletedUserProfile>; subscribers: SubscriberRow[]; contact_submissions: ContactSubmissionRow[]; advertise_leads: AdvertiseLeadRow[] } {
+let inMemoryJsonDbCache: any = null;
+let inMemoryJsonDbCacheTime = 0;
+const JSON_CACHE_TTL_MS = 10000; // 10 seconds in-memory cache
+
+function readJsonDb(): { users: UserRow[]; articles: any[]; deleted_emails: string[]; deleted_user_profiles: Record<string, DeletedUserProfile>; subscribers: SubscriberRow[]; contact_submissions: ContactSubmissionRow[]; advertise_leads: AdvertiseLeadRow[]; site_subscriptions: SiteSubscriptionRow[] } {
+  if (inMemoryJsonDbCache && (Date.now() - inMemoryJsonDbCacheTime < JSON_CACHE_TTL_MS)) {
+    return inMemoryJsonDbCache;
+  }
   try {
     if (fs.existsSync(DB_JSON_PATH)) {
       const raw = fs.readFileSync(DB_JSON_PATH, 'utf-8');
       if (raw && raw.trim()) {
-        const parsed = JSON.parse(raw);
-        return {
-          users: Array.isArray(parsed.users) ? parsed.users : [],
-          articles: Array.isArray(parsed.articles) ? parsed.articles : [],
-          deleted_emails: Array.isArray(parsed.deleted_emails) ? parsed.deleted_emails : [],
-          deleted_user_profiles: (parsed.deleted_user_profiles && typeof parsed.deleted_user_profiles === 'object' && !Array.isArray(parsed.deleted_user_profiles)) ? parsed.deleted_user_profiles : {},
-          subscribers: Array.isArray(parsed.subscribers) ? parsed.subscribers : [],
-          contact_submissions: Array.isArray(parsed.contact_submissions) && parsed.contact_submissions.length > 0 
-            ? parsed.contact_submissions 
-            : DEFAULT_CONTACT_SUBMISSIONS,
-          advertise_leads: Array.isArray(parsed.advertise_leads) && parsed.advertise_leads.length > 0
-            ? parsed.advertise_leads
-            : DEFAULT_ADVERTISE_LEADS
-        };
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(raw);
+        } catch (parseErr) {
+          parsed = null;
+        }
+        if (parsed && typeof parsed === 'object') {
+          const result = {
+            users: Array.isArray(parsed.users) ? parsed.users : [],
+            articles: Array.isArray(parsed.articles) ? parsed.articles : [],
+            deleted_emails: Array.isArray(parsed.deleted_emails) ? parsed.deleted_emails : [],
+            deleted_user_profiles: (parsed.deleted_user_profiles && typeof parsed.deleted_user_profiles === 'object' && !Array.isArray(parsed.deleted_user_profiles)) ? parsed.deleted_user_profiles : {},
+            subscribers: Array.isArray(parsed.subscribers) ? parsed.subscribers : [],
+            contact_submissions: Array.isArray(parsed.contact_submissions) && parsed.contact_submissions.length > 0 
+              ? parsed.contact_submissions 
+              : DEFAULT_CONTACT_SUBMISSIONS,
+            advertise_leads: Array.isArray(parsed.advertise_leads) && parsed.advertise_leads.length > 0
+              ? parsed.advertise_leads
+              : DEFAULT_ADVERTISE_LEADS,
+            site_subscriptions: Array.isArray(parsed.site_subscriptions) ? parsed.site_subscriptions : []
+          };
+          inMemoryJsonDbCache = result;
+          inMemoryJsonDbCacheTime = Date.now();
+          return result;
+        }
       }
     }
   } catch (err) {
     console.warn('[DB] JSON fallback read warning:', err);
   }
-  return { users: [], articles: [], deleted_emails: [], deleted_user_profiles: {}, subscribers: [], contact_submissions: DEFAULT_CONTACT_SUBMISSIONS, advertise_leads: DEFAULT_ADVERTISE_LEADS };
+  return { users: [], articles: [], deleted_emails: [], deleted_user_profiles: {}, subscribers: [], contact_submissions: DEFAULT_CONTACT_SUBMISSIONS, advertise_leads: DEFAULT_ADVERTISE_LEADS, site_subscriptions: [] };
 }
 
-function writeJsonDb(data: { users: UserRow[]; articles: any[]; deleted_emails?: string[]; deleted_user_profiles?: Record<string, DeletedUserProfile>; subscribers?: SubscriberRow[]; contact_submissions?: ContactSubmissionRow[]; advertise_leads?: AdvertiseLeadRow[] }) {
+function writeJsonDb(data: { users: UserRow[]; articles: any[]; deleted_emails?: string[]; deleted_user_profiles?: Record<string, DeletedUserProfile>; subscribers?: SubscriberRow[]; contact_submissions?: ContactSubmissionRow[]; advertise_leads?: AdvertiseLeadRow[]; site_subscriptions?: SiteSubscriptionRow[] }) {
+  inMemoryJsonDbCache = data;
+  inMemoryJsonDbCacheTime = Date.now();
   try {
     const dir = path.dirname(DB_JSON_PATH);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    fs.writeFileSync(DB_JSON_PATH, JSON.stringify(data, null, 2), 'utf-8');
+    const tmpFile = `${DB_JSON_PATH}.tmp.${Date.now()}`;
+    fs.writeFileSync(tmpFile, JSON.stringify(data, null, 2), 'utf-8');
+    try {
+      fs.renameSync(tmpFile, DB_JSON_PATH);
+    } catch {
+      fs.writeFileSync(DB_JSON_PATH, JSON.stringify(data, null, 2), 'utf-8');
+      if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
+    }
   } catch (err) {
     console.warn('[DB] JSON fallback write warning:', err);
   }
@@ -262,10 +311,56 @@ async function ensureMysqlTable(db: mysql.Pool) {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS site_subscriptions (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        user_id BIGINT NULL,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        plan VARCHAR(50) NOT NULL,
+        plan_name VARCHAR(255) NOT NULL,
+        price VARCHAR(50) NOT NULL,
+        start_date DATETIME NOT NULL,
+        trial_expiry_date DATETIME NOT NULL,
+        status VARCHAR(50) DEFAULT 'Free Trial',
+        payment_status VARCHAR(50) DEFAULT 'Free Trial',
+        payment_amount VARCHAR(50) DEFAULT '$0.00',
+        renewal_date DATETIME NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_sub_email (email)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
     tableInitialized = true;
   } catch (err) {
     // If MySQL connection not available, fallback is active
   }
+}
+
+let lastMysqlFailureTime = 0;
+const MYSQL_COOLDOWN_MS = 15000;
+
+export function shouldAttemptMysql(): boolean {
+  const isVercel = Boolean(process.env.VERCEL || process.env.NEXT_PUBLIC_VERCEL_ENV);
+  const host = (process.env.DB_HOST || '127.0.0.1').toLowerCase();
+  // On Vercel serverless, localhost MySQL is unreachable.
+  if (isVercel && (host === 'localhost' || host === '127.0.0.1')) {
+    return false;
+  }
+  return true;
+}
+
+export function isMysqlAvailable(): boolean {
+  if (!shouldAttemptMysql()) return false;
+  if (lastMysqlFailureTime > 0 && Date.now() - lastMysqlFailureTime < MYSQL_COOLDOWN_MS) {
+    return false;
+  }
+  return true;
+}
+
+export function recordMysqlFailure(): void {
+  lastMysqlFailureTime = Date.now();
 }
 
 const globalForDb = globalThis as unknown as { mysqlPool: mysql.Pool | undefined };
@@ -281,9 +376,11 @@ export function getDbPool(): mysql.Pool {
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
-      connectTimeout: 5000,
+      connectTimeout: 1500,
     });
-    ensureMysqlTable(globalForDb.mysqlPool);
+    if (isMysqlAvailable()) {
+      ensureMysqlTable(globalForDb.mysqlPool).catch(() => recordMysqlFailure());
+    }
   }
   return globalForDb.mysqlPool;
 }
@@ -294,18 +391,20 @@ export const DB = {
     if (!norm) return null;
 
     // 1. Try MySQL Database
-    try {
-      const db = getDbPool();
-      await ensureMysqlTable(db);
-      const [rows]: any = await db.query(
-        'SELECT * FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1',
-        [norm]
-      );
-      if (Array.isArray(rows) && rows.length > 0) {
-        return rows[0] as UserRow;
+    if (isMysqlAvailable()) {
+      try {
+        const db = getDbPool();
+        await ensureMysqlTable(db);
+        const [rows]: any = await db.query(
+          'SELECT * FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1',
+          [norm]
+        );
+        if (Array.isArray(rows) && rows.length > 0) {
+          return rows[0] as UserRow;
+        }
+      } catch (e) {
+        recordMysqlFailure();
       }
-    } catch (e) {
-      // MySQL unavailable or offline - continue to persistent storage fallback
     }
 
     // 2. Persistent Storage Lookup
@@ -319,7 +418,7 @@ export const DB = {
     const numId = Number(id);
 
     // 1. Try MySQL Database
-    if (!isNaN(numId)) {
+    if (!isNaN(numId) && isMysqlAvailable()) {
       try {
         const db = getDbPool();
         const [rows]: any = await db.query(
@@ -330,7 +429,7 @@ export const DB = {
           return rows[0] as UserRow;
         }
       } catch (e) {
-        // MySQL unavailable or offline
+        recordMysqlFailure();
       }
     }
 
@@ -349,16 +448,18 @@ export const DB = {
     let mysqlUsers: any[] = [];
 
     // 1. Try MySQL Database
-    try {
-      const db = getDbPool();
-      const [rows]: any = await db.query(
-        'SELECT id, name, email, role, provider, email_verified, is_default_admin, created_at, updated_at FROM users ORDER BY id ASC'
-      );
-      if (Array.isArray(rows)) {
-        mysqlUsers = rows;
+    if (isMysqlAvailable()) {
+      try {
+        const db = getDbPool();
+        const [rows]: any = await db.query(
+          'SELECT id, name, email, role, provider, email_verified, is_default_admin, created_at, updated_at FROM users ORDER BY id ASC'
+        );
+        if (Array.isArray(rows)) {
+          mysqlUsers = rows;
+        }
+      } catch (e) {
+        recordMysqlFailure();
       }
-    } catch (e) {
-      // MySQL unavailable or offline
     }
 
     // 2. Bidirectional Merge: MySQL + JSON Database
@@ -1094,6 +1195,291 @@ export const DB = {
     jsonDb.advertise_leads = jsonDb.advertise_leads.filter(l => String(l.id) !== strId);
     writeJsonDb(jsonDb);
     return jsonDb.advertise_leads.length < initialLen;
+  },
+
+  // --------------------------------------------------------------------------
+  // SITE SUBSCRIPTIONS (One-Year Free Trial & Paid Access)
+  // --------------------------------------------------------------------------
+  async getAllSiteSubscriptions(): Promise<SiteSubscriptionRow[]> {
+    const jsonDb = readJsonDb();
+    let subs: SiteSubscriptionRow[] = Array.isArray(jsonDb.site_subscriptions) ? jsonDb.site_subscriptions : [];
+
+    // Automatically check and update expired free trials
+    const now = new Date();
+    let changed = false;
+    subs = subs.map(sub => {
+      if (sub.status === 'Free Trial' && new Date(sub.trialExpiryDate).getTime() <= now.getTime()) {
+        changed = true;
+        return {
+          ...sub,
+          status: 'Expired' as SubscriptionStatus,
+          updated_at: now.toISOString()
+        };
+      }
+      return sub;
+    });
+
+    if (changed) {
+      jsonDb.site_subscriptions = subs;
+      writeJsonDb(jsonDb);
+    }
+
+    return subs;
+  },
+
+  async getSiteSubscriptionByEmail(email: string): Promise<SiteSubscriptionRow | null> {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail) return null;
+    const all = await this.getAllSiteSubscriptions();
+    const sub = all.find(s => (s.email || '').toLowerCase().trim() === cleanEmail);
+    return sub || null;
+  },
+
+  async checkTrialEligibility(email: string, userId?: string | number): Promise<{
+    eligible: boolean;
+    reason?: string;
+    existingSubscription: SiteSubscriptionRow | null;
+  }> {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail) {
+      return { eligible: false, reason: 'A valid email address is required.', existingSubscription: null };
+    }
+
+    const all = await this.getAllSiteSubscriptions();
+    const existing = all.find(s => 
+      (s.email || '').toLowerCase().trim() === cleanEmail || 
+      (userId && s.userId && String(s.userId) === String(userId))
+    );
+
+    if (!existing) {
+      return { eligible: true, existingSubscription: null };
+    }
+
+    if (existing.status === 'Free Trial') {
+      const isExpired = new Date(existing.trialExpiryDate).getTime() <= Date.now();
+      if (isExpired) {
+        return {
+          eligible: false,
+          reason: 'Your 1-year free trial has ended. Subscribe to continue.',
+          existingSubscription: existing
+        };
+      }
+      return {
+        eligible: false,
+        reason: 'You already have an active 1-year free trial.',
+        existingSubscription: existing
+      };
+    }
+
+    if (existing.status === 'Expired') {
+      return {
+        eligible: false,
+        reason: 'Your free trial has already ended. Please renew to continue.',
+        existingSubscription: existing
+      };
+    }
+
+    if (existing.status === 'Active Paid') {
+      return {
+        eligible: false,
+        reason: 'You already have an active subscription.',
+        existingSubscription: existing
+      };
+    }
+
+    return {
+      eligible: false,
+      reason: 'Free trial already claimed for this account.',
+      existingSubscription: existing
+    };
+  },
+
+  async createSiteSubscription(data: {
+    userId?: number | string | null;
+    name: string;
+    email: string;
+    phone?: string | null;
+    plan: SubscriptionPlanId;
+  }): Promise<{ success: boolean; subscription?: SiteSubscriptionRow; error?: string }> {
+    const cleanEmail = (data.email || '').trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      return { success: false, error: 'A valid email address is required.' };
+    }
+
+    const eligibility = await this.checkTrialEligibility(cleanEmail, data.userId || undefined);
+    if (!eligibility.eligible) {
+      return { success: false, error: eligibility.reason || 'Not eligible for another free trial.' };
+    }
+
+    const now = new Date();
+    const startDate = now.toISOString();
+    // 1-Year Free Access: exactly 1 year from now
+    const expDate = new Date(now);
+    expDate.setFullYear(expDate.getFullYear() + 1);
+    const trialExpiryDate = expDate.toISOString();
+
+    const planName = data.plan === 'bundle' ? 'London BigBen Digital Bundle' : 'London BigBen Digital';
+    const price = data.plan === 'bundle' ? '$5 USD/month' : '$3 USD/month';
+
+    const newSub: SiteSubscriptionRow = {
+      id: `sub-${Date.now()}`,
+      userId: data.userId || null,
+      name: (data.name || cleanEmail.split('@')[0]).trim(),
+      email: cleanEmail,
+      phone: data.phone || null,
+      plan: data.plan,
+      planName,
+      price,
+      startDate,
+      trialExpiryDate,
+      status: 'Free Trial',
+      paymentStatus: 'Free Trial',
+      paymentAmount: '$0.00',
+      renewalDate: trialExpiryDate,
+      created_at: startDate,
+      updated_at: startDate
+    };
+
+    const jsonDb = readJsonDb();
+    if (!Array.isArray(jsonDb.site_subscriptions)) {
+      jsonDb.site_subscriptions = [];
+    }
+    jsonDb.site_subscriptions.unshift(newSub);
+    writeJsonDb(jsonDb);
+
+    // Save to MySQL if available
+    try {
+      const db = getDbPool();
+      await db.query(`
+        INSERT INTO site_subscriptions (
+          user_id, name, email, plan, plan_name, price, start_date, trial_expiry_date, status, payment_status, payment_amount, renewal_date
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        data.userId || null,
+        newSub.name,
+        newSub.email,
+        newSub.plan,
+        newSub.planName,
+        newSub.price,
+        new Date(startDate),
+        new Date(trialExpiryDate),
+        newSub.status,
+        newSub.paymentStatus,
+        newSub.paymentAmount,
+        new Date(trialExpiryDate)
+      ]);
+    } catch (e) {
+      console.warn('[DB.createSiteSubscription] MySQL sync warning:', e);
+    }
+
+    return { success: true, subscription: newSub };
+  },
+
+  async updateSiteSubscription(id: string | number, updates: Partial<SiteSubscriptionRow>): Promise<boolean> {
+    const jsonDb = readJsonDb();
+    if (!Array.isArray(jsonDb.site_subscriptions)) return false;
+    const strId = String(id);
+    const idx = jsonDb.site_subscriptions.findIndex(s => String(s.id) === strId);
+    if (idx >= 0) {
+      jsonDb.site_subscriptions[idx] = {
+        ...jsonDb.site_subscriptions[idx],
+        ...updates,
+        updated_at: new Date().toISOString()
+      };
+      writeJsonDb(jsonDb);
+
+      try {
+        const db = getDbPool();
+        const setClauses: string[] = [];
+        const vals: any[] = [];
+        if (updates.status) { setClauses.push('status = ?'); vals.push(updates.status); }
+        if (updates.paymentStatus) { setClauses.push('payment_status = ?'); vals.push(updates.paymentStatus); }
+        if (updates.paymentAmount) { setClauses.push('payment_amount = ?'); vals.push(updates.paymentAmount); }
+        if (updates.plan) { setClauses.push('plan = ?'); vals.push(updates.plan); }
+        if (updates.planName) { setClauses.push('plan_name = ?'); vals.push(updates.planName); }
+        if (setClauses.length > 0) {
+          vals.push(strId);
+          await db.query(`UPDATE site_subscriptions SET ${setClauses.join(', ')} WHERE id = ?`, vals);
+        }
+      } catch (e) {}
+
+      return true;
+    }
+    return false;
+  },
+
+  async deleteSiteSubscription(id: string | number): Promise<boolean> {
+    const jsonDb = readJsonDb();
+    if (!Array.isArray(jsonDb.site_subscriptions)) return false;
+    const strId = String(id);
+    const prevLen = jsonDb.site_subscriptions.length;
+    jsonDb.site_subscriptions = jsonDb.site_subscriptions.filter(s => String(s.id) !== strId);
+    writeJsonDb(jsonDb);
+
+    try {
+      const db = getDbPool();
+      await db.query('DELETE FROM site_subscriptions WHERE id = ?', [strId]);
+    } catch (e) {}
+
+    return jsonDb.site_subscriptions.length < prevLen;
+  },
+
+  async renewSiteSubscription(email: string, plan: SubscriptionPlanId): Promise<{
+    success: boolean;
+    subscription?: SiteSubscriptionRow;
+    message: string;
+  }> {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const all = await this.getAllSiteSubscriptions();
+    const existing = all.find(s => (s.email || '').toLowerCase().trim() === cleanEmail);
+    const planName = plan === 'bundle' ? 'London BigBen Digital Bundle' : 'London BigBen Digital';
+    const price = plan === 'bundle' ? '$5 USD/month' : '$3 USD/month';
+
+    if (existing) {
+      const updatedSub: SiteSubscriptionRow = {
+        ...existing,
+        plan,
+        planName,
+        price,
+        status: 'Payment Pending',
+        paymentStatus: 'Pending',
+        paymentAmount: plan === 'bundle' ? '$5.00' : '$3.00',
+        updated_at: new Date().toISOString()
+      };
+      await this.updateSiteSubscription(existing.id, updatedSub);
+      return {
+        success: true,
+        subscription: updatedSub,
+        message: `Your renewal request for ${planName} has been registered as Payment Pending. Access will be confirmed once payment processing completes.`
+      };
+    } else {
+      const now = new Date();
+      const newSub: SiteSubscriptionRow = {
+        id: `sub-${Date.now()}`,
+        name: cleanEmail.split('@')[0],
+        email: cleanEmail,
+        plan,
+        planName,
+        price,
+        startDate: now.toISOString(),
+        trialExpiryDate: now.toISOString(),
+        status: 'Payment Pending',
+        paymentStatus: 'Pending',
+        paymentAmount: plan === 'bundle' ? '$5.00' : '$3.00',
+        renewalDate: now.toISOString(),
+        created_at: now.toISOString(),
+        updated_at: now.toISOString()
+      };
+      const jsonDb = readJsonDb();
+      if (!Array.isArray(jsonDb.site_subscriptions)) jsonDb.site_subscriptions = [];
+      jsonDb.site_subscriptions.unshift(newSub);
+      writeJsonDb(jsonDb);
+      return {
+        success: true,
+        subscription: newSub,
+        message: `Your subscription renewal has been registered as Payment Pending.`
+      };
+    }
   }
 };
 

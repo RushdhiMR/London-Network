@@ -50,7 +50,7 @@ export default function LifeStyleSection() {
     title: a.title,
     description: a.description || a.summary || "",
     image: a.imageUrl || a.image || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=500&h=350&fit=crop",
-    href: `/${(a.category || "lifestyle").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}`
+    href: `/article/${a.slug || String(a.id)}`
   }));
 
   if (displayArticles.length === 0) {

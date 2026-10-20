@@ -51,7 +51,7 @@ export default function TechnologyGrid() {
     title: a.title,
     description: a.description || a.summary || "",
     image: a.imageUrl || a.image || "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&h=480&fit=crop",
-    href: `/${(a.category || "technology").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}`
+    href: `/article/${a.slug || String(a.id)}`
   }));
 
   if (displayArticles.length === 0) {

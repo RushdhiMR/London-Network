@@ -64,6 +64,7 @@ interface ArticlePost {
 export default function WriterDashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const auth = useAuth();
   const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role?: string; avatar?: string } | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -205,15 +206,15 @@ export default function WriterDashboardPage() {
   const { articles: liveArticles, loading } = useLiveArticles();
 
   useEffect(() => {
-    if (!loading) {
+    if (!loading && !auth.loading) {
       dispatchPageDataReady();
     }
-  }, [loading]);
+  }, [loading, auth.loading]);
 
   const syncArticlesFromStorageAndServer = useCallback(() => {
     try {
       const localSubs = localStorage.getItem("dj_writer_submitted_articles");
-      const localArticles: any[] = localSubs ? JSON.parse(localSubs) : [];
+      const localArticles: any[] = (localSubs && localSubs.trim()) ? JSON.parse(localSubs) : [];
       const liveList: any[] = Array.isArray(liveArticles) ? liveArticles : [];
 
       const cleanKey = (val: any) => String(val || "").trim().toLowerCase();
@@ -242,7 +243,22 @@ export default function WriterDashboardPage() {
         const idKey = cleanKey(item.id);
         const titleKey = normalizeTitle(item.title);
         const existing = (idKey && mergedMap.get(idKey)) || (titleKey && mergedMap.get(`t_${titleKey}`)) || {};
-        const merged = { ...existing, ...item };
+
+        const targetStatus = item.status || existing.status || "Draft";
+        const isTargetRejected = targetStatus.toLowerCase().trim().includes("reject");
+
+        const resolvedEmail = (item.authorEmail && !item.authorEmail.includes("digitaljournal.com")) ? item.authorEmail : (existing.authorEmail && !existing.authorEmail.includes("digitaljournal.com")) ? existing.authorEmail : (item.authorEmail || existing.authorEmail || item.author_email || existing.author_email);
+        const resolvedName = (item.authorName && item.authorName !== "Staff Journalist" && item.authorName !== "Writer") ? item.authorName : (existing.authorName && existing.authorName !== "Staff Journalist" && existing.authorName !== "Writer") ? existing.authorName : (item.authorName || existing.authorName || item.author_name || existing.author_name);
+
+        const merged = {
+          ...existing,
+          ...item,
+          status: targetStatus,
+          rejectionReason: isTargetRejected ? (item.rejectionReason || existing.rejectionReason || item.rejection_reason || existing.rejection_reason) : undefined,
+          rejectedAt: isTargetRejected ? (item.rejectedAt || existing.rejectedAt || item.rejected_at || existing.rejected_at) : undefined,
+          authorEmail: resolvedEmail,
+          authorName: resolvedName
+        };
         if (idKey) mergedMap.set(idKey, merged);
         if (titleKey) mergedMap.set(`t_${titleKey}`, merged);
       });
@@ -257,9 +273,11 @@ export default function WriterDashboardPage() {
         // If the server/admin has marked the article as Rejected or Published, honor the admin decision
         if (existing) {
           const exSt = (existing.status || "").toLowerCase().trim();
-          if (exSt.includes("reject") || exSt === "published" || exSt === "approved") {
-            if (item.status !== existing.status) {
-              item.status = existing.status;
+          const itemSt = (item.status || "").toLowerCase().trim();
+          if (exSt.includes("reject") || itemSt.includes("reject") || exSt === "published" || exSt === "approved") {
+            const finalStatus = (exSt.includes("reject") || itemSt.includes("reject")) ? "Rejected" : existing.status;
+            if (item.status !== finalStatus) {
+              item.status = finalStatus;
               if (existing.rejectionReason) item.rejectionReason = existing.rejectionReason;
               if (existing.rejection_reason) item.rejection_reason = existing.rejection_reason;
               if (existing.rejectedAt) item.rejectedAt = existing.rejectedAt;
@@ -315,8 +333,49 @@ export default function WriterDashboardPage() {
         }
       });
 
+      const unifiedMap = new Map<string, any>();
+      uniqueList.forEach((post) => {
+        const tk = normalizeTitle(post.title);
+        const ik = cleanKey(post.id);
+        const existing = (tk && unifiedMap.get(`t_${tk}`)) || (ik && unifiedMap.get(ik));
+        if (!existing) {
+          if (tk) unifiedMap.set(`t_${tk}`, post);
+          if (ik) unifiedMap.set(ik, post);
+        } else {
+          const isRej = (existing.status || "").toLowerCase().includes("reject") || (post.status || "").toLowerCase().includes("reject");
+          const resolvedEmail = (post.authorEmail && !post.authorEmail.includes("digitaljournal.com")) ? post.authorEmail : (existing.authorEmail && !existing.authorEmail.includes("digitaljournal.com")) ? existing.authorEmail : (post.authorEmail || existing.authorEmail || post.author_email || existing.author_email);
+          const resolvedName = (post.authorName && post.authorName !== "Staff Journalist" && post.authorName !== "Writer") ? post.authorName : (existing.authorName && existing.authorName !== "Staff Journalist" && existing.authorName !== "Writer") ? existing.authorName : (post.authorName || existing.authorName || post.author_name || existing.author_name);
+          const merged = {
+            ...existing,
+            ...post,
+            status: isRej ? "Rejected" : (post.status || existing.status),
+            rejectionReason: post.rejectionReason || existing.rejectionReason || post.rejection_reason || existing.rejection_reason,
+            rejectedAt: post.rejectedAt || existing.rejectedAt || post.rejected_at || existing.rejected_at,
+            authorEmail: resolvedEmail,
+            authorName: resolvedName
+          };
+          if (tk) unifiedMap.set(`t_${tk}`, merged);
+          if (ik) unifiedMap.set(ik, merged);
+        }
+      });
+
+      const finalPostsList: any[] = [];
+      const seenFinal = new Set<string>();
+      uniqueList.forEach((post) => {
+        const tk = normalizeTitle(post.title);
+        const ik = cleanKey(post.id);
+        const key = tk ? `t_${tk}` : ik;
+        if (key && !seenFinal.has(key)) {
+          seenFinal.add(key);
+          if (tk) seenFinal.add(`t_${tk}`);
+          if (ik) seenFinal.add(ik);
+          const resolved = (tk && unifiedMap.get(`t_${tk}`)) || (ik && unifiedMap.get(ik)) || post;
+          finalPostsList.push(resolved);
+        }
+      });
+
       setPosts((prev) => {
-        if (uniqueList.length > 0) return uniqueList as any;
+        if (finalPostsList.length > 0) return finalPostsList as any;
         if (prev && prev.length > 0) return prev;
         return [];
       });
@@ -331,10 +390,10 @@ export default function WriterDashboardPage() {
   useEffect(() => {
     syncArticlesFromStorageAndServer();
     window.addEventListener("dj_articles_updated", syncArticlesFromStorageAndServer);
-    return () => window.removeEventListener("dj_articles_updated", syncArticlesFromStorageAndServer);
+    return () => {
+      window.removeEventListener("dj_articles_updated", syncArticlesFromStorageAndServer);
+    };
   }, [syncArticlesFromStorageAndServer]);
-
-  const auth = useAuth();
 
   // Auth & Initial load
   useEffect(() => {
@@ -422,13 +481,11 @@ export default function WriterDashboardPage() {
     const validWriterPasswords = ["writer", "writer123", "writer2026", "admin", "admin123", "rushdhi"];
     if (validWriterPasswords.includes(pass) || pass.length >= 3) {
       const writerAcc = {
-        name: "rushdhi",
-        email: "rushdhi@digitaljournal.com",
+        name: auth.user?.name || "rushdhi",
+        email: auth.user?.email || "rushdhi@digitaljournal.com",
         role: "Writer",
-        avatar: "/author_bluesuit.jpg"
+        avatar: auth.user?.avatar || "/author_bluesuit.jpg"
       };
-      localStorage.setItem("dj_user", JSON.stringify(writerAcc));
-      localStorage.setItem("dj_writer_user", JSON.stringify(writerAcc));
       setCurrentUser(writerAcc);
       setIsAuthenticated(true);
     } else {
@@ -548,7 +605,7 @@ export default function WriterDashboardPage() {
           newPassword: newPasswordInput.trim(),
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setProfileError(data.error || "Failed to update password.");
         return;
@@ -589,27 +646,6 @@ export default function WriterDashboardPage() {
     let userEmail = (currentUser?.email || auth.user?.email || "").trim().toLowerCase();
     let userName = (currentUser?.name || auth.user?.name || "").trim().toLowerCase();
 
-    if (!userEmail && !userName && typeof window !== "undefined") {
-      try {
-        const tabSession = sessionStorage.getItem("dj_tab_session");
-        if (tabSession) {
-          const parsed = JSON.parse(tabSession);
-          userEmail = (parsed.email || "").trim().toLowerCase();
-          userName = (parsed.name || "").trim().toLowerCase();
-        }
-      } catch (e) {}
-      if (!userEmail && !userName) {
-        try {
-          const userStr = localStorage.getItem("dj_writer_user") || localStorage.getItem("dj_user");
-          if (userStr) {
-            const parsed = JSON.parse(userStr);
-            userEmail = (parsed.email || "").trim().toLowerCase();
-            userName = (parsed.name || "").trim().toLowerCase();
-          }
-        } catch (e) {}
-      }
-    }
-
     if (!userEmail && !userName) return false;
 
     // Check if post was directly submitted or edited in this writer's local queue
@@ -617,7 +653,7 @@ export default function WriterDashboardPage() {
     if (typeof window !== "undefined") {
       try {
         const subsStr = localStorage.getItem("dj_writer_submitted_articles");
-        if (subsStr) {
+        if (subsStr && subsStr.trim()) {
           const parsed = JSON.parse(subsStr);
           if (Array.isArray(parsed)) {
             const pId = String(post.id || "");
@@ -636,8 +672,6 @@ export default function WriterDashboardPage() {
                 const pAuthorName = (p.authorName || p.author_name || p.author || "").trim().toLowerCase();
                 if (userEmail && pAuthorEmail && userEmail === pAuthorEmail) return true;
                 if (userName && pAuthorName && userName.replace(/[^a-z0-9]/g, "") === pAuthorName.replace(/[^a-z0-9]/g, "")) return true;
-                // If no author info on local record, trust it (was submitted in this session)
-                if (!pAuthorEmail && !pAuthorName) return true;
                 return false;
               }
             );
@@ -660,7 +694,7 @@ export default function WriterDashboardPage() {
       if (userName === postName) return true;
       const cleanU = userName.replace(/[^a-z0-9]/g, "");
       const cleanP = postName.replace(/[^a-z0-9]/g, "");
-      if (cleanU && cleanP && cleanU === cleanP) return true;
+      if (cleanU && cleanP && (cleanU === cleanP || cleanU.includes(cleanP) || cleanP.includes(cleanU))) return true;
     }
 
     // 3. Match by email username prefix
@@ -1209,6 +1243,17 @@ export default function WriterDashboardPage() {
                                     </span>
                                   )}
                                 </div>
+                                {isRejected && (
+                                  <div className="mt-2 p-2 bg-rose-50/80 border border-rose-200/80 rounded-lg flex items-start gap-1.5 max-w-lg">
+                                    <AlertCircle size={13} className="text-rose-600 shrink-0 mt-0.5" />
+                                    <div className="text-[11px] text-rose-950 leading-relaxed">
+                                      <span className="font-bold text-rose-800">Rejection Reason: </span>
+                                      <span className={post.rejectionReason && post.rejectionReason.trim() ? "font-medium text-slate-800" : "italic text-rose-700/80"}>
+                                        {post.rejectionReason && post.rejectionReason.trim() ? post.rejectionReason.trim() : "No rejection reason provided."}
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </td>
@@ -1398,6 +1443,7 @@ export default function WriterDashboardPage() {
                     <option value="Entertainment">Entertainment</option>
                     <option value="Health">Health</option>
                     <option value="Research">Research</option>
+                    <option value="Interview">Interview</option>
                   </select>
                 </div>
 
@@ -1574,7 +1620,7 @@ export default function WriterDashboardPage() {
                     .replace(/[^a-z0-9]+/g, "-")
                     .replace(/^-|-$/g, "");
 
-                  const targetHref = titleSlug ? `/${catSlug || "news"}/${titleSlug}` : `/${catSlug || "news"}`;
+                  const targetHref = titleSlug ? `/article/${titleSlug}` : `/category/${catSlug || "news"}`;
 
                   return (
                     <Link
@@ -1816,19 +1862,25 @@ export default function WriterDashboardPage() {
                   )}
                 </div>
 
-                {selectedReasonPost.rejectionReason ? (
+                {selectedReasonPost.rejectionReason && selectedReasonPost.rejectionReason.trim() ? (
                   <div className="relative border border-red-200/80 bg-gradient-to-br from-red-50/80 via-red-50/30 to-amber-50/20 rounded-2xl p-5 sm:p-6 shadow-2xs">
                     {/* Decorative quote mark */}
                     <span className="absolute top-2 right-4 text-5xl font-serif text-red-200/60 select-none pointer-events-none leading-none">
                       “
                     </span>
                     <p className="text-slate-900 text-sm sm:text-[14.5px] leading-relaxed font-serif font-semibold relative z-10 whitespace-pre-wrap">
-                      "{selectedReasonPost.rejectionReason}"
+                      "{selectedReasonPost.rejectionReason.trim()}"
                     </p>
                   </div>
                 ) : (
-                  <div className="border border-slate-200 bg-slate-50 rounded-2xl p-5 text-xs sm:text-sm text-slate-500 italic leading-relaxed">
-                    No specific written feedback was provided by the editor. You can review your content, adjust any formatting or citations, and resubmit for editorial review.
+                  <div className="border border-slate-200 bg-slate-50 rounded-2xl p-5 text-xs sm:text-sm text-slate-600 leading-relaxed">
+                    <p className="font-bold text-slate-800 not-italic mb-1 flex items-center gap-1.5">
+                      <AlertCircle size={14} className="text-slate-500" />
+                      No rejection reason provided.
+                    </p>
+                    <p className="text-slate-500 text-xs italic">
+                      No specific written feedback was provided by the editor. You can review your content, adjust any formatting or citations, and resubmit for editorial review.
+                    </p>
                   </div>
                 )}
               </div>

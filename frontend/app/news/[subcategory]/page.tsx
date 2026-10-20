@@ -26,40 +26,15 @@ const knownNewsSubcategories = [
   "world", "politics", "business", "technology", "economy", "markets", "lifestyle", "sports", "entertainment", "health", "research", "china", "europe", "united-states", "britain", "middle-east", "africa", "asia"
 ];
 
-export async function generateStaticParams() {
-  return knownNewsSubcategories.map((sub) => ({ subcategory: sub }));
-}
+import { redirect } from "next/navigation";
 
 export default async function NewsSubcategoryPage({ params }: NewsSubcategoryPageProps) {
   const resolvedParams = await params;
   const subcategorySlug = resolvedParams?.subcategory || "world";
 
   if (!knownNewsSubcategories.includes(subcategorySlug.toLowerCase())) {
-    // Article page under /news/[article-slug]
-    return SubcategoryPage({
-      params: Promise.resolve({
-        category: "news",
-        subcategory: subcategorySlug
-      })
-    });
+    redirect(`/article/${subcategorySlug}`);
   }
 
-  const data = getCategoryData(subcategorySlug);
-
-  return (
-    <CategoryPageLayout
-      categoryName={data.categoryName}
-      categorySlug={subcategorySlug}
-      categoryColor={data.categoryColor}
-      infoBoxText={data.infoBoxText}
-      featured={data.featured}
-      secondaryArticles={data.secondaryArticles}
-      guidesTitle={data.guidesTitle}
-      guidesDescription={data.guidesDescription}
-      guides={data.guides}
-      newsTitle={data.newsTitle}
-      newsDescription={data.newsDescription}
-      newsArticles={data.newsArticles}
-    />
-  );
+  redirect(`/category/${subcategorySlug}`);
 }

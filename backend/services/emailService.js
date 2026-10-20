@@ -1,12 +1,15 @@
 const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: process.env.SMTP_SECURE === 'true',
+  host: process.env.SMTP_HOST || 'mail.privateemail.com',
+  port: Number(process.env.SMTP_PORT) || 465,
+  secure: process.env.SMTP_SECURE === 'true' || Number(process.env.SMTP_PORT) === 465,
   auth: {
     user: process.env.SMTP_USER || process.env.EMAIL_USER || '',
     pass: process.env.SMTP_PASS || process.env.EMAIL_PASS || '',
+  },
+  tls: {
+    rejectUnauthorized: false,
   },
 });
 
@@ -40,9 +43,13 @@ async function sendSignInNotificationEmail(email, name) {
   `;
 
   try {
+    const pressEmail = (process.env.PRESS_EMAIL || process.env.SMTP_FROM || 'press@londonbigben.com').trim();
+    const senderName = (process.env.EMAIL_SENDER_NAME || 'London BigBen Security').trim();
     if (process.env.SMTP_USER && process.env.SMTP_PASS) {
       await transporter.sendMail({
-        from: `"London BigBen Security" <${process.env.SMTP_USER}>`,
+        from: `"${senderName}" <${pressEmail}>`,
+        sender: pressEmail,
+        replyTo: pressEmail,
         to: email,
         subject: `Security Alert: Successful Sign-In to London BigBen`,
         html: htmlContent,
@@ -80,9 +87,13 @@ async function sendWelcomeEmail(email, name) {
   `;
 
   try {
+    const pressEmail = (process.env.PRESS_EMAIL || process.env.SMTP_FROM || 'press@londonbigben.com').trim();
+    const senderName = (process.env.EMAIL_SENDER_NAME || 'London BigBen Team').trim();
     if (process.env.SMTP_USER && process.env.SMTP_PASS) {
       await transporter.sendMail({
-        from: `"London BigBen Team" <${process.env.SMTP_USER}>`,
+        from: `"${senderName}" <${pressEmail}>`,
+        sender: pressEmail,
+        replyTo: pressEmail,
         to: email,
         subject: `Welcome to London BigBen, ${name}!`,
         html: htmlContent,
@@ -123,9 +134,13 @@ async function sendPasswordResetEmail(email, resetUrl) {
   `;
 
   try {
+    const pressEmail = (process.env.PRESS_EMAIL || process.env.SMTP_FROM || 'press@londonbigben.com').trim();
+    const senderName = (process.env.EMAIL_SENDER_NAME || 'London BigBen Security').trim();
     if (process.env.SMTP_USER && process.env.SMTP_PASS) {
       await transporter.sendMail({
-        from: `"London BigBen Security" <${process.env.SMTP_USER}>`,
+        from: `"${senderName}" <${pressEmail}>`,
+        sender: pressEmail,
+        replyTo: pressEmail,
         to: email,
         subject: `Reset Your London BigBen Password`,
         html: htmlContent,

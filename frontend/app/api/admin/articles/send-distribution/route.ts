@@ -5,6 +5,7 @@ import { DB } from '@/lib/db';
 
 // POST /api/admin/articles/send-distribution
 // Sends the published article email to each targeted recipient individually.
+
 export async function POST(request: Request) {
   // Allow if admin portal key header is present OR user has verified admin session
   const adminKey = request.headers.get('x-admin-key') || request.headers.get('x-admin-portal');

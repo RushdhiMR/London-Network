@@ -111,9 +111,8 @@ export default function RootLayout({
         <div id="google_translate_element" style={{ display: "none" }} />
 
         {/* Early inline script: hide toolbar and keep body at top */}
-        <Script
+        <script
           id="hide-gt-toolbar"
-          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `
               (function() {

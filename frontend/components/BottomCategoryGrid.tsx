@@ -39,9 +39,8 @@ export default function BottomCategoryGrid() {
       const firstSlug = first.slug || (first.title || "").toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
       
       const restList = rest.map(r => {
-        const rCat = (r.category || r.category_name || title).toLowerCase().replace(/[^a-z0-9]/g, "-");
         const rSlug = r.slug || (r.title || "").toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
-        return { title: r.title, href: `/${rCat}/${rSlug}` };
+        return { title: r.title, href: `/article/${rSlug}` };
       });
 
       return {
@@ -50,7 +49,7 @@ export default function BottomCategoryGrid() {
           title: first.title,
           description: first.description || first.summary || "",
           image: first.imageUrl || first.image || "https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=400&h=250&fit=crop",
-          href: `/${firstCat}/${firstSlug}`,
+          href: `/article/${firstSlug}`,
           hasPlay: false
         },
         list: restList

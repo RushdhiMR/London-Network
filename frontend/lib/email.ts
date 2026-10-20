@@ -1,13 +1,18 @@
 import nodemailer from 'nodemailer';
+import fs from 'fs';
+import path from 'path';
 
 // SMTP Transporter configuration
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: process.env.SMTP_SECURE === 'true',
+  host: process.env.SMTP_HOST || 'mail.privateemail.com',
+  port: Number(process.env.SMTP_PORT) || 465,
+  secure: process.env.SMTP_SECURE === 'true' || Number(process.env.SMTP_PORT) === 465,
   auth: {
     user: process.env.SMTP_USER || process.env.EMAIL_USER || '',
     pass: process.env.SMTP_PASS || process.env.EMAIL_PASS || '',
+  },
+  tls: {
+    rejectUnauthorized: false,
   },
 });
 
@@ -41,9 +46,13 @@ export async function sendSignInNotificationEmail(email: string, name: string) {
   `;
 
   try {
+    const pressEmail = (process.env.PRESS_EMAIL || process.env.SMTP_FROM || 'press@londonbigben.com').trim();
+    const senderName = (process.env.EMAIL_SENDER_NAME || 'London BigBen Network Security').trim();
     if (process.env.SMTP_USER && process.env.SMTP_PASS) {
       await transporter.sendMail({
-        from: `"London BigBen Network Security" <${process.env.SMTP_USER}>`,
+        from: `"${senderName}" <${pressEmail}>`,
+        sender: pressEmail,
+        replyTo: pressEmail,
         to: email,
         subject: `Security Alert: Successful Sign-In to London BigBen Network`,
         html: htmlContent,
@@ -81,9 +90,13 @@ export async function sendWelcomeEmail(email: string, name: string) {
   `;
 
   try {
+    const pressEmail = (process.env.PRESS_EMAIL || process.env.SMTP_FROM || 'press@londonbigben.com').trim();
+    const senderName = (process.env.EMAIL_SENDER_NAME || 'London BigBen Network Team').trim();
     if (process.env.SMTP_USER && process.env.SMTP_PASS) {
       await transporter.sendMail({
-        from: `"London BigBen Network Team" <${process.env.SMTP_USER}>`,
+        from: `"${senderName}" <${pressEmail}>`,
+        sender: pressEmail,
+        replyTo: pressEmail,
         to: email,
         subject: `Welcome to London BigBen Network, ${name}!`,
         html: htmlContent,
@@ -124,9 +137,13 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string) {
   `;
 
   try {
+    const pressEmail = (process.env.PRESS_EMAIL || process.env.SMTP_FROM || 'press@londonbigben.com').trim();
+    const senderName = (process.env.EMAIL_SENDER_NAME || 'London BigBen Network Security').trim();
     if (process.env.SMTP_USER && process.env.SMTP_PASS) {
       await transporter.sendMail({
-        from: `"London BigBen Network Security" <${process.env.SMTP_USER}>`,
+        from: `"${senderName}" <${pressEmail}>`,
+        sender: pressEmail,
+        replyTo: pressEmail,
         to: email,
         subject: `Reset Your London BigBen Network Password`,
         html: htmlContent,
@@ -172,8 +189,8 @@ export async function sendArticleDistributionEmail(
   ).trim();
   const appUrl = rawBase.replace(/\/+$/, '');
   const categorySlug = (article.category || 'news').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
-  const articleSlug = (article.slug || '').trim().replace(/[^a-z0-9-]+/g, '-');
-  const articleUrl = `${appUrl}/${categorySlug}/${articleSlug}`;
+  const articleSlug = article.slug || '';
+  const articleUrl = `${appUrl}/article/${articleSlug}`;
   const year = new Date().getFullYear();
 
   const formattedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase();
@@ -187,37 +204,111 @@ export async function sendArticleDistributionEmail(
     'https://f005.backblazeb2.com/file/LondonNetwork/media/header_logo.png'
   );
 
+  // Known public media assets uploaded to Backblaze B2 CDN
+  const BACKBLAZE_MEDIA_FILES = new Set([
+    'ai_auditorium.png',
+    'ai_chip.png',
+    'ai_events.png',
+    'ai_hero.png',
+    'ai_innovation.png',
+    'ai_studio_booth.png',
+    'argentina_vs_switzerland.png',
+    'header_logo.png',
+    'logo.png',
+  ]);
+  const BACKBLAZE_MEDIA_BASE = 'https://f005.backblazeb2.com/file/LondonNetwork/media';
+
+  const attachments: Array<{ filename: string; path?: string; content?: Buffer; cid: string }> = [];
+  let resolvedArticleImageUrl = '';
+
+  const rawImg = ((article as any).imageUrl || (article as any).image || (article as any).image_url || '').trim();
+  if (rawImg) {
+    if (rawImg.startsWith('data:image/')) {
+      const match = rawImg.match(/^data:image\/([a-zA-Z0-9]+);base64,(.+)$/);
+      if (match) {
+        const ext = match[1] || 'jpeg';
+        const buffer = Buffer.from(match[2], 'base64');
+        const cid = 'article-thumb@london-network';
+        attachments.push({
+          filename: `article-image.${ext}`,
+          content: buffer,
+          cid,
+        });
+        resolvedArticleImageUrl = `cid:${cid}`;
+      }
+    } else {
+      // Strip protocol and hostname (e.g. http://localhost:3000/ai_hero.png -> ai_hero.png)
+      const cleanPath = rawImg
+        .replace(/^https?:\/\/[^/]+/i, '')
+        .replace(/^\/+/, '')
+        .split('?')[0];
+
+      const baseName = path.basename(cleanPath);
+
+      if (BACKBLAZE_MEDIA_FILES.has(baseName)) {
+        // Public HTTPS Backblaze CDN URL is accessible to all email clients
+        resolvedArticleImageUrl = `${BACKBLAZE_MEDIA_BASE}/${baseName}`;
+      } else if (rawImg.startsWith('https://') && !rawImg.includes('localhost') && !rawImg.includes('127.0.0.1')) {
+        // External public HTTPS URL (e.g. Unsplash, remote CDN)
+        resolvedArticleImageUrl = rawImg;
+      } else {
+        // Check if file exists locally in public folder (e.g. uploads/articles/...)
+        const possibleRoots = [
+          path.join(process.cwd(), 'public'),
+          path.join(process.cwd(), 'frontend', 'public'),
+        ];
+        let foundPath = '';
+        for (const root of possibleRoots) {
+          const candidate = path.join(root, cleanPath);
+          if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+            foundPath = candidate;
+            break;
+          }
+        }
+
+        if (foundPath) {
+          const cid = 'article-thumb@london-network';
+          attachments.push({
+            filename: path.basename(foundPath),
+            path: foundPath,
+            cid,
+          });
+          resolvedArticleImageUrl = `cid:${cid}`;
+        } else if (process.env.NEXT_PUBLIC_SITE_URL && process.env.NEXT_PUBLIC_SITE_URL.startsWith('https://') && !process.env.NEXT_PUBLIC_SITE_URL.includes('localhost')) {
+          resolvedArticleImageUrl = `${process.env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, '')}/${cleanPath}`;
+        }
+      }
+    }
+  }
+
+  const safeAltTitle = (article.title || '').replace(/"/g, '&quot;');
+
   const htmlContent = `
     <div style="font-family: Georgia, 'Times New Roman', serif; max-width: 620px; margin: 0 auto; background-color: #f5f4f0;">
 
       <div style="background-color: #ffffff; border: 1px solid #ddd;">
 
         <!-- Top domain bar -->
-        <div style="text-align: center; padding: 14px 32px 0 32px;">
+        <div style="text-align: center; padding: 24px 32px 0 32px;">
           <p style="margin: 0; font-size: 11px; color: #9ca3af; letter-spacing: 1px; font-family: Arial, sans-serif;">${appDomain}</p>
         </div>
 
         <!-- Brand logo masthead -->
-        <div style="text-align: center; padding: 10px 32px 0 32px;">
-          <img src="${logoUrl}" alt="London BigBen Network" width="200" style="display: inline-block; max-width: 200px; height: auto;" />
-          <div style="margin: 6px auto 14px auto; text-align: center;">
-            <div style="display: inline-block; width: 30px; height: 2px; background-color: #BF1E2D; vertical-align: middle;"></div>
-            <div style="display: inline-block; width: 80px; height: 1px; background-color: #BF1E2D; vertical-align: middle; margin: 0 3px;"></div>
-            <div style="display: inline-block; width: 30px; height: 2px; background-color: #BF1E2D; vertical-align: middle;"></div>
-          </div>
+        <div style="text-align: center; padding: 20px 32px 14px 32px;">
+          <img src="${logoUrl}" alt="London BigBen Network" width="210" style="display: inline-block; max-width: 210px; height: auto;" />
         </div>
 
         <!-- Category + Date -->
-        <div style="text-align: center; padding: 4px 32px 16px 32px; border-bottom: 1px solid #ddd;">
-          <p style="margin: 0 0 5px 0; font-size: 24px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; color: #111827; font-family: Arial, sans-serif;">${categoryLabel}</p>
-          <p style="margin: 0; font-size: 10px; color: #9ca3af; letter-spacing: 2px; font-family: Arial, sans-serif; text-transform: uppercase;">${formattedDate}</p>
+        <div style="text-align: center; padding: 10px 32px 30px 32px; border-bottom: 1px solid #ddd;">
+          <p style="margin: 0 0 8px 0; font-size: 26px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; color: #111827; font-family: Arial, sans-serif;">${categoryLabel}</p>
+          <p style="margin: 0; font-size: 11px; color: #9ca3af; letter-spacing: 2px; font-family: Arial, sans-serif; text-transform: uppercase;">${formattedDate}</p>
         </div>
 
         <!-- Article row: image left, text right -->
         <div style="padding: 22px 28px; border-bottom: 1px solid #ddd;">
           <table cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse;">
             <tr>
-              ${(article.imageUrl && (article.imageUrl.startsWith('https://') || article.imageUrl.startsWith('http://'))) ? `<td width="180" valign="top" style="padding-right: 20px;"><img src="${article.imageUrl}" alt="${article.title}" width="180" style="display: block; width: 180px; max-width: 180px; height: auto;" /></td>` : ''}
+              ${resolvedArticleImageUrl ? `<td width="180" valign="top" style="padding-right: 20px;"><img src="${resolvedArticleImageUrl}" alt="${safeAltTitle}" width="180" style="display: block; width: 180px; max-width: 180px; height: auto;" /></td>` : ''}
               <td valign="top">
                 <p style="margin: 0 0 10px 0; font-size: 17px; font-weight: 800; line-height: 1.4; color: #111827; font-family: Georgia, serif;">${article.title}</p>
                 <p style="margin: 0 0 12px 0; font-size: 13px; color: #4b5563; line-height: 1.65; font-family: Arial, sans-serif;">${excerpt}</p>
@@ -240,8 +331,8 @@ export async function sendArticleDistributionEmail(
   `;
 
   try {
-    const host = process.env.SMTP_HOST || 'smtp.gmail.com';
-    const port = Number(process.env.SMTP_PORT) || 587;
+    const host = process.env.SMTP_HOST || 'mail.privateemail.com';
+    const port = Number(process.env.SMTP_PORT) || 465;
     const isSecure = port === 465 || process.env.SMTP_SECURE === 'true';
 
     const clientTransporter = nodemailer.createTransport({
@@ -257,11 +348,18 @@ export async function sendArticleDistributionEmail(
       },
     });
 
+    const senderName = (process.env.EMAIL_SENDER_NAME || 'London BigBen Network').trim();
+    const pressEmail = (process.env.PRESS_EMAIL || 'press@londonbigben.com').trim();
+    const distributionFrom = (process.env.DISTRIBUTION_FROM_EMAIL || process.env.SMTP_FROM || pressEmail).trim();
+
     const info = await clientTransporter.sendMail({
-      from: `"London BigBen Network" <${smtpUser}>`,
+      from: `"${senderName}" <${distributionFrom}>`,
+      sender: distributionFrom,
+      replyTo: pressEmail,
       to: recipientEmail,
       subject: `[London BigBen] ${article.title}`,
       html: htmlContent,
+      attachments: attachments.length > 0 ? attachments : undefined,
     });
 
     console.log(`[Email Service] Sent article distribution email to ${recipientEmail} (messageId: ${info.messageId})`);

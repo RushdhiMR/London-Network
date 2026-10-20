@@ -7,8 +7,8 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { CheckCircle2, Bookmark, Share2, ArrowLeft, Send, Trash2, MessageSquare, ThumbsUp, Heart, Reply, CornerDownRight, Smile, Plus, X, Image as ImageIcon, Edit3 } from "lucide-react";
 import { generateAutoSEO } from "@/lib/seo";
-import { getUserProfile, getAuthorAvatarByNameOrEmail, getAuthorFullProfileByNameOrEmail, resolveUserAvatar } from "@/lib/userProfiles";
-import { useLiveArticles, useLiveAdSlots, formatAdDimensions, isDuplicateAdImage, isTrendingNow } from "@/lib/articlesSync";
+import { getUserProfile, getAuthorAvatarByNameOrEmail, getAuthorFullProfileByNameOrEmail, resolveUserAvatar, safeSaveBookmarksToStorage, safeGetBookmarksFromStorage } from "@/lib/userProfiles";
+import { useLiveArticles, useLiveAdSlots, formatAdDimensions, isDuplicateAdImage, isTrendingNow, isLatestNews } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
 import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
 
@@ -83,7 +83,7 @@ interface ArticlePageContentProps {
   subcategory: string;
   parent: { name: string; color: string; desc: string };
   subName: string;
-  newsData: ArticleData;
+  newsData: ArticleData | null;
   sidebarPicks: SidebarItem[];
 }
 
@@ -165,9 +165,7 @@ function resolveArticleTags(article: any): string[] {
     article.tags,
     article.hashtags,
     article.hash_tags,
-    article.hashTags,
-    article.seo?.keywords,
-    article.keywords
+    article.hashTags
   ];
   if (Array.isArray(article)) sources.unshift(article);
 
@@ -314,20 +312,111 @@ function ArticlePageContentInner({
     return { name, avatar, bio };
   };
 
-  const initialAuthor = resolveCleanAuthor(newsData.authorName, newsData.authorAvatar, newsData.authorEmail, newsData.authorBio);
+  const initialAuthor = resolveCleanAuthor(newsData?.authorName, newsData?.authorAvatar, newsData?.authorEmail, newsData?.authorBio);
   const [activeNewsData, setActiveNewsData] = useState<ArticleData>({
-    ...newsData,
+    ...(newsData || {}),
+    title: newsData?.title || "",
     authorName: initialAuthor.name,
     authorAvatar: initialAuthor.avatar,
-    authorBio: initialAuthor.bio || newsData.authorBio,
-    category: newsData.category || parent?.name || category,
-    subcategories: newsData.subcategories || (subName ? [subName] : []),
-    tags: resolveArticleTags(newsData)
+    authorBio: initialAuthor.bio || newsData?.authorBio || "",
+    category: newsData?.category || parent?.name || category,
+    subcategories: newsData?.subcategories || (subName ? [subName] : []),
+    tags: resolveArticleTags(newsData),
+    date: newsData?.date || "",
+    image: newsData?.image || "",
+    caption: newsData?.caption || "",
+    sections: newsData?.sections || []
   });
   const { articles: liveArticles, loading: liveArticlesLoading } = useLiveArticles();
 
-  const trendingArticles = useMemo(() => {
+  // Reset resolution state on route or article prop changes so previous article never flashes
+  useEffect(() => {
+    setIsArticleResolved(false);
+    if (newsData) {
+      const authInfo = resolveCleanAuthor(newsData.authorName, newsData.authorAvatar, newsData.authorEmail, newsData.authorBio);
+      setActiveNewsData({
+        ...newsData,
+        authorName: authInfo.name,
+        authorAvatar: authInfo.avatar,
+        authorBio: authInfo.bio || newsData.authorBio,
+        category: newsData.category || parent?.name || category,
+        subcategories: newsData.subcategories || (subName ? [subName] : []),
+        tags: resolveArticleTags(newsData)
+      });
+    }
+  }, [pathname, subcategory, newsData]);
+
+  // "More News" articles: Linked with Latest News
+  const moreNewsArticles = useMemo(() => {
     const getArticleTimestamp = (item: any): number => {
+      if (!item) return 0;
+      if (item.published_at || item.publishedAt) {
+        const t = new Date(item.published_at || item.publishedAt).getTime();
+        if (!isNaN(t) && t > 0) return t;
+      }
+      if (item.createdAt || item.created_at) {
+        const t = new Date(item.createdAt || item.created_at).getTime();
+        if (!isNaN(t) && t > 0) return t;
+      }
+      if (item.date && item.date !== "Just now" && item.date !== "Today" && item.date !== "Just published") {
+        const t = new Date(item.date).getTime();
+        if (!isNaN(t) && t > 0) return t;
+      }
+      if (item.updated_at || item.updatedAt) {
+        const t = new Date(item.updated_at || item.updatedAt).getTime();
+        if (!isNaN(t) && t > 0) return t;
+      }
+      return 0;
+    };
+
+    const currentId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
+    const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
+
+    const published = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
+      if (!p || (p.status || "").toLowerCase() !== "published") return false;
+      if (String(p.id) === currentId) return false;
+      if ((p.title || "").trim().toLowerCase() === currentTitle) return false;
+      return true;
+    });
+
+    // 1. Prioritize articles designated as Latest News
+    const latestDesignated = published.filter((p) => isLatestNews(p));
+    latestDesignated.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
+
+    // 2. Supplement with the newest published articles so there are always fresh articles
+    const remaining = published
+      .filter((p) => !latestDesignated.some((l) => l.id === p.id))
+      .sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
+
+    const sourceList = [...latestDesignated, ...remaining];
+
+    return sourceList.slice(0, 4).map((post, index) => {
+      const cat = (post.category || post.category_name || "NEWS").toUpperCase();
+      const catSlug = cat.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const postSlug = (post.slug || post.title || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, "")
+        .trim()
+        .replace(/\s+/g, "-");
+
+      const displayDate = post.date || (post.updated_at ? new Date(post.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : (post.published_at ? new Date(post.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Just published"));
+
+      return {
+        number: `0${index + 1}`.slice(-2),
+        category: cat,
+        title: post.title,
+        time: displayDate,
+        image: post.imageUrl || post.image || (post as any).image_url || "https://images.unsplash.com/photo-1563206767-5b18f218e8de?w=600&h=400&fit=crop",
+        href: `/article/${post.slug || postSlug}`
+      };
+    });
+  }, [liveArticles, activeNewsData, newsData]);
+
+  const trendingArticles = moreNewsArticles;
+
+  // "Up next" articles: Recent articles across multiple distinct categories
+  const upNextArticles = useMemo(() => {
+    const getTimestamp = (item: any): number => {
       if (!item) return 0;
       const d = item.updated_at || item.published_at || item.createdAt || item.date;
       if (!d) return 0;
@@ -335,46 +424,107 @@ function ArticlePageContentInner({
       return isNaN(parsed) ? 0 : parsed;
     };
 
-    let trendingPublished = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
+    const currentId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
+    const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
+
+    const published = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
       if (!p || (p.status || "").toLowerCase() !== "published") return false;
-      return isTrendingNow(p);
+      if (String(p.id) === currentId) return false;
+      if ((p.title || "").trim().toLowerCase() === currentTitle) return false;
+      return true;
     });
 
-    trendingPublished.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
+    published.sort((a, b) => getTimestamp(b) - getTimestamp(a));
 
-    const sourceList = trendingPublished.length > 0
-      ? trendingPublished
-      : (Array.isArray(liveArticles) ? liveArticles : [])
-          .filter((p) => p && (p.status || "").toLowerCase() === "published")
-          .sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
+    // Select recent articles across multiple diverse categories
+    const selectedByCategory: any[] = [];
+    const usedCategories = new Set<string>();
 
-    return sourceList.slice(0, 4).map((post, index) => {
+    for (const post of published) {
       const cat = (post.category || post.category_name || "NEWS").toUpperCase();
+      if (!usedCategories.has(cat)) {
+        usedCategories.add(cat);
+        selectedByCategory.push(post);
+        if (selectedByCategory.length >= 6) break;
+      }
+    }
+
+    // If fewer than 6 categories available, fill remaining slots with next most recent
+    if (selectedByCategory.length < 6) {
+      for (const post of published) {
+        if (!selectedByCategory.some((p) => p.id === post.id)) {
+          selectedByCategory.push(post);
+          if (selectedByCategory.length >= 6) break;
+        }
+      }
+    }
+
+    return selectedByCategory.slice(0, 6).map((post) => {
+      const cat = (post.category || post.category_name || "world").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
       const postSlug = (post.slug || post.title || "")
         .toLowerCase()
         .replace(/[^a-z0-9\s-]/g, "")
         .trim()
         .replace(/\s+/g, "-");
 
-      const displayDate = post.date || (post.updated_at ? new Date(post.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : (post.published_at ? new Date(post.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Just now"));
+      const content = post.content || post.rawContent || post.summary || "";
+      const words = content.replace(/<[^>]+>/g, " ").trim().split(/\s+/).filter(Boolean).length;
+      const minutes = Math.max(3, Math.min(10, Math.ceil(words / 180)));
 
       return {
-        number: `0${index + 1}`.slice(-2),
-        category: cat,
+        id: String(post.id),
         title: post.title,
-        time: displayDate,
-        image: post.imageUrl || post.image || (post as any).image_url || "https://images.unsplash.com/photo-1563206767-5b18f218e8de?w=200&h=140&fit=crop",
-        href: `/${cat.toLowerCase()}/news/${postSlug}?id=${post.id}`
+        readTime: `${minutes} MIN READ`,
+        image: post.imageUrl || post.image || (post as any).image_url || "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=600&h=400&fit=crop",
+        href: `/article/${post.slug || postSlug}`
       };
     });
-  }, [liveArticles]);
+  }, [liveArticles, activeNewsData, newsData]);
+
+  // "Most read" articles: 8 top articles sorted by views
+  const mostReadArticles = useMemo(() => {
+    const currentId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
+    const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
+
+    const getViews = (a: any, index: number): number => {
+      if (a?.views && typeof a.views === "number" && a.views > 0) return a.views;
+      if (a?.reads_count && typeof a.reads_count === "number" && a.reads_count > 0) return a.reads_count;
+      if (a?.viewsCount && typeof a.viewsCount === "number" && a.viewsCount > 0) return a.viewsCount;
+      const seed = typeof a?.id === "number" ? a.id : (parseInt(String(a?.id || "").replace(/\D/g, ""), 10) || (index + 1) * 37);
+      return Math.max(45, (seed * 17) % 350 + 55);
+    };
+
+    const published = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
+      if (!p || (p.status || "").toLowerCase() !== "published") return false;
+      if (String(p.id) === currentId) return false;
+      if ((p.title || "").trim().toLowerCase() === currentTitle) return false;
+      return true;
+    });
+
+    published.sort((a, b) => getViews(b, 0) - getViews(a, 0));
+
+    return published.slice(0, 8).map((post) => {
+      const cat = (post.category || post.category_name || "world").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
+      const postSlug = (post.slug || post.title || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, "")
+        .trim()
+        .replace(/\s+/g, "-");
+
+      return {
+        id: String(post.id),
+        title: post.title,
+        href: `/article/${post.slug || postSlug}`
+      };
+    });
+  }, [liveArticles, activeNewsData, newsData]);
 
   useEffect(() => {
     // Only run the match once live articles have been fetched (not still loading)
     if (liveArticlesLoading) return;
     try {
         const searchId = searchParams?.get("id") || (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("id") : null);
-        const currentTitle = (newsData.title || "").trim().toLowerCase();
+        const currentTitle = (newsData?.title || "").trim().toLowerCase();
         const currentPath = typeof window !== "undefined" ? window.location.pathname.toLowerCase() : "";
         const pathSegments = currentPath.split("/").filter(Boolean);
         const lastSegment = pathSegments[pathSegments.length - 1] || "";
@@ -443,9 +593,9 @@ function ArticlePageContentInner({
             authorAvatar: resolved.avatar,
             authorEmail: realEmail,
             authorBio: realAuthorBio,
-            date: matched.date || newsData.date || "July 2026",
-            image: matched.imageUrl || matched.image || newsData.image,
-            caption: matched.subheading || matched.summary || newsData.caption,
+            date: matched.date || newsData?.date || "July 2026",
+            image: matched.imageUrl || matched.image || newsData?.image || "",
+            caption: matched.subheading || matched.summary || newsData?.caption || "",
             category: rawCategory,
             subcategories: rawSubcategories,
             tags: (() => {
@@ -621,15 +771,11 @@ function ArticlePageContentInner({
   const isAdmin = Boolean(
     isMounted && (
       auth.role === "admin" ||
-      (auth.user && auth.user.role === "admin") ||
-      (typeof window !== "undefined" && (
-        localStorage.getItem("dj_admin_portal_authenticated") === "true" ||
-        localStorage.getItem("dj_user_role") === "admin"
-      ))
+      (auth.user && auth.user.role === "admin")
     )
   );
 
-  const articleKey = (activeNewsData.title || newsData.title || "article").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const articleKey = (activeNewsData.title || newsData?.title || "article").toLowerCase().replace(/[^a-z0-9]+/g, "-");
   const [comments, setComments] = useState<ArticleComment[]>([]);
   const [showCommentsList, setShowCommentsList] = useState(false);
   const [newCommentText, setNewCommentText] = useState("");
@@ -672,8 +818,8 @@ function ArticlePageContentInner({
   };
 
   const isUserArticleAuthor = (userEmail?: string, userName?: string): boolean => {
-    const artAuthor = (activeNewsData.authorName || newsData.authorName || "").toLowerCase().trim();
-    const artEmail = (activeNewsData.authorEmail || newsData.authorEmail || "").toLowerCase().trim();
+    const artAuthor = (activeNewsData.authorName || newsData?.authorName || "").toLowerCase().trim();
+    const artEmail = (activeNewsData.authorEmail || newsData?.authorEmail || "").toLowerCase().trim();
     const uName = (userName || auth.user?.name || "").toLowerCase().trim();
     const uEmail = (userEmail || auth.user?.email || "").toLowerCase().trim();
 
@@ -1081,26 +1227,37 @@ function ArticlePageContentInner({
   };
 
   useEffect(() => {
-    try {
-      const key = getUserBookmarkStorageKey();
-      if (!key) {
-        setIsBookmarked(false);
-        return;
-      }
-      const savedStr = localStorage.getItem(key);
-      if (savedStr) {
-        const savedList: any[] = JSON.parse(savedStr);
-        const exists = savedList.some(
-          (item) => item.title.trim().toLowerCase() === activeNewsData.title.trim().toLowerCase()
-        );
-        setIsBookmarked(exists);
-      } else {
-        setIsBookmarked(false);
-      }
-    } catch (e) {
-      console.error(e);
+    const checkBookmarkStatus = () => {
+      try {
+        const key = getUserBookmarkStorageKey();
+        if (!key) {
+          setIsBookmarked(false);
+          return;
+        }
+        const savedList = safeGetBookmarksFromStorage(key);
+        let isFound = false;
+        if (Array.isArray(savedList)) {
+          const targetTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
+          const targetId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
+          isFound = savedList.some((item) => {
+            if (!item) return false;
+            if (targetId && item.id && String(item.id) === targetId) return true;
+            const itemTitle = (item.title || "").trim().toLowerCase();
+            return Boolean(itemTitle && targetTitle && itemTitle === targetTitle);
+          });
+        }
+        setIsBookmarked(isFound);
+      } catch {}
+    };
+
+    checkBookmarkStatus();
+    if (typeof window !== "undefined") {
+      window.addEventListener("dj_bookmarks_updated", checkBookmarkStatus);
+      return () => {
+        window.removeEventListener("dj_bookmarks_updated", checkBookmarkStatus);
+      };
     }
-  }, [activeNewsData.title, auth.user]);
+  }, [activeNewsData?.title, (activeNewsData as any)?.id, auth.user]);
 
   const toggleBookmark = () => {
     if (!auth.authenticated || !auth.user) {
@@ -1111,12 +1268,7 @@ function ArticlePageContentInner({
 
     // DISALLOW BOOKMARKING FOR WRITERS & ADMINS
     const role = (auth.user.role || "").toLowerCase();
-    const email = (auth.user.email || "").toLowerCase();
-    const isStaffOrAdmin =
-      role === "writer" ||
-      role === "admin" ||
-      email.includes("writer") ||
-      email.includes("admin");
+    const isStaffOrAdmin = role === "writer" || role === "admin" || role === "co-admin";
 
     if (isStaffOrAdmin) {
       showToast("🚫 Bookmarking is available for Reader accounts only.");
@@ -1129,37 +1281,67 @@ function ArticlePageContentInner({
         setIsAuthModalOpen(true);
         return;
       }
-      const savedStr = localStorage.getItem(key);
-      let savedList: any[] = savedStr ? JSON.parse(savedStr) : [];
+      const savedList: any[] = [...safeGetBookmarksFromStorage(key)];
 
-      const existsIndex = savedList.findIndex(
-        (item) => item.title.trim().toLowerCase() === newsData.title.trim().toLowerCase()
-      );
+      const targetTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
+      const targetId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
+      const existsIndex = savedList.findIndex((item) => {
+        if (!item) return false;
+        if (targetId && item.id && String(item.id) === targetId) return true;
+        const itTitle = (item.title || "").trim().toLowerCase();
+        return Boolean(itTitle && targetTitle && itTitle === targetTitle);
+      });
 
       if (existsIndex >= 0) {
         // Remove bookmark from account
         savedList.splice(existsIndex, 1);
-        localStorage.setItem(key, JSON.stringify(savedList));
+        safeSaveBookmarksToStorage(key, savedList);
         setIsBookmarked(false);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("dj_bookmarks_updated"));
+        }
         showToast("Article removed from your Saved Reading List.");
       } else {
         // Add bookmark to account
         const currentHref = typeof window !== "undefined" ? (window.location.pathname + window.location.search) : "/";
+        const articleId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
+        const articleTitle = activeNewsData?.title || newsData?.title || "Article";
+        const articleCategory = (activeNewsData?.category || parent?.name || "POLITICS").toUpperCase();
+        const articleDate = (activeNewsData?.date || newsData?.date || new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })).split("•")[0].trim();
+
+        let articleImage = activeNewsData?.image || newsData?.image || (activeNewsData as any)?.imageUrl || "";
+        if (typeof articleImage === "string" && (articleImage.length > 500 || articleImage.startsWith("data:"))) {
+          articleImage = "";
+        }
+
         const newBookmark = {
-          title: newsData.title,
-          category: parent.name.toUpperCase(),
+          id: articleId,
+          title: articleTitle,
+          category: articleCategory,
           href: currentHref,
-          date: newsData.date.split("•")[0].trim() || "Jul 2026",
-          image: newsData.image,
+          date: articleDate,
+          image: articleImage,
           savedAt: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
         };
-        savedList.unshift(newBookmark);
-        localStorage.setItem(key, JSON.stringify(savedList));
+
+        const filtered = savedList.filter((item) => {
+          if (!item) return false;
+          if (articleId && item.id && String(item.id) === articleId) return false;
+          const itTitle = (item.title || "").trim().toLowerCase();
+          if (articleTitle && itTitle && itTitle === articleTitle.trim().toLowerCase()) return false;
+          return true;
+        });
+        filtered.unshift(newBookmark);
+        safeSaveBookmarksToStorage(key, filtered);
+
         setIsBookmarked(true);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("dj_bookmarks_updated"));
+        }
         showToast("✓ Article saved to your personal account reading list!");
       }
     } catch (e) {
-      console.error(e);
+      console.warn("Bookmark toggle warning:", e);
       showToast("❌ Could not update saved reading list.");
     }
   };
@@ -1185,25 +1367,26 @@ function ArticlePageContentInner({
       const dbStr = typeof window !== "undefined" ? localStorage.getItem("dj_user_profiles_db") : null;
       if (dbStr) {
         const profiles = JSON.parse(dbStr);
+        const targetAuthor = (activeNewsData?.authorName || newsData?.authorName || "").toLowerCase().trim();
         const match: any = Object.values(profiles).find(
-          (p: any) => p.name && p.name.toLowerCase().trim() === newsData.authorName.toLowerCase().trim()
+          (p: any) => p.name && p.name.toLowerCase().trim() === targetAuthor
         );
         if (match?.linkedin && match.linkedin.trim()) {
           setAuthorLinkedinUrl(match.linkedin.trim());
         }
       }
     } catch (e) {}
-  }, [newsData.authorName]);
+  }, [activeNewsData.authorName]);
 
   const autoSEO = generateAutoSEO({
-    title: newsData.title,
-    content: newsData.sections?.flatMap((s) => s.paragraphs).join(" ") || "",
-    category,
+    title: activeNewsData?.title || newsData?.title || "",
+    content: (activeNewsData?.sections || newsData?.sections || []).flatMap((s) => s.paragraphs).join(" ") || "",
+    category: activeNewsData?.category || category,
     subcategory,
-    authorName: newsData.authorName,
-    imageUrl: newsData.image,
-    imageCaption: newsData.caption,
-    publishedAt: newsData.date
+    authorName: activeNewsData?.authorName || newsData?.authorName || "",
+    imageUrl: activeNewsData?.image || newsData?.image || "",
+    imageCaption: activeNewsData?.caption || newsData?.caption || "",
+    publishedAt: activeNewsData?.date || newsData?.date || ""
   });
 
   return (
@@ -1214,7 +1397,7 @@ function ArticlePageContentInner({
           __html: JSON.stringify(autoSEO.jsonLdSchema)
         }}
       />
-      <Header />
+      <Header showProgressBar={true} />
 
       {/* Show loading skeleton until live article data is resolved to prevent stale/old article flash */}
       {!isArticleResolved ? (
@@ -1242,12 +1425,12 @@ function ArticlePageContentInner({
       )}
 
       {/* ARTICLE WRAPPER */}
-      <div className="max-w-[1240px] mx-auto px-4 md:px-6 pt-6 pb-16 font-sans">
+      <div id="article-read-container" className="max-w-[1240px] mx-auto px-4 md:px-6 pt-6 pb-16 font-sans">
         
         {/* Top Utility Bar */}
         {(() => {
           const currentPath = typeof window !== "undefined" ? window.location.pathname.toLowerCase() : "";
-          const currentTitle = (activeNewsData.title || newsData.title || "").trim().toLowerCase();
+          const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
           const matchedArticle = (Array.isArray(liveArticles) ? liveArticles : []).find((p) => {
             if (!p || p.status !== "Published") return false;
             const pTitle = (p.title || "").trim().toLowerCase();
@@ -1266,8 +1449,8 @@ function ArticlePageContentInner({
           const resolveDisplayCategory = () => {
             if (matchedArticle?.category && !isInvalidCategory(matchedArticle.category)) return matchedArticle.category;
             if (matchedArticle?.category_name && !isInvalidCategory(matchedArticle.category_name)) return matchedArticle.category_name;
-            if (activeNewsData.category && !isInvalidCategory(activeNewsData.category)) return activeNewsData.category;
-            if (newsData.category && !isInvalidCategory(newsData.category)) return newsData.category;
+            if (activeNewsData?.category && !isInvalidCategory(activeNewsData.category)) return activeNewsData.category;
+            if (newsData?.category && !isInvalidCategory(newsData.category)) return newsData.category;
             if (parent?.name && !isInvalidCategory(parent.name)) return parent.name;
             if (subName && !isInvalidCategory(subName)) return subName;
             if (subcategory && !isInvalidCategory(subcategory)) return subcategory.charAt(0).toUpperCase() + subcategory.slice(1);
@@ -1277,10 +1460,7 @@ function ArticlePageContentInner({
           const trueMainCategory = resolveDisplayCategory();
           const formatCategorySlug = (cat: string) => cat.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
           const mainCategorySlug = formatCategorySlug(trueMainCategory);
-          const newsPrefixedCategories = ["world", "politics", "economy", "markets", "lifestyle", "sports", "entertainment", "health"];
-          const mainCategoryHref = newsPrefixedCategories.includes(mainCategorySlug)
-            ? `/news/${mainCategorySlug}`
-            : `/${mainCategorySlug}`;
+          const mainCategoryHref = `/category/${mainCategorySlug}`;
 
           return (
             <div className="flex items-center justify-between py-2.5 mb-4 text-[12px] font-sans text-zinc-500 border-b border-zinc-100">
@@ -1297,7 +1477,7 @@ function ArticlePageContentInner({
                   onClick={() => {
                     const cleanUrl = window.location.origin + window.location.pathname;
                     if (navigator.share) {
-                      navigator.share({ title: activeNewsData.title || newsData.title, url: cleanUrl }).catch(() => {});
+                      navigator.share({ title: activeNewsData?.title || newsData?.title || "", url: cleanUrl }).catch(() => {});
                     } else {
                       navigator.clipboard.writeText(cleanUrl);
                       showToast("Link copied to clipboard!");
@@ -1334,7 +1514,7 @@ function ArticlePageContentInner({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 mt-2 items-start">
           
           {/* Left Column: Main News content */}
-          <div className="lg:col-span-8 flex flex-col">
+          <div id="article-content-body" className="lg:col-span-8 flex flex-col">
 
             {/* Category Navigation Badge */}
             {(() => {
@@ -1343,7 +1523,7 @@ function ArticlePageContentInner({
               };
 
               const currentPath = typeof window !== "undefined" ? window.location.pathname.toLowerCase() : "";
-              const currentTitle = (activeNewsData.title || newsData.title || "").trim().toLowerCase();
+              const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
               const matchedArticle = (Array.isArray(liveArticles) ? liveArticles : []).find((p) => {
                 if (!p || p.status !== "Published") return false;
                 const pTitle = (p.title || "").trim().toLowerCase();
@@ -1362,8 +1542,8 @@ function ArticlePageContentInner({
               const resolveDisplayCategory = () => {
                 if (matchedArticle?.category && !isInvalidCategory(matchedArticle.category)) return matchedArticle.category;
                 if (matchedArticle?.category_name && !isInvalidCategory(matchedArticle.category_name)) return matchedArticle.category_name;
-                if (activeNewsData.category && !isInvalidCategory(activeNewsData.category)) return activeNewsData.category;
-                if (newsData.category && !isInvalidCategory(newsData.category)) return newsData.category;
+                if (activeNewsData?.category && !isInvalidCategory(activeNewsData.category)) return activeNewsData.category;
+                if (newsData?.category && !isInvalidCategory(newsData.category)) return newsData.category;
                 if (parent?.name && !isInvalidCategory(parent.name)) return parent.name;
                 if (subName && !isInvalidCategory(subName)) return subName;
                 if (subcategory && !isInvalidCategory(subcategory)) return subcategory.charAt(0).toUpperCase() + subcategory.slice(1);
@@ -1372,10 +1552,7 @@ function ArticlePageContentInner({
 
               const mainCategoryName = resolveDisplayCategory().trim();
               const mainCategorySlug = formatCategorySlug(mainCategoryName);
-              const newsPrefixedCategories = ["world", "politics", "economy", "markets", "lifestyle", "sports", "entertainment", "health"];
-              const mainCategoryHref = newsPrefixedCategories.includes(mainCategorySlug)
-                ? `/news/${mainCategorySlug}`
-                : `/${mainCategorySlug}`;
+              const mainCategoryHref = `/category/${mainCategorySlug}`;
 
               return (
                 <div className="flex items-center gap-2 mb-3 font-standard-sans">
@@ -1424,20 +1601,6 @@ function ArticlePageContentInner({
                         <title>Verified Journalist</title>
                         <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.34-1.89-4.24-4.23-4.24-.496 0-.966.084-1.4.238C14.31 2.225 12.94 1.35 11.36 1.35c-1.58 0-2.95.875-3.6 2.148-.435-.154-.905-.238-1.4-.238-2.34 0-4.24 1.89-4.24 4.23 0 .496.084.966.238 1.4C1.225 9.55.35 10.92.35 12.5c0 1.58.875 2.95 2.148 3.6-.154.435-.238.905-.238 1.4 0 2.34 1.89 4.24 4.23 4.24.496 0 .966-.084 1.4-.238.65 1.273 2.02 2.148 3.6 2.148 1.58 0 2.95-.875 3.6-2.148.435.154.905.238 1.4.238 2.34 0 4.24-1.89 4.24-4.23 0-.496-.084-.966-.238-1.4 1.273-.65 2.148-2.02 2.148-3.6zm-12.28 4.29l-4.11-4.11 1.41-1.41 2.7 2.7 6.44-6.44 1.41 1.41-7.85 7.85z"/>
                       </svg>
-
-                      {/* Author LinkedIn Icon Symbol */}
-                      <a
-                        href={authorLinkedinUrl}
-                        suppressHydrationWarning
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="ml-1 inline-flex items-center text-[#0A66C2] hover:text-[#004182] transition-colors p-0.5"
-                        title={`Connect with ${activeNewsData.authorName} on LinkedIn`}
-                      >
-                        <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
-                          <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
-                        </svg>
-                      </a>
                     </div>
                     <p className="text-[12px] text-zinc-500 mt-0.5">{activeNewsData.date}</p>
                   </div>
@@ -1560,20 +1723,6 @@ function ArticlePageContentInner({
                         <title>Verified Journalist</title>
                         <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.34-1.89-4.24-4.23-4.24-.496 0-.966.084-1.4.238C14.31 2.225 12.94 1.35 11.36 1.35c-1.58 0-2.95.875-3.6 2.148-.435-.154-.905-.238-1.4-.238-2.34 0-4.24 1.89-4.24 4.23 0 .496.084.966.238 1.4C1.225 9.55.35 10.92.35 12.5c0 1.58.875 2.95 2.148 3.6-.154.435-.238.905-.238 1.4 0 2.34 1.89 4.24 4.23 4.24.496 0 .966-.084 1.4-.238.65 1.273 2.02 2.148 3.6 2.148 1.58 0 2.95-.875 3.6-2.148.435.154.905.238 1.4.238 2.34 0 4.24-1.89 4.24-4.23 0-.496-.084-.966-.238-1.4 1.273-.65 2.148-2.02 2.148-3.6zm-12.28 4.29l-4.11-4.11 1.41-1.41 2.7 2.7 6.44-6.44 1.41 1.41-7.85 7.85z"/>
                       </svg>
-
-                      {/* Author LinkedIn Icon Symbol */}
-                      <a
-                        href={authorLinkedinUrl}
-                        suppressHydrationWarning
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center text-[#0A66C2] hover:text-[#004182] transition-colors p-0.5"
-                        title={`Connect with ${cleanAuth.name} on LinkedIn`}
-                      >
-                        <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
-                          <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
-                        </svg>
-                      </a>
                     </div>
 
                     {/* Author Bio Paragraphs */}
@@ -1600,12 +1749,6 @@ function ArticlePageContentInner({
               const totalCommentsCount = comments.length + comments.reduce((acc, c) => acc + (c.replies?.length || 0), 0);
               return (
                 <>
-                  <div className="font-sans my-6 text-[12px] text-zinc-500">
-                    <div className="flex items-center gap-2 font-bold text-black uppercase tracking-wider text-[11.5px]">
-                      <span>💬 COMMENTS ({totalCommentsCount})</span>
-                    </div>
-                  </div>
-
                   {/* INTERACTIVE COMMENTS & OPINIONS SECTION */}
                   <div className="mt-8 pt-6 border-t border-zinc-200 font-sans">
                     <div className="flex items-center justify-between mb-4">
@@ -2296,20 +2439,17 @@ function ArticlePageContentInner({
                 !isDuplicateAdImage(adSlot4.imageUrl, adSlot4.id, adSlots);
               const isExternal = (adSlot4.actionType || "").toLowerCase().includes("external") || (adSlot4.targetUrl || "").startsWith("http");
               return (
-                <div className="pt-6 border-t border-zinc-200 mt-6 w-full flex flex-col items-center">
-                  <span className="text-[9px] font-mono tracking-widest uppercase text-zinc-400 mb-2 font-bold self-start">
-                    SPONSORED
-                  </span>
+                <div className="pt-6 border-t border-zinc-200 mt-6 w-full flex flex-col items-start">
                   {hasSlot4Image ? (
                     <a
                       href={adSlot4.targetUrl || "#"}
                       target={isExternal ? "_blank" : "_self"}
                       rel={isExternal ? "noopener noreferrer" : undefined}
-                      className="block group relative overflow-hidden rounded-xs border border-zinc-200 bg-black w-full max-w-[300px] aspect-[300/250]"
+                      className="block group relative overflow-hidden rounded-xs border border-zinc-200 bg-black w-full max-w-[340px] aspect-[300/250]"
                     >
                       <img
                         src={adSlot4.imageUrl}
-                        alt={adSlot4.title || "Advertisement"}
+                        alt={adSlot4.title || "Ad"}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                       <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-xs px-2 py-0.5 text-[9px] font-mono tracking-widest uppercase text-white border border-white/10">
@@ -2317,10 +2457,7 @@ function ArticlePageContentInner({
                       </div>
                     </a>
                   ) : (
-                    <div className="w-full max-w-[300px] aspect-[300/250] bg-[#111827] border border-dashed border-gray-700 rounded-xs flex flex-col items-center justify-center p-4 text-center">
-                      <span className="text-[10px] font-mono tracking-widest uppercase text-[#D31220] font-bold mb-1">
-                        ADVERTISEMENT
-                      </span>
+                    <div className="w-full max-w-[340px] aspect-[300/250] bg-[#111827] border border-dashed border-gray-700 rounded-xs flex flex-col items-center justify-center p-4 text-center">
                       <span className="text-white font-mono font-bold text-sm tracking-widest">
                         {slot4Dimensions}
                       </span>
@@ -2344,20 +2481,17 @@ function ArticlePageContentInner({
                 !isDuplicateAdImage(adSlot5.imageUrl, adSlot5.id, adSlots);
               const isExternal = (adSlot5.actionType || "").toLowerCase().includes("external") || (adSlot5.targetUrl || "").startsWith("http");
               return (
-                <div className="pt-8 border-t border-zinc-200 mt-8 flex flex-col items-center w-full sticky top-24">
-                  <span className="text-[9px] font-mono tracking-widest uppercase text-zinc-400 mb-2 font-bold self-start">
-                    ADVERTISEMENT
-                  </span>
+                <div className="pt-8 border-t border-zinc-200 mt-8 flex flex-col items-start w-full sticky top-24">
                   {hasSlot5Image ? (
                     <a
                       href={adSlot5.targetUrl || "#"}
                       target={isExternal ? "_blank" : "_self"}
                       rel={isExternal ? "noopener noreferrer" : undefined}
-                      className="block group relative overflow-hidden rounded-xs border border-zinc-200 bg-black w-full max-w-[300px] h-[550px]"
+                      className="block group relative overflow-hidden rounded-xs border border-zinc-200 bg-black w-full max-w-[340px] h-[550px]"
                     >
                       <img
                         src={adSlot5.imageUrl}
-                        alt={adSlot5.title || "Advertisement"}
+                        alt={adSlot5.title || "Ad"}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
                       <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-xs px-2 py-0.5 text-[9px] font-mono tracking-widest uppercase text-white border border-white/10">
@@ -2365,10 +2499,7 @@ function ArticlePageContentInner({
                       </div>
                     </a>
                   ) : (
-                    <div className="w-full max-w-[300px] h-[550px] bg-[#111827] border border-dashed border-gray-700 rounded-xs flex flex-col items-center justify-center p-6 text-center">
-                      <span className="text-[10px] font-mono tracking-widest uppercase text-[#D31220] font-bold mb-2">
-                        ADVERTISEMENT
-                      </span>
+                    <div className="w-full max-w-[340px] h-[550px] bg-[#111827] border border-dashed border-gray-700 rounded-xs flex flex-col items-center justify-center p-6 text-center">
                       <span className="text-white font-mono font-bold text-base tracking-widest">
                         {slot5Dimensions}
                       </span>
@@ -2387,20 +2518,22 @@ function ArticlePageContentInner({
 
         </div>
 
-        {/* Trending Now Section (Big and Fit to Screen Across All Columns) */}
-        {trendingArticles.length > 0 && (
+        {/* More News Section (Linked with Latest News) */}
+        {moreNewsArticles.length > 0 && (
           <div className="mt-14 pt-10 border-t border-zinc-200 font-sans w-full">
             <div className="flex items-center gap-2 mb-6">
               <div className="w-1.5 h-6 bg-[#D31220]" />
               <h2 className="text-xl font-extrabold text-gray-900 tracking-tight uppercase font-sans">
-                Trending Now
+                <Link href="/news" className="hover:text-[#BF1E2D] transition-colors">
+                  More News
+                </Link>
               </h2>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {trendingArticles.map((item, idx) => (
+              {moreNewsArticles.map((item, idx) => (
                 <Link
-                  key={`trending-col-${idx}-${item.href}`}
+                  key={`more-news-col-${idx}-${item.href}`}
                   href={item.href}
                   className="group flex flex-col cursor-pointer bg-white border border-gray-200 hover:border-gray-300 hover:shadow-md p-3.5 rounded-sm transition-all"
                 >
@@ -2434,6 +2567,73 @@ function ArticlePageContentInner({
                   </h3>
                 </Link>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── UP NEXT & MOST READ SECTION ── */}
+        {(upNextArticles.length > 0 || mostReadArticles.length > 0) && (
+          <div className="mt-14 pt-10 border-t border-zinc-200 font-sans w-full">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
+              
+              {/* Left Column: Up next (Recent articles across multiple categories) */}
+              <div className="lg:col-span-8">
+                <h2 className="text-xl sm:text-2xl font-bold font-sans text-zinc-950 tracking-tight mb-6">
+                  Up next
+                </h2>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                  {upNextArticles.map((item) => (
+                    <Link
+                      key={`upnext-card-${item.id}`}
+                      href={item.href}
+                      className="group flex flex-col cursor-pointer"
+                    >
+                      <div className="relative w-full aspect-[16/10] bg-zinc-100 overflow-hidden mb-2.5 rounded-xs border border-zinc-100">
+                        <img
+                          src={item.image}
+                          alt={item.title}
+                          onError={(e) => {
+                            e.currentTarget.src = "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=600&h=400&fit=crop";
+                          }}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      </div>
+                      <h3 className="text-[14px] sm:text-[14.5px] font-bold text-zinc-900 group-hover:text-[#BF1E2D] transition-colors line-clamp-3 leading-snug font-sans mb-1.5">
+                        {item.title}
+                      </h3>
+                      <span className="text-[11px] font-bold tracking-wider text-zinc-400 font-sans uppercase mt-auto">
+                        {item.readTime}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+
+              {/* Right Column: Most read (Numbered 1-8 List) */}
+              <div className="lg:col-span-4 lg:pl-2">
+                <h2 className="text-xl sm:text-2xl font-bold font-sans text-zinc-950 tracking-tight mb-6">
+                  Most read
+                </h2>
+
+                <div className="flex flex-col divide-y divide-zinc-200 border-b border-zinc-200">
+                  {mostReadArticles.map((item, idx) => (
+                    <Link
+                      key={`most-read-item-${item.id}`}
+                      href={item.href}
+                      className="group flex items-start gap-4 py-3.5 first:pt-0 cursor-pointer"
+                    >
+                      <span className="font-bold text-base sm:text-lg text-zinc-950 w-4 shrink-0 font-sans leading-snug">
+                        {idx + 1}
+                      </span>
+                      <h3 className="text-[13.5px] sm:text-[14px] font-medium text-zinc-900 group-hover:text-[#BF1E2D] leading-snug line-clamp-2 transition-colors font-sans">
+                        {item.title}
+                      </h3>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+
             </div>
           </div>
         )}

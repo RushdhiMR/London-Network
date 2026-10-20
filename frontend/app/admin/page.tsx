@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import JSZip from "jszip";
@@ -40,6 +40,7 @@ import {
   BarChart3,
   Globe,
   DollarSign,
+  CreditCard,
   Layers,
   Radio,
   Edit3,
@@ -57,15 +58,24 @@ import {
   ChevronUp,
   ChevronRight,
   Sparkles,
+  Phone,
   CheckCircle,
   ArrowLeft,
   Send,
   Lock,
   Pencil,
-  Upload
+  Upload,
+  Video,
+  Play,
+  Crop,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  Move
 } from "lucide-react";
 import { useLiveArticles, updateArticleStatusOnServer, deleteArticleOnServer, fetchArticlesFromServer, saveArticleToServer } from "@/lib/articlesSync";
 import { isEmailAlreadyRegistered, getUserProfile, saveUserProfile } from "@/lib/userProfiles";
+import { ReelVideo, ReelPlatform, getStoredReels, fetchServerReels, saveStoredReels, detectPlatformAndThumbnail } from "@/lib/reelsSync";
 
 interface Article {
   id: number | string;
@@ -218,7 +228,8 @@ const ALL_MAIN_CATEGORIES = [
   "Sports",
   "Entertainment",
   "Health",
-  "Research"
+  "Research",
+  "Interview"
 ];
 
 const ALL_SUB_CATEGORIES = [
@@ -231,7 +242,8 @@ const ALL_SUB_CATEGORIES = [
   "Sports",
   "Entertainment",
   "Health",
-  "Research"
+  "Research",
+  "Interview"
 ];
 
 const WORLD_SUBCATEGORIES = [
@@ -267,9 +279,7 @@ function extractCleanTagsList(source: any): string[] {
     source.tags,
     source.hashtags,
     source.hash_tags,
-    source.hashTags,
-    source.seo?.keywords,
-    source.keywords
+    source.hashTags
   ];
   if (Array.isArray(source)) candidates.unshift(source);
 
@@ -317,7 +327,7 @@ export default function AdminDashboardPage() {
   const [lockError, setLockError] = useState("");
 
   const [activeTab, setActiveTab] = useState<
-    "overview" | "newsletter" | "articles" | "users" | "ads" | "contact_submissions" | "advertise_leads" | "backups" | "trending_words"
+    "overview" | "newsletter" | "subscriptions" | "articles" | "users" | "ads" | "contact_submissions" | "advertise_leads" | "backups" | "trending_words" | "reels"
   >("overview");
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -683,15 +693,15 @@ export default function AdminDashboardPage() {
 
   // Dashboard Metrics & Data
   const [stats, setStats] = useState<Stats>({
-    totalArticles: 142,
-    totalAuthors: 6,
-    totalSubscribers: 5,
-    totalUsers: 9,
-    monthlyViews: "184,250",
+    totalArticles: 0,
+    totalAuthors: 0,
+    totalSubscribers: 0,
+    totalUsers: 0,
+    monthlyViews: "0",
     systemStatus: "Healthy / Operational",
     dbHost: "localhost (digital_journal_db)",
-    lastBackup: "2026-08-11 04:00 AM",
-    monthlyAdRevenue: "$14,850.00"
+    lastBackup: "None",
+    monthlyAdRevenue: "$0.00"
   });
 
   // Default fallback submissions
@@ -703,18 +713,77 @@ export default function AdminDashboardPage() {
   // London BigBen Newsletter Subscribers Roster
   const [newsletterSubscribers, setNewsletterSubscribers] = useState<SubscriberItem[]>([]);
 
+  // London BigBen Website Subscriptions (One-Year Free Access & Paid Access)
+  const [siteSubscriptions, setSiteSubscriptions] = useState<any[]>([]);
+  const [siteSubscriptionsLoading, setSiteSubscriptionsLoading] = useState(false);
+  const [siteSubSearch, setSiteSubSearch] = useState("");
+  const [siteSubStatusFilter, setSiteSubStatusFilter] = useState("ALL");
+  const [siteSubPlanFilter, setSiteSubPlanFilter] = useState("ALL");
+  const [siteSubPage, setSiteSubPage] = useState(1);
+
+  const fetchSiteSubscriptions = async () => {
+    setSiteSubscriptionsLoading(true);
+    try {
+      const res = await fetch("/api/admin/subscriptions", {
+        headers: { "x-admin-portal": "dj_admin_portal_authenticated_2026" }
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.subscriptions)) {
+        setSiteSubscriptions(data.subscriptions);
+      }
+    } catch (e) {
+      console.warn("Failed to load site subscriptions:", e);
+    } finally {
+      setSiteSubscriptionsLoading(false);
+    }
+  };
+
+  const handleUpdateSubscriptionStatus = async (id: string | number, status: string, paymentStatus?: string, paymentAmount?: string) => {
+    try {
+      const res = await fetch("/api/admin/subscriptions", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-portal": "dj_admin_portal_authenticated_2026"
+        },
+        body: JSON.stringify({ id, status, paymentStatus, paymentAmount })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showNotification(`✓ Subscription status updated to "${status}".`);
+        fetchSiteSubscriptions();
+      } else {
+        showNotification(`⚠️ ${data.error || "Failed to update subscription"}`);
+      }
+    } catch (e) {
+      showNotification("⚠️ Network error updating subscription.");
+    }
+  };
+
+  const handleDeleteSiteSubscription = async (id: string | number, subEmail: string) => {
+    if (!confirm(`Are you sure you want to delete subscription record for "${subEmail}"?`)) return;
+    try {
+      const res = await fetch(`/api/admin/subscriptions?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: { "x-admin-portal": "dj_admin_portal_authenticated_2026" }
+      });
+      const data = await res.json();
+      if (data.success) {
+        showNotification(`✓ Subscription record deleted.`);
+        fetchSiteSubscriptions();
+      } else {
+        showNotification(`⚠️ ${data.error || "Failed to delete subscription"}`);
+      }
+    } catch (e) {
+      showNotification("⚠️ Network error deleting subscription.");
+    }
+  };
+
   // London BigBen Published Articles Catalog
   const [articles, setArticles] = useState<Article[]>([]);
 
   // London BigBen Workspace Users (Strictly Real Registered Users)
-  const [workspaceUsers, setWorkspaceUsers] = useState<WorkspaceUser[]>([
-    { id: 2, name: "Rushdhi MR", email: "rushdhiriyaj2005@gmail.com", role: "ADMIN", isDefaultAdmin: true, joinedDate: "Aug 01, 2026", status: "Active" },
-    { id: 9, name: "Rushdhi MR", email: "rushdhiwriter@gmail.com", role: "WRITER", joinedDate: "Aug 26, 2026", status: "Active" },
-    { id: 12, name: "Muba_kity", email: "rura@gmail.com", role: "WRITER", joinedDate: "Aug 31, 2026", status: "Active" },
-    { id: 13, name: "Roomi", email: "roomiwriter@gmail.com", role: "WRITER", joinedDate: "Sep 01, 2026", status: "Active" },
-    { id: 5, name: "Ruzni", email: "ruzni@gmail.com", role: "ADMIN", joinedDate: "Aug 31, 2026", status: "Active" },
-    { id: 7, name: "Roomi", email: "roomi@gmail.com", role: "READER", joinedDate: "Aug 13, 2026", status: "Active" }
-  ]);
+  const [workspaceUsers, setWorkspaceUsers] = useState<WorkspaceUser[]>([]);
 
   const isCurrentAdminDefault = Boolean(
     adminUser?.email === "geethliyanage979@gmail.com" ||
@@ -735,56 +804,7 @@ export default function AdminDashboardPage() {
   const [contactTypeFilter, setContactTypeFilter] = useState("all");
   const [viewingContactModal, setViewingContactModal] = useState<ContactSubmissionItem | null>(null);
 
-  const [contactSubmissions, setContactSubmissions] = useState<ContactSubmissionItem[]>([
-    {
-      id: "cs-101",
-      date: "Jul 27, 09:07 PM",
-      name: "SORORIA",
-      company: "N/A",
-      email: "rij102008sororia@outlook.com",
-      phone: "P: 000 000 0000",
-      whatsapp: "W: 000 000 0000",
-      type: "Editorial",
-      message: "Policy and structure Although our publication standards require verified sources, we would like to inquire about publishing syndication arrangements...",
-      status: "New"
-    },
-    {
-      id: "cs-102",
-      date: "Aug 11, 10:14 AM",
-      name: "Robert Taylor",
-      company: "Apex Media Partners",
-      email: "rtaylor@apex.io",
-      phone: "P: +1 (555) 234-5678",
-      whatsapp: "W: +1 (555) 234-5678",
-      type: "Advertising",
-      message: "We are interested in booking the Header Top Leaderboard slot for Q4 enterprise campaign targeting AI startups.",
-      status: "In Review"
-    },
-    {
-      id: "cs-103",
-      date: "Aug 10, 04:30 PM",
-      name: "Dr. Aris Thorne",
-      company: "MIT Media Lab",
-      email: "athorne@mit.edu",
-      phone: "P: +1 (617) 253-1000",
-      whatsapp: "W: N/A",
-      type: "Editorial",
-      message: "Submitting a research breakthrough paper on quantum semiconductor nodes for review by your technology editorial desk.",
-      status: "New"
-    },
-    {
-      id: "cs-104",
-      date: "Aug 08, 02:15 PM",
-      name: "Sarah Jenkins",
-      company: "Global Tech Foundation",
-      email: "sjenkins@globaltech.org",
-      phone: "P: +44 20 7946 0912",
-      whatsapp: "W: +44 20 7946 0912",
-      type: "General Inquiry",
-      message: "Inquiry regarding press accreditation for the upcoming International Digital Journalism Conference in London.",
-      status: "Resolved"
-    }
-  ]);
+  const [contactSubmissions, setContactSubmissions] = useState<ContactSubmissionItem[]>([]);
 
   const handleUpdateContactStatus = async (id: string | number, newStatus: any) => {
     const updated = contactSubmissions.map(c => c.id === id ? { ...c, status: newStatus } : c);
@@ -823,60 +843,7 @@ export default function AdminDashboardPage() {
   const [leadServiceFilter, setLeadServiceFilter] = useState("all");
   const [viewingLeadModal, setViewingLeadModal] = useState<AdvertiseLeadItem | null>(null);
 
-  const [advertiseLeads, setAdvertiseLeads] = useState<AdvertiseLeadItem[]>([
-    {
-      id: "lead-5001",
-      date: "Aug 11, 11:30 AM",
-      submitterName: "Rachel Vance",
-      company: "NVIDIA Enterprise",
-      email: "rvance@nvidia.com",
-      phone: "P: +1 (408) 486-2000",
-      whatsapp: "W: +1 (408) 486-2000",
-      serviceOption: "Banner Ads",
-      requirements: "Requesting Header Top Leaderboard placement for Q4 Enterprise AI launch campaign...",
-      budget: "$25,000 / mo",
-      status: "In Discussion"
-    },
-    {
-      id: "lead-5002",
-      date: "Aug 09, 03:45 PM",
-      submitterName: "David Miller",
-      company: "Palantir Tech",
-      email: "dmiller@palantir.com",
-      phone: "P: +1 (650) 841-4000",
-      whatsapp: "W: N/A",
-      serviceOption: "Sponsored Articles",
-      requirements: "Sponsorship slot for multi-part editorial series on Foundry data infrastructure.",
-      budget: "$15,000 / mo",
-      status: "Qualified"
-    },
-    {
-      id: "lead-5003",
-      date: "Aug 07, 09:20 AM",
-      submitterName: "Marcus Vance",
-      company: "AWS Cloud Solutions",
-      email: "mvance@amazon.com",
-      phone: "P: +1 (206) 266-1000",
-      whatsapp: "W: +1 (206) 266-1000",
-      serviceOption: "Newsletter Takeover",
-      requirements: "Exclusive newsletter banner placement for re:Invent conference announcements.",
-      budget: "$18,500 / mo",
-      status: "New"
-    },
-    {
-      id: "lead-5004",
-      date: "Aug 04, 01:10 PM",
-      submitterName: "Elena Rostova",
-      company: "Bloomberg Media",
-      email: "erostova@bloomberg.net",
-      phone: "P: +1 (212) 318-2000",
-      whatsapp: "W: +1 (212) 318-2000",
-      serviceOption: "Brand Partnership",
-      requirements: "Joint content syndication and co-branded webinar sponsorship package.",
-      budget: "$30,000 / mo",
-      status: "Closed"
-    }
-  ]);
+  const [advertiseLeads, setAdvertiseLeads] = useState<AdvertiseLeadItem[]>([]);
 
   const handleUpdateLeadStatus = async (id: string | number, newStatus: any) => {
     const updated = advertiseLeads.map(l => l.id === id ? { ...l, status: newStatus } : l);
@@ -915,7 +882,7 @@ export default function AdminDashboardPage() {
     if (typeof window !== "undefined") {
       try {
         const saved = localStorage.getItem("dj_database_backups");
-        if (saved) {
+        if (saved && saved.trim()) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) return parsed;
         }
@@ -954,7 +921,7 @@ export default function AdminDashboardPage() {
     if (typeof window !== "undefined") {
       try {
         const saved = localStorage.getItem("dj_trending_words");
-        if (saved) {
+        if (saved && saved.trim()) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
             const sliced = parsed.slice(0, 6);
@@ -1032,6 +999,312 @@ export default function AdminDashboardPage() {
     return matchesQuery;
   });
 
+  // Reels Management State (10 Dedicated Slots)
+  const [reelsVideos, setReelsVideos] = useState<ReelVideo[]>(() => {
+    return getStoredReels();
+  });
+  const [editingReel, setEditingReel] = useState<ReelVideo | null>(null);
+  const [reelTitle, setReelTitle] = useState("");
+  const [reelVideoUrl, setReelVideoUrl] = useState("");
+  const [reelThumbnailUrl, setReelThumbnailUrl] = useState("");
+  const [reelDuration, setReelDuration] = useState("");
+  const [reelPlatform, setReelPlatform] = useState<ReelPlatform>("YouTube Shorts");
+  const [reelTargetSlot, setReelTargetSlot] = useState<number>(1);
+  const [reelStatus, setReelStatus] = useState<"Active" | "Inactive">("Active");
+  const [isAutoFetching, setIsAutoFetching] = useState(false);
+  const [customThumbnailFileName, setCustomThumbnailFileName] = useState("");
+  const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
+  const [isUploadingReelVideo, setIsUploadingReelVideo] = useState(false);
+  const [reelVideoFileName, setReelVideoFileName] = useState("");
+
+  const reelAutoFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleVideoUrlChange = (url: string) => {
+    setReelVideoUrl(url);
+    if (!url.trim()) return;
+
+    // Detect platform, duration, and preliminary thumbnail immediately
+    const detected = detectPlatformAndThumbnail(url);
+    setReelPlatform(detected.platform);
+    if (detected.duration) {
+      setReelDuration(detected.duration);
+    }
+    // Set thumbnail immediately for YouTube, Rumble, Instagram, or Facebook
+    if (detected.thumbnailUrl) {
+      setReelThumbnailUrl(detected.thumbnailUrl);
+    }
+
+    // Automatically auto-fetch high-res title and thumbnail metadata in the background
+    const cleanUrl = url.trim();
+    if (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://")) {
+      if (reelAutoFetchTimeoutRef.current) {
+        clearTimeout(reelAutoFetchTimeoutRef.current);
+      }
+      reelAutoFetchTimeoutRef.current = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/reels/metadata?url=${encodeURIComponent(cleanUrl)}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.platform) setReelPlatform(data.platform);
+            if (data.title && (!reelTitle || reelTitle === "Short Video Title")) {
+              setReelTitle(data.title);
+            }
+            if (data.thumbnailUrl) {
+              setReelThumbnailUrl(data.thumbnailUrl);
+            }
+            if (data.duration) {
+              setReelDuration(data.duration);
+            }
+          }
+        } catch (e) {
+          // Keep instant thumbnail
+        }
+      }, 350);
+    }
+  };
+
+  const handleAutoFetch = async () => {
+    if (!reelVideoUrl.trim()) {
+      showNotification("Please enter a video URL first.");
+      return;
+    }
+    setIsAutoFetching(true);
+    try {
+      const res = await fetch(`/api/reels/metadata?url=${encodeURIComponent(reelVideoUrl.trim())}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.platform) setReelPlatform(data.platform);
+        if (data.title && (!reelTitle || reelTitle === "Short Video Title")) {
+          setReelTitle(data.title);
+        }
+        if (data.thumbnailUrl) {
+          setReelThumbnailUrl(data.thumbnailUrl);
+        }
+        if (data.duration) {
+          setReelDuration(data.duration);
+        }
+        showNotification("✓ Platform, title and thumbnail auto-detected!");
+      } else {
+        const detected = detectPlatformAndThumbnail(reelVideoUrl.trim());
+        setReelPlatform(detected.platform);
+        if (detected.thumbnailUrl) setReelThumbnailUrl(detected.thumbnailUrl);
+        showNotification(`✓ Platform detected as ${detected.platform}`);
+      }
+    } catch (e) {
+      const detected = detectPlatformAndThumbnail(reelVideoUrl.trim());
+      setReelPlatform(detected.platform);
+      if (detected.thumbnailUrl) setReelThumbnailUrl(detected.thumbnailUrl);
+      showNotification(`✓ Platform detected as ${detected.platform}`);
+    } finally {
+      setIsAutoFetching(false);
+    }
+  };
+
+  const handleCustomThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCustomThumbnailFileName(file.name);
+
+    // Instant local preview
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      if (result) {
+        setReelThumbnailUrl(result);
+      }
+    };
+    reader.readAsDataURL(file);
+
+    // Upload directly to Backblaze B2
+    try {
+      setIsUploadingThumbnail(true);
+      showNotification("Uploading custom thumbnail to Backblaze B2...");
+      const uploadedUrl = await uploadImageToBackblaze(file, file.name, "reels");
+      if (uploadedUrl) {
+        setReelThumbnailUrl(uploadedUrl);
+        showNotification("✓ Custom thumbnail uploaded to Backblaze B2!");
+      }
+    } catch (err) {
+      console.error("Backblaze thumbnail upload error:", err);
+      showNotification("✓ Custom thumbnail loaded into preview (local)");
+    } finally {
+      setIsUploadingThumbnail(false);
+    }
+  };
+
+  const handleReelVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setReelVideoFileName(file.name);
+
+    // Auto-detect duration from video file metadata
+    try {
+      const objUrl = URL.createObjectURL(file);
+      const tempVideo = document.createElement("video");
+      tempVideo.preload = "metadata";
+      tempVideo.onloadedmetadata = () => {
+        window.URL.revokeObjectURL(objUrl);
+        const sec = Math.round(tempVideo.duration);
+        if (sec > 0) {
+          const mins = Math.floor(sec / 60);
+          const secs = sec % 60;
+          setReelDuration(`${mins}:${secs.toString().padStart(2, "0")}`);
+        }
+      };
+      tempVideo.src = objUrl;
+    } catch {}
+
+    // Auto-fill title if empty or default
+    if (!reelTitle || reelTitle === "Short Video Title") {
+      const cleanTitle = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]+/g, " ");
+      setReelTitle(cleanTitle);
+    }
+
+    try {
+      setIsUploadingReelVideo(true);
+      showNotification("Uploading reel video to Backblaze B2...");
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "reels");
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (data?.success && data?.url) {
+        setReelVideoUrl(data.url);
+        setReelPlatform("Backblaze Video");
+        showNotification("✓ Reel video connected with Backblaze B2!");
+      } else {
+        showNotification(data?.error || "Upload to Backblaze failed");
+      }
+    } catch (err: any) {
+      console.error("Backblaze video upload error:", err);
+      showNotification("Error uploading video to Backblaze");
+    } finally {
+      setIsUploadingReelVideo(false);
+    }
+  };
+
+  const handleSaveReelSlot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reelTitle.trim()) {
+      showNotification("Please enter a video title.");
+      return;
+    }
+    if (!reelVideoUrl.trim()) {
+      showNotification("Please enter a video URL.");
+      return;
+    }
+
+    let slotNum = Number(reelTargetSlot) || 1;
+    if (!editingReel) {
+      const occupiedSlots = new Set(reelsVideos.map((r) => r.slot));
+      const firstAvailable = [1, 2, 3, 4, 5].find((s) => !occupiedSlots.has(s));
+      if (firstAvailable && occupiedSlots.has(slotNum)) {
+        slotNum = firstAvailable;
+      }
+    }
+
+    let finalThumbnail = reelThumbnailUrl.trim();
+    if (finalThumbnail.startsWith("data:image/")) {
+      try {
+        const uploaded = await uploadImageToBackblaze(finalThumbnail, `reel-thumb-${Date.now()}.webp`, "reels");
+        if (uploaded) finalThumbnail = uploaded;
+      } catch (err) {}
+    }
+    if (!finalThumbnail) {
+      finalThumbnail = "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600&h=800&fit=crop";
+    }
+
+    // Strict 1 video per slot: remove any existing video in this slot
+    const others = reelsVideos.filter((r) => (r.slot || 0) !== slotNum);
+
+    const newVideo: ReelVideo = {
+      id: editingReel ? editingReel.id : `reel-${Date.now()}`,
+      slot: slotNum,
+      platform: reelPlatform,
+      status: reelStatus,
+      title: reelTitle.trim(),
+      videoUrl: reelVideoUrl.trim(),
+      thumbnailUrl: finalThumbnail,
+      duration: reelDuration.trim() || "0:00",
+      sourceBadge: reelPlatform,
+      isMain: slotNum === 1,
+      category: "Reels",
+      createdAt:
+        editingReel?.createdAt ||
+        new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+    };
+
+    const updated = [...others, newVideo].sort((a, b) => (a.slot || 0) - (b.slot || 0));
+    setReelsVideos(updated);
+    saveStoredReels(updated);
+
+    showNotification(
+      editingReel
+        ? `✓ Slot #${slotNum} updated successfully!`
+        : `✓ Video added to Slot #${slotNum}!`
+    );
+
+    handleResetReelForm();
+  };
+
+  const handleEditReelSlot = (reel: ReelVideo) => {
+    setEditingReel(reel);
+    setReelTitle(reel.title);
+    setReelVideoUrl(reel.videoUrl);
+    setReelThumbnailUrl(reel.thumbnailUrl);
+    setReelDuration(reel.duration || "0:45");
+    setReelPlatform((reel.platform as ReelPlatform) || "YouTube Shorts");
+    setReelTargetSlot(reel.slot || 1);
+    setReelStatus((reel.status as "Active" | "Inactive") || "Active");
+    setCustomThumbnailFileName("");
+    const formElem = document.getElementById("reels-form-card");
+    if (formElem) {
+      formElem.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+
+  const handleDeleteReelSlot = (slotNum: number) => {
+    if (!confirm(`Are you sure you want to remove the video from Slot #${slotNum}?`)) {
+      return;
+    }
+    const updated = reelsVideos.filter((r) => (r.slot || 0) !== slotNum);
+    setReelsVideos(updated);
+    saveStoredReels(updated);
+    showNotification(`✓ Video removed from Slot #${slotNum}!`);
+    if (editingReel && editingReel.slot === slotNum) {
+      handleResetReelForm();
+    }
+  };
+
+  const handleResetReelForm = () => {
+    setEditingReel(null);
+    setReelTitle("");
+    setReelVideoUrl("");
+    setReelThumbnailUrl("");
+    setReelDuration("");
+    setReelPlatform("YouTube Shorts");
+    setCustomThumbnailFileName("");
+    setReelVideoFileName("");
+    setIsUploadingThumbnail(false);
+    setIsUploadingReelVideo(false);
+    // Find next empty slot or default to Slot 1
+    const occupied = new Set(reelsVideos.map((r) => r.slot));
+    let nextEmpty = 1;
+    for (let i = 1; i <= 4; i++) {
+      if (!occupied.has(i)) {
+        nextEmpty = i;
+        break;
+      }
+    }
+    setReelTargetSlot(nextEmpty);
+    setReelStatus("Active");
+  };
+
   const handleCreateB2Backup = async () => {
     try {
       showNotification("Creating system snapshot covering all published posts, newsletter, users, contacts & leads...");
@@ -1047,7 +1320,8 @@ export default function AdminDashboardPage() {
         workspaceUsers,
         contactSubmissions,
         advertiseLeads,
-        adSlots
+        adSlots,
+        reelsVideos
       };
 
       const res = await fetch("/api/admin/backups", {
@@ -1056,7 +1330,7 @@ export default function AdminDashboardPage() {
         body: JSON.stringify(snapshotPayload)
       });
 
-      const resData = await res.json();
+      const resData = await res.json().catch(() => ({}));
       if (!res.ok || !resData.success) {
         throw new Error(resData.error || "Failed to upload to Backblaze B2");
       }
@@ -1117,6 +1391,17 @@ export default function AdminDashboardPage() {
 
   const [adSlots, setAdSlots] = useState<AdSlotItem[]>([
     {
+      id: "slot-technology",
+      dimensions: "728X250",
+      title: "Homepage — Above Videos Section Leaderboard Banner (728x250)",
+      description: "Full-width 728x250 leaderboard banner displayed directly above the Videos section on homepage",
+      categoryGroup: "HOMEPAGE",
+      imageUrl: "",
+      actionType: "External Link (URL)",
+      targetUrl: "https://www.google.com",
+      isActive: true
+    },
+    {
       id: "slot-1",
       dimensions: "728X250",
       title: "Homepage — Mid Leaderboard Banner (Slot 2)",
@@ -1150,10 +1435,21 @@ export default function AdminDashboardPage() {
       isActive: true
     },
     {
+      id: "slot-homepage-7",
+      dimensions: "300X600",
+      title: "Homepage — Videos Section Sidebar Long Ad Banner",
+      description: "Vertical 300x600 skyscraper ad banner beside the Videos panel on homepage",
+      categoryGroup: "HOMEPAGE",
+      imageUrl: "https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=600&h=400&fit=crop",
+      actionType: "External Link (URL)",
+      targetUrl: "https://www.apple.com/apple-podcasts/",
+      isActive: true
+    },
+    {
       id: "slot-4",
       dimensions: "300X250",
       title: "Category Pages — Sidebar Top Ad Box",
-      description: "Right sidebar top box on Category news feeds (Politics, Tech, etc.)",
+      description: "Right sidebar top box on Category news feeds (Politics, Tech, etc.) & Article pages",
       categoryGroup: "CATEGORY",
       imageUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&h=300&fit=crop",
       actionType: "External Link (URL)",
@@ -1164,7 +1460,7 @@ export default function AdminDashboardPage() {
       id: "slot-5",
       dimensions: "300X600",
       title: "Category Pages — Sidebar Bottom Tall Ad Box",
-      description: "Vertical 300x600 tall skyscraper ad box on category sidebars",
+      description: "Vertical 300x600 tall skyscraper ad box on category sidebars & Article pages",
       categoryGroup: "CATEGORY",
       imageUrl: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=600&h=300&fit=crop",
       actionType: "External Link (URL)",
@@ -1200,7 +1496,7 @@ export default function AdminDashboardPage() {
       .catch(() => {
         try {
           const stored = localStorage.getItem("dj_site_ad_slots");
-          if (stored) {
+          if (stored && stored.trim()) {
             const parsed = JSON.parse(stored);
             if (Array.isArray(parsed) && parsed.length > 0) {
               setAdSlots(parsed);
@@ -1237,32 +1533,167 @@ export default function AdminDashboardPage() {
     saveUpdatedSlots(updated);
   };
 
-  const handleAdImageUpload = async (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
+  // Ad Cropper & Frame Setter State
+  const [cropperSlotId, setCropperSlotId] = useState<string | null>(null);
+  const [cropperImageSrc, setCropperImageSrc] = useState<string | null>(null);
+  const [cropperZoom, setCropperZoom] = useState<number>(1);
+  const [cropperPan, setCropperPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isSavingCrop, setIsSavingCrop] = useState<boolean>(false);
+  const [isDraggingCrop, setIsDraggingCrop] = useState<boolean>(false);
+  const cropDragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const cropPanStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  const openCropper = (id: string, imageSrc: string) => {
+    setCropperSlotId(id);
+    setCropperImageSrc(imageSrc);
+    setCropperZoom(1);
+    setCropperPan({ x: 0, y: 0 });
+  };
+
+  const closeCropper = () => {
+    setCropperSlotId(null);
+    setCropperImageSrc(null);
+    setCropperZoom(1);
+    setCropperPan({ x: 0, y: 0 });
+    setIsSavingCrop(false);
+    setIsDraggingCrop(false);
+  };
+
+  const handleCropPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    setIsDraggingCrop(true);
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    cropDragStartRef.current = { x: e.clientX, y: e.clientY };
+    cropPanStartRef.current = { ...cropperPan };
+  };
+
+  const handleCropPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingCrop) return;
+    const dx = e.clientX - cropDragStartRef.current.x;
+    const dy = e.clientY - cropDragStartRef.current.y;
+    setCropperPan({
+      x: cropPanStartRef.current.x + dx,
+      y: cropPanStartRef.current.y + dy,
+    });
+  };
+
+  const handleAdImageUpload = (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      try {
-        showNotification("Uploading ad banner to Backblaze B2...");
-        const cleanFileName = `ad-${id}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-        const b2Url = await uploadImageToBackblaze(file, cleanFileName, "ads");
-        if (b2Url) {
-          const updated = adSlots.map(s => s.id === id ? { ...s, imageUrl: b2Url } : s);
-          saveUpdatedSlots(updated);
-          showNotification("✓ New ad banner uploaded to Backblaze B2 and saved!");
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64 = event.target?.result as string;
+        if (base64) {
+          openCropper(id, base64);
         }
-      } catch (err) {
-        console.error("Ad upload to Backblaze error:", err);
-        // Fallback to local base64 reader if anything unexpected occurs
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const base64 = event.target?.result as string;
-          if (base64) {
-            const updated = adSlots.map(s => s.id === id ? { ...s, imageUrl: base64 } : s);
-            saveUpdatedSlots(updated);
-            showNotification("✓ New ad banner image uploaded and saved!");
+      };
+      reader.readAsDataURL(file);
+      e.target.value = "";
+    }
+  };
+
+  const handleApplyCroppedFrame = async () => {
+    if (!cropperSlotId || !cropperImageSrc) return;
+    const slot = adSlots.find(s => s.id === cropperSlotId);
+    if (!slot) return;
+
+    setIsSavingCrop(true);
+    try {
+      const [targetW, targetH] = (slot.dimensions || "300X250").split(/[xX]/).map(Number);
+      const tw = targetW || 300;
+      const th = targetH || 250;
+
+      let finalImgSrc = cropperImageSrc;
+
+      // If remote HTTP/HTTPS image, fetch as base64 dataUrl via proxy to guarantee zero CORS/taint issues
+      if (cropperImageSrc.startsWith("http")) {
+        try {
+          const res = await fetch(`/api/upload?fetchUrl=${encodeURIComponent(cropperImageSrc)}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.dataUrl) {
+              finalImgSrc = data.dataUrl;
+            }
+          }
+        } catch {
+          finalImgSrc = cropperImageSrc + (cropperImageSrc.includes("?") ? "&" : "?") + "_c=" + Date.now();
+        }
+      }
+
+      const img = new Image();
+      if (!finalImgSrc.startsWith("data:") && !finalImgSrc.startsWith("blob:")) {
+        img.crossOrigin = "anonymous";
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => {
+          if (img.crossOrigin) {
+            img.removeAttribute("crossorigin");
+            img.src = finalImgSrc;
+          } else {
+            reject(new Error("Failed to load image for framing"));
           }
         };
-        reader.readAsDataURL(file);
-      }
+        img.src = finalImgSrc;
+      });
+
+      const frameEl = document.getElementById("ad-crop-frame-viewport");
+      const fw = frameEl ? frameEl.clientWidth : tw;
+      const fh = frameEl ? frameEl.clientHeight : th;
+
+      // High-res output canvas (at least 600px width for clarity)
+      const outW = Math.max(tw * 2, 600);
+      const outH = Math.round(outW * (th / tw));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = outW;
+      canvas.height = outH;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Could not create canvas context");
+
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+
+      const natW = img.naturalWidth || img.width || tw;
+      const natH = img.naturalHeight || img.height || th;
+      const baseScale = Math.max(fw / natW, fh / natH);
+
+      const baseScreenW = natW * baseScale;
+      const baseScreenH = natH * baseScale;
+
+      const screenX0 = (fw - baseScreenW) / 2;
+      const screenY0 = (fh - baseScreenH) / 2;
+
+      const finalScreenLeft = (fw / 2) + (screenX0 - (fw / 2)) * cropperZoom + cropperPan.x;
+      const finalScreenTop = (fh / 2) + (screenY0 - (fh / 2)) * cropperZoom + cropperPan.y;
+      const finalScreenW = baseScreenW * cropperZoom;
+      const finalScreenH = baseScreenH * cropperZoom;
+
+      const scaleToCanvas = outW / fw;
+
+      const dx = finalScreenLeft * scaleToCanvas;
+      const dy = finalScreenTop * scaleToCanvas;
+      const dw = finalScreenW * scaleToCanvas;
+      const dh = finalScreenH * scaleToCanvas;
+
+      ctx.drawImage(img, dx, dy, dw, dh);
+
+      const croppedDataUrl = canvas.toDataURL("image/webp", 0.92);
+
+      showNotification("Uploading framed ad banner to Cloud Storage...");
+      const cleanFileName = `ad-${slot.id}-frame.webp`;
+      const uploadedUrl = await uploadImageToBackblaze(croppedDataUrl, cleanFileName, "ads");
+      const finalImageUrl = uploadedUrl || croppedDataUrl;
+
+      const updated = adSlots.map(s => s.id === slot.id ? { ...s, imageUrl: finalImageUrl } : s);
+      saveUpdatedSlots(updated);
+      closeCropper();
+      showNotification(`✓ Image frame set for "${slot.title}" and saved!`);
+    } catch (err) {
+      console.error("Error setting image frame:", err);
+      showNotification("Failed to set image frame. Please try again.");
+    } finally {
+      setIsSavingCrop(false);
     }
   };
 
@@ -1289,12 +1720,13 @@ export default function AdminDashboardPage() {
       if (typeof window !== "undefined") {
         try {
           const tabSession = sessionStorage.getItem("dj_tab_session");
-          if (tabSession) {
+          if (tabSession && tabSession.trim()) {
             const parsed = JSON.parse(tabSession);
-            const r = (parsed?.role || "").toLowerCase();
-            const em = (parsed?.email || "").toLowerCase();
-            if (r === "admin" || r === "co-admin" || r === "editor" || em.includes("admin") || parsed?.id === 1) {
-              effectiveUser = parsed;
+            const userObj = parsed?.user || parsed;
+            const r = (userObj?.role || "").toLowerCase();
+            const em = (userObj?.email || "").toLowerCase();
+            if (r === "admin" || r === "co-admin" || r === "editor" || em.includes("admin") || userObj?.id === 1) {
+              effectiveUser = userObj;
             }
           }
         } catch (e) {}
@@ -1313,7 +1745,7 @@ export default function AdminDashboardPage() {
       if (!effectiveUser && typeof window !== "undefined") {
         try {
           const storedAdmin = localStorage.getItem("dj_admin_user");
-          if (storedAdmin) {
+          if (storedAdmin && storedAdmin.trim()) {
             effectiveUser = JSON.parse(storedAdmin);
           }
         } catch (e) {}
@@ -1337,6 +1769,14 @@ export default function AdminDashboardPage() {
   }, [auth.loading, auth.authenticated, auth.user, router]);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tabParam = urlParams.get("tab");
+      if (tabParam === "subscriptions") {
+        setActiveTab("subscriptions");
+      }
+    }
+
     fetchDashboardData();
 
     const handleStorageChange = () => {
@@ -1355,20 +1795,50 @@ export default function AdminDashboardPage() {
   }, []);
 
   const fetchDashboardData = async () => {
+    const safeJson = async (res: Response) => {
+      try {
+        const text = await res.text();
+        return text && text.trim() ? JSON.parse(text) : null;
+      } catch (e) {
+        return null;
+      }
+    };
+
     try {
+      // Fetch all dashboard data concurrently to eliminate network waterfall delays
+      const [usersSettled, artsSettled, subsSettled, contactSettled, leadsSettled, backupsSettled] = await Promise.allSettled([
+        fetch("/api/admin/users", {
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-portal": "dj_admin_portal_authenticated_2026",
+          },
+        }),
+        fetch(`/api/articles?_t=${Date.now()}`, {
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache"
+          }
+        }),
+        fetch("/api/newsletter/subscribe"),
+        fetch("/api/contact"),
+        fetch("/api/advertise"),
+        fetch("/api/admin/backups")
+      ]);
+
+      const resUsers = usersSettled.status === "fulfilled" ? usersSettled.value : null;
+      const resArts = artsSettled.status === "fulfilled" ? artsSettled.value : null;
+      const resSubs = subsSettled.status === "fulfilled" ? subsSettled.value : null;
+      const resContact = contactSettled.status === "fulfilled" ? contactSettled.value : null;
+      const resLeads = leadsSettled.status === "fulfilled" ? leadsSettled.value : null;
+      const resBk = backupsSettled.status === "fulfilled" ? backupsSettled.value : null;
+
     // 1. Synchronize Real Database Users
     try {
-      const resUsers = await fetch("/api/admin/users", {
-        headers: {
-          "Content-Type": "application/json",
-          "x-admin-portal": "dj_admin_portal_authenticated_2026",
-        },
-      });
-
       let dbUsersList: any[] = [];
-      if (resUsers.ok) {
-        const data = await resUsers.json();
-        if (data.success && Array.isArray(data.users)) {
+      if (resUsers && resUsers.ok) {
+        const data = await safeJson(resUsers);
+        if (data && data.success && Array.isArray(data.users)) {
           dbUsersList = data.users;
         }
       }
@@ -1403,7 +1873,7 @@ export default function AdminDashboardPage() {
       if (typeof window !== "undefined") {
         try {
           const regStr = localStorage.getItem("dj_registered_users");
-          if (regStr) {
+          if (regStr && regStr.trim()) {
             const regList: any[] = JSON.parse(regStr);
             regList.forEach((u: any, idx: number) => {
               if (!u || !u.email) return;
@@ -1427,7 +1897,7 @@ export default function AdminDashboardPage() {
         // C. Add from central profiles DB
         try {
           const profDbStr = localStorage.getItem("dj_user_profiles_db");
-          if (profDbStr) {
+          if (profDbStr && profDbStr.trim()) {
             const profDb: Record<string, any> = JSON.parse(profDbStr);
             Object.values(profDb).forEach((u: any, idx: number) => {
               if (!u || !u.email) return;
@@ -1452,7 +1922,7 @@ export default function AdminDashboardPage() {
         ["dj_user", "dj_writer_user"].forEach((k) => {
           try {
             const str = localStorage.getItem(k);
-            if (str) {
+            if (str && str.trim()) {
               const u = JSON.parse(str);
               if (u && u.email) {
                 const cleanEmail = u.email.toLowerCase().trim();
@@ -1486,10 +1956,9 @@ export default function AdminDashboardPage() {
     try {
       let serverArticles: any[] = [];
       try {
-        const resArts = await fetch("/api/articles", { cache: "no-store" });
-        if (resArts.ok) {
-          const dataArts = await resArts.json();
-          if (dataArts.success && Array.isArray(dataArts.articles) && dataArts.articles.length > 0) {
+        if (resArts && resArts.ok) {
+          const dataArts = await safeJson(resArts);
+          if (dataArts && dataArts.success && Array.isArray(dataArts.articles) && dataArts.articles.length > 0) {
             serverArticles = dataArts.articles;
           }
         }
@@ -1634,12 +2103,20 @@ export default function AdminDashboardPage() {
           const idKey = cleanKey(item.id);
           const titleKey = cleanTitleKey(item.title);
           const existing = (idKey && subMap.get(idKey)) || (titleKey && subMap.get(`t_${titleKey}`)) || {};
-          const merged = { ...existing, ...item };
+          const targetStatus = item.status || existing.status || "Pending review";
+          const isTargetRejected = targetStatus.toLowerCase().includes("reject");
+          const merged = { 
+            ...existing, 
+            ...item,
+            status: targetStatus,
+            rejectionReason: isTargetRejected ? (item.rejectionReason || existing.rejectionReason || item.rejection_reason || existing.rejection_reason) : undefined,
+            rejectedAt: isTargetRejected ? (item.rejectedAt || existing.rejectedAt || item.rejected_at || existing.rejected_at) : undefined,
+          };
           if (idKey) subMap.set(idKey, merged);
           if (titleKey) subMap.set(`t_${titleKey}`, merged);
         });
 
-        const mergedSubsList: any[] = [];
+        const rawSubsList: any[] = [];
         const seenSubs = new Set<string>();
 
         localSubsList.forEach((item) => {
@@ -1650,7 +2127,7 @@ export default function AdminDashboardPage() {
           if (!isSeen) {
             if (idKey) seenSubs.add(idKey);
             if (titleKey) seenSubs.add(`t_${titleKey}`);
-            mergedSubsList.push(resolved);
+            rawSubsList.push(resolved);
           }
         });
 
@@ -1662,6 +2139,43 @@ export default function AdminDashboardPage() {
             if (idKey) seenSubs.add(idKey);
             if (titleKey) seenSubs.add(`t_${titleKey}`);
             const resolved = (idKey && subMap.get(idKey)) || (titleKey && subMap.get(`t_${titleKey}`)) || item;
+            rawSubsList.push(resolved);
+          }
+        });
+
+        const unifiedMap = new Map<string, any>();
+        rawSubsList.forEach((sub) => {
+          const tk = cleanTitleKey(sub.title);
+          const ik = cleanKey(sub.id);
+          const existing = (tk && unifiedMap.get(`t_${tk}`)) || (ik && unifiedMap.get(ik));
+          if (!existing) {
+            if (tk) unifiedMap.set(`t_${tk}`, sub);
+            if (ik) unifiedMap.set(ik, sub);
+          } else {
+            const isRej = (existing.status || "").toLowerCase().includes("reject") || (sub.status || "").toLowerCase().includes("reject");
+            const merged = {
+              ...existing,
+              ...sub,
+              status: isRej ? "Rejected" : (sub.status || existing.status),
+              rejectionReason: sub.rejectionReason || existing.rejectionReason || sub.rejection_reason || existing.rejection_reason,
+              rejectedAt: sub.rejectedAt || existing.rejectedAt || sub.rejected_at || existing.rejected_at,
+            };
+            if (tk) unifiedMap.set(`t_${tk}`, merged);
+            if (ik) unifiedMap.set(ik, merged);
+          }
+        });
+
+        const mergedSubsList: any[] = [];
+        const seenFinal = new Set<string>();
+        rawSubsList.forEach((sub) => {
+          const tk = cleanTitleKey(sub.title);
+          const ik = cleanKey(sub.id);
+          const key = tk ? `t_${tk}` : ik;
+          if (key && !seenFinal.has(key)) {
+            seenFinal.add(key);
+            if (tk) seenFinal.add(`t_${tk}`);
+            if (ik) seenFinal.add(ik);
+            const resolved = (tk && unifiedMap.get(`t_${tk}`)) || (ik && unifiedMap.get(ik)) || sub;
             mergedSubsList.push(resolved);
           }
         });
@@ -1674,10 +2188,9 @@ export default function AdminDashboardPage() {
 
     // 4. Newsletter Subscribers Sync from Database and Local Cache
     try {
-      const resSubs = await fetch("/api/newsletter/subscribe");
-      if (resSubs.ok) {
-        const subsData = await resSubs.json();
-        if (subsData.success && Array.isArray(subsData.subscribers)) {
+      if (resSubs && resSubs.ok) {
+        const subsData = await safeJson(resSubs);
+        if (subsData && subsData.success && Array.isArray(subsData.subscribers)) {
           const localStr = typeof window !== "undefined" ? localStorage.getItem("dj_newsletter_subscribers") : null;
           let localSubs: any[] = [];
           if (localStr) {
@@ -1715,7 +2228,7 @@ export default function AdminDashboardPage() {
     // 5. Trashed Articles Sync
     try {
       const trashedStr = localStorage.getItem("dj_trashed_articles");
-      if (trashedStr) {
+      if (trashedStr && trashedStr.trim()) {
         const parsed = JSON.parse(trashedStr);
         if (Array.isArray(parsed)) {
           setTrashedArticles(parsed);
@@ -1725,13 +2238,12 @@ export default function AdminDashboardPage() {
 
     // 6. Contact Us Submissions Sync from Database and Local Storage
     try {
-      const resContact = await fetch("/api/contact");
-      if (resContact.ok) {
-        const contactData = await resContact.json();
-        if (contactData.success && Array.isArray(contactData.contactSubmissions)) {
+      if (resContact && resContact.ok) {
+        const contactData = await safeJson(resContact);
+        if (contactData && contactData.success && Array.isArray(contactData.contactSubmissions)) {
           const localStr = typeof window !== "undefined" ? localStorage.getItem("dj_contact_submissions") : null;
           let localContacts: any[] = [];
-          if (localStr) {
+          if (localStr && localStr.trim()) {
             try { localContacts = JSON.parse(localStr); } catch (e) {}
           }
           if (!Array.isArray(localContacts)) localContacts = [];
@@ -1756,13 +2268,12 @@ export default function AdminDashboardPage() {
 
     // 6b. Commercial Advertise Leads Sync from Database and Local Storage
     try {
-      const resLeads = await fetch("/api/advertise");
-      if (resLeads.ok) {
-        const leadsData = await resLeads.json();
-        if (leadsData.success && Array.isArray(leadsData.leads)) {
+      if (resLeads && resLeads.ok) {
+        const leadsData = await safeJson(resLeads);
+        if (leadsData && leadsData.success && Array.isArray(leadsData.leads)) {
           const localStr = typeof window !== "undefined" ? localStorage.getItem("dj_advertise_leads") : null;
           let localLeads: any[] = [];
-          if (localStr) {
+          if (localStr && localStr.trim()) {
             try { localLeads = JSON.parse(localStr); } catch (e) {}
           }
           if (!Array.isArray(localLeads)) localLeads = [];
@@ -1787,13 +2298,12 @@ export default function AdminDashboardPage() {
 
     // 7. Database Backups Sync from Backblaze B2 & Local Storage
     try {
-      const resBk = await fetch("/api/admin/backups");
-      if (resBk.ok) {
-        const bkData = await resBk.json();
-        if (bkData.success && Array.isArray(bkData.backups) && bkData.backups.length > 0) {
+      if (resBk && resBk.ok) {
+        const bkData = await safeJson(resBk);
+        if (bkData && bkData.success && Array.isArray(bkData.backups) && bkData.backups.length > 0) {
           const localStr = typeof window !== "undefined" ? localStorage.getItem("dj_database_backups") : null;
           let localBk: any[] = [];
-          if (localStr) {
+          if (localStr && localStr.trim()) {
             try { localBk = JSON.parse(localStr); } catch (e) {}
           }
           if (!Array.isArray(localBk)) localBk = [];
@@ -1817,6 +2327,23 @@ export default function AdminDashboardPage() {
       }
     } catch (err) {
       console.warn("Backblaze database backups sync notice:", err);
+    }
+
+    // 8. Site Subscriptions Sync from Database
+    try {
+      await fetchSiteSubscriptions();
+    } catch (err) {
+      console.warn("Site subscriptions sync notice:", err);
+    }
+
+    // 9. Sync Reels from Server and Database
+    try {
+      const serverReels = await fetchServerReels();
+      if (Array.isArray(serverReels) && serverReels.length > 0) {
+        setReelsVideos(serverReels);
+      }
+    } catch (err) {
+      console.warn("Reels sync notice:", err);
     }
     } finally {
       dispatchPageDataReady();
@@ -1908,6 +2435,10 @@ export default function AdminDashboardPage() {
       updatedAt: new Date().toISOString(),
       date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     };
+    delete (updatedPostToSave as any).rejectionReason;
+    delete (updatedPostToSave as any).rejection_reason;
+    delete (updatedPostToSave as any).rejectedAt;
+    delete (updatedPostToSave as any).rejected_at;
 
     await saveArticleToServer(updatedPostToSave as any);
 
@@ -2007,6 +2538,15 @@ export default function AdminDashboardPage() {
       else targetAuthorEmail = "writer@digitaljournal.com";
     }
 
+    if (!targetAuthorName && targetAuthorEmail) {
+      const cleanEmail = targetAuthorEmail.toLowerCase().trim();
+      if (cleanEmail.includes("rura")) targetAuthorName = "Muba_kity";
+      else if (cleanEmail.includes("roomi")) targetAuthorName = "Roomi";
+      else if (cleanEmail.includes("rushdhi")) targetAuthorName = "Rushdhi MR";
+      else if (cleanEmail.includes("abcd")) targetAuthorName = "ABCD";
+      else if (cleanEmail.includes("nesto")) targetAuthorName = "Nesto Super";
+    }
+
     if (!targetAuthorName) targetAuthorName = "Staff Journalist";
     if (!targetAuthorEmail) targetAuthorEmail = "writer@digitaljournal.com";
 
@@ -2055,21 +2595,31 @@ export default function AdminDashboardPage() {
       return [rejectedItem, ...prev];
     });
 
+    // Remove from Published articles if previously present
+    setArticles(prev => prev.filter(a => String(a.id) !== String(sub.id) && cleanT(a.title) !== cleanT(sub.title)));
+
     // 2. Persist to server and local storage
     try {
-      const { saveArticleToServer, setCachedArticles, getCachedArticles } = await import("@/lib/articlesSync");
+      const { saveArticleToServer, setCachedArticles, getCachedArticles, resetArticlesFetchCache } = await import("@/lib/articlesSync");
+      resetArticlesFetchCache();
+
       const cached = getCachedArticles();
-      const cIdx = cached.findIndex((a: any) =>
-        String(a.id) === String(sub.id) || (cleanT(a.title) && cleanT(sub.title) && cleanT(a.title) === cleanT(sub.title))
+      const updatedCached = cached.filter((a: any) =>
+        !(String(a.id) === String(sub.id) || (cleanT(a.title) && cleanT(sub.title) && cleanT(a.title) === cleanT(sub.title)))
       );
-      if (cIdx >= 0) {
-        cached[cIdx] = { ...cached[cIdx], ...rejectedItem, status: "Rejected" };
-        setCachedArticles(cached, false);
-      } else {
-        setCachedArticles([rejectedItem, ...cached], false);
-      }
+      setCachedArticles([rejectedItem, ...updatedCached], false);
 
       await saveArticleToServer(rejectedItem as any);
+
+      try {
+        await fetch("/api/articles", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(rejectedItem)
+        });
+      } catch (e) {}
+
+      resetArticlesFetchCache();
 
       const subsStr = localStorage.getItem("dj_writer_submitted_articles");
       let subsList: any[] = [];
@@ -2077,19 +2627,10 @@ export default function AdminDashboardPage() {
         try { subsList = JSON.parse(subsStr); } catch (e) {}
       }
 
-      const existingIdx = subsList.findIndex((p: any) =>
-        String(p.id) === String(sub.id) || (cleanT(p.title) && cleanT(sub.title) && cleanT(p.title) === cleanT(sub.title))
+      subsList = subsList.filter((p: any) =>
+        !(String(p.id) === String(sub.id) || (cleanT(p.title) && cleanT(sub.title) && cleanT(p.title) === cleanT(sub.title)))
       );
-
-      if (existingIdx >= 0) {
-        subsList[existingIdx] = {
-          ...subsList[existingIdx],
-          ...rejectedItem,
-          status: "Rejected"
-        };
-      } else {
-        subsList.unshift(rejectedItem);
-      }
+      subsList.unshift(rejectedItem);
       localStorage.setItem("dj_writer_submitted_articles", JSON.stringify(subsList));
 
       if (typeof window !== "undefined") {
@@ -2120,7 +2661,7 @@ export default function AdminDashboardPage() {
 
     try {
       const stored = localStorage.getItem("dj_writer_submitted_articles");
-      if (stored) {
+      if (stored && stored.trim()) {
         const list = JSON.parse(stored);
         const found = list.find((p: any) => String(p.id) === String(sub.id) || (cleanT(p.title) && cleanT(sub.title) && cleanT(p.title) === cleanT(sub.title)));
         if (found) fullPost = { ...sub, ...found };
@@ -2244,9 +2785,6 @@ export default function AdminDashboardPage() {
     };
     try {
       localStorage.setItem("dj_editing_post", JSON.stringify(postToEdit));
-      const adminSessionUser = adminUser || { id: 1, name: "Admin", email: "geethliyanage979@gmail.com", role: "admin" };
-      localStorage.setItem("dj_admin_user", JSON.stringify(adminSessionUser));
-      sessionStorage.setItem("dj_tab_session", JSON.stringify(adminSessionUser));
     } catch (e) {}
 
     if (navigate) {
@@ -2261,15 +2799,17 @@ export default function AdminDashboardPage() {
     const nowIso = new Date().toISOString();
     const updatedRecord = {
       ...editingArticle,
+      original_title: editingArticle.title,
+      previousTitle: editingArticle.title,
       title: editTitle.trim(),
       category_name: editCategory,
       author_name: editAuthor.trim(),
       description: editDescription.trim(),
-      published_at: nowIso,
-      publishedAt: nowIso,
+      published_at: editingArticle.published_at || (editingArticle as any).publishedAt || nowIso,
+      publishedAt: (editingArticle as any).publishedAt || editingArticle.published_at || nowIso,
       updated_at: nowIso,
       updatedAt: nowIso,
-      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      date: (editingArticle as any).date || new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     };
 
     setArticles(articles.map(a => a.id === editingArticle.id ? updatedRecord : a));
@@ -2370,7 +2910,7 @@ export default function AdminDashboardPage() {
         await deleteArticleOnServer(sub.id, sub.title);
 
         const subsStr = localStorage.getItem("dj_writer_submitted_articles");
-        if (subsStr) {
+        if (subsStr && subsStr.trim()) {
           const parsed = JSON.parse(subsStr);
           const updated = parsed.map((p: any) => 
             (String(p.id) === String(sub.id) || (p.title || "").trim().toLowerCase() === sub.title.trim().toLowerCase())
@@ -2415,7 +2955,7 @@ export default function AdminDashboardPage() {
 
     try {
       const deletedStr = localStorage.getItem("dj_deleted_articles");
-      if (deletedStr) {
+      if (deletedStr && deletedStr.trim()) {
         const list: string[] = JSON.parse(deletedStr);
         const normTitle = (art.title || "").trim().toLowerCase();
         const normId = String(art.id);
@@ -2425,7 +2965,7 @@ export default function AdminDashboardPage() {
       }
 
       const subsStr = localStorage.getItem("dj_writer_submitted_articles");
-      if (subsStr) {
+      if (subsStr && subsStr.trim()) {
         const parsed = JSON.parse(subsStr);
         const updated = parsed.map((p: any) =>
           (String(p.id) === String(art.id) || (p.title || "").trim().toLowerCase() === (art.title || "").trim().toLowerCase())
@@ -2625,7 +3165,12 @@ export default function AdminDashboardPage() {
         }),
       });
 
-      const data = await res.json();
+      let data: any = {};
+      try {
+        data = await res.json();
+      } catch (e) {
+        data = {};
+      }
       if (!res.ok) {
         alert(data.error || "Failed to create user");
         return;
@@ -2634,7 +3179,7 @@ export default function AdminDashboardPage() {
       // Unblacklist email from local storage blacklist if previously deleted
       try {
         const blStr = localStorage.getItem("dj_deleted_users_blacklist");
-        if (blStr) {
+        if (blStr && blStr.trim()) {
           const blacklist: string[] = JSON.parse(blStr);
           const filtered = blacklist.filter(e => e.toLowerCase() !== emailNorm);
           localStorage.setItem("dj_deleted_users_blacklist", JSON.stringify(filtered));
@@ -2731,7 +3276,7 @@ export default function AdminDashboardPage() {
         try {
           // 1. dj_registered_users
           const regStr = localStorage.getItem("dj_registered_users");
-          if (regStr) {
+          if (regStr && regStr.trim()) {
             let regList = JSON.parse(regStr);
             if (Array.isArray(regList)) {
               regList = regList.map((u: any) => {
@@ -2893,7 +3438,7 @@ export default function AdminDashboardPage() {
       // 1. Add to deleted users blacklist in localStorage
       try {
         const blStr = localStorage.getItem("dj_deleted_users_blacklist");
-        const blacklist: string[] = blStr ? JSON.parse(blStr) : [];
+        const blacklist: string[] = (blStr && blStr.trim()) ? JSON.parse(blStr) : [];
         if (!blacklist.includes(emailLower)) {
           blacklist.push(emailLower);
           localStorage.setItem("dj_deleted_users_blacklist", JSON.stringify(blacklist));
@@ -2903,7 +3448,7 @@ export default function AdminDashboardPage() {
       // 2. Remove from registered users list
       try {
         const regStr = localStorage.getItem("dj_registered_users");
-        if (regStr) {
+        if (regStr && regStr.trim()) {
           const regList: any[] = JSON.parse(regStr);
           const filtered = regList.filter(u => (u.email || '').toLowerCase().trim() !== emailLower);
           localStorage.setItem("dj_registered_users", JSON.stringify(filtered));
@@ -2913,7 +3458,7 @@ export default function AdminDashboardPage() {
       // 3. Remove from user profiles DB
       try {
         const dbStr = localStorage.getItem("dj_user_profiles_db");
-        if (dbStr) {
+        if (dbStr && dbStr.trim()) {
           const dbObj = JSON.parse(dbStr);
           delete dbObj[emailLower];
           localStorage.setItem("dj_user_profiles_db", JSON.stringify(dbObj));
@@ -2923,7 +3468,7 @@ export default function AdminDashboardPage() {
       // 4. Remove from writers list
       try {
         const wStr = localStorage.getItem("dj_writers_list");
-        if (wStr) {
+        if (wStr && wStr.trim()) {
           const wList: any[] = JSON.parse(wStr);
           const filtered = wList.filter(w => (w.email || '').toLowerCase().trim() !== emailLower);
           localStorage.setItem("dj_writers_list", JSON.stringify(filtered));
@@ -2933,7 +3478,7 @@ export default function AdminDashboardPage() {
       // 5. Remove from device google accounts
       try {
         const dStr = localStorage.getItem("dj_device_google_accounts");
-        if (dStr) {
+        if (dStr && dStr.trim()) {
           const dList: any[] = JSON.parse(dStr);
           const filtered = dList.filter(d => (d.email || '').toLowerCase().trim() !== emailLower);
           localStorage.setItem("dj_device_google_accounts", JSON.stringify(filtered));
@@ -2943,7 +3488,7 @@ export default function AdminDashboardPage() {
       // 6. Clear session if currently active user was deleted
       try {
         const activeUserStr = localStorage.getItem("dj_user");
-        if (activeUserStr) {
+        if (activeUserStr && activeUserStr.trim()) {
           const active = JSON.parse(activeUserStr);
           if ((active?.email || '').toLowerCase().trim() === emailLower) {
             localStorage.removeItem("dj_user");
@@ -3055,7 +3600,7 @@ export default function AdminDashboardPage() {
     if (typeof window !== "undefined") {
       try {
         const subsStr = localStorage.getItem("dj_newsletter_subscribers");
-        let subsList: any[] = subsStr ? JSON.parse(subsStr) : [];
+        let subsList: any[] = (subsStr && subsStr.trim()) ? JSON.parse(subsStr) : [];
         if (!Array.isArray(subsList)) subsList = [];
         subsList.unshift(newSub);
         localStorage.setItem("dj_newsletter_subscribers", JSON.stringify(subsList));
@@ -3152,10 +3697,10 @@ export default function AdminDashboardPage() {
 
       if (placementFilter === "home_page_a_plus" || placementFilter === "featured") {
         return (
-          pl.includes("home page a+") ||
+          (pl.includes("home page a+") && !pl.includes("2") && !pl.includes("3")) ||
           pl === "a+ section" ||
-          (pl.includes("a+") && !pl.includes("2")) ||
-          (a.is_featured === true && !pl.includes("2"))
+          (pl.includes("a+") && !pl.includes("2") && !pl.includes("3")) ||
+          (a.is_featured === true && !pl.includes("2") && !pl.includes("3"))
         );
       }
 
@@ -3173,10 +3718,20 @@ export default function AdminDashboardPage() {
 
       if (placementFilter === "home_page_a_plus_2") {
         return (
-          pl.includes("section 2") ||
+          (pl.includes("section 2") ||
           pl.includes("a+ 2") ||
           pl.includes("a+2") ||
-          pl.includes("spotlight banner")
+          pl.includes("spotlight banner")) &&
+          !pl.includes("3")
+        );
+      }
+
+      if (placementFilter === "home_page_a_plus_3") {
+        return (
+          pl.includes("section 3") ||
+          pl.includes("a+ 3") ||
+          pl.includes("a+3") ||
+          pl.includes("main news 3")
         );
       }
 
@@ -3251,9 +3806,40 @@ export default function AdminDashboardPage() {
   }
 
 
+  const cleanTitleKeyForFilter = (val: any) =>
+    String(val || "")
+      .toLowerCase()
+      .replace(/[\u2018\u2019\u201A\u201B']/g, "'")
+      .replace(/[\u201C\u201D\u201E\u201F"]/g, '"')
+      .replace(/[\u2013\u2014]/g, "-")
+      .replace(/[^\w\s-]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const rejectedTitleKeys = new Set(
+    writerSubmissions
+      .filter((s) => (s.status || "").toLowerCase().includes("reject"))
+      .map((s) => cleanTitleKeyForFilter(s.title))
+      .filter(Boolean)
+  );
+
+  const rejectedIds = new Set(
+    writerSubmissions
+      .filter((s) => (s.status || "").toLowerCase().includes("reject"))
+      .map((s) => String(s.id))
+      .filter(Boolean)
+  );
+
   const pendingSubmissions = writerSubmissions.filter((s) => {
     const st = (s.status || "").toLowerCase().trim();
     if (st.includes("reject") || st === "draft" || st === "trash" || st === "published" || st === "approved") {
+      return false;
+    }
+    if (rejectedIds.has(String(s.id))) {
+      return false;
+    }
+    const tk = cleanTitleKeyForFilter(s.title);
+    if (tk && rejectedTitleKeys.has(tk)) {
       return false;
     }
     return true;
@@ -3384,6 +3970,28 @@ export default function AdminDashboardPage() {
             </span>
           </button>
 
+          {/* Subscription */}
+          <button
+            onClick={() => {
+              setActiveTab("subscriptions");
+              fetchSiteSubscriptions();
+              setIsMobileSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === "subscriptions"
+                ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
+                : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
+            }`}
+          >
+            <CreditCard className="w-4 h-4 flex-shrink-0" />
+            <span className="font-sans">Subscription</span>
+            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
+              activeTab === "subscriptions" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
+            }`}>
+              {siteSubscriptions.length}
+            </span>
+          </button>
+
           {/* 3. Published Posts */}
           <button
             onClick={() => {
@@ -3430,6 +4038,7 @@ export default function AdminDashboardPage() {
           <button
             onClick={() => {
               setActiveTab("ads");
+              setAdSubTab("ALL");
               setIsMobileSidebarOpen(false);
             }}
             className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
@@ -3523,6 +4132,27 @@ export default function AdminDashboardPage() {
               activeTab === "trending_words" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
             }`}>
               {trendingWords.length}
+            </span>
+          </button>
+
+          {/* 10. Reels */}
+          <button
+            onClick={() => {
+              setActiveTab("reels");
+              setIsMobileSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === "reels"
+                ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
+                : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
+            }`}
+          >
+            <Video className="w-4 h-4 flex-shrink-0" />
+            <span className="font-sans">Reels</span>
+            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
+              activeTab === "reels" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
+            }`}>
+              {reelsVideos.length}
             </span>
           </button>
         </nav>
@@ -3957,6 +4587,373 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
+        {/* TAB: SUBSCRIPTION MANAGEMENT */}
+        {activeTab === "subscriptions" && (() => {
+          const now = Date.now();
+          const totalSubscribers = siteSubscriptions.length;
+          const activePaid = siteSubscriptions.filter(s => s.status === "Active Paid").length;
+          const expiredCount = siteSubscriptions.filter(s => s.status === "Expired" || (s.status === "Free Trial" && new Date(s.trialExpiryDate).getTime() <= now)).length;
+
+          // Filter by search query, status, and plan
+          const filteredSubs = siteSubscriptions.filter((sub) => {
+            const matchesSearch =
+              !siteSubSearch ||
+              (sub.name || "").toLowerCase().includes(siteSubSearch.toLowerCase()) ||
+              (sub.email || "").toLowerCase().includes(siteSubSearch.toLowerCase()) ||
+              (sub.phone || "").toLowerCase().includes(siteSubSearch.toLowerCase()) ||
+              (sub.planName || "").toLowerCase().includes(siteSubSearch.toLowerCase());
+
+            const expTime = new Date(sub.trialExpiryDate).getTime();
+            const isExpiredTime = isNaN(expTime) ? false : expTime <= now;
+            const isExpired = sub.status === "Expired" || (sub.status === "Free Trial" && isExpiredTime);
+            const effectiveStatus = isExpired ? "Expired" : sub.status;
+
+            const matchesStatus =
+              siteSubStatusFilter === "ALL" ||
+              (siteSubStatusFilter === "Active" ? (!isExpired && sub.status !== "Cancelled") :
+               siteSubStatusFilter === "Expired" ? isExpired : sub.status === siteSubStatusFilter);
+
+            const matchesPlan =
+              siteSubPlanFilter === "ALL" ||
+              sub.plan === siteSubPlanFilter;
+
+            return matchesSearch && matchesStatus && matchesPlan;
+          });
+
+          // Pagination
+          const itemsPerPage = 10;
+          const totalPages = Math.max(1, Math.ceil(filteredSubs.length / itemsPerPage));
+          const currentPage = Math.min(siteSubPage, totalPages);
+          const startIndex = (currentPage - 1) * itemsPerPage;
+          const paginatedSubs = filteredSubs.slice(startIndex, startIndex + itemsPerPage);
+
+          return (
+            <div className="space-y-6">
+              {/* Header Bar */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-extrabold font-sans text-slate-900 tracking-tight flex items-center gap-2.5">
+                    <CreditCard className="w-6 h-6 text-[#D31220]" />
+                    <span>Subscription Management</span>
+                  </h2>
+                  <p className="text-xs font-mono text-slate-500 mt-1">
+                    Manage 1-year free trial accounts, countdown timers, renewal dates, and payment records.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <button
+                    onClick={() => fetchSiteSubscriptions()}
+                    disabled={siteSubscriptionsLoading}
+                    className="flex items-center gap-2 bg-[#EBF0F7] shadow-[4px_4px_10px_#c8d2df,-4px_-4px_10px_#ffffff] active:shadow-[inset_2px_2px_5px_#c8d2df,inset_-2px_-2px_5px_#ffffff] border border-white/80 text-slate-700 hover:text-slate-900 px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer font-mono uppercase tracking-wider"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${siteSubscriptionsLoading ? "animate-spin" : ""}`} />
+                    <span>Refresh</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 3 SUMMARY STAT CARDS */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* Total Subscribers */}
+                <div className="bg-[#EBF0F7] rounded-3xl border border-white/80 p-5 shadow-[6px_6px_14px_#c8d2df,-6px_-6px_14px_#ffffff] flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] font-mono font-extrabold uppercase tracking-wider text-slate-500 mb-1">
+                      Total Subscribers
+                    </div>
+                    <div className="text-2xl font-black font-sans text-slate-900">
+                      {totalSubscribers}
+                    </div>
+                    <div className="text-[11px] font-mono text-slate-500 mt-0.5">
+                      All registered records
+                    </div>
+                  </div>
+                  <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-md shadow-slate-900/20">
+                    <Users className="w-6 h-6" />
+                  </div>
+                </div>
+
+                {/* Active Paid Subscriptions */}
+                <div className="bg-[#EBF0F7] rounded-3xl border border-white/80 p-5 shadow-[6px_6px_14px_#c8d2df,-6px_-6px_14px_#ffffff] flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] font-mono font-extrabold uppercase tracking-wider text-emerald-600 mb-1">
+                      Active Paid
+                    </div>
+                    <div className="text-2xl font-black font-sans text-emerald-950">
+                      {activePaid}
+                    </div>
+                    <div className="text-[11px] font-mono text-emerald-700 mt-0.5">
+                      Confirmed paid renewals
+                    </div>
+                  </div>
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-600/20">
+                    <ShieldCheck className="w-6 h-6" />
+                  </div>
+                </div>
+
+                {/* Expired Subscriptions */}
+                <div className="bg-[#EBF0F7] rounded-3xl border border-white/80 p-5 shadow-[6px_6px_14px_#c8d2df,-6px_-6px_14px_#ffffff] flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] font-mono font-extrabold uppercase tracking-wider text-rose-600 mb-1">
+                      Expired Subscriptions
+                    </div>
+                    <div className="text-2xl font-black font-sans text-rose-950">
+                      {expiredCount}
+                    </div>
+                    <div className="text-[11px] font-mono text-rose-700 mt-0.5">
+                      Trial ended / Unrenewed
+                    </div>
+                  </div>
+                  <div className="w-12 h-12 rounded-2xl bg-rose-600 text-white flex items-center justify-center shadow-md shadow-rose-600/20">
+                    <Clock className="w-6 h-6" />
+                  </div>
+                </div>
+              </div>
+
+              {/* SEARCH & FILTERS TOOLBAR */}
+              <div className="bg-[#EBF0F7] rounded-3xl border border-white/80 p-5 shadow-[6px_6px_14px_#c8d2df,-6px_-6px_14px_#ffffff] flex flex-wrap items-center justify-between gap-4 font-mono text-xs">
+                <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
+                  {/* Search input */}
+                  <div className="relative flex-1 min-w-[220px]">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search subscriber name, email, or plan..."
+                      value={siteSubSearch}
+                      onChange={(e) => {
+                        setSiteSubSearch(e.target.value);
+                        setSiteSubPage(1);
+                      }}
+                      className="w-full pl-9 pr-3.5 py-2.5 bg-[#EBF0F7] shadow-[inset_3px_3px_6px_#c8d2df,inset_-3px_-3px_6px_#ffffff] border border-white/60 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Status Filter */}
+                  <div>
+                    <select
+                      value={siteSubStatusFilter}
+                      onChange={(e) => {
+                        setSiteSubStatusFilter(e.target.value);
+                        setSiteSubPage(1);
+                      }}
+                      className="px-3.5 py-2.5 bg-[#EBF0F7] shadow-[inset_3px_3px_6px_#c8d2df,inset_-3px_-3px_6px_#ffffff] border border-white/60 rounded-xl text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
+                    >
+                      <option value="ALL">All Statuses</option>
+                      <option value="Active">Active</option>
+                      <option value="Expired">Expired</option>
+                      <option value="Free Trial">Free Trial</option>
+                      <option value="Active Paid">Active Paid</option>
+                      <option value="Payment Pending">Payment Pending</option>
+                      <option value="Cancelled">Cancelled</option>
+                    </select>
+                  </div>
+
+                  {/* Plan Filter */}
+                  <div>
+                    <select
+                      value={siteSubPlanFilter}
+                      onChange={(e) => {
+                        setSiteSubPlanFilter(e.target.value);
+                        setSiteSubPage(1);
+                      }}
+                      className="px-3.5 py-2.5 bg-[#EBF0F7] shadow-[inset_3px_3px_6px_#c8d2df,inset_-3px_-3px_6px_#ffffff] border border-white/60 rounded-xl text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
+                    >
+                      <option value="ALL">All Plans</option>
+                      <option value="digital">London BigBen Digital ($3/mo)</option>
+                      <option value="bundle">London BigBen Digital Bundle ($5/mo)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="text-slate-500 font-extrabold text-[11px]">
+                  Showing {paginatedSubs.length} of {filteredSubs.length} records
+                </div>
+              </div>
+
+              {/* SUBSCRIBERS TABLE */}
+              <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs font-sans">
+                    <thead className="bg-slate-50 text-slate-500 font-mono text-[10px] uppercase tracking-wider border-b border-slate-200">
+                      <tr>
+                        <th className="py-3.5 px-5 font-extrabold">Subscriber</th>
+                        <th className="py-3.5 px-4 font-extrabold">Plan</th>
+                        <th className="py-3.5 px-4 font-extrabold">Status</th>
+                        <th className="py-3.5 px-4 font-extrabold">Start Date</th>
+                        <th className="py-3.5 px-4 font-extrabold">Trial Expiry</th>
+                        <th className="py-3.5 px-4 font-extrabold">Remaining Days</th>
+                        <th className="py-3.5 px-4 font-extrabold">Payment & Amount</th>
+                        <th className="py-3.5 px-4 font-extrabold">Renewal Date</th>
+                        <th className="py-3.5 px-5 font-extrabold text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {siteSubscriptionsLoading ? (
+                        <tr>
+                          <td colSpan={9} className="py-12 text-center text-slate-400 font-mono text-xs">
+                            <div className="inline-flex items-center gap-2">
+                              <RefreshCw className="w-4 h-4 animate-spin text-slate-500" />
+                              <span>Loading subscription records from database...</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : paginatedSubs.length === 0 ? (
+                        <tr>
+                          <td colSpan={9} className="py-12 text-center text-slate-400 font-mono text-xs">
+                            <CreditCard className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                            <p className="font-bold text-slate-600">No subscription records found.</p>
+                            <p className="text-[11px] text-slate-400 mt-1">
+                              New subscribers activating a 1-year free trial on /subscribe will appear here in real-time.
+                            </p>
+                          </td>
+                        </tr>
+                      ) : (
+                        paginatedSubs.map((sub) => {
+                          const expTime = new Date(sub.trialExpiryDate).getTime();
+                          const diffMs = expTime - now;
+                          const isExpiredTime = isNaN(expTime) ? false : diffMs <= 0;
+                          const remainingDays = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+                          const isExpired = sub.status === "Expired" || (sub.status === "Free Trial" && isExpiredTime);
+                          const effectiveStatus = isExpired ? "Expired" : sub.status;
+
+                          return (
+                            <tr key={sub.id} className="hover:bg-slate-50/70 transition-colors">
+                              {/* Subscriber Details: Name, Email & Phone */}
+                              <td className="py-3.5 px-5">
+                                <div className="min-w-0">
+                                  <div className="font-extrabold text-slate-900 truncate">
+                                    {sub.name || "Subscriber"}
+                                  </div>
+                                  <div className="text-[11px] text-slate-500 font-mono truncate">
+                                    {sub.email}
+                                  </div>
+                                  {sub.phone && (
+                                    <div className="text-[10.5px] text-slate-700 font-mono flex items-center gap-1.5 mt-0.5 font-medium">
+                                      <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                                      <span>{sub.phone}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* Selected Plan */}
+                              <td className="py-3.5 px-4 whitespace-nowrap">
+                                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold ${
+                                  sub.plan === "bundle"
+                                    ? "bg-purple-50 text-purple-700 border border-purple-200"
+                                    : "bg-blue-50 text-blue-700 border border-blue-200"
+                                }`}>
+                                  {sub.planName || (sub.plan === "bundle" ? "London BigBen Digital Bundle" : "London BigBen Digital")}
+                                </span>
+                              </td>
+
+                              {/* Subscription Status (Active / Expired) */}
+                              <td className="py-3.5 px-4 whitespace-nowrap">
+                                {sub.status === "Cancelled" ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold font-mono uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-300">
+                                    Cancelled
+                                  </span>
+                                ) : isExpired ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold font-mono uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                                    Expired
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold font-mono uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                    Active
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Start Date */}
+                              <td className="py-3.5 px-4 whitespace-nowrap font-mono text-[11px] text-slate-600">
+                                {sub.startDate ? new Date(sub.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                              </td>
+
+                              {/* Trial Expiry Date */}
+                              <td className="py-3.5 px-4 whitespace-nowrap font-mono text-[11px] text-slate-600">
+                                {sub.trialExpiryDate ? new Date(sub.trialExpiryDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                              </td>
+
+                              {/* Remaining Free Trial Days */}
+                              <td className="py-3.5 px-4 whitespace-nowrap">
+                                {effectiveStatus === "Free Trial" ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold font-mono bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    <Clock className="w-3 h-3 text-emerald-600" />
+                                    {remainingDays} days left
+                                  </span>
+                                ) : effectiveStatus === "Expired" ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold font-mono bg-rose-50 text-rose-700 border border-rose-200">
+                                    0 days (Ended)
+                                  </span>
+                                ) : (
+                                  <span className="text-[11px] font-mono text-slate-400">—</span>
+                                )}
+                              </td>
+
+                              {/* Payment & Amount */}
+                              <td className="py-3.5 px-4 whitespace-nowrap font-mono text-[11px]">
+                                <div className="font-extrabold text-slate-900">
+                                  {sub.paymentAmount || "$0.00"}
+                                </div>
+                                <div className="text-[10px] text-slate-500">
+                                  {sub.paymentStatus || (effectiveStatus === "Free Trial" ? "Free Trial" : "None")}
+                                </div>
+                              </td>
+
+                              {/* Renewal Date */}
+                              <td className="py-3.5 px-4 whitespace-nowrap font-mono text-[11px] text-slate-600">
+                                {sub.renewalDate ? new Date(sub.renewalDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                              </td>
+
+                              {/* Actions */}
+                              <td className="py-3.5 px-5 whitespace-nowrap text-right">
+                                <button
+                                  onClick={() => handleDeleteSiteSubscription(sub.id, sub.email)}
+                                  className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-md transition-colors cursor-pointer inline-flex items-center justify-center"
+                                  title="Delete subscription record"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between font-mono text-xs text-slate-600">
+                    <div>
+                      Page {currentPage} of {totalPages}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setSiteSubPage((p) => Math.max(1, p - 1))}
+                        disabled={currentPage <= 1}
+                        className="px-3 py-1 bg-white border border-slate-200 rounded-md disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors font-bold"
+                      >
+                        Previous
+                      </button>
+                      <button
+                        onClick={() => setSiteSubPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={currentPage >= totalPages}
+                        className="px-3 py-1 bg-white border border-slate-200 rounded-md disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors font-bold"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* TAB 3: POSTS WORKSPACE */}
         {activeTab === "articles" && (
           <div className="space-y-6">
@@ -4027,7 +5024,8 @@ export default function AdminDashboardPage() {
                         <option value="trending_now">Trending Now Section</option>
                         <option value="editors_picks">Editor&apos;s Picks Section</option>
                         <option value="latest_news">Latest News Section</option>
-                        <option value="home_page_a_plus_2">Home Page A+ Section 2</option>
+                        <option value="home_page_a_plus_2">Main News 2 / Home Page A+ Section 2</option>
+                        <option value="home_page_a_plus_3">Home Page A+ Section 3</option>
                         <option value="category_only">Category Section Only</option>
                       </select>
                     </div>
@@ -4269,7 +5267,7 @@ export default function AdminDashboardPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-xs">
-                        {writerSubmissions.filter(s => { const st = (s.status || "").toLowerCase(); return st.includes("pending") || st.includes("submitted") || st.includes("review"); }).length === 0 ? (
+                        {writerSubmissions.filter(s => { const st = (s.status || "").toLowerCase(); const tk = cleanTitleKeyForFilter(s.title); if (st.includes("reject") || rejectedIds.has(String(s.id)) || (tk && rejectedTitleKeys.has(tk))) return false; return st.includes("pending") || st.includes("submitted") || st.includes("review"); }).length === 0 ? (
                           <tr>
                             <td colSpan={5} className="py-12 text-center text-slate-400 font-mono">
                               No pending articles awaiting review.
@@ -4277,7 +5275,7 @@ export default function AdminDashboardPage() {
                           </tr>
                         ) : (
                           writerSubmissions
-                            .filter(s => { const st = (s.status || "").toLowerCase(); return st.includes("pending") || st.includes("submitted") || st.includes("review"); })
+                            .filter(s => { const st = (s.status || "").toLowerCase(); const tk = cleanTitleKeyForFilter(s.title); if (st.includes("reject") || rejectedIds.has(String(s.id)) || (tk && rejectedTitleKeys.has(tk))) return false; return st.includes("pending") || st.includes("submitted") || st.includes("review"); })
                             .map((sub, idx) => (
                               <tr key={`pending-${sub.id}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
                                 <td className="py-4 px-6 max-w-lg">
@@ -4757,7 +5755,7 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* SUB-TABS NAVIGATION BAR */}
-            <div className="border-b border-slate-200 flex items-center gap-6 font-mono text-xs">
+            <div className="border-b border-slate-200 flex items-center gap-6 font-mono text-xs flex-wrap">
               <button
                 onClick={() => setAdSubTab("ALL")}
                 className={`pb-3 font-extrabold transition-all cursor-pointer border-b-2 uppercase tracking-wider ${
@@ -4766,7 +5764,7 @@ export default function AdminDashboardPage() {
                     : "border-transparent text-slate-400 hover:text-slate-700"
                 }`}
               >
-                ALL AD SLOTS ({adSlots.length})
+                SHOW ALL AD SECTIONS ({adSlots.length})
               </button>
 
               <button
@@ -4777,7 +5775,7 @@ export default function AdminDashboardPage() {
                     : "border-transparent text-slate-400 hover:text-slate-700"
                 }`}
               >
-                HOMEPAGE SLOTS ({adSlots.filter(s => s.categoryGroup === "HOMEPAGE").length})
+                HOMEPAGE ADS ({adSlots.filter(s => s.categoryGroup === "HOMEPAGE").length})
               </button>
 
               <button
@@ -4788,7 +5786,7 @@ export default function AdminDashboardPage() {
                     : "border-transparent text-slate-400 hover:text-slate-700"
                 }`}
               >
-                CATEGORY PAGE SLOTS ({adSlots.filter(s => s.categoryGroup === "CATEGORY").length})
+                CATEGORY & ARTICLE ADS ({adSlots.filter(s => s.categoryGroup === "CATEGORY").length})
               </button>
 
               <button
@@ -4799,7 +5797,7 @@ export default function AdminDashboardPage() {
                     : "border-transparent text-slate-400 hover:text-slate-700"
                 }`}
               >
-                AUTHOR PAGE SLOTS ({adSlots.filter(s => s.categoryGroup === "AUTHOR").length})
+                AUTHOR PAGE ADS ({adSlots.filter(s => s.categoryGroup === "AUTHOR").length})
               </button>
             </div>
 
@@ -4809,10 +5807,15 @@ export default function AdminDashboardPage() {
                 <div key={`ad-slot-${slot.id}-${idx}`} className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-sm space-y-6">
                   
                   {/* Card Header: Slot Dimensions & Active Switch */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-extrabold font-mono text-orange-600 uppercase tracking-widest">
-                      SLOT DIMENSIONS: {slot.dimensions}
-                    </span>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <span className="text-[11px] font-extrabold font-mono text-orange-600 uppercase tracking-widest">
+                        SLOT DIMENSIONS: {slot.dimensions}
+                      </span>
+                      <span className="text-[9.5px] font-bold font-mono px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 uppercase tracking-wider">
+                        {slot.categoryGroup === "HOMEPAGE" ? "Homepage Section" : slot.categoryGroup === "CATEGORY" ? "Category & Article Pages" : "Author Profile Page"}
+                      </span>
+                    </div>
 
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-bold font-mono uppercase text-slate-400">
@@ -4850,12 +5853,35 @@ export default function AdminDashboardPage() {
                     {/* Left Column: Image Preview + Upload */}
                     <div className="md:col-span-5 space-y-3">
                       {slot.imageUrl ? (
-                        <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-inner">
-                          <img
-                            src={slot.imageUrl}
-                            alt={slot.title}
-                            className="w-full h-44 object-cover rounded-xl"
-                          />
+                        <div className="space-y-2">
+                          <div
+                            style={{
+                              aspectRatio: (() => {
+                                const [w, h] = (slot.dimensions || "300X250").split(/[xX]/).map(Number);
+                                return w && h ? `${w}/${h}` : "300/250";
+                              })()
+                            }}
+                            className="relative w-full max-h-[240px] overflow-hidden rounded-xl border border-slate-200 bg-slate-900 shadow-inner flex items-center justify-center group"
+                          >
+                            <img
+                              src={slot.imageUrl}
+                              alt={slot.title}
+                              className="w-full h-full object-cover rounded-xl"
+                            />
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => openCropper(slot.id, slot.imageUrl)}
+                                className="px-3.5 py-1.5 bg-white hover:bg-slate-100 text-slate-900 font-bold text-xs rounded-lg shadow-lg flex items-center gap-1.5 cursor-pointer transition-colors"
+                              >
+                                <Crop className="w-3.5 h-3.5 text-[#D31220]" />
+                                Adjust Frame
+                              </button>
+                            </div>
+                            <div className="absolute bottom-2 left-2 bg-black/75 backdrop-blur-xs text-[9px] font-mono font-bold text-white px-2 py-0.5 rounded border border-white/10 uppercase">
+                              Frame: {slot.dimensions}
+                            </div>
+                          </div>
                         </div>
                       ) : (
                         <div className="w-full h-44 rounded-xl border-2 border-dashed border-slate-300 bg-slate-100 flex flex-col items-center justify-center p-4 text-center">
@@ -4875,20 +5901,36 @@ export default function AdminDashboardPage() {
                         <label className="block text-[9px] font-extrabold font-mono text-slate-400 uppercase tracking-wider mb-1.5">
                           UPLOAD BANNER IMAGE
                         </label>
-                        <div className="flex items-center gap-2 text-xs font-mono">
+                        <div className="flex items-center gap-2 text-xs font-mono flex-wrap">
                           <input
                             type="file"
                             id={`file-${slot.id}`}
+                            accept="image/*"
                             onChange={(e) => handleAdImageUpload(slot.id, e)}
                             className="hidden"
                           />
                           <label
                             htmlFor={`file-${slot.id}`}
-                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 py-1.5 rounded-lg border border-slate-300 cursor-pointer text-xs"
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 py-1.5 rounded-lg border border-slate-300 cursor-pointer text-xs flex items-center gap-1.5"
                           >
+                            <Upload className="w-3.5 h-3.5" />
                             Choose File
                           </label>
-                          <span className="text-slate-400 text-[11px] truncate">No file chosen</span>
+
+                          {slot.imageUrl && (
+                            <button
+                              type="button"
+                              onClick={() => openCropper(slot.id, slot.imageUrl)}
+                              className="bg-slate-800 hover:bg-slate-900 text-white font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+                            >
+                              <Crop className="w-3.5 h-3.5 text-red-400" />
+                              Crop / Set Frame
+                            </button>
+                          )}
+
+                          <span className="text-slate-400 text-[11px] truncate">
+                            {slot.imageUrl ? "Active framed image" : "No file chosen"}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -4933,6 +5975,17 @@ export default function AdminDashboardPage() {
 
                   {/* Bottom Action Buttons */}
                   <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                    {slot.imageUrl && (
+                      <button
+                        type="button"
+                        onClick={() => openCropper(slot.id, slot.imageUrl)}
+                        className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-extrabold rounded-xl transition-all cursor-pointer uppercase font-mono tracking-wider flex items-center gap-1.5"
+                      >
+                        <Crop className="w-3.5 h-3.5 text-slate-600" />
+                        CROP / SET FRAME
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={() => handleClearAdImage(slot.id)}
@@ -5534,6 +6587,463 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
+        {/* TAB 10: SHORTS & REELS MANAGER (10 DEDICATED SLOTS) */}
+        {activeTab === "reels" && (
+          <div className="space-y-8 font-sans">
+            
+            {/* Header: Shorts & Reels Manager */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl sm:text-2xl font-extrabold font-sans text-slate-900 tracking-tight">
+                    Shorts & Reels Manager
+                  </h2>
+                  <span className="bg-orange-50 text-orange-600 border border-orange-200/70 font-mono text-xs px-2.5 py-0.5 rounded-full font-bold">
+                    {reelsVideos.length} Videos
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1 font-sans">
+                  Curate short-form video stories from YouTube Shorts and Rumble.
+                </p>
+              </div>
+
+              <div>
+                <span className="bg-emerald-50/90 text-emerald-800 border border-emerald-300 font-mono text-[11px] font-black uppercase tracking-wider px-3.5 py-1.5 rounded-lg inline-flex items-center gap-1.5 shadow-xs">
+                  HOMEPAGE FEED: {reelsVideos.filter((r) => r.status !== "Inactive").length} / 4 VIDEOS
+                </span>
+              </div>
+            </div>
+
+            {/* CARD 1: ADD / EDIT SHORT / REEL VIDEO FORM */}
+            <div
+              id="reels-form-card"
+              className="bg-white rounded-2xl border border-slate-200/90 p-6 sm:p-8 shadow-xs space-y-6"
+            >
+              {/* Form Title & Subtitle */}
+              <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-5">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-2xl bg-orange-100/80 text-orange-600 flex items-center justify-center shrink-0 shadow-xs">
+                    <Play className="w-5 h-5 fill-orange-600 translate-x-0.5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-base text-slate-900">
+                      {editingReel ? `Edit Short / Reel Video (Slot #${editingReel.slot})` : "Add New Short / Reel Video"}
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Paste any YouTube or Rumble link — platform and thumbnails are detected automatically.
+                    </p>
+                  </div>
+                </div>
+
+                {editingReel && (
+                  <button
+                    type="button"
+                    onClick={handleResetReelForm}
+                    className="text-xs font-bold text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors cursor-pointer"
+                  >
+                    Cancel Editing
+                  </button>
+                )}
+              </div>
+
+              {/* Form Body */}
+              <form onSubmit={handleSaveReelSlot} className="space-y-5">
+                {/* Row 1: VIDEO URL & PLATFORM */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                  <div className="lg:col-span-8 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-mono font-extrabold uppercase tracking-wider text-slate-700">
+                        VIDEO URL <span className="text-rose-500">*</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleAutoFetch}
+                        disabled={isAutoFetching}
+                        className="text-xs font-bold text-amber-600 hover:text-amber-700 inline-flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                        <span>{isAutoFetching ? "Auto-Fetching..." : "Auto-Fetch Title, Image & Duration"}</span>
+                      </button>
+                    </div>
+
+                    <input
+                      type="url"
+                      required
+                      value={reelVideoUrl}
+                      onChange={(e) => handleVideoUrlChange(e.target.value)}
+                      placeholder="e.g. https://www.youtube.com/shorts/... or https://rumble.com/... or Backblaze Video URL"
+                      className="w-full px-4 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400"
+                    />
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+                      <p className="text-[11px] text-slate-400 font-sans">
+                        Supports YouTube Shorts, Rumble, and Backblaze direct videos.
+                      </p>
+                      <label className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold cursor-pointer transition-colors shrink-0">
+                        <Upload className="w-3.5 h-3.5 text-slate-600" />
+                        <span>{isUploadingReelVideo ? "Uploading to Backblaze..." : "Upload Reel Video (Backblaze)"}</span>
+                        <input
+                          type="file"
+                          accept="video/*"
+                          disabled={isUploadingReelVideo}
+                          onChange={handleReelVideoUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                    {reelVideoFileName && (
+                      <p className="text-[10.5px] font-mono text-emerald-600 truncate">
+                        ✓ {reelVideoFileName}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="lg:col-span-4 space-y-1.5">
+                    <label className="text-[11px] font-mono font-extrabold uppercase tracking-wider text-slate-700 block">
+                      PLATFORM
+                    </label>
+                    <select
+                      value={reelPlatform}
+                      onChange={(e) => setReelPlatform(e.target.value as ReelPlatform)}
+                      className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 shadow-xs cursor-pointer transition-all"
+                    >
+                      <option value="YouTube Shorts">YouTube Shorts</option>
+                      <option value="Rumble Video">Rumble Video</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Row 2: VIDEO TITLE / HEADLINE */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-mono font-extrabold uppercase tracking-wider text-slate-700 block">
+                    VIDEO TITLE / HEADLINE <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={reelTitle}
+                    onChange={(e) => setReelTitle(e.target.value)}
+                    placeholder="e.g. Supreme Court Hearing Highlights & Legal Analysis"
+                    className="w-full px-4 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400"
+                  />
+                </div>
+
+                {/* Row 3: INPUTS (LEFT) & LIVE FEED PREVIEW (RIGHT) */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-1">
+                  
+                  {/* Left Column: Thumbnails, Duration, Slot, Status & Yellow Alert */}
+                  <div className="lg:col-span-8 space-y-4">
+                    
+                    {/* Cover Image URL */}
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-mono font-extrabold uppercase tracking-wider text-slate-700 block">
+                        COVER IMAGE / THUMBNAIL URL
+                      </label>
+                      <input
+                        type="url"
+                        value={reelThumbnailUrl}
+                        onChange={(e) => setReelThumbnailUrl(e.target.value)}
+                        placeholder="e.g. https://images.unsplash.com/... or auto-fetched YouTube thumbnail"
+                        className="w-full px-4 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:text-slate-400"
+                      />
+                    </div>
+
+                    {/* Or Upload Custom Thumbnail */}
+                    <div className="space-y-1.5">
+                      <label className="text-[10.5px] font-mono font-extrabold uppercase tracking-wider text-slate-400 block">
+                        OR UPLOAD CUSTOM THUMBNAIL (BACKBLAZE)
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <label className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold cursor-pointer transition-colors shrink-0 flex items-center gap-1.5">
+                          <Upload className="w-3.5 h-3.5 text-slate-600" />
+                          <span>{isUploadingThumbnail ? "Uploading to Backblaze..." : "Choose File"}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            disabled={isUploadingThumbnail}
+                            onChange={handleCustomThumbnailUpload}
+                            className="hidden"
+                          />
+                        </label>
+                        <span className="text-xs text-slate-500 truncate font-mono">
+                          {isUploadingThumbnail
+                            ? "Uploading to Backblaze B2..."
+                            : (customThumbnailFileName || (reelThumbnailUrl.includes("backblaze") ? "✓ Stored in Backblaze B2" : "No file chosen"))}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Duration input */}
+                    <div className="space-y-1.5 pt-1">
+                      <label className="text-[10.5px] font-mono font-extrabold uppercase tracking-wider text-slate-600 block">
+                        DURATION (AUTO)
+                      </label>
+                      <input
+                        type="text"
+                        value={reelDuration}
+                        onChange={(e) => setReelDuration(e.target.value)}
+                        placeholder="e.g. 1:34"
+                        className="w-full sm:w-1/2 px-3 py-2 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:outline-none focus:border-orange-500 focus:bg-white"
+                      />
+                    </div>
+
+                  </div>
+
+                  {/* Right Column: Live Feed Preview */}
+                  <div className="lg:col-span-4 flex flex-col items-center justify-center">
+                    <div className="w-full bg-slate-50/70 rounded-2xl border border-dashed border-slate-200 p-4 sm:p-5 flex flex-col items-center justify-center">
+                      <span className="text-[10px] font-mono tracking-widest text-slate-400 font-extrabold uppercase mb-3 text-center block">
+                        LIVE FEED PREVIEW
+                      </span>
+
+                      {/* Phone Vertical Frame */}
+                      <div className="w-44 h-72 sm:w-48 sm:h-80 rounded-xl bg-black text-white relative overflow-hidden shadow-2xl flex flex-col justify-between p-3.5 border border-slate-800 shrink-0">
+                        {/* Thumbnail image background */}
+                        {reelThumbnailUrl ? (
+                          <img
+                            src={reelThumbnailUrl}
+                            alt="Live Thumbnail Preview"
+                            className="absolute inset-0 w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="absolute inset-0 bg-gradient-to-b from-slate-900 to-black flex items-center justify-center">
+                            <Video className="w-10 h-10 text-slate-700" />
+                          </div>
+                        )}
+
+                        {/* Dark Gradient Overlay for readability */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/25 to-black/60 pointer-events-none" />
+
+                        {/* Top-left Platform Badge */}
+                        <div className="relative z-10">
+                          {reelPlatform === "YouTube Shorts" && (
+                            <span className="px-2 py-0.5 rounded bg-red-600 text-white font-black text-[9px] uppercase tracking-wider shadow">
+                              YOUTUBE
+                            </span>
+                          )}
+                          {reelPlatform === "Rumble Video" && (
+                            <span className="px-2 py-0.5 rounded bg-[#00ff40] text-black font-black text-[9px] uppercase tracking-wider shadow">
+                              RUMBLE
+                            </span>
+                          )}
+                          {reelPlatform === "Backblaze Video" && (
+                            <span className="px-2 py-0.5 rounded bg-blue-600 text-white font-black text-[9px] uppercase tracking-wider shadow">
+                              BACKBLAZE
+                            </span>
+                          )}
+                          {reelPlatform === "Instagram Reel" && (
+                            <span className="px-2 py-0.5 rounded bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 text-white font-black text-[9px] uppercase tracking-wider shadow">
+                              INSTAGRAM
+                            </span>
+                          )}
+                          {reelPlatform === "Facebook Reel" && (
+                            <span className="px-2 py-0.5 rounded bg-[#1877F2] text-white font-black text-[9px] uppercase tracking-wider shadow">
+                              FACEBOOK
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Center Play Icon */}
+                        <div className="relative z-10 my-auto flex items-center justify-center">
+                          <div className="w-12 h-12 rounded-full border border-white/25 bg-black/30 backdrop-blur-xs flex items-center justify-center text-white/70">
+                            <Play className="w-5 h-5 fill-white/80 translate-x-0.5" />
+                          </div>
+                        </div>
+
+                        {/* Bottom Video Info */}
+                        <div className="relative z-10 space-y-1">
+                          <p className="font-extrabold text-[11px] leading-tight text-white line-clamp-2 drop-shadow-md">
+                            {reelTitle.trim() || "Short Video Title"}
+                          </p>
+                          <p className="text-[10px] text-white/85 font-mono flex items-center gap-1">
+                            <Play className="w-2.5 h-2.5 fill-white/80" />
+                            <span>{reelDuration || "0:00"}</span>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Form Footer Action Button */}
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 bg-[#ea580c] hover:bg-[#c2410c] text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all cursor-pointer"
+                  >
+                    {editingReel ? "UPDATE VIDEO" : "ADD TO FEED"}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* CARD 2: CURRENT SHORTS & REELS (5 DEDICATED SLOTS) */}
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-extrabold text-lg text-slate-900 tracking-tight">
+                    Current Shorts & Reels (5 Dedicated Slots)
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Strictly 1 video per slot (Slot #1 to #5). Slot #1 is the Main Featured Video, Slots #2, #3, and #4 are the 3 bottom videos, and Slot #5 is under the sidebar ad.
+                  </p>
+                </div>
+
+                <div>
+                  <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 font-mono text-[11px] font-extrabold px-3 py-1 rounded-full shadow-xs">
+                    {reelsVideos.length} / 5 Slots Occupied
+                  </span>
+                </div>
+              </div>
+
+              {/* Grid of 5 Slots */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4.5 pt-2">
+                {[1, 2, 3, 4, 5].map((slotNum) => {
+                  const slotVideo = reelsVideos.find((r) => r.slot === slotNum);
+
+                  if (slotVideo) {
+                    return (
+                      <div
+                        key={`slot-${slotNum}`}
+                        className="bg-white rounded-2xl border border-slate-200/90 p-3 shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
+                      >
+                        {/* Upper card content */}
+                        <div className="flex gap-3">
+                          {/* Thumbnail with platform badge */}
+                          <div className="w-20 h-28 sm:w-22 sm:h-30 rounded-xl overflow-hidden bg-slate-900 relative shrink-0 border border-slate-200 shadow-xs">
+                            <img
+                              src={slotVideo.thumbnailUrl}
+                              alt={slotVideo.title}
+                              className="w-full h-full object-cover"
+                            />
+                            {/* Platform badge on thumbnail */}
+                            <div className="absolute top-1.5 left-1.5">
+                              {slotVideo.platform === "Rumble Video" && (
+                                <span className="bg-[#001f07]/90 text-[#00ff40] border border-[#00ff40]/40 font-mono font-black text-[7.5px] px-1.5 py-0.5 rounded shadow">
+                                  RUMBLE
+                                </span>
+                              )}
+                              {slotVideo.platform === "YouTube Shorts" && (
+                                <span className="bg-[#2a0004]/90 text-red-500 border border-red-500/40 font-mono font-black text-[7.5px] px-1.5 py-0.5 rounded shadow">
+                                  YOUTUBE
+                                </span>
+                              )}
+                              {slotVideo.platform === "Instagram Reel" && (
+                                <span className="bg-[#200020]/90 text-pink-400 border border-pink-500/40 font-mono font-black text-[7.5px] px-1.5 py-0.5 rounded shadow">
+                                  INSTAGRAM
+                                </span>
+                              )}
+                              {slotVideo.platform === "Facebook Reel" && (
+                                <span className="bg-[#001030]/90 text-blue-400 border border-blue-500/40 font-mono font-black text-[7.5px] px-1.5 py-0.5 rounded shadow">
+                                  FACEBOOK
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Info Column */}
+                          <div className="flex-1 min-w-0 flex flex-col justify-between">
+                            <div>
+                              {/* Badges row: Status & Slot */}
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span
+                                  className={`text-[9px] font-extrabold uppercase font-mono px-1.5 py-0.5 rounded ${
+                                    slotVideo.status === "Active"
+                                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                      : "bg-slate-100 text-slate-500 border border-slate-200"
+                                  }`}
+                                >
+                                  {slotVideo.status || "ACTIVE"}
+                                </span>
+                                <span className="bg-amber-50 text-amber-800 border border-amber-200 text-[9px] font-extrabold uppercase font-mono px-1.5 py-0.5 rounded">
+                                  Slot #{slotNum} {slotNum === 1 ? "• Main" : "• Bottom"}
+                                </span>
+                              </div>
+
+                              {/* Title */}
+                              <h4
+                                className="font-bold text-xs text-slate-900 line-clamp-2 mt-1.5 leading-snug"
+                                title={slotVideo.title}
+                              >
+                                {slotVideo.title}
+                              </h4>
+                            </div>
+
+                            {/* Duration & Watch Link */}
+                            <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 pt-1 mt-auto">
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-slate-400" />
+                                <span>{slotVideo.duration}</span>
+                              </span>
+                              <a
+                                href={slotVideo.videoUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-orange-600 hover:text-orange-700 font-bold inline-flex items-center gap-0.5 transition-colors"
+                              >
+                                <span>Watch</span>
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Card Action Buttons */}
+                        <div className="border-t border-slate-100 pt-2.5 mt-2.5 flex items-center justify-between">
+                          <button
+                            type="button"
+                            onClick={() => handleEditReelSlot(slotVideo)}
+                            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 py-1 px-2.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                          >
+                            <Pencil className="w-3 h-3 text-slate-500" />
+                            <span>EDIT</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteReelSlot(slotNum)}
+                            className="inline-flex items-center gap-1.5 text-xs font-bold text-rose-600 hover:text-rose-700 py-1 px-2.5 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3 text-rose-500" />
+                            <span>DELETE</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // Empty Slot Card
+                  return (
+                    <div
+                      key={`empty-slot-${slotNum}`}
+                      className="bg-slate-50/50 rounded-2xl border border-dashed border-slate-300 p-4 flex flex-col items-center justify-center text-center min-h-[175px] hover:border-orange-400 hover:bg-orange-50/30 transition-all group cursor-pointer"
+                      onClick={() => {
+                        setReelTargetSlot(slotNum);
+                        setEditingReel(null);
+                        document.getElementById("reels-form-card")?.scrollIntoView({ behavior: "smooth" });
+                      }}
+                    >
+                      <span className="bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-extrabold uppercase font-mono px-2 py-0.5 rounded mb-2">
+                        Slot #{slotNum} {slotNum === 1 ? "(Main Featured)" : "(Bottom)"} (Empty)
+                      </span>
+                      <p className="text-xs text-slate-400 mb-3 font-sans">
+                        No video assigned to this slot
+                      </p>
+                      <button
+                        type="button"
+                        className="text-xs font-extrabold text-orange-600 group-hover:text-orange-700 inline-flex items-center gap-1.5"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Assign Video</span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+          </div>
+        )}
+
       </main>
 
       {/* ADD USER OVERLAY MODAL */}
@@ -5559,7 +7069,7 @@ export default function AdminDashboardPage() {
                   required
                   name="dj_admin_new_username"
                   autoComplete="off"
-                  placeholder="e.g. Rushdhi MR"
+                  placeholder="e.g. John Doe"
                   value={newUserName}
                   onChange={(e) => setNewUserName(e.target.value)}
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-bold focus:outline-none focus:border-[#D31220]"
@@ -6440,7 +7950,8 @@ export default function AdminDashboardPage() {
                         <option value="Trending Now Section">Trending Now Section (Trending sidebar list beside Hero)</option>
                         <option value="Editor's Picks Section">Editor&apos;s Picks Section (4-Card featured row below Hero)</option>
                         <option value="Latest News Section">Latest News Section (Latest news feed and featured lead)</option>
-                        <option value="Home Page A+ Section 2">Home Page A+ Section 2 (Middle dark spotlight banner)</option>
+                        <option value="Home Page A+ Section 2">Main News 2 / Home Page A+ Section 2 (Middle dark spotlight banner slider)</option>
+                        <option value="Home Page A+ Section 3">Home Page A+ Section 3 (Featured Story beside Most Read)</option>
                       </select>
                       <p className="text-[10px] text-slate-500 leading-normal font-sans">
                         Select where this story will be curated on the homepage layout. Any list slots will automatically push the newest article to rank #1 and shift older items down.
@@ -6734,7 +8245,7 @@ export default function AdminDashboardPage() {
                     // Persist to localStorage queue
                     try {
                       const rawSubs = localStorage.getItem("dj_writer_submitted_articles");
-                      if (rawSubs) {
+                      if (rawSubs && rawSubs.trim()) {
                         const subsList = JSON.parse(rawSubs);
                         if (Array.isArray(subsList)) {
                           const updatedList = subsList.map((s: any) =>
@@ -6940,7 +8451,6 @@ export default function AdminDashboardPage() {
                 />
               </div>
 
-
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
@@ -6960,6 +8470,250 @@ export default function AdminDashboardPage() {
           </div>
         </div>
       )}
+
+      {/* CROP & SET AD FRAME MODAL */}
+      {cropperSlotId && cropperImageSrc && (() => {
+        const slot = adSlots.find(s => s.id === cropperSlotId);
+        const [targetW, targetH] = (slot?.dimensions || "300X250").split(/[xX]/).map(Number);
+        const tw = targetW || 300;
+        const th = targetH || 250;
+
+        return (
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-3xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+              
+              {/* Modal Header */}
+              <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-center text-[#D31220]">
+                    <Crop className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-sm sm:text-base text-white tracking-tight flex items-center gap-2">
+                      <span>Crop Image & Set Frame</span>
+                      <span className="text-[10px] font-mono font-bold bg-[#D31220]/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded uppercase">
+                        {tw} × {th} px
+                      </span>
+                    </h3>
+                    <p className="text-[11px] font-mono text-slate-400 truncate max-w-md">
+                      {slot?.title || "Ad Banner"}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closeCropper}
+                  disabled={isSavingCrop}
+                  className="w-8 h-8 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Body: Framing Workspace */}
+              <div className="p-5 overflow-y-auto space-y-4">
+                
+                {/* Visual Viewport with Masked Frame */}
+                <div className="relative bg-slate-950 rounded-xl p-4 sm:p-6 border border-slate-800 flex flex-col items-center justify-center overflow-hidden">
+                  <div className="text-[11px] font-mono text-slate-400 mb-3 flex items-center gap-1.5">
+                    <Move className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Drag inside the frame to adjust position • Scroll or use slider to zoom</span>
+                  </div>
+
+                  <div className="relative w-full flex items-center justify-center overflow-hidden py-2">
+                    {/* The Framing Box (Aspect Ratio Matched) */}
+                    <div
+                      id="ad-crop-frame-viewport"
+                      style={{
+                        aspectRatio: `${tw}/${th}`,
+                        maxHeight: "360px",
+                        maxWidth: tw > 500 ? "580px" : tw === th ? "320px" : th > tw ? "200px" : "380px"
+                      }}
+                      onPointerDown={handleCropPointerDown}
+                      onPointerMove={handleCropPointerMove}
+                      onPointerUp={(e) => {
+                        setIsDraggingCrop(false);
+                        try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+                      }}
+                      onWheel={(e) => {
+                        e.preventDefault();
+                        const delta = e.deltaY < 0 ? 0.08 : -0.08;
+                        setCropperZoom((prev) => Math.max(0.5, Math.min(3, parseFloat((prev + delta).toFixed(2)))));
+                      }}
+                      className="relative w-full overflow-hidden border-2 border-white/95 shadow-[0_0_0_9999px_rgba(0,0,0,0.78)] rounded-xs cursor-grab active:cursor-grabbing select-none"
+                    >
+                      {/* Image transformed by pan and zoom */}
+                      <img
+                        src={cropperImageSrc}
+                        alt="Crop target"
+                        draggable={false}
+                        style={{
+                          transform: `translate(${cropperPan.x}px, ${cropperPan.y}px) scale(${cropperZoom})`,
+                          transformOrigin: "center center",
+                        }}
+                        className="w-full h-full object-cover select-none pointer-events-none"
+                      />
+
+                      {/* Rule of Thirds Guides */}
+                      <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none border border-white/20">
+                        <div className="border-r border-b border-white/25"></div>
+                        <div className="border-r border-b border-white/25"></div>
+                        <div className="border-b border-white/25"></div>
+                        <div className="border-r border-b border-white/25"></div>
+                        <div className="border-r border-b border-white/25"></div>
+                        <div className="border-b border-white/25"></div>
+                        <div className="border-r border-white/25"></div>
+                        <div className="border-r border-white/25"></div>
+                        <div></div>
+                      </div>
+
+                      {/* Frame Dimension Badge */}
+                      <div className="absolute top-2 left-2 bg-black/85 backdrop-blur-xs text-[9px] font-mono font-bold text-white px-2 py-0.5 rounded border border-white/10 uppercase tracking-wider pointer-events-none">
+                        FRAME: {tw} × {th}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Cropping Controls Toolbar */}
+                <div className="bg-slate-800/80 rounded-xl p-4 border border-slate-700/60 space-y-3">
+                  
+                  {/* Zoom Slider Row */}
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setCropperZoom(prev => Math.max(0.5, parseFloat((prev - 0.1).toFixed(2))))}
+                      className="w-8 h-8 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 flex items-center justify-center transition-colors cursor-pointer"
+                      title="Zoom Out"
+                    >
+                      <ZoomOut className="w-4 h-4" />
+                    </button>
+
+                    <div className="flex-1 flex items-center gap-3">
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="3"
+                        step="0.05"
+                        value={cropperZoom}
+                        onChange={(e) => setCropperZoom(parseFloat(e.target.value))}
+                        className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-[#D31220]"
+                      />
+                      <span className="text-xs font-mono font-bold text-slate-300 min-w-[50px] text-right">
+                        {(cropperZoom * 100).toFixed(0)}%
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setCropperZoom(prev => Math.min(3, parseFloat((prev + 0.1).toFixed(2))))}
+                      className="w-8 h-8 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 flex items-center justify-center transition-colors cursor-pointer"
+                      title="Zoom In"
+                    >
+                      <ZoomIn className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Alignment & Pan Nudge Buttons */}
+                  <div className="flex items-center justify-between flex-wrap gap-2 pt-2 border-t border-slate-700/60 text-xs">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { setCropperPan({ x: 0, y: 0 }); setCropperZoom(1); }}
+                        className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        Reset Center
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setCropperZoom(1.2)}
+                        className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold rounded-lg transition-colors cursor-pointer"
+                      >
+                        Fill Frame
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-1 text-[11px] font-mono text-slate-400">
+                      <span>Nudge:</span>
+                      <button
+                        type="button"
+                        onClick={() => setCropperPan(p => ({ ...p, x: p.x - 15 }))}
+                        className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded cursor-pointer"
+                      >
+                        ←
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCropperPan(p => ({ ...p, x: p.x + 15 }))}
+                        className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded cursor-pointer"
+                      >
+                        →
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCropperPan(p => ({ ...p, y: p.y - 15 }))}
+                        className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded cursor-pointer"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCropperPan(p => ({ ...p, y: p.y + 15 }))}
+                        className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded cursor-pointer"
+                      >
+                        ↓
+                      </button>
+                    </div>
+                  </div>
+
+                </div>
+
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-5 py-4 border-t border-slate-800 bg-slate-900/90 flex items-center justify-between">
+                <span className="text-[11px] font-mono text-slate-400 hidden sm:inline">
+                  Frame will appear in homepage ad & article sections
+                </span>
+
+                <div className="flex items-center gap-3 ml-auto">
+                  <button
+                    type="button"
+                    onClick={closeCropper}
+                    disabled={isSavingCrop}
+                    className="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleApplyCroppedFrame}
+                    disabled={isSavingCrop}
+                    className="px-6 py-2.5 bg-[#D31220] hover:bg-[#BF1E2D] disabled:opacity-50 text-white text-xs font-extrabold rounded-xl transition-all cursor-pointer shadow-lg shadow-red-950/40 uppercase font-mono tracking-wider flex items-center gap-2"
+                  >
+                    {isSavingCrop ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span>Saving Frame...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        <span>Set Frame & Save Ad</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );

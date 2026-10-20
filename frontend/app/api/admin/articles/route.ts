@@ -25,7 +25,13 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = await request.json();
+    let body: any = {};
+    try {
+      const text = await request.text();
+      body = text && text.trim() ? JSON.parse(text) : {};
+    } catch {
+      body = {};
+    }
     const { title, description, is_featured, is_editors_pick, category_name } = body;
 
     if (!title) {

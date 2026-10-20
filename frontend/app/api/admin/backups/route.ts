@@ -67,6 +67,10 @@ export async function POST(request: NextRequest) {
         adSlots: {
           count: Array.isArray(body.adSlots) ? body.adSlots.length : 0,
           items: body.adSlots || []
+        },
+        reelsVideos: {
+          count: Array.isArray(body.reelsVideos) ? body.reelsVideos.length : 0,
+          items: body.reelsVideos || []
         }
       }
     };

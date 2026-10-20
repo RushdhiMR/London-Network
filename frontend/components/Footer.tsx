@@ -1,223 +1,188 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { FaFacebook, FaInstagram, FaLinkedin } from "react-icons/fa";
 import { SiRumble } from "react-icons/si";
-import { Mail } from "lucide-react";
 
 export default function Footer() {
+  const [activeEdition, setActiveEdition] = useState("United States");
+
+  const newsCategories = [
+    { name: "World", href: "/news/world" },
+    { name: "Politics", href: "/news/politics" },
+    { name: "Business", href: "/business" },
+    { name: "Technology", href: "/technology" },
+    { name: "Economy", href: "/news/economy" },
+    { name: "Markets", href: "/news/markets" },
+    { name: "Lifestyle", href: "/news/lifestyle" },
+    { name: "Sports", href: "/news/sports" },
+    { name: "Entertainment", href: "/news/entertainment" },
+    { name: "Health", href: "/news/health" },
+    { name: "Research", href: "/industry-insights" },
+    { name: "Interview", href: "/interview" },
+  ];
+
+  const regionLinks = [
+    { name: "China", href: "/china" },
+    { name: "United States", href: "/united-states" },
+    { name: "Europe", href: "/europe" },
+    { name: "Britain", href: "/britain" },
+    { name: "Middle East", href: "/middle-east" },
+    { name: "Africa", href: "/africa" },
+    { name: "Asia", href: "/asia" },
+  ];
+
+  const companyLinks = [
+    { name: "About us", href: "/about" },
+    { name: "Contact us", href: "/contact" },
+    { name: "Terms & Conditions", href: "/terms" },
+    { name: "Privacy Policy", href: "/privacy" },
+    { name: "Cookie Policy", href: "/cookies" },
+    { name: "Editorial Policy", href: "/editorial-policy" },
+    { name: "Advertise with us", href: "/advertise" },
+    { name: "RSS Feed", href: "/sitemap.xml" },
+  ];
+
+  const editions = [
+    "United States",
+    "United Kingdom",
+    "Australia",
+    "India",
+    "Singapore",
+  ];
+
   return (
-    <footer className="bg-white text-gray-900 mt-20 pt-16 pb-12 border-t border-gray-200">
-      <div className="max-w-[1320px] mx-auto px-4 sm:px-6 lg:px-8">
+    <footer className="bg-black text-white mt-20 border-t border-zinc-900 relative select-none">
+      {/* Top 3px Brand Accent Bar */}
+      <div className="h-[3px] w-full bg-gradient-to-r from-[#BF1E2D] via-[#D31220] to-[#8B0E19]" />
+
+      <div className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8">
+        {/* BRAND TOP ROW */}
+        <div className="py-8 border-b border-zinc-800">
+          <div className="max-w-xl">
+            <Link
+              href="/"
+              className="inline-block transition-transform hover:opacity-95"
+              aria-label="London BigBen Network Home"
+            >
+              <Image
+                src="/footer_logo.png"
+                alt="London BigBen Network"
+                width={260}
+                height={48}
+                className="h-10 w-auto object-contain"
+              />
+            </Link>
+            <p className="mt-3 text-[13px] text-zinc-400 leading-relaxed font-sans">
+              Independent international journalism, verified market intelligence, and fearless editorial analysis from London, Washington, and global financial centers.
+            </p>
+          </div>
+        </div>
+
         {/* 5-COLUMN NAVIGATION GRID */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-8 lg:gap-12 pb-14 text-left">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8 lg:gap-10 py-12 border-b border-zinc-800 text-left">
           
-          {/* COLUMN 1: NEWS */}
+          {/* COLUMN 1: NEWS & COVERAGE */}
           <div>
-            <h3 className="text-[13px] font-bold text-gray-900 tracking-wider mb-4 uppercase">
-              NEWS
+            <h3 className="flex items-center gap-2 text-[12px] font-mono font-bold tracking-widest text-white mb-4 uppercase">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#BF1E2D]" />
+              NEWS &amp; COVERAGE
             </h3>
-            <ul className="space-y-2.5 text-[13px] text-gray-600">
-              <li>
-                <Link href="/news/world" className="hover:text-[#BF1E2D] transition-colors">
-                  World
-                </Link>
-              </li>
-              <li>
-                <Link href="/news/politics" className="hover:text-[#BF1E2D] transition-colors">
-                  Politics
-                </Link>
-              </li>
-              <li>
-                <Link href="/business" className="hover:text-[#BF1E2D] transition-colors">
-                  Business
-                </Link>
-              </li>
-              <li>
-                <Link href="/technology" className="hover:text-[#BF1E2D] transition-colors">
-                  Technology
-                </Link>
-              </li>
-              <li>
-                <Link href="/news/economy" className="hover:text-[#BF1E2D] transition-colors">
-                  Economy
-                </Link>
-              </li>
-              <li>
-                <Link href="/news/markets" className="hover:text-[#BF1E2D] transition-colors">
-                  Markets
-                </Link>
-              </li>
-              <li>
-                <Link href="/news/lifestyle" className="hover:text-[#BF1E2D] transition-colors">
-                  Lifestyle
-                </Link>
-              </li>
-              <li>
-                <Link href="/news/sports" className="hover:text-[#BF1E2D] transition-colors">
-                  Sports
-                </Link>
-              </li>
-              <li>
-                <Link href="/news/entertainment" className="hover:text-[#BF1E2D] transition-colors">
-                  Entertainment
-                </Link>
-              </li>
-              <li>
-                <Link href="/news/health" className="hover:text-[#BF1E2D] transition-colors">
-                  Health
-                </Link>
-              </li>
-              <li>
-                <Link href="/industry-insights" className="hover:text-[#BF1E2D] transition-colors">
-                  Research
-                </Link>
-              </li>
+            <ul className="space-y-2.5 text-[13px]">
+              {newsCategories.map((item) => (
+                <li key={item.name}>
+                  <Link
+                    href={item.href}
+                    className="text-zinc-400 hover:text-white hover:translate-x-1 transition-all inline-block"
+                  >
+                    {item.name}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
 
-          {/* COLUMN 2: FEATURED */}
+          {/* COLUMN 2: REGIONAL DESKS */}
           <div>
-            <h3 className="text-[13px] font-bold text-gray-900 tracking-wider mb-4 uppercase">
-              FEATURED
+            <h3 className="flex items-center gap-2 text-[12px] font-mono font-bold tracking-widest text-white mb-4 uppercase">
+              <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
+              REGIONS
             </h3>
-            <ul className="space-y-2.5 text-[13px] text-gray-600">
-              <li>
-                <Link href="/china" className="hover:text-[#BF1E2D] transition-colors">
-                  China
-                </Link>
-              </li>
-              <li>
-                <Link href="/united-states" className="hover:text-[#BF1E2D] transition-colors">
-                  United States
-                </Link>
-              </li>
-              <li>
-                <Link href="/europe" className="hover:text-[#BF1E2D] transition-colors">
-                  Europe
-                </Link>
-              </li>
-              <li>
-                <Link href="/britain" className="hover:text-[#BF1E2D] transition-colors">
-                  Britain
-                </Link>
-              </li>
-              <li>
-                <Link href="/middle-east" className="hover:text-[#BF1E2D] transition-colors">
-                  Middle East
-                </Link>
-              </li>
-              <li>
-                <Link href="/africa" className="hover:text-[#BF1E2D] transition-colors">
-                  Africa
-                </Link>
-              </li>
-              <li>
-                <Link href="/asia" className="hover:text-[#BF1E2D] transition-colors">
-                  Asia
-                </Link>
-              </li>
+            <ul className="space-y-2.5 text-[13px]">
+              {regionLinks.map((item) => (
+                <li key={item.name}>
+                  <Link
+                    href={item.href}
+                    className="text-zinc-400 hover:text-white hover:translate-x-1 transition-all inline-block"
+                  >
+                    {item.name}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
 
-          {/* COLUMN 3: ABOUT */}
+          {/* COLUMN 3: COMPANY */}
           <div>
-            <h3 className="text-[13px] font-bold text-gray-900 tracking-wider mb-4 uppercase">
-              ABOUT
+            <h3 className="flex items-center gap-2 text-[12px] font-mono font-bold tracking-widest text-white mb-4 uppercase">
+              <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
+              COMPANY
             </h3>
-            <ul className="space-y-2.5 text-[13px] text-gray-600">
-              <li>
-                <Link href="/about" className="hover:text-[#BF1E2D] transition-colors">
-                  About us
-                </Link>
-              </li>
-              <li>
-                <Link href="/contact" className="hover:text-[#BF1E2D] transition-colors">
-                  Contact us
-                </Link>
-              </li>
-              <li>
-                <Link href="/terms" className="hover:text-[#BF1E2D] transition-colors">
-                  Terms &amp; Conditions
-                </Link>
-              </li>
-              <li>
-                <Link href="/privacy" className="hover:text-[#BF1E2D] transition-colors">
-                  Privacy Policy
-                </Link>
-              </li>
-              <li>
-                <Link href="/cookies" className="hover:text-[#BF1E2D] transition-colors">
-                  Cookie Policy
-                </Link>
-              </li>
-              <li>
-                <Link href="/editorial-policy" className="hover:text-[#BF1E2D] transition-colors">
-                  Editorial Policy
-                </Link>
-              </li>
-              <li>
-                <Link href="/advertise" className="hover:text-[#BF1E2D] transition-colors">
-                  Advertise with us
-                </Link>
-              </li>
-              <li>
-                <Link href="/sitemap.xml" className="hover:text-[#BF1E2D] transition-colors">
-                  RSS Feed
-                </Link>
-              </li>
+            <ul className="space-y-2.5 text-[13px]">
+              {companyLinks.map((item) => (
+                <li key={item.name}>
+                  <Link
+                    href={item.href}
+                    className="text-zinc-400 hover:text-white hover:translate-x-1 transition-all inline-block"
+                  >
+                    {item.name}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
 
-          {/* COLUMN 4: EDITIONS */}
+          {/* COLUMN 4: EDITIONS (LEFT OF FOLLOW & CONNECT) */}
           <div>
-            <h3 className="text-[13px] font-bold text-gray-900 tracking-wider mb-4 uppercase">
+            <h3 className="flex items-center gap-2 text-[12px] font-mono font-bold tracking-widest text-white mb-4 uppercase">
+              <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
               EDITIONS
             </h3>
             <ul className="space-y-2.5 text-[13px]">
-              <li>
-                <span className="text-gray-900 font-medium cursor-default">
-                  United States
-                </span>
-              </li>
-              <li>
-                <span className="text-gray-400 hover:text-gray-700 transition-colors cursor-pointer">
-                  Australia
-                </span>
-              </li>
-              <li>
-                <span className="text-gray-400 hover:text-gray-700 transition-colors cursor-pointer">
-                  India
-                </span>
-              </li>
-              <li>
-                <span className="text-gray-400 hover:text-gray-700 transition-colors cursor-pointer">
-                  Singapore
-                </span>
-              </li>
-              <li>
-                <span className="text-gray-400 hover:text-gray-700 transition-colors cursor-pointer">
-                  United Kingdom
-                </span>
-              </li>
+              {editions.map((item) => (
+                <li key={item}>
+                  <button
+                    type="button"
+                    onClick={() => setActiveEdition(item)}
+                    className={`transition-all hover:translate-x-1 inline-block text-left cursor-pointer ${
+                      activeEdition === item
+                        ? "text-white font-bold"
+                        : "text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    {item}
+                  </button>
+                </li>
+              ))}
             </ul>
           </div>
 
-          {/* COLUMN 5: FOLLOW US */}
+          {/* COLUMN 5: FOLLOW & CONNECT (ONE COLUMN) */}
           <div>
-            <h3 className="text-[13px] font-bold text-gray-900 tracking-wider mb-4 uppercase">
-              FOLLOW US
+            <h3 className="flex items-center gap-2 text-[12px] font-mono font-bold tracking-widest text-white mb-4 uppercase">
+              FOLLOW &amp; CONNECT
             </h3>
-            <ul className="space-y-2.5 text-[13px] text-gray-600">
+            <ul className="space-y-2.5 text-[13px]">
               <li>
                 <a
                   href="https://facebook.com"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2.5 hover:text-[#BF1E2D] transition-colors group"
+                  className="flex items-center gap-2.5 text-zinc-400 hover:text-white hover:translate-x-1 transition-all group"
                 >
-                  <FaFacebook className="w-4 h-4 text-gray-400 group-hover:text-[#BF1E2D] transition-colors shrink-0" />
+                  <FaFacebook className="w-3.5 h-3.5 text-zinc-400 group-hover:text-[#1877F2] transition-colors shrink-0" />
                   <span>Facebook</span>
                 </a>
               </li>
@@ -226,9 +191,9 @@ export default function Footer() {
                   href="https://linkedin.com"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2.5 hover:text-[#BF1E2D] transition-colors group"
+                  className="flex items-center gap-2.5 text-zinc-400 hover:text-white hover:translate-x-1 transition-all group"
                 >
-                  <FaLinkedin className="w-4 h-4 text-gray-400 group-hover:text-[#BF1E2D] transition-colors shrink-0" />
+                  <FaLinkedin className="w-3.5 h-3.5 text-zinc-400 group-hover:text-[#0A66C2] transition-colors shrink-0" />
                   <span>LinkedIn</span>
                 </a>
               </li>
@@ -237,9 +202,9 @@ export default function Footer() {
                   href="https://instagram.com"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2.5 hover:text-[#BF1E2D] transition-colors group"
+                  className="flex items-center gap-2.5 text-zinc-400 hover:text-white hover:translate-x-1 transition-all group"
                 >
-                  <FaInstagram className="w-4 h-4 text-gray-400 group-hover:text-[#BF1E2D] transition-colors shrink-0" />
+                  <FaInstagram className="w-3.5 h-3.5 text-zinc-400 group-hover:text-[#E4405F] transition-colors shrink-0" />
                   <span>Instagram</span>
                 </a>
               </li>
@@ -248,40 +213,31 @@ export default function Footer() {
                   href="https://rumble.com"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2.5 hover:text-[#BF1E2D] transition-colors group"
+                  className="flex items-center gap-2.5 text-zinc-400 hover:text-white hover:translate-x-1 transition-all group"
                 >
-                  <SiRumble className="w-4 h-4 text-[#66B032] shrink-0" />
+                  <SiRumble className="w-3.5 h-3.5 text-zinc-400 group-hover:text-white transition-colors shrink-0" />
                   <span>Rumble</span>
                 </a>
-              </li>
-              <li>
-                <Link
-                  href="/newsletters"
-                  className="inline-flex items-center gap-2.5 hover:text-[#BF1E2D] transition-colors group"
-                >
-                  <Mail className="w-4 h-4 text-gray-400 group-hover:text-[#BF1E2D] transition-colors shrink-0" />
-                  <span>Newsletter</span>
-                </Link>
               </li>
             </ul>
           </div>
 
         </div>
 
-        {/* BOTTOM SECTION: DIVIDER, CENTERED LOGO, COPYRIGHT */}
-        <div className="border-t border-gray-200/90 pt-8 pb-3 flex flex-col items-center justify-center text-center">
-          <Link href="/" className="inline-block group mb-3" aria-label="London BigBen Network Home">
-            <Image
-              src="/header_logo.png"
-              alt="London BigBen Network"
-              width={220}
-              height={40}
-              className="h-8 md:h-9 w-auto object-contain mx-auto transition-transform group-hover:scale-[1.02]"
-            />
-          </Link>
-          <p className="text-[11px] sm:text-[12px] text-gray-400 leading-relaxed max-w-2xl text-center">
+        {/* BOTTOM METADATA & COPYRIGHT STRIP */}
+        <div className="py-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
+          <p className="text-[11.5px] leading-relaxed text-center md:text-left text-zinc-500 font-sans">
             &copy; Copyright 2026 London BigBen Network Media LLC. All Rights Reserved. All standard legal notices apply.
           </p>
+          <div className="flex items-center gap-2 text-[11.5px] text-zinc-500 font-sans">
+            <span className="text-zinc-500">Official Press &amp; Media:</span>
+            <a
+              href="mailto:press@londonbigben.com"
+              className="text-zinc-400 hover:text-[#BF1E2D] font-mono font-bold underline transition-colors"
+            >
+              press@londonbigben.com
+            </a>
+          </div>
         </div>
       </div>
     </footer>

@@ -9,7 +9,7 @@ import { saveUserProfile, getUserProfile, resolveUserAvatar, isUploadedAvatar } 
 import { uploadImageToBackblaze } from "@/lib/imageUtils";
 import { useLiveArticles } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
-import { getAllSearchableArticles, searchArticlesByQuery, SearchableArticle } from "@/lib/searchArticles";
+import { getAllSearchableArticles, searchArticlesByQuery, SearchableArticle, fetchAllSearchableArticlesAsync, articlesToSearchable } from "@/lib/searchArticles";
 
 const megaMenuData: Record<string, {
   diveDeeper: string[];
@@ -66,16 +66,27 @@ const megaMenuData: Record<string, {
   }
 };
 
-export default function Header() {
+interface HeaderProps {
+  showProgressBar?: boolean;
+}
+
+export default function Header({ showProgressBar = false }: HeaderProps = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const loginHref = pathname && pathname !== "/login" && pathname !== "/register"
     ? `/login?redirect=${encodeURIComponent(pathname)}`
     : "/login";
 
+  const [readingProgress, setReadingProgress] = useState(0);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [suggestedArticles, setSuggestedArticles] = useState<SearchableArticle[]>([]);
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
+  const searchRequestIdRef = useRef(0);
+  const searchDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const headerSearchRef = useRef<HTMLDivElement>(null);
+  const mobileSearchRef = useRef<HTMLDivElement>(null);
   const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role?: string; avatar?: string; bio?: string; linkedin?: string } | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
@@ -156,9 +167,9 @@ export default function Header() {
     };
   }, []);
 
-  // ── Real-time date / location / weather ──────────────────────────────────
+  // ── Real-time date / country / weather ──────────────────────────────────
   const [currentDate, setCurrentDate] = useState("");
-  const [locationName, setLocationName] = useState("");
+  const [countryName, setCountryName] = useState("");
   const [weatherTemp, setWeatherTemp] = useState<number | null>(null);
   const [weatherCode, setWeatherCode] = useState<number | null>(null);
 
@@ -186,33 +197,67 @@ export default function Header() {
       }));
     };
     updateDate();
-    const dateTimer = setInterval(updateDate, 60000);
+    const dateTimer = setInterval(updateDate, 30000);
 
-    const fetchLocationAndWeather = async () => {
+    const fetchCountryAndWeather = async () => {
       try {
-        const geoRes = await fetch("https://ipapi.co/json/", { cache: "no-store" });
-        if (!geoRes.ok) throw new Error("geo fetch failed");
-        const geo = await geoRes.json();
-        const city = geo.city || "";
-        const country = geo.country_name || "";
-        setLocationName(city && country ? `${city}, ${country}` : city || country || "");
-
-        if (geo.latitude && geo.longitude) {
-          const wxRes = await fetch(
-            `https://api.open-meteo.com/v1/forecast?latitude=${geo.latitude}&longitude=${geo.longitude}&current=temperature_2m,weathercode&temperature_unit=celsius`,
-            { cache: "no-store" }
-          );
-          if (!wxRes.ok) throw new Error("weather fetch failed");
-          const wx = await wxRes.json();
-          setWeatherTemp(Math.round(wx.current.temperature_2m));
-          setWeatherCode(wx.current.weathercode);
+        // 1. Primary: Server-side weather & location endpoint (no CORS/ad-blocker blocks)
+        const res = await fetch("/api/weather", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            if (data.country) setCountryName(data.country);
+            if (data.temp !== undefined && data.temp !== null) setWeatherTemp(data.temp);
+            if (data.weatherCode !== undefined && data.weatherCode !== null) setWeatherCode(data.weatherCode);
+            return;
+          }
         }
       } catch {
-        // silently ignore – keep previous values
+        // Continue to client-side fallback
       }
+
+      // 2. Client-side fallback via ipwho.is + Open-Meteo
+      try {
+        const geoRes = await fetch("https://ipwho.is/", { cache: "no-store" });
+        if (geoRes.ok) {
+          const geo = await geoRes.json();
+          if (geo.success !== false && geo.country) {
+            setCountryName(geo.country);
+            if (geo.latitude && geo.longitude) {
+              const wxRes = await fetch(
+                `https://api.open-meteo.com/v1/forecast?latitude=${geo.latitude}&longitude=${geo.longitude}&current=temperature_2m,weathercode&temperature_unit=celsius`,
+                { cache: "no-store" }
+              );
+              if (wxRes.ok) {
+                const wx = await wxRes.json();
+                if (wx?.current?.temperature_2m !== undefined) {
+                  setWeatherTemp(Math.round(wx.current.temperature_2m));
+                  setWeatherCode(wx.current.weathercode ?? 1);
+                  return;
+                }
+              }
+            }
+          }
+        }
+      } catch {
+        // Continue to timezone fallback
+      }
+
+      // 3. Fallback country detection from browser timezone
+      try {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+        if (tz.includes("Colombo")) setCountryName("Sri Lanka");
+        else if (tz.includes("London")) setCountryName("United Kingdom");
+        else if (tz.includes("New_York") || tz.includes("Los_Angeles") || tz.includes("Chicago")) setCountryName("United States");
+        else if (tz.includes("/")) {
+          const region = tz.split("/")[1]?.replace(/_/g, " ");
+          if (region) setCountryName(region);
+        }
+      } catch {}
     };
-    fetchLocationAndWeather();
-    const wxTimer = setInterval(fetchLocationAndWeather, 600000);
+
+    fetchCountryAndWeather();
+    const wxTimer = setInterval(fetchCountryAndWeather, 300000); // refresh every 5 min
 
     return () => {
       clearInterval(dateTimer);
@@ -285,7 +330,11 @@ export default function Header() {
   const { articles: liveArticles } = useLiveArticles();
 
   useEffect(() => {
-    setAllSearchArticles(getAllSearchableArticles());
+    if (Array.isArray(liveArticles) && liveArticles.length > 0) {
+      setAllSearchArticles(articlesToSearchable(liveArticles));
+    } else {
+      setAllSearchArticles(getAllSearchableArticles());
+    }
   }, [liveArticles]);
 
   useEffect(() => {
@@ -476,69 +525,164 @@ export default function Header() {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSearchFocused(false);
     const query = searchQuery.trim();
     router.push(query ? `/search?q=${encodeURIComponent(query)}` : "/search");
   };
+
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q) {
+      if (searchDebounceTimerRef.current) clearTimeout(searchDebounceTimerRef.current);
+      setSuggestedArticles([]);
+      setIsSearchLoading(false);
+      return;
+    }
+
+    setIsSearchLoading(true);
+    if (searchDebounceTimerRef.current) clearTimeout(searchDebounceTimerRef.current);
+
+    const requestId = ++searchRequestIdRef.current;
+    searchDebounceTimerRef.current = setTimeout(async () => {
+      try {
+        let pool = allSearchArticles;
+        if (!pool || pool.length === 0) {
+          pool = await fetchAllSearchableArticlesAsync();
+          setAllSearchArticles(pool);
+        }
+        if (searchRequestIdRef.current !== requestId) return;
+
+        const results = searchArticlesByQuery(pool, q);
+        if (searchRequestIdRef.current === requestId) {
+          setSuggestedArticles(results.slice(0, 6));
+          setIsSearchLoading(false);
+        }
+      } catch {
+        if (searchRequestIdRef.current === requestId) {
+          setSuggestedArticles([]);
+          setIsSearchLoading(false);
+        }
+      }
+    }, 220);
+
+    return () => {
+      if (searchDebounceTimerRef.current) clearTimeout(searchDebounceTimerRef.current);
+    };
+  }, [searchQuery, allSearchArticles]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      const insideDesktop = headerSearchRef.current && headerSearchRef.current.contains(target);
+      const insideMobile = mobileSearchRef.current && mobileSearchRef.current.contains(target);
+      if (!insideDesktop && !insideMobile) {
+        setIsSearchFocused(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    setIsSearchFocused(false);
+  }, [pathname]);
+
+  // Scroll progress / Article reading completion tracking
+  useEffect(() => {
+    let ticking = false;
+
+    const calculateProgress = () => {
+      const scrollY = window.scrollY;
+      if (scrollY <= 0) {
+        setReadingProgress(0);
+        return;
+      }
+
+      const articleEl =
+        document.getElementById("article-content-body") ||
+        document.getElementById("article-read-container");
+
+      if (articleEl) {
+        const rect = articleEl.getBoundingClientRect();
+        const articleTop = rect.top + scrollY;
+        const articleHeight = articleEl.offsetHeight;
+        // Total scrollable distance for the article
+        const maxScroll = Math.max(1, articleTop + articleHeight - window.innerHeight);
+
+        if (scrollY >= maxScroll) {
+          setReadingProgress(100);
+        } else {
+          const pct = (scrollY / maxScroll) * 100;
+          setReadingProgress(Math.min(100, Math.max(3, pct)));
+        }
+      } else {
+        // Page scroll progress for homepage, category, and other pages
+        const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+        if (maxScroll > 0) {
+          const pct = (scrollY / maxScroll) * 100;
+          setReadingProgress(Math.min(100, Math.max(3, pct)));
+        } else {
+          setReadingProgress(0);
+        }
+      }
+    };
+
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          calculateProgress();
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    calculateProgress();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleScroll);
+    };
+  }, [pathname]);
 
   const isCurrentCategoryActive = (cat: { name: string; href: string }) => {
     if (!pathname) return false;
     const currentPath = pathname.toLowerCase();
     const catName = cat.name.toLowerCase();
 
+    if (currentPath === cat.href.toLowerCase() || currentPath === `/category/${catName}` || currentPath.startsWith(`/category/${catName}/`)) {
+      return true;
+    }
+
     if (catName === "world") {
       return (
+        currentPath === "/category/world" ||
+        currentPath.startsWith("/category/world/") ||
         currentPath === "/news/world" ||
-        currentPath === "/world" ||
         currentPath.startsWith("/news/world/") ||
-        currentPath.startsWith("/world/") ||
-        ["/china", "/united-states", "/europe", "/britain", "/middle-east", "/africa", "/asia"].some(r => currentPath === r || currentPath.startsWith(r + "/"))
+        ["china", "united-states", "europe", "britain", "middle-east", "africa", "asia"].some(r => currentPath === `/category/${r}` || currentPath.startsWith(`/category/${r}/`) || currentPath === `/${r}` || currentPath.startsWith(`/${r}/`))
       );
     }
-    if (catName === "politics") {
-      return currentPath === "/news/politics" || currentPath === "/politics" || currentPath.startsWith("/news/politics/") || currentPath.startsWith("/politics/");
-    }
-    if (catName === "business") {
-      return currentPath === "/business" || currentPath.startsWith("/business/");
-    }
-    if (catName === "technology") {
-      return currentPath === "/technology" || currentPath.startsWith("/technology/");
-    }
-    if (catName === "economy") {
-      return currentPath === "/news/economy" || currentPath === "/economy" || currentPath.startsWith("/news/economy/") || currentPath.startsWith("/economy/");
-    }
-    if (catName === "markets") {
-      return currentPath === "/news/markets" || currentPath === "/markets" || currentPath.startsWith("/news/markets/") || currentPath.startsWith("/markets/");
-    }
-    if (catName === "lifestyle") {
-      return currentPath === "/news/lifestyle" || currentPath === "/lifestyle" || currentPath.startsWith("/news/lifestyle/") || currentPath.startsWith("/lifestyle/");
-    }
-    if (catName === "sports") {
-      return currentPath === "/news/sports" || currentPath === "/sports" || currentPath.startsWith("/news/sports/") || currentPath.startsWith("/sports/");
-    }
-    if (catName === "entertainment") {
-      return currentPath === "/news/entertainment" || currentPath === "/entertainment" || currentPath.startsWith("/news/entertainment/") || currentPath.startsWith("/entertainment/");
-    }
-    if (catName === "health") {
-      return currentPath === "/news/health" || currentPath === "/health" || currentPath.startsWith("/news/health/") || currentPath.startsWith("/health/");
-    }
-    if (catName === "research") {
-      return currentPath === "/industry-insights" || currentPath === "/research" || currentPath.startsWith("/industry-insights/") || currentPath.startsWith("/research/");
-    }
-    return currentPath === cat.href.toLowerCase();
+    return currentPath === cat.href.toLowerCase() || currentPath === `/${catName}` || currentPath.startsWith(`/${catName}/`);
   };
 
   const navCategories = [
-    { name: "World", href: "/news/world", hasSub: true },
-    { name: "Politics", href: "/news/politics", hasSub: false },
-    { name: "Business", href: "/business", hasSub: false },
-    { name: "Technology", href: "/technology", hasSub: false },
-    { name: "Economy", href: "/news/economy", hasSub: false },
-    { name: "Markets", href: "/news/markets", hasSub: false },
-    { name: "Lifestyle", href: "/news/lifestyle", hasSub: false },
-    { name: "Sports", href: "/news/sports", hasSub: false },
-    { name: "Entertainment", href: "/news/entertainment", hasSub: false },
-    { name: "Health", href: "/news/health", hasSub: false },
-    { name: "Research", href: "/industry-insights", hasSub: false },
+    { name: "World", href: "/category/world", hasSub: true },
+    { name: "Politics", href: "/category/politics", hasSub: false },
+    { name: "Business", href: "/category/business", hasSub: false },
+    { name: "Technology", href: "/category/technology", hasSub: false },
+    { name: "Economy", href: "/category/economy", hasSub: false },
+    { name: "Markets", href: "/category/markets", hasSub: false },
+    { name: "Lifestyle", href: "/category/lifestyle", hasSub: false },
+    { name: "Sports", href: "/category/sports", hasSub: false },
+    { name: "Entertainment", href: "/category/entertainment", hasSub: false },
+    { name: "Health", href: "/category/health", hasSub: false },
+    { name: "Research", href: "/category/research", hasSub: false },
+    { name: "Interview", href: "/category/interview", hasSub: false },
   ];
 
   const [trendingTopics, setTrendingTopics] = useState([
@@ -554,7 +698,7 @@ export default function Header() {
     const syncTrending = () => {
       try {
         const saved = localStorage.getItem("dj_trending_words");
-        if (saved) {
+        if (saved && saved.trim()) {
           const list = JSON.parse(saved);
           if (Array.isArray(list) && list.length > 0) {
             const active = list
@@ -581,13 +725,13 @@ export default function Header() {
   }, []);
 
   const worldRegionsList = [
-    { name: "China", href: "/china" },
-    { name: "United States", href: "/united-states" },
-    { name: "Europe", href: "/europe" },
-    { name: "Britain", href: "/britain" },
-    { name: "Middle East", href: "/middle-east" },
-    { name: "Africa", href: "/africa" },
-    { name: "Asia", href: "/asia" },
+    { name: "China", href: "/category/china" },
+    { name: "United States", href: "/category/united-states" },
+    { name: "Europe", href: "/category/europe" },
+    { name: "Britain", href: "/category/britain" },
+    { name: "Middle East", href: "/category/middle-east" },
+    { name: "Africa", href: "/category/africa" },
+    { name: "Asia", href: "/category/asia" },
   ];
 
   return (
@@ -619,22 +763,144 @@ export default function Header() {
           />
         </Link>
 
-        {/* SEARCH INPUT BAR (Instant navigation link to /search, hidden when already on /search) */}
+        {/* SEARCH INPUT BAR (hidden when already on /search) */}
         {pathname !== "/search" ? (
-          <div className="hidden md:block relative flex-1 max-w-[460px] lg:max-w-[540px] mx-4 lg:mx-8">
-            <Link
-              href="/search"
-              prefetch={true}
-              className="flex items-center justify-between w-full pl-4 pr-3.5 py-2 text-[13px] border border-gray-300 rounded-full bg-gray-50/70 hover:bg-white hover:border-[#BF1E2D] text-gray-400 hover:text-gray-700 transition-all cursor-pointer shadow-2xs group"
-              aria-label="Open Search"
-            >
-              <span className="truncate select-none">
-                Search for news, topics, companies...
-              </span>
-              <span className="text-gray-400 group-hover:text-[#BF1E2D] transition-colors ml-2 shrink-0">
+          <div ref={headerSearchRef} className="hidden md:block relative flex-1 max-w-[460px] lg:max-w-[540px] mx-4 lg:mx-8">
+            <form onSubmit={handleSearchSubmit} className="relative w-full">
+              <input
+                type="text"
+                value={searchQuery}
+                onFocus={() => setIsSearchFocused(true)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setIsSearchFocused(true);
+                }}
+                placeholder="Search for news, topics, companies..."
+                className="w-full pl-4 pr-16 py-2 text-[13px] border border-gray-300 rounded-full bg-gray-50/70 hover:bg-white focus:bg-white hover:border-[#BF1E2D] focus:border-[#BF1E2D] text-gray-800 placeholder-gray-400 transition-all outline-none shadow-2xs group"
+                aria-label="Search"
+              />
+              {searchQuery.length > 0 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSearchQuery("");
+                    setSuggestedArticles([]);
+                    setIsSearchLoading(false);
+                  }}
+                  className="absolute right-9 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 transition-colors cursor-pointer p-0.5"
+                  aria-label="Clear search"
+                  title="Clear search"
+                >
+                  <X size={14} />
+                </button>
+              )}
+              <button
+                type="submit"
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#BF1E2D] transition-colors cursor-pointer"
+                aria-label="Submit search"
+              >
                 <Search size={16} strokeWidth={2.2} />
-              </span>
-            </Link>
+              </button>
+            </form>
+
+            {/* Suggestions Dropdown */}
+            {isSearchFocused && searchQuery.trim().length > 0 && (
+              <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-2xl border border-gray-200/90 overflow-hidden z-50 py-2 divide-y divide-gray-100 animate-in fade-in zoom-in-95 duration-150">
+                {isSearchLoading ? (
+                  /* Skeleton Loader while suggestions are loading */
+                  <div className="px-4 py-3 space-y-3">
+                    <div className="flex items-center justify-between text-[11px] font-mono uppercase tracking-wider text-gray-400 font-bold mb-1">
+                      <span>Searching articles...</span>
+                      <span className="w-2 h-2 rounded-full bg-[#BF1E2D] animate-ping" />
+                    </div>
+                    {[1, 2, 3].map((n) => (
+                      <div key={n} className="flex items-center gap-3 animate-pulse py-1">
+                        <div className="w-10 h-10 bg-gray-200 rounded-lg shrink-0" />
+                        <div className="min-w-0 flex-1 space-y-1.5">
+                          <div className="h-3.5 bg-gray-200 rounded-sm w-4/5" />
+                          <div className="flex items-center gap-2">
+                            <div className="h-2.5 bg-red-100 rounded-sm w-16" />
+                            <div className="h-2.5 bg-gray-100 rounded-sm w-24" />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : suggestedArticles.length > 0 ? (
+                  <>
+                    <div className="px-4 py-1.5 flex items-center justify-between text-[11px] font-mono uppercase tracking-wider text-gray-400 font-bold">
+                      <span>Suggested Articles</span>
+                      <span>{suggestedArticles.length} found</span>
+                    </div>
+                    <div className="py-1 max-h-[360px] overflow-y-auto">
+                      {suggestedArticles.map((art) => (
+                        <Link
+                          key={art.id}
+                          href={art.href}
+                          onClick={() => setIsSearchFocused(false)}
+                          className="flex items-center gap-3 px-4 py-2.5 hover:bg-red-50/60 transition-colors group cursor-pointer"
+                        >
+                          <img
+                            src={art.image || "/argentina_vs_switzerland.png"}
+                            alt={art.title}
+                            onError={(e) => { e.currentTarget.src = "/argentina_vs_switzerland.png"; }}
+                            className="w-10 h-10 rounded-lg object-cover shrink-0 border border-gray-100"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <h4 className="text-xs font-bold text-gray-900 group-hover:text-[#BF1E2D] line-clamp-1 transition-colors">
+                              {art.title}
+                            </h4>
+                            <div className="flex items-center gap-2 mt-0.5 text-[10.5px] text-gray-400 font-mono">
+                              <span className="text-[#BF1E2D] font-bold">{art.category}</span>
+                              {art.date && (
+                                <>
+                                  <span>•</span>
+                                  <span className="truncate">{art.date}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <span className="text-gray-300 group-hover:text-[#BF1E2D] shrink-0 text-xs transition-colors">
+                            ↗
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                    <div className="px-4 pt-2 pb-1 bg-gray-50/70">
+                      <button
+                        type="button"
+                        onClick={handleSearchSubmit}
+                        className="w-full text-center text-xs font-bold text-[#BF1E2D] hover:underline flex items-center justify-center gap-1.5 py-1 cursor-pointer"
+                      >
+                        <span>See all results for &quot;{searchQuery}&quot;</span>
+                        <Search size={13} />
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="p-5 text-center">
+                    <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-gray-100 flex items-center justify-center text-gray-400">
+                      <Search size={18} />
+                    </div>
+                    <p className="text-xs font-bold text-gray-800">
+                      No results found for &quot;{searchQuery}&quot;
+                    </p>
+                    <p className="text-[11px] text-gray-500 mt-1 max-w-[280px] mx-auto">
+                      Try searching for a different keyword, category, topic, or company name.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleSearchSubmit}
+                      className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 hover:bg-black text-white text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      <Search size={13} />
+                      <span>Search All Archives</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <div className="hidden md:block flex-1 mx-4 lg:mx-8" />
@@ -797,6 +1063,20 @@ export default function Header() {
         </div>
 
       </div>
+
+      {/* Article Reading Completion Bar */}
+      {(showProgressBar || readingProgress > 0) && (
+        <div 
+          className="absolute bottom-0 left-0 right-0 w-full h-[3.5px] bg-transparent pointer-events-none z-50 overflow-hidden"
+          aria-hidden="true"
+        >
+          <div 
+            className="h-full bg-[#BF1E2D] transition-[width] duration-75 ease-out"
+            style={{ width: `${readingProgress}%` }}
+          />
+        </div>
+      )}
+
     </div>
 
       {/* Spacer placeholder matching fixed Row 1 height */}
@@ -922,7 +1202,7 @@ export default function Header() {
 
               <div className="pt-2 mt-2 border-t border-gray-150 flex items-center justify-between">
                 <Link
-                  href="/news/world"
+                  href="/category/world"
                   onClick={() => setActiveMenu(null)}
                   className="text-[11px] font-extrabold text-[#BF1E2D] hover:underline flex items-center gap-1"
                 >
@@ -957,17 +1237,16 @@ export default function Header() {
             </div>
           </div>
 
-          {/* RIGHT: DATE, LOCATION & WEATHER WIDGET — desktop */}
+          {/* RIGHT: DATE, COUNTRY & WEATHER WIDGET — desktop */}
           <div className="hidden lg:flex items-center gap-3 text-[11.5px] text-gray-500 font-medium shrink-0">
             {currentDate && <span>{currentDate}</span>}
-            {currentDate && locationName && <span className="text-gray-300">•</span>}
-            {locationName && <span>{locationName}</span>}
-            {(locationName || currentDate) && weatherTemp !== null && <span className="text-gray-300">•</span>}
+            {currentDate && countryName && <span className="text-gray-300">•</span>}
+            {countryName && <span>{countryName}</span>}
+            {(countryName || currentDate) && weatherTemp !== null && <span className="text-gray-300">•</span>}
             
             {/* Weather Pill */}
             {weatherTemp !== null && (
               <div className="flex items-center gap-1 text-gray-800 font-semibold cursor-pointer hover:text-[#BF1E2D] bg-white px-2 py-0.5 rounded border border-gray-200 shadow-2xs transition-colors">
-                <span className="text-xs">{getWeatherIcon(weatherCode)}</span>
                 <span>{weatherTemp}°C</span>
               </div>
             )}
@@ -975,18 +1254,17 @@ export default function Header() {
 
         </div>
 
-        {/* MOBILE/TABLET ONLY: Date, Location & Weather row */}
-        {(currentDate || locationName || weatherTemp !== null) && (
+        {/* MOBILE/TABLET ONLY: Date, Country & Weather row */}
+        {(currentDate || countryName || weatherTemp !== null) && (
           <div className="lg:hidden max-w-[1400px] mx-auto px-3 sm:px-6 pb-1 pt-0.5 flex items-center justify-between gap-2 text-[10.5px] text-gray-500 font-medium">
             <div className="flex items-center gap-1.5 truncate min-w-0">
               {currentDate && <span className="truncate">{currentDate}</span>}
-              {currentDate && locationName && <span className="text-gray-300 shrink-0">•</span>}
-              {locationName && <span className="truncate text-gray-500">{locationName}</span>}
+              {currentDate && countryName && <span className="text-gray-300 shrink-0">•</span>}
+              {countryName && <span className="truncate text-gray-500">{countryName}</span>}
             </div>
 
             {weatherTemp !== null && (
               <div className="flex items-center gap-1 text-gray-800 font-semibold bg-white px-2 py-0.5 rounded border border-gray-200 shadow-2xs shrink-0">
-                <span className="text-xs">{getWeatherIcon(weatherCode)}</span>
                 <span className="text-[11px]">{weatherTemp}°C</span>
               </div>
             )}
@@ -1004,17 +1282,143 @@ export default function Header() {
           className="md:hidden fixed top-[58px] sm:top-[68px] left-0 right-0 z-40 bg-white text-gray-900 border-t border-b border-gray-200 py-4 px-4 space-y-4 shadow-2xl animate-in slide-in-from-top-2 duration-200 max-h-[calc(100dvh-58px)] sm:max-h-[calc(100dvh-68px)] overflow-y-auto"
         >
           
-          {/* Mobile Search Button (Instant navigation link to /search, hidden on /search page) */}
+          {/* Mobile Search Input */}
           {pathname !== "/search" && (
-            <Link
-              href="/search"
-              prefetch={true}
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="flex items-center justify-between w-full pl-4 pr-3.5 py-2.5 text-xs border border-gray-300 rounded-full bg-gray-50 text-gray-500 hover:text-gray-900 cursor-pointer"
-            >
-              <span>Search news, topics, companies...</span>
-              <Search size={16} className="text-gray-400" />
-            </Link>
+            <div ref={mobileSearchRef} className="relative w-full">
+              <form
+                onSubmit={(e) => {
+                  setIsMobileMenuOpen(false);
+                  setIsSearchFocused(false);
+                  handleSearchSubmit(e);
+                }}
+                className="relative w-full"
+              >
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setIsSearchFocused(true);
+                  }}
+                  placeholder="Search for news, topics, companies..."
+                  className="w-full pl-4 pr-16 py-2.5 text-xs border border-gray-300 rounded-full bg-gray-50 focus:bg-white text-gray-800 focus:border-[#BF1E2D] outline-none"
+                />
+                {searchQuery.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSearchQuery("");
+                      setSuggestedArticles([]);
+                      setIsSearchLoading(false);
+                    }}
+                    className="absolute right-9 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 transition-colors cursor-pointer p-0.5"
+                    aria-label="Clear search"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#BF1E2D]"
+                  aria-label="Submit search"
+                >
+                  <Search size={16} />
+                </button>
+              </form>
+
+              {/* Mobile Suggestions Dropdown */}
+              {isSearchFocused && searchQuery.trim().length > 0 && (
+                <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-2xl border border-gray-200/90 overflow-hidden z-50 py-2 divide-y divide-gray-100 animate-in fade-in zoom-in-95 duration-150">
+                  {isSearchLoading ? (
+                    <div className="px-4 py-3 space-y-3">
+                      <div className="flex items-center justify-between text-[11px] font-mono uppercase tracking-wider text-gray-400 font-bold mb-1">
+                        <span>Searching articles...</span>
+                        <span className="w-2 h-2 rounded-full bg-[#BF1E2D] animate-ping" />
+                      </div>
+                      {[1, 2, 3].map((n) => (
+                        <div key={n} className="flex items-center gap-3 animate-pulse py-1">
+                          <div className="w-9 h-9 bg-gray-200 rounded-lg shrink-0" />
+                          <div className="min-w-0 flex-1 space-y-1.5">
+                            <div className="h-3.5 bg-gray-200 rounded-sm w-4/5" />
+                            <div className="h-2.5 bg-red-100 rounded-sm w-16" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : suggestedArticles.length > 0 ? (
+                    <>
+                      <div className="px-4 py-1.5 flex items-center justify-between text-[11px] font-mono uppercase tracking-wider text-gray-400 font-bold">
+                        <span>Suggested Articles</span>
+                        <span>{suggestedArticles.length} found</span>
+                      </div>
+                      <div className="py-1 max-h-[260px] overflow-y-auto">
+                        {suggestedArticles.map((art) => (
+                          <Link
+                            key={art.id}
+                            href={art.href}
+                            onClick={() => {
+                              setIsSearchFocused(false);
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className="flex items-center gap-3 px-4 py-2 hover:bg-red-50/60 transition-colors group cursor-pointer"
+                          >
+                            <img
+                              src={art.image || "/argentina_vs_switzerland.png"}
+                              alt={art.title}
+                              onError={(e) => { e.currentTarget.src = "/argentina_vs_switzerland.png"; }}
+                              className="w-9 h-9 rounded-lg object-cover shrink-0 border border-gray-100"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <h4 className="text-xs font-bold text-gray-900 group-hover:text-[#BF1E2D] line-clamp-1 transition-colors">
+                                {art.title}
+                              </h4>
+                              <span className="text-[10px] text-[#BF1E2D] font-bold font-mono">{art.category}</span>
+                            </div>
+                            <span className="text-gray-300 group-hover:text-[#BF1E2D] shrink-0 text-xs transition-colors">
+                              ↗
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
+                      <div className="px-4 pt-2 pb-1 bg-gray-50/70">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            setIsMobileMenuOpen(false);
+                            setIsSearchFocused(false);
+                            handleSearchSubmit(e);
+                          }}
+                          className="w-full text-center text-xs font-bold text-[#BF1E2D] hover:underline flex items-center justify-center gap-1.5 py-1 cursor-pointer"
+                        >
+                          <span>See all results for &quot;{searchQuery}&quot;</span>
+                          <Search size={13} />
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="p-4 text-center">
+                      <p className="text-xs font-bold text-gray-800">
+                        No results found for &quot;{searchQuery}&quot;
+                      </p>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          setIsMobileMenuOpen(false);
+                          setIsSearchFocused(false);
+                          handleSearchSubmit(e);
+                        }}
+                        className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 hover:bg-black text-white text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        <Search size={13} />
+                        <span>Search All Archives</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           )}
 
           {/* Action Row 1: Subscribe & Newsletter */}
@@ -1116,7 +1520,7 @@ export default function Header() {
                         isApproved = true;
                       } else {
                         const writersListStr = localStorage.getItem("dj_writers_list");
-                        if (writersListStr) {
+                        if (writersListStr && writersListStr.trim()) {
                           try {
                             const wList: any[] = JSON.parse(writersListStr);
                             isApproved = wList.some((w: any) => w.email && w.email.toLowerCase().trim() === email && (w.status === "Active" || !w.status));
@@ -1245,7 +1649,7 @@ export default function Header() {
                     </div>
                     <div className="pt-1.5 border-t border-gray-200/60">
                       <Link
-                        href="/news/world"
+                        href="/category/world"
                         onClick={() => setIsMobileMenuOpen(false)}
                         className="block py-1 px-2 text-[11px] font-extrabold text-[#BF1E2D] hover:underline"
                       >

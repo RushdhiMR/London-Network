@@ -27,7 +27,14 @@ export function saveUserProfile(user: UserProfileData) {
 
     // 1. Save to central dj_user_profiles_db
     const existingDbStr = localStorage.getItem("dj_user_profiles_db");
-    const profilesDb: Record<string, UserProfileData> = existingDbStr ? JSON.parse(existingDbStr) : {};
+    let profilesDb: Record<string, UserProfileData> = {};
+    if (existingDbStr && existingDbStr.trim()) {
+      try {
+        profilesDb = JSON.parse(existingDbStr);
+      } catch (e) {
+        profilesDb = {};
+      }
+    }
     
     const updatedProfile = {
       ...profilesDb[emailKey],
@@ -133,13 +140,13 @@ export function saveUserProfile(user: UserProfileData) {
             const b2Profile = { ...updatedProfile, avatar: data.user.avatar };
             try {
               const existingDb = localStorage.getItem("dj_user_profiles_db");
-              const dbObj = existingDb ? JSON.parse(existingDb) : {};
+              const dbObj = (existingDb && existingDb.trim()) ? JSON.parse(existingDb) : {};
               dbObj[emailKey] = b2Profile;
               safeSetItem("dj_user_profiles_db", JSON.stringify(dbObj));
               safeSetItem("dj_user_profile", JSON.stringify(b2Profile));
               ["dj_user", "dj_writer_user"].forEach((k) => {
                 const s = localStorage.getItem(k);
-                if (s) {
+                if (s && s.trim()) {
                   const o = JSON.parse(s);
                   if (o?.email && o.email.toLowerCase().trim() === emailKey) {
                     o.avatar = data.user.avatar;
@@ -173,11 +180,13 @@ export function getUserProfile(email?: string | null): UserProfileData | null {
   try {
     // 1. Central profiles DB
     const existingDbStr = localStorage.getItem("dj_user_profiles_db");
-    if (existingDbStr) {
-      const profilesDb: Record<string, UserProfileData> = JSON.parse(existingDbStr);
-      if (profilesDb[emailKey]) {
-        return profilesDb[emailKey];
-      }
+    if (existingDbStr && existingDbStr.trim()) {
+      try {
+        const profilesDb: Record<string, UserProfileData> = JSON.parse(existingDbStr);
+        if (profilesDb[emailKey]) {
+          return profilesDb[emailKey];
+        }
+      } catch (e) {}
     }
 
     // 2. Active profile object
@@ -452,41 +461,55 @@ export function isEmailAlreadyRegistered(email?: string | null): { exists: boole
   try {
     // 1. Check central profiles DB
     const existingDbStr = typeof window !== "undefined" ? localStorage.getItem("dj_user_profiles_db") : null;
-    if (existingDbStr) {
-      const profilesDb: Record<string, UserProfileData> = JSON.parse(existingDbStr);
-      if (profilesDb[target]) {
-        return { exists: true, role: profilesDb[target].role, user: profilesDb[target] };
-      }
+    if (existingDbStr && existingDbStr.trim()) {
+      try {
+        const profilesDb: Record<string, UserProfileData> = JSON.parse(existingDbStr);
+        if (profilesDb[target]) {
+          return { exists: true, role: profilesDb[target].role, user: profilesDb[target] };
+        }
+      } catch (e) {}
     }
 
     // 2. Check registered users list
     const regStr = typeof window !== "undefined" ? localStorage.getItem("dj_registered_users") : null;
-    if (regStr) {
-      const regList: any[] = JSON.parse(regStr);
-      const found = regList.find((u) => u.email && u.email.toLowerCase().trim() === target);
-      if (found) {
-        return { exists: true, role: found.role, user: found };
-      }
+    if (regStr && regStr.trim()) {
+      try {
+        const regList: any[] = JSON.parse(regStr);
+        if (Array.isArray(regList)) {
+          const found = regList.find((u) => u.email && u.email.toLowerCase().trim() === target);
+          if (found) {
+            return { exists: true, role: found.role, user: found };
+          }
+        }
+      } catch (e) {}
     }
 
     // 3. Check writers list
     const writerStr = typeof window !== "undefined" ? localStorage.getItem("dj_writers_list") : null;
-    if (writerStr) {
-      const writerList: any[] = JSON.parse(writerStr);
-      const found = writerList.find((w) => w.email && w.email.toLowerCase().trim() === target);
-      if (found) {
-        return { exists: true, role: "Writer", user: found };
-      }
+    if (writerStr && writerStr.trim()) {
+      try {
+        const writerList: any[] = JSON.parse(writerStr);
+        if (Array.isArray(writerList)) {
+          const found = writerList.find((w) => w.email && w.email.toLowerCase().trim() === target);
+          if (found) {
+            return { exists: true, role: "Writer", user: found };
+          }
+        }
+      } catch (e) {}
     }
 
     // 4. Check co-admins list
     const coStr = typeof window !== "undefined" ? localStorage.getItem("dj_co_admins_list") : null;
-    if (coStr) {
-      const coList: any[] = JSON.parse(coStr);
-      const found = coList.find((c) => c.email && c.email.toLowerCase().trim() === target);
-      if (found) {
-        return { exists: true, role: "Co-Admin", user: found };
-      }
+    if (coStr && coStr.trim()) {
+      try {
+        const coList: any[] = JSON.parse(coStr);
+        if (Array.isArray(coList)) {
+          const found = coList.find((c) => c.email && c.email.toLowerCase().trim() === target);
+          if (found) {
+            return { exists: true, role: "Co-Admin", user: found };
+          }
+        }
+      } catch (e) {}
     }
   } catch (err) {
     console.warn("Failed to check duplicate email:", err);
@@ -503,10 +526,179 @@ export function isEmailDeletedOnClient(email?: string | null): boolean {
   const target = email.toLowerCase().trim();
   try {
     const blStr = localStorage.getItem("dj_deleted_users_blacklist");
-    if (blStr) {
+    if (blStr && blStr.trim()) {
       const list: string[] = JSON.parse(blStr);
-      return list.some((e) => e.toLowerCase().trim() === target);
+      if (Array.isArray(list)) {
+        return list.some((e) => e.toLowerCase().trim() === target);
+      }
     }
   } catch (e) {}
   return false;
+}
+
+const inMemoryBookmarkCache: Record<string, string> = {};
+
+/**
+ * Frees up localStorage space when quota is reached by purging non-critical caches
+ * and truncating oversized transient items.
+ */
+function freeBulkyLocalStorageSpace() {
+  if (typeof window === "undefined") return;
+
+  // 1. Remove non-essential transient caches
+  const transientKeys = [
+    "dj_articles_cache",
+    "dj_recent_searches",
+    "dj_editing_post",
+    "dj_trashed_articles",
+    "dj_deleted_articles",
+    "dj_live_articles_cache",
+  ];
+  for (const k of transientKeys) {
+    try {
+      localStorage.removeItem(k);
+    } catch (e) {}
+  }
+
+  // 2. Remove bulky comment caches
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && (k.startsWith("dj_article_comments_") || k.startsWith("temp_"))) {
+        localStorage.removeItem(k);
+      }
+    }
+  } catch (e) {}
+
+  // 3. Prune bulky data URLs or oversized drafts in dj_writer_submitted_articles
+  try {
+    const writerStr = localStorage.getItem("dj_writer_submitted_articles");
+    if (writerStr && writerStr.length > 25000) {
+      const parsed = JSON.parse(writerStr);
+      if (Array.isArray(parsed)) {
+        const trimmed = parsed.slice(0, 10).map((a: any) => ({
+          ...a,
+          image: typeof a?.image === "string" && a.image.startsWith("data:") ? "" : a.image,
+          content: typeof a?.content === "string" && a.content.length > 5000 ? a.content.slice(0, 5000) : a.content,
+        }));
+        localStorage.setItem("dj_writer_submitted_articles", JSON.stringify(trimmed));
+      }
+    }
+  } catch (e) {}
+}
+
+/**
+ * Deduplicates bookmarks by unique ID and title so an article can never appear twice.
+ */
+export function deduplicateBookmarkList(list: any[]): any[] {
+  if (!Array.isArray(list)) return [];
+  const seenIds = new Set<string>();
+  const seenTitles = new Set<string>();
+  const deduplicated: any[] = [];
+
+  for (const item of list) {
+    if (!item) continue;
+    const itemId = String(item?.id || item?.article_id || "").trim();
+    const itemTitle = String(item?.title || "").trim().toLowerCase();
+
+    if (itemId && seenIds.has(itemId)) continue;
+    if (itemTitle && itemTitle !== "untitled article" && seenTitles.has(itemTitle)) continue;
+
+    if (itemId) seenIds.add(itemId);
+    if (itemTitle && itemTitle !== "untitled article") seenTitles.add(itemTitle);
+    deduplicated.push(item);
+  }
+  return deduplicated;
+}
+
+/**
+ * Safely reads bookmarks for a user, checking localStorage, sessionStorage,
+ * and an in-memory fallback, and automatically deduplicates entries.
+ */
+export function safeGetBookmarksFromStorage(key: string): any[] {
+  if (typeof window === "undefined" || !key) return [];
+  try {
+    let raw = localStorage.getItem(key);
+    if (!raw && typeof sessionStorage !== "undefined") {
+      raw = sessionStorage.getItem(key);
+    }
+    if (!raw && inMemoryBookmarkCache[key]) {
+      raw = inMemoryBookmarkCache[key];
+    }
+    if (raw && raw.trim()) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return deduplicateBookmarkList(parsed);
+    }
+  } catch (e) {}
+  return [];
+}
+
+/**
+ * Saves reader bookmarks safely to storage with automatic quota cleanup
+ * and fallbacks to prevent QuotaExceededError. Deduplicates list before storing.
+ */
+export function safeSaveBookmarksToStorage(key: string, list: any[]): boolean {
+  if (typeof window === "undefined" || !key) return false;
+
+  // Deduplicate before saving to prevent duplicate articles
+  const deduplicated = deduplicateBookmarkList(Array.isArray(list) ? list : []);
+
+  // 1. Sanitize list into lightweight bookmarks without heavy data URLs
+  const cleaned = deduplicated.slice(0, 30).map((item) => {
+    const rawImg = item?.image || "";
+    const safeImg = typeof rawImg === "string" && !rawImg.startsWith("data:") && rawImg.length < 500 ? rawImg : "";
+    return {
+      id: String(item?.id || ""),
+      title: String(item?.title || "Article").slice(0, 250),
+      category: String(item?.category || "GENERAL").slice(0, 50),
+      href: String(item?.href || "/").slice(0, 250),
+      date: String(item?.date || "Recent").slice(0, 50),
+      image: safeImg,
+      savedAt: String(item?.savedAt || new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })),
+    };
+  });
+
+  const serialized = JSON.stringify(cleaned);
+  inMemoryBookmarkCache[key] = serialized;
+
+  // Always mirror to sessionStorage as a safe secondary quota
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.setItem(key, serialized);
+    }
+  } catch (e) {}
+
+  // 2. Attempt writing to localStorage
+  try {
+    localStorage.setItem(key, serialized);
+    return true;
+  } catch (err: any) {
+    // Quota reached: free up bulky cache items and retry
+    freeBulkyLocalStorageSpace();
+
+    try {
+      localStorage.setItem(key, serialized);
+      return true;
+    } catch (err2) {
+      // 3. Compact fallback: remove images and take top 20
+      try {
+        const compact = cleaned.slice(0, 20).map(({ id, title, category, href, date, savedAt }) => ({
+          id, title, category, href, date, savedAt
+        }));
+        const compactSerialized = JSON.stringify(compact);
+        inMemoryBookmarkCache[key] = compactSerialized;
+        try {
+          if (typeof sessionStorage !== "undefined") {
+            sessionStorage.setItem(key, compactSerialized);
+          }
+        } catch (e) {}
+
+        localStorage.setItem(key, compactSerialized);
+        return true;
+      } catch (err3) {
+        // Fallback silently without throwing or calling console.error which triggers Next.js dev overlay
+        return true;
+      }
+    }
+  }
 }

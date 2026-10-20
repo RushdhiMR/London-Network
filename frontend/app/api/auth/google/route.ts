@@ -115,12 +115,13 @@ export async function POST(request: Request) {
       };
     }
 
-    await setAuthCookie(userPayload);
+    const token = await setAuthCookie(userPayload);
 
     return NextResponse.json({
       success: true,
       message: 'Google authentication successful',
       user: userPayload,
+      token,
     });
   } catch (error: any) {
     console.error('[Google Auth] Error:', error);

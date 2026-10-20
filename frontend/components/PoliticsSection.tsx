@@ -51,7 +51,7 @@ export default function PoliticsSection() {
     title: a.title,
     description: a.description || a.summary || "",
     image: a.imageUrl || a.image || "https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?w=800&h=480&fit=crop",
-    href: `/${(a.category || "politics").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${a.slug || String(a.id)}`
+    href: `/article/${a.slug || String(a.id)}`
   }));
 
   if (displayArticles.length === 0) {

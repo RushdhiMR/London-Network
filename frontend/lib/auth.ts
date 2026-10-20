@@ -51,7 +51,7 @@ export async function comparePassword(password: string, hash: string): Promise<b
  * Signs JWT authentication token containing user payload
  */
 export function signAuthToken(payload: JWTPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
 }
 
 /**
@@ -66,7 +66,8 @@ export function verifyAuthToken(token: string): JWTPayload | null {
 }
 
 /**
- * Sets secure HTTP-Only session cookie in Next.js response headers
+ * Sets secure HTTP-Only session cookie in Next.js response headers.
+ * Uses standard session cookie (no maxAge/expires) so it clears when the browser is closed.
  */
 export async function setAuthCookie(payload: JWTPayload): Promise<string> {
   const token = signAuthToken(payload);
@@ -77,34 +78,46 @@ export async function setAuthCookie(payload: JWTPayload): Promise<string> {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
-    maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
   });
 
   return token;
 }
 
-/**
- * Clears HTTP-Only session cookie
- */
 export async function clearAuthCookie(): Promise<void> {
   const cookieStore = await cookies();
+  cookieStore.delete(AUTH_COOKIE_NAME);
   cookieStore.set(AUTH_COOKIE_NAME, '', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
     maxAge: 0,
+    expires: new Date(0),
   });
 }
 
 /**
- * Retrieves & verifies current session user from HTTP-Only cookie,
+ * Retrieves & verifies current session user from request header (tab session) or HTTP-Only cookie,
  * fetching fresh database user record to ensure roles are strictly server-enforced.
  */
-export async function getAuthSession(): Promise<JWTPayload | null> {
+export async function getAuthSession(req?: Request): Promise<JWTPayload | null> {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
+    let token: string | undefined;
+
+    // 1. Inspect request header for tab-specific session token
+    if (req) {
+      const authHeader = req.headers.get('authorization') || req.headers.get('x-tab-session');
+      if (authHeader) {
+        token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader.trim();
+      }
+    }
+
+    // 2. Fall back to cookie if no header token was supplied
+    if (!token) {
+      const cookieStore = await cookies();
+      token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
+    }
+
     if (!token) return null;
 
     const decoded = verifyAuthToken(token);

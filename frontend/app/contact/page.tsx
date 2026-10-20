@@ -160,10 +160,10 @@ export default function ContactUsPage() {
                       <Mail className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="font-serif font-bold text-slate-900 text-base">Editorial & Newsroom</h3>
-                      <p className="text-xs text-slate-500 mt-0.5">Press releases, research breakthroughs, story leads</p>
-                      <a href="mailto:editorial@londonbigben.com" className="inline-block mt-2 font-mono text-xs font-bold text-[#BF1E2D] hover:underline">
-                        editorial@londonbigben.com
+                      <h3 className="font-serif font-bold text-slate-900 text-base">Press &amp; Newsroom</h3>
+                      <p className="text-xs text-slate-500 mt-0.5">News tips, media inquiries, press releases &amp; corrections</p>
+                      <a href="mailto:press@londonbigben.com" className="inline-block mt-2 font-mono text-xs font-bold text-[#BF1E2D] hover:underline">
+                        press@londonbigben.com
                       </a>
                     </div>
                   </div>
@@ -175,10 +175,10 @@ export default function ContactUsPage() {
                       <ShieldCheck className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="font-serif font-bold text-slate-900 text-base">Advertising & Partnerships</h3>
-                      <p className="text-xs text-slate-500 mt-0.5">Commercial campaigns, brand sponsorships & events</p>
-                      <a href="mailto:partnerships@londonbigben.com" className="inline-block mt-2 font-mono text-xs font-bold text-blue-600 hover:underline">
-                        partnerships@londonbigben.com
+                      <h3 className="font-serif font-bold text-slate-900 text-base">Advertising &amp; Partnerships</h3>
+                      <p className="text-xs text-slate-500 mt-0.5">Commercial campaigns, brand sponsorships &amp; partnerships</p>
+                      <a href="mailto:press@londonbigben.com" className="inline-block mt-2 font-mono text-xs font-bold text-blue-600 hover:underline">
+                        press@londonbigben.com
                       </a>
                     </div>
                   </div>

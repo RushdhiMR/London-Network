@@ -32,20 +32,31 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // If no cookie, allow client-side auth context to verify localStorage/sessionStorage
+  // If no session cookie, user is logged out -> redirect to appropriate login
   if (!sessionCookie) {
-    return NextResponse.next();
+    if (isAdminRoute) {
+      return NextResponse.redirect(new URL('/admin/login', request.url));
+    }
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
   const payload = decodeJWTPayload(sessionCookie);
   if (!payload) {
-    return NextResponse.next();
+    if (isAdminRoute) {
+      return NextResponse.redirect(new URL('/admin/login', request.url));
+    }
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
   const role = (payload.role || '').toLowerCase().trim();
   const email = (payload.email || '').toLowerCase().trim();
   const isAdmin = role === 'admin' || role === 'co-admin' || role === 'editor' || email.includes('admin') || payload.id === 1;
   const isWriter = isAdmin || role === 'writer' || role === 'editor' || email.includes('writer');
+
+  // Admin route protection: must have admin role
+  if (isAdminRoute && !isAdmin) {
+    return NextResponse.redirect(new URL(isWriter ? '/writer' : '/reader', request.url));
+  }
 
   // Writer route protection if signed in as reader only
   if (isWriterRoute && !isWriter && role === 'reader') {

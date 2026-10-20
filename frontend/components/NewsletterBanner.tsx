@@ -4,11 +4,32 @@ import { useState } from "react";
 import Link from "next/link";
 import { Mail } from "lucide-react";
 
-export default function NewsletterBanner() {
-  const [email, setEmail] = useState("");
-  const [subscribed, setSubscribed] = useState(false);
+interface NewsletterBannerProps {
+  email?: string;
+  setEmail?: (val: string) => void;
+  onSubmit?: (e: React.FormEvent) => void;
+  subscribed?: boolean;
+}
+
+export default function NewsletterBanner({
+  email: propEmail,
+  setEmail: propSetEmail,
+  onSubmit: propOnSubmit,
+  subscribed: propSubscribed,
+}: NewsletterBannerProps = {}) {
+  const [internalEmail, setInternalEmail] = useState("");
+  const [internalSubscribed, setInternalSubscribed] = useState(false);
+
+  const email = propEmail !== undefined ? propEmail : internalEmail;
+  const setEmail = propSetEmail || setInternalEmail;
+  const subscribed = propSubscribed !== undefined ? propSubscribed : internalSubscribed;
 
   const handleSubmit = async (e: React.FormEvent) => {
+    if (propOnSubmit) {
+      propOnSubmit(e);
+      return;
+    }
+
     e.preventDefault();
     if (!email) return;
 
@@ -22,10 +43,10 @@ export default function NewsletterBanner() {
       console.warn("Newsletter API request error:", e);
     }
 
-    setSubscribed(true);
+    setInternalSubscribed(true);
     setTimeout(() => {
-      setSubscribed(false);
-      setEmail("");
+      setInternalSubscribed(false);
+      setInternalEmail("");
     }, 4000);
   };
 

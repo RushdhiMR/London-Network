@@ -1,17 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Share2, Bookmark } from "lucide-react";
 import { useLiveArticles, isLatestNews } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
+import { safeSaveBookmarksToStorage, safeGetBookmarksFromStorage } from "@/lib/userProfiles";
 
 export default function LatestNewsSection() {
+  const router = useRouter();
   const { articles: liveArticles = [] } = useLiveArticles();
   const auth = useAuth();
   const [email, setEmail] = useState("");
   const [subscribed, setSubscribed] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
   const getArticleTimestamp = (item: any): number => {
     if (!item) return 0;
     if (item.published_at || item.publishedAt) {
@@ -59,32 +68,147 @@ export default function LatestNewsSection() {
       title: post.title,
       time: displayDate,
       image: post.imageUrl || post.image || (post as any).image_url || "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=300&h=200&fit=crop",
-      href: `/${(post.category || "news").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}/${post.slug || (post.title || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}`,
+      href: `/article/${post.slug || (post.title || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}`,
       summary: post.summary || post.content?.replace(/<[^>]+>/g, "").slice(0, 140) + "..."
     };
   });
 
   const handleSubscribe = (e: React.FormEvent) => {
     e.preventDefault();
-    if (email.trim()) {
-      setSubscribed(true);
-      setEmail("");
-      setTimeout(() => setSubscribed(false), 4000);
+    const trimmed = email.trim();
+    if (trimmed) {
+      router.push(`/newsletters?email=${encodeURIComponent(trimmed)}`);
     }
   };
 
-  if (publishedNews.length === 0) {
-    return null;
-  }
-
   const mainFeatured = publishedNews[0];
+
+  useEffect(() => {
+    const checkBookmark = () => {
+      if (!auth.authenticated || !auth.user || !auth.user.email) {
+        setBookmarked(false);
+        return;
+      }
+      const role = (auth.user.role || "").toLowerCase();
+      if (role === "writer" || role === "admin" || role === "co-admin") {
+        setBookmarked(false);
+        return;
+      }
+      try {
+        const sanitizedEmail = auth.user.email.trim().toLowerCase().replace(/[^a-z0-9]/g, "_");
+        const key = `dj_bookmarks_${sanitizedEmail}`;
+        const list = safeGetBookmarksFromStorage(key);
+        if (Array.isArray(list) && mainFeatured?.title) {
+          const exists = list.some((item) => (item.title || "").trim().toLowerCase() === mainFeatured.title.trim().toLowerCase());
+          setBookmarked(exists);
+          return;
+        }
+      } catch (e) {}
+      setBookmarked(false);
+    };
+
+    checkBookmark();
+    window.addEventListener("dj_bookmarks_updated", checkBookmark);
+    return () => {
+      window.removeEventListener("dj_bookmarks_updated", checkBookmark);
+    };
+  }, [auth.user, auth.authenticated, mainFeatured?.title]);
+
+  const handleBookmarkClick = () => {
+    if (!auth.authenticated || !auth.user) {
+      showToast("🚫 Bookmarking is available for Reader accounts only. Please sign in.");
+      setTimeout(() => {
+        router.push(`/login?redirect=${encodeURIComponent(typeof window !== "undefined" ? window.location.pathname : "/")}`);
+      }, 1200);
+      return;
+    }
+
+    const role = (auth.user.role || "").toLowerCase();
+    const email = (auth.user.email || "").toLowerCase();
+    const isStaffOrAdmin =
+      role === "writer" ||
+      role === "admin" ||
+      role === "co-admin" ||
+      email.includes("writer") ||
+      email.includes("admin");
+
+    if (isStaffOrAdmin) {
+      showToast("🚫 Bookmarking is available for Reader accounts only.");
+      return;
+    }
+
+    try {
+      const sanitizedEmail = auth.user.email.trim().toLowerCase().replace(/[^a-z0-9]/g, "_");
+      const key = `dj_bookmarks_${sanitizedEmail}`;
+      const list: any[] = [...safeGetBookmarksFromStorage(key)];
+
+      const targetTitle = (mainFeatured?.title || "").trim().toLowerCase();
+      const targetId = String((mainFeatured as any)?.id || "");
+      const existsIndex = list.findIndex((item) => {
+        if (!item) return false;
+        if (targetId && item.id && String(item.id) === targetId) return true;
+        const itTitle = (item.title || "").trim().toLowerCase();
+        return Boolean(itTitle && targetTitle && itTitle === targetTitle);
+      });
+
+      if (existsIndex >= 0) {
+        list.splice(existsIndex, 1);
+        safeSaveBookmarksToStorage(key, list);
+        setBookmarked(false);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("dj_bookmarks_updated"));
+        }
+        showToast("Article removed from your Saved Reading List.");
+      } else {
+        let safeImage = mainFeatured.image || "";
+        if (typeof safeImage === "string" && (safeImage.length > 500 || safeImage.startsWith("data:"))) {
+          safeImage = "";
+        }
+
+        const newBookmark = {
+          id: targetId,
+          title: mainFeatured.title,
+          category: (mainFeatured.category || "WORLD").toUpperCase(),
+          href: mainFeatured.href || "/",
+          date: (mainFeatured.time || "Oct 2026").split("•")[0].trim(),
+          image: safeImage,
+          savedAt: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+        };
+        const filtered = list.filter((item) => {
+          if (!item) return false;
+          if (targetId && item.id && String(item.id) === targetId) return false;
+          const itTitle = (item.title || "").trim().toLowerCase();
+          if (mainFeatured.title && itTitle && itTitle === mainFeatured.title.trim().toLowerCase()) return false;
+          return true;
+        });
+        filtered.unshift(newBookmark);
+        safeSaveBookmarksToStorage(key, filtered);
+        setBookmarked(true);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("dj_bookmarks_updated"));
+        }
+        showToast("✓ Article saved to your personal Reader reading list!");
+      }
+    } catch (e) {
+      console.warn(e);
+      showToast("❌ Could not update saved reading list.");
+    }
+  };
+
   if (!mainFeatured) {
     return null;
   }
   const displayStacked = publishedNews.length > 1 ? publishedNews.slice(1, 4) : [];
 
   return (
-    <section className="max-w-[1400px] mx-auto px-4 md:px-6 pt-10 pb-0 font-sans">
+    <section className="max-w-[1400px] mx-auto px-4 md:px-6 pt-10 pb-0 font-sans relative">
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 bg-zinc-900 text-white text-xs font-bold py-2.5 px-6 rounded-full border border-zinc-700 shadow-2xl flex items-center justify-center gap-2 z-[9999] animate-in fade-in">
+          <span>{toastMessage}</span>
+        </div>
+      )}
 
       {/* SECTION HEADER */}
       <div className="flex items-center gap-2 mb-8">
@@ -151,21 +275,10 @@ export default function LatestNewsSection() {
                   <Share2 size={15} strokeWidth={2} />
                 </button>
                 <button
-                  onClick={() => {
-                    try {
-                      if (auth.user) {
-                        const role = (auth.user.role || "").toLowerCase();
-                        const email = (auth.user.email || "").toLowerCase();
-                        if (role === "writer" || role === "admin" || email.includes("writer") || email.includes("admin")) {
-                          alert("🚫 Bookmarking is available for Reader accounts only. Writer & Admin accounts cannot save articles.");
-                          return;
-                        }
-                      }
-                    } catch (e) {}
-                    setBookmarked(!bookmarked);
-                  }}
+                  onClick={handleBookmarkClick}
                   className={`cursor-pointer p-1 transition-colors ${bookmarked ? "text-[#D31220]" : "hover:text-gray-700"}`}
                   aria-label="Bookmark article"
+                  title={bookmarked ? "Remove from Saved Reading List" : "Save to Reader Reading List"}
                 >
                   <Bookmark size={15} strokeWidth={2} fill={bookmarked ? "currentColor" : "none"} />
                 </button>

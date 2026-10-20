@@ -13,6 +13,8 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const dynamicParams = true;
 
+import { redirect } from 'next/navigation';
+
 interface PageProps {
   params: Promise<{
     category: string;
@@ -145,6 +147,11 @@ const parentConfig: Record<string, { name: string; color: string; desc: string }
     name: "Asia",
     color: "bg-sky-50",
     desc: "covers Asia-Pacific tech hubs, manufacturing, and diplomatic partnerships."
+  },
+  "interview": {
+    name: "Interview",
+    color: "bg-[#FFE9D6]",
+    desc: "features in-depth conversations with global leaders, founders, and changemakers."
   }
 };
 
@@ -1341,7 +1348,7 @@ async function getNewsContent(slug: string) {
   if (!dbArticle && typeof window !== "undefined") {
     try {
       const stored = localStorage.getItem("dj_writer_submitted_articles");
-      if (stored) {
+      if (stored && stored.trim()) {
         const posts: any[] = JSON.parse(stored);
         localArticle = posts.find((p) => {
           const pSlug = (p.title || "")
@@ -1363,7 +1370,8 @@ async function getNewsContent(slug: string) {
       const dbPath = path.join(process.cwd(), "data", "digital_journal_db.json");
       if (fs.existsSync(dbPath)) {
         const raw = fs.readFileSync(dbPath, "utf-8");
-        const parsed = JSON.parse(raw);
+        if (raw && raw.trim()) {
+          const parsed = JSON.parse(raw);
         if (Array.isArray(parsed.articles)) {
           const clean = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
           const targetClean = clean(slug);
@@ -1373,97 +1381,31 @@ async function getNewsContent(slug: string) {
                    String(a.id) === String(slug);
           });
         }
+        }
       }
     } catch (e) {}
   }
 
   const artSource = dbArticle || localArticle || serverArticle;
 
-  const existing = artSource
-    ? {
-        title: artSource.title,
-        authorName: artSource.authorName || artSource.author || "Rushdhi MR",
-        authorAvatar: artSource.authorAvatar || "/author_bluesuit.jpg",
-        authorBio: artSource.authorBio || "Journalist for London BigBen.",
-        date: artSource.date || "July 28, 2026",
-        image: artSource.imageUrl || artSource.image || "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1200&h=750&fit=crop",
-        caption: artSource.subheading || artSource.summary || `${artSource.title}. (Photo courtesy of London BigBen)`,
-        category: artSource.category,
-        subcategories: Array.isArray(artSource.subcategories) ? artSource.subcategories : (Array.isArray(artSource.subCategories) ? artSource.subCategories : []),
-        tags: (artSource.tags && artSource.tags.length > 0) ? artSource.tags : (artSource.hashtags || artSource.seo?.keywords || []),
-        rawContent: artSource.content || "",
-        sections: [
-          {
-            heading: "",
-            paragraphs: artSource.content
-              ? [artSource.content]
-              : [artSource.summary || "Article content."]
-          }
-        ]
-      }
-    : customNewsDatabase[slug];
+  if (!artSource) {
+    return null;
+  }
 
-  const title = existing ? existing.title : formatTitleFromSlug(slug);
-  const authorName = existing ? existing.authorName : "Rushdhi MR";
-  
+  const title = artSource.title;
+  const authorName = artSource.authorName || artSource.author || "Rushdhi MR";
   const mappedAuthor = authorAvatarMap[authorName];
-  const authorAvatar = existing?.authorAvatar || mappedAuthor?.avatar || (
+  const authorAvatar = artSource.authorAvatar || mappedAuthor?.avatar || (
     authorName.toLowerCase().includes('roomi') ? "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_glasses.jpg" :
     authorName.toLowerCase().includes('muba') ? "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_woman.jpg" :
     authorName.toLowerCase().includes('ruzni') ? "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_beard.jpg" :
-    "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_bluesuit.jpg"
+    "/author_bluesuit.jpg"
   );
-  const authorBio = existing?.authorBio || mappedAuthor?.bio || `${authorName} is a dedicated journalist for London BigBen covering breaking news, enterprise technology, and policy developments.`;
+  const authorBio = artSource.authorBio || mappedAuthor?.bio || `${authorName} is a dedicated journalist for London BigBen covering breaking news, enterprise technology, and policy developments.`;
 
-  const date = existing ? existing.date : "July 22, 2026 6:08 PM EDT";
-  const image = (existing && existing.image) ? existing.image : getTopicMatchingImage(slug, title);
-  const caption = existing ? existing.caption : `Comprehensive analysis and latest updates regarding ${title.toLowerCase()}. (Photo courtesy of London BigBen)`;
-
-  // Generate big, multi-section in-depth long-form article for all news pages
-  const baseSections = existing ? existing.sections : [];
-  
-  const comprehensiveSections = [
-    {
-      heading: "",
-      paragraphs: [
-        ...(baseSections[0]?.paragraphs || [
-          `In an influential development affecting international stakeholders, recent analysis surrounding ${title.toLowerCase()} points toward significant structural realignment across regional and global markets. Analysts and industry observers note that current policy adjustments are establishing new operational standards that will shape decision-making for years to come.`
-        ]),
-        `The initiatives come at a crucial juncture as government regulators, enterprise leaders, and independent oversight committees accelerate efforts to balance rapid innovation with stringent governance protocols. Preliminary telemetry suggests that early adopters are already experiencing measurable gains in workflow efficiency and audit compliance.`,
-        `"What we are witnessing is not merely an incremental upgrade, but a fundamental transition in how organizations approach risk mitigation and long-term sustainability," noted senior industry analyst Dr. Marcus Vance during a briefing in Washington.`
-      ]
-    },
-    {
-      heading: "Strategic Context & Regulatory Frameworks",
-      paragraphs: [
-        ...(baseSections[1]?.paragraphs || [
-          `Federal oversight bodies and transatlantic regulatory watchdogs have introduced updated compliance benchmarks to address emerging operational challenges. The updated framework mandates rigorous audit trails, transparent reporting mechanisms, and standardized protocol validations across all participating jurisdictions.`
-        ]),
-        `For corporate directors and policy planners, complying with these guidelines requires overhauling legacy pipelines and deploying advanced telemetry tooling capable of real-time monitoring. Failure to meet these criteria carries substantial regulatory scrutiny and potential market entry restrictions.`
-      ]
-    },
-    {
-      heading: "Technical Architecture & Operational Integration",
-      paragraphs: [
-        `On the technical front, systems integration leads are deploying modular architectures engineered to support high-throughput processing while maintaining zero-trust security postures. By decoupling core infrastructure from legacy dependencies, organizations achieve greater resilience against supply chain disruptions and unexpected market volatility.`,
-        `Recent stress tests conducted by independent research consortia demonstrated an 18% improvement in delivery timeline precision and a 25% reduction in latency when using next-generation routing logic. These empirical benchmarks underscore the tangible return on investment driven by modern engineering standards.`
-      ]
-    },
-    {
-      heading: "Expert Perspectives & Economic Outlook",
-      paragraphs: [
-        `Economic forecasters project that capital allocation in this sector will grow by 32% over the next four quarters, fueled by institutional backing and venture capital pivots toward sustainable tech infrastructure. Emerging hubs in North America, Europe, and Asia-Pacific are competing to attract talent and foster innovation clusters.`,
-        `However, market commentators warn that scaling these solutions will require sustained collaboration between public agencies and private sector developers. Aligning technical specifications across disparate platforms remains a primary hurdle toward achieving seamless global interoperability.`
-      ]
-    },
-    {
-      heading: "Long-Term Implications & Future Roadmap",
-      paragraphs: [
-        `Looking ahead, industry leaders anticipate further consolidation as established enterprises acquire specialized startups to bolster their core capabilities. Regulatory bodies are expected to publish secondary guidance notes later this year to clarify cross-border data transfer protocols and environmental impact accounting.`,
-        `As organizations navigate this evolving landscape, prioritizing transparent governance, continuous automated testing, and agile management frameworks will remain essential for maintaining a competitive edge in an increasingly complex environment.`
-      ]
-    }
-  ];
+  const date = artSource.date || (artSource.published_at ? new Date(artSource.published_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "Recently Published");
+  const image = artSource.imageUrl || artSource.image || artSource.image_url || "/ai_hero.png";
+  const caption = artSource.subheading || artSource.summary || `${title}.`;
 
   return {
     title,
@@ -1473,9 +1415,18 @@ async function getNewsContent(slug: string) {
     date,
     image,
     caption,
-    tags: (existing as any)?.tags || [],
-    rawContent: (existing as any)?.rawContent || "",
-    sections: comprehensiveSections,
+    category: artSource.category,
+    subcategories: Array.isArray(artSource.subcategories) ? artSource.subcategories : (Array.isArray(artSource.subCategories) ? artSource.subCategories : []),
+    tags: Array.isArray(artSource.tags) ? artSource.tags : (Array.isArray(artSource.hashtags) ? artSource.hashtags : []),
+    rawContent: artSource.content || "",
+    sections: [
+      {
+        heading: "",
+        paragraphs: artSource.content
+          ? [artSource.content]
+          : [artSource.summary || ""]
+      }
+    ],
   };
 }
 
@@ -1484,38 +1435,10 @@ export async function generateStaticParams() {
   const paths: { category: string; subcategory: string }[] = [];
 
   const subData: Record<string, string[]> = {
-    "news": [
-      "world", "markets", "politics",
-      "international-data-privacy-standards-updated-after-cross-border-audits",
-      "scientific-research-consortium-publishes-open-access-genome-study",
-      "urban-infrastructure-plans-integrate-smart-power-grids-in-major-cities",
-      "public-transportation-systems-roll-out-unified-digital-ticking",
-      "education-systems-adapt-curricula-to-include-basic-ai-literacy"
-    ],
-    "business": [
-      "companies", "corporate-news", "entrepreneurship", "startups", "leadership",
-      "canadas-conexiom-bets-that-the-future-of-ai-lies-in-automation-not-experimentation",
-      "lightworks-scotiabank-sun-life-and-telus-launch-ai-consortium",
-      "canadas-ai-adoption-problem-meets-its-youth-employment-problem",
-      "oped-rethinking-humanity-as-automation-rewrites-human-realities",
-      "indispensable-xiaohongshu-app-fuels-chinese-tourism"
-    ],
-    "industry-insights": [
-      "agriculture", "tourism", "financial-services", "health", "transportation",
-      "boeing-gets-order-for-100-737-max-jets-from-leasing-company-smbc",
-      "spacex-abruptly-scrubs-starship-test-flight",
-      "ai-helps-pathologists-spot-prostate-cancer-faster-what-canada-can-learn-from-landmark-uk-study",
-      "openai-fails-to-trademark-name-in-eu",
-      "like-my-lover-chinese-users-bid-farewell-to-ai-companions"
-    ],
-    "technology": [
-      "artificial-intelligence", "cybersecurity", "innovations", "space-technology",
-      "silicon-valley-chip-manufacturers-announce-breakthrough-architectural-updates",
-      "new-quantum-computing-clusters-open-to-public-cloud-developer-preview",
-      "opensource-database-platform-raises-record-funding-round-for-scaling",
-      "how-edge-computing-is-transforming-real-time-telemetry-processing",
-      "cybersecurity-protocols-updated-globally-to-counter-multi-vector-threats"
-    ]
+    "news": ["world", "markets", "politics"],
+    "business": ["companies", "corporate-news", "entrepreneurship", "startups", "leadership"],
+    "industry-insights": ["agriculture", "tourism", "financial-services", "health", "transportation"],
+    "technology": ["artificial-intelligence", "cybersecurity", "innovations", "space-technology"]
   };
 
   categories.forEach((cat) => {
@@ -1543,70 +1466,52 @@ export default async function SubcategoryPage({ params }: PageProps) {
   const isNewsArticle = !diveDeeperShortlist.includes(subcategory);
 
   if (isNewsArticle) {
+    if (category !== 'article') {
+      redirect(`/article/${subcategory}`);
+    }
+
     const newsData = await getNewsContent(subcategory);
 
-    const sidebarPicks = [
-      {
-        title: "US announces civilian nuclear deal with Saudi Arabia",
-        date: "July 22, 2026 5:25 PM EDT",
-        image: "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=150&h=150&fit=crop",
-        href: "/news/world/us-announces-civilian-nuclear-deal-with-saudi-arabia"
-      },
-      {
-        title: "As Canadians turn to AI for mortgage advice, experts warn about privacy risks and inaccurate guidance",
-        date: "July 22, 2026 5:17 PM EDT",
-        image: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=150&h=150&fit=crop",
-        href: "/news/markets/as-canadians-turn-to-ai-for-mortgage-advice-experts-warn-about-privacy-risks"
-      },
-      {
-        title: "Tesla shares dip after profit misses expectations",
-        date: "July 22, 2026 5:10 PM EDT",
-        image: "https://images.unsplash.com/photo-1563720223185-11003d516935?w=150&h=150&fit=crop",
-        href: "/news/markets/tesla-shares-dip-after-profit-misses-expectations"
-      },
-      {
-        title: "Your AI made a decision, and Canadian regulators want to know how",
-        date: "July 21, 2026",
-        image: "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=150&h=150&fit=crop",
-        href: "/industry-insights/health/your-ai-made-a-decision-and-canadian-regulators-want-to-know-how"
-      },
-      {
-        title: "Dutch students unveil 'world-first' solar-powered ambulance",
-        date: "July 21, 2026",
-        image: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=150&h=150&fit=crop",
-        href: "/news/world/dutch-students-unveil-world-first-solar-powered-ambulance"
-      },
-      {
-        title: "Autonomous Fleet Operating Networks Expand Regional Commercial Routes",
-        date: "July 20, 2026",
-        image: "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=150&h=150&fit=crop",
-        href: "/business/new-exclusive-decoration-design-fit-out-llc-structural-acrylic-pioneers-in-the-uae"
-      },
-      {
-        title: "European Tech Ecosystem Accelerates Sovereign Cloud & Quantum Infrastructure",
-        date: "July 19, 2026",
-        image: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=150&h=150&fit=crop",
-        href: "/technology/ai-innovation/meta-accelerates-generative-ai-initiatives-with-major-infrastructure-upgrade"
-      },
-      {
-        title: "Global Central Banks Navigate Shifting Inflation Frameworks",
-        date: "July 18, 2026",
-        image: "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=150&h=150&fit=crop",
-        href: "/news/markets/us-stocks-end-higher-as-sk-hynixs-wall-street-debut-and-metas-ai-momentum-lift-markets"
-      },
-      {
-        title: "Clean Energy Grid Transitions Secure Landmark Cross-Border Funding",
-        date: "July 17, 2026",
-        image: "https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=150&h=150&fit=crop",
-        href: "/industry-insights/energy/oil-market-rebalancing-amidst-refinery-maintenance-and-global-demand-trends"
-      },
-      {
-        title: "Digital Privacy Regulators Finalize Standardized Enterprise Guidelines",
-        date: "July 16, 2026",
-        image: "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=150&h=150&fit=crop",
-        href: "/news/politics/trump-declares-iran-ceasefire-over-raising-questions-about-the-next-phase-of-the-conflict"
-      }
-    ];
+    // Build sidebarPicks from real published articles in the same category
+    let sidebarPicks: { title: string; date: string; image: string; href: string }[] = [];
+    try {
+      const { readArticlesStore } = await import("@/lib/serverArticlesStore");
+      const allArticles = await readArticlesStore();
+      const clean = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const currentSlugClean = clean(subcategory);
+      const catClean = clean(category);
+      const categoryArticles = allArticles.filter((a) => {
+        if ((a.status || "").toLowerCase() !== "published") return false;
+        // Exclude the current article
+        const aSlug = clean(a.slug || "");
+        const aTitle = clean(a.title || "");
+        if (aSlug === currentSlugClean || aTitle === currentSlugClean) return false;
+        // Match by category slug or category name
+        const aCatSlug = clean(a.category_slug || "");
+        const aCatName = clean(a.category_name || a.category || "");
+        return aCatSlug === catClean || aCatName === catClean || aCatSlug.includes(catClean) || catClean.includes(aCatSlug);
+      });
+      // Sort by most recent
+      categoryArticles.sort((a, b) => {
+        const da = a.published_at ? new Date(a.published_at).getTime() : 0;
+        const db2 = b.published_at ? new Date(b.published_at).getTime() : 0;
+        return db2 - da;
+      });
+      sidebarPicks = categoryArticles.slice(0, 10).map((a) => {
+        const artSlug = a.slug || a.title?.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "";
+        const artCatSlug = a.category_slug || category;
+        const href = `/${artCatSlug}/${artSlug}`;
+        const image = (a.imageUrl || a.image || a.image_url || "").trim() || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=150&h=150&fit=crop";
+        return {
+          title: a.title,
+          date: a.date || (a.published_at ? new Date(a.published_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : ""),
+          image,
+          href,
+        };
+      });
+    } catch (e) {
+      // ignore, fall through to hardcoded fallback
+    }
 
     const relatedNewsList = [
       {

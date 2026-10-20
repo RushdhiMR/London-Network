@@ -65,8 +65,8 @@ export async function POST(request: Request) {
         provider: newUser.provider,
       };
 
-      // Set HTTP-Only session cookie
-      await setAuthCookie(userPayload);
+      // Set HTTP-Only session cookie and return token for tab session isolation
+      const token = await setAuthCookie(userPayload);
 
       // Send welcome email if configured
       try {
@@ -79,6 +79,7 @@ export async function POST(request: Request) {
         success: true,
         message: 'Account created successfully',
         user: userPayload,
+        token,
       });
     } catch (dbError: any) {
       if (dbError.code === 'ER_DUP_ENTRY' || dbError.message?.includes('already exists')) {

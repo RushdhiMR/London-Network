@@ -58,7 +58,7 @@ export default function BusinessGrid() {
     description: displayList[0].description || displayList[0].summary || "",
     image: displayList[0].imageUrl || displayList[0].image || "/ai_hero.png",
     time: displayList[0].date || "Just published",
-    href: `/business/${displayList[0].slug || String(displayList[0].id)}`
+    href: `/article/${displayList[0].slug || String(displayList[0].id)}`
   };
 
   const bottomCards = displayList.slice(1, 5).map((a, idx) => ({
@@ -67,7 +67,7 @@ export default function BusinessGrid() {
     description: a.description || a.summary || "",
     time: a.date || "Just published",
     image: a.imageUrl || a.image || "/ai_hero.png",
-    href: `/business/${a.slug || String(a.id)}`
+    href: `/article/${a.slug || String(a.id)}`
   }));
 
   const businessAdSlot = adSlots.find(s => s.id === "slot-3" || s.title.includes("Business Section Top-Right") || s.title.includes("Business Section"));
@@ -135,7 +135,7 @@ export default function BusinessGrid() {
               href={businessAdSlot.targetUrl || "#"}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full h-full min-h-[220px] aspect-[16/10] lg:aspect-auto bg-black flex items-center justify-center cursor-pointer group hover:opacity-95 transition-opacity relative overflow-hidden border border-zinc-800"
+              className="w-full h-full min-h-[220px] aspect-[300/250] bg-black flex items-center justify-center cursor-pointer group hover:opacity-95 transition-opacity relative overflow-hidden border border-zinc-800"
             >
               <img
                 src={businessAdSlot.imageUrl}
@@ -147,7 +147,7 @@ export default function BusinessGrid() {
               </div>
             </a>
           ) : (
-            <div className="w-full h-full min-h-[220px] aspect-[16/10] lg:aspect-auto bg-[#111827] border border-dashed border-gray-700 flex flex-col items-center justify-center p-4 text-center">
+            <div className="w-full h-full min-h-[220px] aspect-[300/250] bg-[#111827] border border-dashed border-gray-700 flex flex-col items-center justify-center p-4 text-center">
               <span className="text-[10px] font-mono tracking-widest uppercase text-[#D31220] font-bold mb-1">
                 ADVERTISEMENT
               </span>

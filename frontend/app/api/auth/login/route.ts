@@ -58,13 +58,14 @@ export async function POST(request: Request) {
           provider: user.provider,
         };
 
-        // Issue secure HTTP-Only session cookie
-        await setAuthCookie(userPayload);
+        // Issue secure HTTP-Only session cookie and return token for tab session isolation
+        const token = await setAuthCookie(userPayload);
 
         return NextResponse.json({
           success: true,
           message: 'Login successful',
           user: userPayload,
+          token,
         });
       }
     }

@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { useAuth } from "@/lib/auth-context";
+import { useAuth, dispatchTabLogin } from "@/lib/auth-context";
 import { ShieldCheck, Lock, Mail, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
 
@@ -49,20 +49,11 @@ export default function AdminLoginPage() {
     setIsSubmitting(true);
 
     try {
-      let res;
-      try {
-        res = await fetch("/api/admin/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-        });
-      } catch (err) {
-        res = await fetch("/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-        });
-      }
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
       const data = await res.json();
 
@@ -72,24 +63,17 @@ export default function AdminLoginPage() {
         return;
       }
 
-      const adminUser = data.user || {
-        id: 1,
-        name: "Admin User",
-        email: email,
-        role: "admin",
-      };
+      const adminUser = data.user;
+      const role = (adminUser?.role || "").toLowerCase();
+      const isAdmin = role === "admin" || role === "co-admin" || role === "editor" || adminUser?.id === 1;
 
-      // Set admin local storage state
-      localStorage.setItem("dj_admin_user", JSON.stringify(adminUser));
-      localStorage.setItem("dj_user", JSON.stringify(adminUser));
-      localStorage.setItem(
-        "dj_toast",
-        `Welcome to Admin Control Center, ${adminUser.name}!`
-      );
-
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("dj_auth_change"));
+      if (!isAdmin) {
+        setErrorMessage("Access Denied: You do not have administrator permissions.");
+        setIsSubmitting(false);
+        return;
       }
+
+      dispatchTabLogin(adminUser, data.token);
 
       setSuccessMessage(`Authenticated as ${adminUser.name}. Redirecting to Admin Dashboard...`);
       
@@ -97,22 +81,7 @@ export default function AdminLoginPage() {
         window.location.href = "/admin";
       }, 500);
     } catch (err) {
-      console.warn("Admin login API error, applying test admin fallback:", err);
-      const fallbackAdmin = {
-        id: 1,
-        name: "Admin User",
-        email: email || "admin@digitaljournal.com",
-        role: "admin",
-      };
-
-      localStorage.setItem("dj_admin_user", JSON.stringify(fallbackAdmin));
-      localStorage.setItem("dj_user", JSON.stringify(fallbackAdmin));
-      localStorage.setItem("dj_toast", `Welcome, ${fallbackAdmin.name}! Admin session active.`);
-
-      setSuccessMessage("Admin authentication successful! Redirecting to dashboard...");
-      setTimeout(() => {
-        router.push("/admin");
-      }, 1000);
+      setErrorMessage("Admin login failed. Please check your credentials and try again.");
     } finally {
       setIsSubmitting(false);
     }

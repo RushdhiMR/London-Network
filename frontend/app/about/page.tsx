@@ -201,13 +201,13 @@ export default function AboutUsPage() {
                 <Mail className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
                 <div>
                   <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">
-                    EMAIL INQUIRY
+                    PRESS &amp; MEDIA INQUIRY
                   </span>
                   <a
-                    href="mailto:editorial@londonbigben.com"
+                    href="mailto:press@londonbigben.com"
                     className="text-xs font-bold text-[#1B50E8] hover:text-[#BF1E2D] transition-colors"
                   >
-                    editorial@londonbigben.com
+                    press@londonbigben.com
                   </a>
                 </div>
               </div>

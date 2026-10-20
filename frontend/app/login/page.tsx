@@ -3,8 +3,6 @@
 import Link from "next/link";
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import { Lock } from "lucide-react";
 import { triggerGoogleOAuth } from "@/lib/googleAuth";
 import { useAuth, dispatchTabLogin } from "@/lib/auth-context";
@@ -120,7 +118,7 @@ function LoginFormContent() {
         role: authenticatedUser.role,
         provider: authenticatedUser.provider || "google",
         avatar: authenticatedUser.avatar,
-      });
+      }, data.token);
 
       const targetDestination = getRedirectDestination(userRole);
       localStorage.setItem("dj_toast", `Welcome back, ${authenticatedUser.name}! Signed in successfully.`);
@@ -185,7 +183,7 @@ function LoginFormContent() {
         email: authenticatedUser.email,
         role: authenticatedUser.role,
         provider: authenticatedUser.provider || 'local',
-      });
+      }, data.token);
 
       const targetDestination = getRedirectDestination(userRole);
       localStorage.setItem("dj_toast", `Welcome back, ${authenticatedUser.name}! Signed in successfully.`);
@@ -203,23 +201,18 @@ function LoginFormContent() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col font-sans text-slate-900 selection:bg-red-100 selection:text-red-900">
-      <Header />
-
       {/* MAIN PLAIN PAGE CONTAINER */}
       <main className="flex-1 bg-white py-12 lg:py-16 flex items-center justify-center">
         <div className="w-full max-w-[440px] mx-auto px-4 font-sans text-slate-900">
           
           {/* Logo & Corporate Title */}
           <div className="flex flex-col items-center mb-8 text-center">
-            <Link href="/" className="flex items-center gap-2.5 hover:opacity-90 transition-opacity mb-2 group">
+            <Link href="/" className="inline-block hover:opacity-90 transition-opacity mb-4">
               <img
-                src="/logo.png"
-                alt="London BigBen Logo"
-                className="w-9 h-9 object-contain"
+                src="/header_logo.png"
+                alt="London BigBen Network"
+                className="h-9 sm:h-10 w-auto object-contain"
               />
-              <span className="text-2xl font-serif font-black tracking-tight text-slate-900 group-hover:text-[#BF1E2D] transition-colors">
-                LONDON BIGBEN
-              </span>
             </Link>
 
             <h1 className="text-xl font-bold text-slate-900">Sign in to your account</h1>
@@ -394,15 +387,16 @@ function LoginFormContent() {
           </form>
 
           <div className="mt-8 pt-6 border-t border-slate-100 text-center">
-            <Link href="/register" className="text-xs text-slate-600 hover:text-slate-900 transition-colors font-medium">
+            <Link
+              href={searchParams?.get("redirect") ? `/register?redirect=${encodeURIComponent(searchParams.get("redirect")!)}` : "/register"}
+              className="text-xs text-slate-600 hover:text-slate-900 transition-colors font-medium"
+            >
               Don't have an account? <span className="text-[#BF1E2D] font-bold hover:underline">Create a new account</span>
             </Link>
           </div>
 
         </div>
       </main>
-
-      <Footer />
     </div>
   );
 }

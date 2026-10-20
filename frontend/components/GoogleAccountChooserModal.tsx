@@ -80,29 +80,37 @@ export default function GoogleAccountChooserModal({
       const savedAccountsStr = localStorage.getItem("dj_device_google_accounts");
       const activeUserStr = localStorage.getItem("dj_user");
 
-      const deviceList: Account[] = savedAccountsStr ? JSON.parse(savedAccountsStr) : [];
+      let deviceList: Account[] = [];
+      if (savedAccountsStr && savedAccountsStr.trim()) {
+        try {
+          const parsed = JSON.parse(savedAccountsStr);
+          if (Array.isArray(parsed)) deviceList = parsed;
+        } catch {}
+      }
 
-      if (activeUserStr) {
-        const activeUser = JSON.parse(activeUserStr);
-        if (activeUser?.email) {
-          const found = deviceList.find((a) => a.email.toLowerCase() === activeUser.email.toLowerCase());
-          if (found) {
-            found.status = "Signed in";
-            found.isDevice = true;
-          } else {
-            const initials = activeUser.name
-              ? activeUser.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
-              : activeUser.email.slice(0, 2).toUpperCase();
+      if (activeUserStr && activeUserStr.trim()) {
+        try {
+          const activeUser = JSON.parse(activeUserStr);
+          if (activeUser?.email) {
+            const found = deviceList.find((a) => a.email.toLowerCase() === activeUser.email.toLowerCase());
+            if (found) {
+              found.status = "Signed in";
+              found.isDevice = true;
+            } else {
+              const initials = activeUser.name
+                ? activeUser.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
+                : activeUser.email.slice(0, 2).toUpperCase();
 
-            deviceList.unshift({
-              name: activeUser.name || activeUser.email.split("@")[0],
-              email: activeUser.email,
-              avatar: activeUser.avatar || initials,
-              status: "Signed in",
-              isDevice: true,
-            });
+              deviceList.unshift({
+                name: activeUser.name || activeUser.email.split("@")[0],
+                email: activeUser.email,
+                avatar: activeUser.avatar || initials,
+                status: "Signed in",
+                isDevice: true,
+              });
+            }
           }
-        }
+        } catch {}
       }
 
       // Filter out any accounts that were deleted by the administrator
@@ -142,9 +150,11 @@ export default function GoogleAccountChooserModal({
 
     try {
       const regStr = localStorage.getItem("dj_registered_users");
-      if (regStr) {
+      if (regStr && regStr.trim()) {
         const regList: any[] = JSON.parse(regStr);
-        return regList.some((u) => u.email && u.email.toLowerCase() === lower);
+        if (Array.isArray(regList)) {
+          return regList.some((u) => u.email && u.email.toLowerCase() === lower);
+        }
       }
     } catch (e) {
       console.warn(e);
@@ -179,7 +189,11 @@ export default function GoogleAccountChooserModal({
     // Register user with password in localStorage
     try {
       const regStr = localStorage.getItem("dj_registered_users");
-      const regList: any[] = regStr ? JSON.parse(regStr) : [];
+      let regList: any[] = [];
+      if (regStr && regStr.trim()) {
+        const parsed = JSON.parse(regStr);
+        if (Array.isArray(parsed)) regList = parsed;
+      }
       
       const newUser = {
         name: pendingAccount.name,
@@ -216,7 +230,11 @@ export default function GoogleAccountChooserModal({
     // Save to local device google accounts
     try {
       const existingStr = localStorage.getItem("dj_device_google_accounts");
-      const existingList: Account[] = existingStr ? JSON.parse(existingStr) : [];
+      let existingList: Account[] = [];
+      if (existingStr && existingStr.trim()) {
+        const parsed = JSON.parse(existingStr);
+        if (Array.isArray(parsed)) existingList = parsed;
+      }
       const idx = existingList.findIndex((a) => a.email.toLowerCase() === acc.email.toLowerCase());
       if (idx !== -1) {
         existingList[idx] = finalAccount;

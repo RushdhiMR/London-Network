@@ -216,7 +216,7 @@ export default function AdvertiseWithUsPage() {
                 Client Inquiry Lead
               </h2>
               <p className="text-xs text-slate-500 mt-1.5 font-mono">
-                Fill out the form below to connect with our advertising &amp; partnership team.
+                Fill out the form below or email <a href="mailto:press@londonbigben.com" className="text-[#D31220] hover:underline font-bold">press@londonbigben.com</a> to connect with our advertising &amp; partnership team.
               </p>
             </div>
 

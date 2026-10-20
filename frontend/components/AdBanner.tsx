@@ -6,9 +6,15 @@ interface AdBannerProps {
   label?: string;
   slotId?: string;
   className?: string;
+  maxWidth?: string;
 }
 
-export default function AdBanner({ label = "ADVERTISEMENT", slotId, className = "" }: AdBannerProps) {
+export default function AdBanner({
+  label = "ADVERTISEMENT",
+  slotId,
+  className = "",
+  maxWidth = "max-w-[728px]"
+}: AdBannerProps) {
   const { adSlots } = useLiveAdSlots();
 
   const isSlot2 = (slotId && slotId.includes("2")) || label.toUpperCase().includes("SLOT 2");
@@ -32,14 +38,14 @@ export default function AdBanner({ label = "ADVERTISEMENT", slotId, className = 
   if (hasValidImage && matchingSlot) {
     const isExternal = (matchingSlot.actionType || "").toLowerCase().includes("external") || (matchingSlot.targetUrl || "").startsWith("http");
     return (
-      <div className={`w-full max-w-[1400px] mx-auto px-4 md:px-6 my-8 ${className}`}>
+      <div className={`w-full ${maxWidth} mx-auto px-4 md:px-6 my-8 ${className}`}>
         <a
           href={matchingSlot.targetUrl || "#"}
           target={isExternal ? "_blank" : "_self"}
           rel={isExternal ? "noopener noreferrer" : undefined}
           className="block group relative overflow-hidden"
         >
-          <div className="relative w-full h-[180px] sm:h-[220px] md:h-[260px] bg-[#111827] border border-gray-800 flex items-center justify-center overflow-hidden">
+          <div className="relative w-full aspect-[728/250] max-h-[250px] bg-[#111827] border border-gray-800 flex items-center justify-center overflow-hidden">
             <img
               src={matchingSlot.imageUrl}
               alt={matchingSlot.title}
@@ -55,8 +61,8 @@ export default function AdBanner({ label = "ADVERTISEMENT", slotId, className = 
   }
 
   return (
-    <div className={`w-full max-w-[1400px] mx-auto px-4 md:px-6 my-8 ${className}`}>
-      <div className="w-full h-[180px] sm:h-[220px] md:h-[260px] bg-[#111827] border border-dashed border-gray-700 flex flex-col items-center justify-center text-center px-4">
+    <div className={`w-full ${maxWidth} mx-auto px-4 md:px-6 my-8 ${className}`}>
+      <div className="w-full aspect-[728/250] max-h-[250px] bg-[#111827] border border-dashed border-gray-700 flex flex-col items-center justify-center text-center px-4">
         <span className="text-[10px] font-mono tracking-widest uppercase text-[#D31220] font-extrabold mb-1.5">
           {label}
         </span>

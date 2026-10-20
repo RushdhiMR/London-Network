@@ -1,12 +1,66 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Clock } from "lucide-react";
 import { useLiveArticles, isEditorsPick } from "@/lib/articlesSync";
 
 export default function EditorsPicks() {
+  interface MarketItem {
+    symbol: string;
+    price: string;
+    change: string;
+    positive: boolean;
+  }
+
   const [activeTab, setActiveTab] = useState<"indices" | "commodities" | "currencies">("indices");
+  const [marketData, setMarketData] = useState<Record<string, MarketItem[]> | null>(null);
+  const [isLoadingMarket, setIsLoadingMarket] = useState(true);
+  const [marketError, setMarketError] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchMarket = async (silent = false) => {
+      try {
+        if (!silent && !marketData) {
+          setIsLoadingMarket(true);
+        }
+        const res = await fetch("/api/market-data", { cache: "no-store" });
+        if (!res.ok) throw new Error("Failed to fetch market data");
+        const json = await res.json();
+        if (json && json.success && json.data) {
+          if (isMounted) {
+            setMarketData(json.data);
+            setMarketError(false);
+          }
+        } else {
+          throw new Error("Invalid response format");
+        }
+      } catch {
+        if (isMounted && !marketData) {
+          setMarketError(true);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingMarket(false);
+        }
+      }
+    };
+
+    fetchMarket(false);
+
+    // Auto-refresh periodically without user reloading the page
+    const interval = setInterval(() => {
+      fetchMarket(true);
+    }, 30000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   const { articles: liveArticles = [] } = useLiveArticles();
 
   const getArticleTimestamp = (item: any): number => {
@@ -55,40 +109,13 @@ export default function EditorsPicks() {
       title: post.title,
       readTime: post.readDuration || "5 MIN READ",
       image: post.imageUrl || post.image || "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=500&h=380&fit=crop",
-      href: `/${cat.toLowerCase()}/companies/${postSlug}?id=${post.id}`
+      href: `/article/${postSlug}`
     };
   });
 
   if (displayPicks.length === 0) {
     return null;
   }
-
-  const marketTabs = {
-    indices: [
-      { symbol: "S&P 500", price: "4,510.04", change: "+0.62%", positive: true },
-      { symbol: "NASDAQ", price: "14,150.65", change: "+0.53%", positive: true },
-      { symbol: "DOW JONES", price: "34,112.27", change: "+0.48%", positive: true },
-      { symbol: "FTSE 100", price: "7,524.35", change: "-0.12%", positive: false },
-      { symbol: "DAX 40", price: "15,925.10", change: "-0.18%", positive: false },
-      { symbol: "NIKKEI 225", price: "39,678.02", change: "+0.35%", positive: true }
-    ],
-    commodities: [
-      { symbol: "Crude Oil (WTI)", price: "$78.45", change: "+1.20%", positive: true },
-      { symbol: "Brent Crude", price: "$82.10", change: "+0.95%", positive: true },
-      { symbol: "Gold (USD/oz)", price: "$2,380.50", change: "+0.45%", positive: true },
-      { symbol: "Silver", price: "$30.75", change: "-0.30%", positive: false },
-      { symbol: "Natural Gas", price: "$2.45", change: "-1.15%", positive: false },
-      { symbol: "Copper", price: "$4.42", change: "+0.80%", positive: true }
-    ],
-    currencies: [
-      { symbol: "EUR / USD", price: "1.0875", change: "+0.15%", positive: true },
-      { symbol: "GBP / USD", price: "1.2940", change: "+0.22%", positive: true },
-      { symbol: "USD / JPY", price: "154.20", change: "-0.35%", positive: false },
-      { symbol: "USD / CAD", price: "1.3780", change: "-0.10%", positive: false },
-      { symbol: "AUD / USD", price: "0.6680", change: "+0.40%", positive: true },
-      { symbol: "BTC / USD", price: "$67,420.00", change: "+2.15%", positive: true }
-    ]
-  };
 
   return (
     <section className="max-w-[1400px] mx-auto px-4 md:px-6 pt-8 pb-0 font-sans">
@@ -198,23 +225,46 @@ export default function EditorsPicks() {
           </div>
 
           {/* Tabbed Financial Items Table */}
-          <div className="flex-1 flex flex-col justify-between divide-y divide-gray-100">
-            {marketTabs[activeTab].map((item, idx) => (
-              <div key={idx} className="flex items-center justify-between py-2.5">
-                <span className="text-[12.5px] font-bold text-gray-900 uppercase">
-                  {item.symbol}
-                </span>
-                <span className="text-[12px] font-medium text-gray-600 font-mono">
-                  {item.price}
-                </span>
-                <span className={`text-[12px] font-bold flex items-center gap-0.5 font-mono ${
-                  item.positive ? "text-emerald-600" : "text-red-600"
-                }`}>
-                  <span>{item.change}</span>
-                  <span className="text-[10px]">{item.positive ? "▲" : "▼"}</span>
-                </span>
+          <div className="flex-1 flex flex-col justify-between divide-y divide-gray-100 min-h-[220px]">
+            {isLoadingMarket && !marketData ? (
+              // Loading skeleton matching existing layout and row height
+              Array.from({ length: 6 }).map((_, idx) => (
+                <div key={idx} className="flex items-center justify-between py-2.5 animate-pulse">
+                  <div className="h-3.5 bg-gray-200 rounded w-24" />
+                  <div className="h-3.5 bg-gray-100 rounded w-16" />
+                  <div className="h-3.5 bg-gray-100 rounded w-12" />
+                </div>
+              ))
+            ) : marketError && !marketData ? (
+              <div className="flex-1 flex flex-col items-center justify-center py-8 text-center">
+                <span className="text-xs text-gray-400 font-medium">Market data temporarily unavailable</span>
               </div>
-            ))}
+            ) : (
+              (marketData?.[activeTab] || []).map((item, idx) => (
+                <div key={idx} className="flex items-center justify-between py-2.5">
+                  <span className="text-[12.5px] font-bold text-gray-900 uppercase">
+                    {item.symbol}
+                  </span>
+                  <span className="text-[12px] font-medium text-gray-600 font-mono">
+                    {item.price}
+                  </span>
+                  <span
+                    className={`text-[12px] font-bold flex items-center gap-0.5 font-mono ${
+                      item.change === "—"
+                        ? "text-gray-400"
+                        : item.positive
+                        ? "text-emerald-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    <span>{item.change}</span>
+                    {item.change !== "—" && (
+                      <span className="text-[10px]">{item.positive ? "▲" : "▼"}</span>
+                    )}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
 
         </div>

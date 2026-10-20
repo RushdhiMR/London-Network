@@ -91,7 +91,8 @@ const ALL_MAIN_CATEGORIES = [
   "Sports",
   "Entertainment",
   "Health",
-  "Research"
+  "Research",
+  "Interview"
 ];
 
 const ALL_SUB_CATEGORIES = [
@@ -104,7 +105,8 @@ const ALL_SUB_CATEGORIES = [
   "Sports",
   "Entertainment",
   "Health",
-  "Research"
+  "Research",
+  "Interview"
 ];
 
 const WORLD_SUBCATEGORIES = [
@@ -133,9 +135,7 @@ function extractCleanTagsList(source: any): string[] {
     source.tags,
     source.hashtags,
     source.hash_tags,
-    source.hashTags,
-    source.seo?.keywords,
-    source.keywords
+    source.hashTags
   ];
   if (Array.isArray(source)) candidates.unshift(source);
 
@@ -169,29 +169,27 @@ function extractCleanTagsList(source: any): string[] {
   return [];
 }
 
+function safeSetLocalStorage(key: string, value: string) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(key, value);
+  } catch (err) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed) && parsed.length > 20) {
+        localStorage.setItem(key, JSON.stringify(parsed.slice(0, 20)));
+      }
+    } catch (_) {}
+  }
+}
+
 export default function CreatePostPage() {
   const router = useRouter();
 
   const [mounted, setMounted] = useState(false);
 
   // Current User State
-  const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role?: string; avatar?: string } | null>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const storedAdmin = localStorage.getItem("dj_admin_user");
-        if (storedAdmin) {
-          const parsed = JSON.parse(storedAdmin);
-          if (parsed && (parsed.email || parsed.role)) return parsed;
-        }
-        const storedUser = localStorage.getItem("dj_user") || localStorage.getItem("dj_writer_user");
-        if (storedUser) {
-          const parsed = JSON.parse(storedUser);
-          if (parsed && (parsed.email || parsed.role)) return parsed;
-        }
-      } catch (e) {}
-    }
-    return null;
-  });
+  const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role?: string; avatar?: string } | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -238,7 +236,10 @@ export default function CreatePostPage() {
   const normalizePlacement = (pl: string | undefined | null): string => {
     if (!pl) return "Standard Post";
     const clean = pl.toLowerCase().trim();
-    if (clean.includes("a+ section 2") || clean.includes("a+ 2") || clean.includes("section 2")) {
+    if (clean.includes("a+ section 3") || clean.includes("a+ 3") || clean.includes("section 3") || clean.includes("main news 3")) {
+      return "Home Page A+ Section 3";
+    }
+    if (clean.includes("a+ section 2") || clean.includes("a+ 2") || clean.includes("section 2") || clean.includes("main news 2")) {
       return "Home Page A+ Section 2";
     }
     if (clean.includes("a+") || clean.includes("hero")) {
@@ -316,89 +317,26 @@ export default function CreatePostPage() {
   const isAdmin = mounted && (userRole === "admin" || userRole === "co-admin" || userRole === "editor" || (auth.user?.email || currentUser?.email || "").toLowerCase().includes("admin"));
 
   useEffect(() => {
-    let effectiveUser: any = null;
+    if (auth.loading) return;
 
-    // 1. Check tab-level session
-    if (typeof window !== "undefined") {
-      try {
-        const tabStr = sessionStorage.getItem("dj_tab_session");
-        if (tabStr) {
-          const parsed = JSON.parse(tabStr);
-          if (parsed && (parsed.role === "admin" || parsed.role === "writer" || parsed.role === "co-admin")) {
-            effectiveUser = parsed;
-          }
-        }
-      } catch (e) {}
-    }
-
-    // 2. Check auth context
-    if (!effectiveUser && auth.user) {
-      const r = (auth.user.role || "").toLowerCase();
-      if (r === "admin" || r === "writer" || r === "co-admin" || r === "editor") {
-        effectiveUser = auth.user;
-      }
-    }
-
-    // 3. Check persistent admin & writer storage
-    if (!effectiveUser && typeof window !== "undefined") {
-      try {
-        const storedAdmin = localStorage.getItem("dj_admin_user");
-        if (storedAdmin) {
-          const parsed = JSON.parse(storedAdmin);
-          if (parsed && (parsed.email || parsed.role)) {
-            effectiveUser = {
-              id: parsed.id || 1,
-              name: parsed.name || "Admin",
-              email: parsed.email || "admin@digitaljournal.com",
-              role: (parsed.role || "admin").toLowerCase(),
-              avatar: parsed.avatar || "/author_bluesuit.jpg"
-            };
-          }
-        }
-        if (!effectiveUser) {
-          const storedUser = localStorage.getItem("dj_user") || localStorage.getItem("dj_writer_user");
-          if (storedUser) {
-            const parsed = JSON.parse(storedUser);
-            if (parsed && (parsed.email || parsed.role)) {
-              effectiveUser = {
-                id: parsed.id || 1,
-                name: parsed.name || "Writer",
-                email: parsed.email || "writer@digitaljournal.com",
-                role: (parsed.role || "writer").toLowerCase(),
-                avatar: parsed.avatar || "/author_bluesuit.jpg"
-              };
-            }
-          }
-        }
-      } catch (e) {}
-    }
-
-    // 4. If editing a post, ensure admin/writer session is active
-    if (!effectiveUser && typeof window !== "undefined") {
-      const searchParams = new URLSearchParams(window.location.search);
-      const isEditing = searchParams.get("edit") || localStorage.getItem("dj_editing_post");
-      if (isEditing) {
-        effectiveUser = {
-          id: 1,
-          name: "Admin",
-          email: "geethliyanage979@gmail.com",
-          role: "admin",
-          avatar: "/author_bluesuit.jpg"
-        };
-      }
-    }
-
-    if (!effectiveUser) {
-      if (auth.loading) return;
+    if (!auth.authenticated || !auth.user) {
       router.push("/login");
       return;
     }
 
-    const uRole = (effectiveUser.role || "").toLowerCase();
+    const uRole = (auth.user.role || "").toLowerCase();
     if (uRole !== "writer" && uRole !== "admin" && uRole !== "co-admin" && uRole !== "editor") {
       router.push("/reader");
       return;
     }
+
+    const effectiveUser = {
+      id: auth.user.id,
+      name: auth.user.name,
+      email: auth.user.email,
+      role: auth.user.role,
+      avatar: auth.user.avatar || "/author_bluesuit.jpg"
+    };
 
     setCurrentUser(effectiveUser);
 
@@ -409,7 +347,7 @@ export default function CreatePostPage() {
 
         // 1. Try reading from dj_editing_post
         const storedEditingPost = localStorage.getItem("dj_editing_post");
-        if (storedEditingPost) {
+        if (storedEditingPost && storedEditingPost.trim()) {
           try {
             postToEdit = JSON.parse(storedEditingPost);
           } catch (e) {}
@@ -438,19 +376,19 @@ export default function CreatePostPage() {
         if (editId) {
           let foundArticle: any = null;
           try {
-            const submittedStr = localStorage.getItem("dj_writer_submitted_articles");
-            if (submittedStr) {
-              const list: any[] = JSON.parse(submittedStr);
-              const found = list.find((p: any) => String(p.id) === String(editId) || (p.title && postToEdit?.title && p.title.trim().toLowerCase() === postToEdit.title.trim().toLowerCase()));
-              if (found) foundArticle = found;
-            }
+            const serverArticles = await fetchArticlesFromServer();
+            const found = serverArticles.find((p: any) => String(p.id) === String(editId) || (p.title && postToEdit?.title && p.title.trim().toLowerCase() === postToEdit.title.trim().toLowerCase()));
+            if (found) foundArticle = found;
           } catch (e) {}
 
           if (!foundArticle) {
             try {
-              const serverArticles = await fetchArticlesFromServer();
-              const found = serverArticles.find((p: any) => String(p.id) === String(editId) || (p.title && postToEdit?.title && p.title.trim().toLowerCase() === postToEdit.title.trim().toLowerCase()));
-              if (found) foundArticle = found;
+              const submittedStr = localStorage.getItem("dj_writer_submitted_articles");
+              if (submittedStr && submittedStr.trim()) {
+                const list: any[] = JSON.parse(submittedStr);
+                const found = list.find((p: any) => String(p.id) === String(editId) || (p.title && postToEdit?.title && p.title.trim().toLowerCase() === postToEdit.title.trim().toLowerCase()));
+                if (found) foundArticle = found;
+              }
             } catch (e) {}
           }
 
@@ -1033,6 +971,9 @@ export default function CreatePostPage() {
       alert("Please paste an image URL or choose a file.");
       return;
     }
+    if (!imageUrl) {
+      setImageUrl(finalUrl);
+    }
 
     let rawCap = imageCaption.trim();
     let rawCred = imageCredit.trim();
@@ -1519,7 +1460,7 @@ function isWorldOrWorldSub(cat: string): boolean {
     setTags(tags.filter((t) => t !== tagToRemove));
   };
 
-  const [submittingAction, setSubmittingAction] = useState<"draft" | "publish" | null>(null);
+  const [submittingAction, setSubmittingAction] = useState<"draft" | "publish" | "reject" | null>(null);
 
   const handleSaveDraft = () => {
     let currentContent = content;
@@ -1547,6 +1488,25 @@ function isWorldOrWorldSub(cat: string): boolean {
       return;
     }
 
+    let bodyImgSrc = "";
+    if (editorRef.current) {
+      const firstImg = editorRef.current.querySelector("img");
+      if (firstImg && firstImg.src) {
+        bodyImgSrc = firstImg.src.trim();
+      }
+    }
+    if (!bodyImgSrc && currentContent) {
+      const match = currentContent.match(/<img[^>]+src=["']([^"']+)["']/i);
+      if (match && match[1]) {
+        bodyImgSrc = match[1].trim();
+      }
+    }
+    const hasImage = Boolean(bodyImgSrc || imageUrl.trim());
+    if (!hasImage) {
+      alert("Please insert an article image before submitting for review.");
+      return;
+    }
+
     setSubmittingAction("publish");
     savePost("Pending review", currentContent);
   };
@@ -1560,6 +1520,27 @@ function isWorldOrWorldSub(cat: string): boolean {
     const finalTitle = title.trim() || "Untitled Article";
     if (!title.trim()) {
       setTitle(finalTitle);
+    }
+
+    if (status === "Pending review" || status === "Published") {
+      let bodyImgSrc = "";
+      if (editorRef.current) {
+        const firstImg = editorRef.current.querySelector("img");
+        if (firstImg && firstImg.src) {
+          bodyImgSrc = firstImg.src.trim();
+        }
+      }
+      if (!bodyImgSrc && currentContent) {
+        const match = currentContent.match(/<img[^>]+src=["']([^"']+)["']/i);
+        if (match && match[1]) {
+          bodyImgSrc = match[1].trim();
+        }
+      }
+      const hasImage = Boolean(bodyImgSrc || imageUrl.trim());
+      if (!hasImage) {
+        alert("Please insert an article image before submitting.");
+        return;
+      }
     }
 
     setSubmittingAction(status === "Draft" ? "draft" : "publish");
@@ -1593,7 +1574,9 @@ function isWorldOrWorldSub(cat: string): boolean {
 
     let processedImageUrl = bodyImgSrc || imageUrl.trim();
     if (!processedImageUrl && (status === "Pending review" || status === "Published")) {
-      processedImageUrl = "/ai_hero.png";
+      setIsSubmitting(false);
+      alert("Please insert an article image before submitting.");
+      return;
     }
 
     if (processedImageUrl && processedImageUrl.startsWith("data:image/")) {
@@ -1604,22 +1587,10 @@ function isWorldOrWorldSub(cat: string): boolean {
       }
     }
 
-    let activeEmail = "";
-    let activeName = "";
-    let activeAvatar = "";
-    let activeBio = "";
-    try {
-      const userStr = localStorage.getItem("dj_user") || localStorage.getItem("dj_writer_user");
-      if (userStr) {
-        const parsed = JSON.parse(userStr);
-        activeEmail = parsed.email || "";
-        activeName = parsed.name || "";
-        activeAvatar = parsed.avatar || "";
-        activeBio = parsed.bio || "";
-      }
-    } catch (e) {
-      console.warn("Could not read current user for article:", e);
-    }
+    const activeEmail = currentUser?.email || auth.user?.email || "";
+    const activeName = currentUser?.name || auth.user?.name || "";
+    const activeAvatar = currentUser?.avatar || auth.user?.avatar || "";
+    const activeBio = (currentUser as any)?.bio || "";
 
     const userRole = (currentUser?.role || auth.user?.role || "").toLowerCase();
     const isAdmin = userRole === "admin" || userRole === "co-admin";
@@ -1723,7 +1694,7 @@ function isWorldOrWorldSub(cat: string): boolean {
       // Explicitly update local storage queue immediately
       try {
         const subsStr = localStorage.getItem("dj_writer_submitted_articles");
-        const existingList: any[] = subsStr ? JSON.parse(subsStr) : [];
+        const existingList: any[] = (subsStr && subsStr.trim()) ? JSON.parse(subsStr) : [];
         const targetId = String(postToSave.id);
         const editId = editingPostId ? String(editingPostId) : "";
         const targetTitle = postToSave.title.trim().toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ');
@@ -1764,7 +1735,7 @@ function isWorldOrWorldSub(cat: string): boolean {
           }
         });
 
-        localStorage.setItem("dj_writer_submitted_articles", JSON.stringify(deduplicatedList));
+        safeSetLocalStorage("dj_writer_submitted_articles", JSON.stringify(deduplicatedList));
 
         // Also update live articles cache directly
         const { getCachedArticles, setCachedArticles } = await import("@/lib/articlesSync");
@@ -1824,8 +1795,8 @@ function isWorldOrWorldSub(cat: string): boolean {
                   baseUrl: typeof window !== "undefined" ? window.location.origin : undefined,
                 }),
               });
-              const distData = await distRes.json();
-              console.log(`[Distribution] Article email sent: ${distData.sent}/${distData.total} recipients`, distData);
+              const distData = await distRes.json().catch(() => ({ sent: 0, total: 0 }));
+              console.log(`[Distribution] Article email sent: ${distData?.sent || 0}/${distData?.total || 0} recipients`, distData);
             } catch (distErr) {
               console.error("[Distribution] Email send error:", distErr);
             }
@@ -1921,6 +1892,11 @@ function isWorldOrWorldSub(cat: string): boolean {
       }
 
       let liveImageUrl = bodyImgSrc || imageUrl || "";
+      if (!liveImageUrl) {
+        setIsSubmitting(false);
+        alert("Please insert an article image before publishing.");
+        return;
+      }
       if (liveImageUrl && liveImageUrl.startsWith("data:image/")) {
         try {
           liveImageUrl = await uploadImageToBackblaze(liveImageUrl, (liveTitle || "article").substring(0, 30) + ".webp", "articles");
@@ -1941,7 +1917,7 @@ function isWorldOrWorldSub(cat: string): boolean {
       if (!finalAuthorName || finalAuthorName.toLowerCase() === "system administrator" || finalAuthorName.toLowerCase() === "administrator" || finalAuthorName.toLowerCase() === "admin") {
         try {
           const subsStr = localStorage.getItem("dj_writer_submitted_articles");
-          if (subsStr) {
+          if (subsStr && subsStr.trim()) {
             const list = JSON.parse(subsStr);
             const found = list.find((p: any) => String(p.id) === String(editingPostId) || (p.title && liveTitle && p.title.trim().toLowerCase() === liveTitle.trim().toLowerCase()));
             if (found && found.authorName && !found.authorName.toLowerCase().includes("admin")) {
@@ -2037,8 +2013,8 @@ function isWorldOrWorldSub(cat: string): boolean {
                 baseUrl: typeof window !== "undefined" ? window.location.origin : undefined,
               }),
             });
-            const distData = await distRes.json();
-            console.log(`[Distribution] Article email sent: ${distData.sent}/${distData.total} recipients`, distData);
+            const distData = await distRes.json().catch(() => ({ sent: 0, total: 0 }));
+            console.log(`[Distribution] Article email sent: ${distData?.sent || 0}/${distData?.total || 0} recipients`, distData);
           } catch (distErr) {
             console.error("[Distribution] Email send error:", distErr);
           }
@@ -2070,6 +2046,7 @@ function isWorldOrWorldSub(cat: string): boolean {
   };
 
   const handleConfirmRejectSubmission = async () => {
+    setSubmittingAction("reject");
     setIsSubmitting(true);
     try {
       const liveTitle = title.trim() || "Untitled Article";
@@ -2090,7 +2067,7 @@ function isWorldOrWorldSub(cat: string): boolean {
       let existingArticle: any = null;
       try {
         const subsStr = localStorage.getItem("dj_writer_submitted_articles");
-        if (subsStr) {
+        if (subsStr && subsStr.trim()) {
           const list: any[] = JSON.parse(subsStr);
           existingArticle = list.find((p: any) =>
             (editingPostId && String(p.id) === String(editingPostId)) ||
@@ -2102,7 +2079,7 @@ function isWorldOrWorldSub(cat: string): boolean {
       if (!existingArticle) {
         try {
           const storedEdit = localStorage.getItem("dj_editing_post");
-          if (storedEdit) {
+          if (storedEdit && storedEdit.trim()) {
             const parsed = JSON.parse(storedEdit);
             if (
               (editingPostId && String(parsed.id) === String(editingPostId)) ||
@@ -2156,7 +2133,7 @@ function isWorldOrWorldSub(cat: string): boolean {
           const uLists = ["dj_registered_users", "dj_users", "dj_all_users", "dj_user", "dj_writer_user"];
           for (const key of uLists) {
             const str = localStorage.getItem(key);
-            if (str) {
+            if (str && str.trim()) {
               const parsed = JSON.parse(str);
               const arr = Array.isArray(parsed) ? parsed : [parsed];
               const foundUser = arr.find((u: any) =>
@@ -2181,6 +2158,15 @@ function isWorldOrWorldSub(cat: string): boolean {
         else if (cleanName.includes("abcd")) targetAuthorEmail = "abcd@gmail.com";
         else if (cleanName.includes("nesto")) targetAuthorEmail = "nestosuper@gmail.com";
         else targetAuthorEmail = "writer@digitaljournal.com";
+      }
+
+      if (!targetAuthorName && targetAuthorEmail) {
+        const cleanEmail = targetAuthorEmail.toLowerCase().trim();
+        if (cleanEmail.includes("rura")) targetAuthorName = "Muba_kity";
+        else if (cleanEmail.includes("roomi")) targetAuthorName = "Roomi";
+        else if (cleanEmail.includes("rushdhi")) targetAuthorName = "Rushdhi MR";
+        else if (cleanEmail.includes("abcd")) targetAuthorName = "ABCD";
+        else if (cleanEmail.includes("nesto")) targetAuthorName = "Nesto Super";
       }
 
       if (!targetAuthorName) targetAuthorName = "Staff Journalist";
@@ -2214,48 +2200,60 @@ function isWorldOrWorldSub(cat: string): boolean {
         updatedAt: rejectedAt
       };
 
-      // 1. Update/upsert submissions with status Rejected in localStorage
-      const subsStr = localStorage.getItem("dj_writer_submitted_articles");
-      let subsList: any[] = [];
-      if (subsStr) {
-        try {
-          subsList = JSON.parse(subsStr);
-        } catch (e) {}
+      const cleanAlpha = (t: string) => String(t || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const liveAlpha = cleanAlpha(liveTitle);
+
+      // 1. Persist to backend server API first
+      try {
+        const { saveArticleToServer, setCachedArticles, getCachedArticles, resetArticlesFetchCache } = await import("@/lib/articlesSync");
+        resetArticlesFetchCache();
+
+        const cached = getCachedArticles();
+        const updatedCached = cached.filter((a: any) =>
+          !(
+            (editingPostId && String(a.id) === String(editingPostId)) ||
+            (cleanT(a.title) && cleanT(liveTitle) && cleanT(a.title) === cleanT(liveTitle)) ||
+            (liveAlpha && cleanAlpha(a.title) === liveAlpha) ||
+            (existingArticle?.id && String(a.id) === String(existingArticle.id))
+          )
+        );
+        setCachedArticles([rejectedArticle, ...updatedCached], false);
+        await saveArticleToServer(rejectedArticle as any);
+        resetArticlesFetchCache();
+      } catch (backendErr) {
+        console.warn("Backend server save article notice:", backendErr);
       }
 
-      const existingIndex = subsList.findIndex((p: any) =>
-        (editingPostId && String(p.id) === String(editingPostId)) ||
-        (cleanT(p.title) && cleanT(liveTitle) && cleanT(p.title) === cleanT(liveTitle)) ||
-        (existingArticle?.id && String(p.id) === String(existingArticle.id))
-      );
+      // Direct call to PUT /api/articles to ensure MySQL DB is directly updated
+      try {
+        await fetch("/api/articles", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(rejectedArticle)
+        });
+      } catch (e) {}
 
-      if (existingIndex >= 0) {
-        subsList[existingIndex] = {
-          ...subsList[existingIndex],
-          ...rejectedArticle,
-          status: "Rejected"
-        };
-      } else {
+      // 2. Update/upsert submissions with status Rejected in localStorage safely
+      try {
+        const subsStr = localStorage.getItem("dj_writer_submitted_articles");
+        let subsList: any[] = [];
+        if (subsStr && subsStr.trim()) {
+          try {
+            subsList = JSON.parse(subsStr);
+          } catch (e) {}
+        }
+
+        subsList = subsList.filter((p: any) =>
+          !(
+            (editingPostId && String(p.id) === String(editingPostId)) ||
+            (cleanT(p.title) && cleanT(liveTitle) && cleanT(p.title) === cleanT(liveTitle)) ||
+            (liveAlpha && cleanAlpha(p.title) === liveAlpha) ||
+            (existingArticle?.id && String(p.id) === String(existingArticle.id))
+          )
+        );
         subsList.unshift(rejectedArticle);
-      }
-      localStorage.setItem("dj_writer_submitted_articles", JSON.stringify(subsList));
-
-      // 2. Persist to backend server API
-      const { saveArticleToServer, setCachedArticles, getCachedArticles } = await import("@/lib/articlesSync");
-      const cached = getCachedArticles();
-      const cIdx = cached.findIndex((a: any) =>
-        (editingPostId && String(a.id) === String(editingPostId)) ||
-        (cleanT(a.title) && cleanT(liveTitle) && cleanT(a.title) === cleanT(liveTitle)) ||
-        (existingArticle?.id && String(a.id) === String(existingArticle.id))
-      );
-      if (cIdx >= 0) {
-        cached[cIdx] = { ...cached[cIdx], ...rejectedArticle, status: "Rejected" };
-        setCachedArticles(cached, false);
-      } else {
-        setCachedArticles([rejectedArticle, ...cached], false);
-      }
-
-      await saveArticleToServer(rejectedArticle as any);
+        safeSetLocalStorage("dj_writer_submitted_articles", JSON.stringify(subsList));
+      } catch (e) {}
 
       // 3. Dispatch live sync event across all browser windows/tabs
       if (typeof window !== "undefined") {
@@ -2263,14 +2261,26 @@ function isWorldOrWorldSub(cat: string): boolean {
       }
 
       setIsRejectModalOpen(false);
-      localStorage.setItem("dj_toast", `✓ Article marked as Rejected.`);
-      localStorage.removeItem("dj_editing_post");
+      try {
+        localStorage.setItem("dj_toast", `✓ Article marked as Rejected.`);
+      } catch (e) {}
+      try {
+        localStorage.removeItem("dj_editing_post");
+      } catch (e) {}
 
-      router.push("/admin");
+      if (typeof window !== "undefined") {
+        window.location.href = "/admin";
+      } else {
+        router.push("/admin");
+      }
     } catch (e) {
       console.warn("Reject submission error:", e);
       setIsRejectModalOpen(false);
-      router.push("/admin");
+      if (typeof window !== "undefined") {
+        window.location.href = "/admin";
+      } else {
+        router.push("/admin");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -2337,8 +2347,17 @@ function isWorldOrWorldSub(cat: string): boolean {
                 disabled={isSubmitting}
                 className="bg-[#8B0000] hover:bg-[#A00000] active:scale-[0.98] text-white font-bold text-[11px] sm:text-xs px-3.5 sm:px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-sm shadow-red-950/40 transition-all cursor-pointer uppercase tracking-wider disabled:opacity-60 disabled:cursor-not-allowed font-mono"
               >
-                <X size={14} strokeWidth={2.5} />
-                <span>REJECT TO TRASH</span>
+                {isSubmitting && submittingAction === "reject" ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin text-white" />
+                    <span>REJECTING...</span>
+                  </>
+                ) : (
+                  <>
+                    <X size={14} strokeWidth={2.5} />
+                    <span>REJECT TO TRASH</span>
+                  </>
+                )}
               </button>
 
               <button
@@ -3243,7 +3262,8 @@ function isWorldOrWorldSub(cat: string): boolean {
                         { id: "Trending Now", label: "Trending Now Section", desc: "Trending sidebar list beside Hero" },
                         { id: "Editor's Picks", label: "Editor's Picks Section", desc: "4-Card featured row below Hero" },
                         { id: "Latest News", label: "Latest News Section", desc: "Latest news feed and featured lead" },
-                        { id: "Home Page A+ Section 2", label: "Home Page A+ Section 2", desc: "Middle dark spotlight banner" },
+                        { id: "Home Page A+ Section 2", label: "Main News 2 (Home Page A+ Section 2)", desc: "Middle dark spotlight banner slider" },
+                        { id: "Home Page A+ Section 3", label: "Home Page A+ Section 3", desc: "Featured story beside Most Read list" },
                         { id: "Standard Post", label: "Category Section Only", desc: "Default category news feed" },
                       ].map((item) => {
                         const isSelected = normalizePlacement(placement) === normalizePlacement(item.id);
@@ -3743,18 +3763,6 @@ function isWorldOrWorldSub(cat: string): boolean {
                             <title>Verified Journalist</title>
                             <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.34-1.89-4.24-4.23-4.24-.496 0-.966.084-1.4.238C14.31 2.225 12.94 1.35 11.36 1.35c-1.58 0-2.95.875-3.6 2.148-.435-.154-.905-.238-1.4-.238-2.34 0-4.24 1.89-4.24 4.23 0 .496.084.966.238 1.4C1.225 9.55.35 10.92.35 12.5c0 1.58.875 2.95 2.148 3.6-.154.435-.238.905-.238 1.4 0 2.34 1.89 4.24 4.23 4.24.496 0 .966-.084 1.4-.238.65 1.273 2.02 2.148 3.6 2.148 1.58 0 2.95-.875 3.6-2.148.435.154.905.238 1.4.238 2.34 0 4.24-1.89 4.24-4.23 0-.496-.084-.966-.238-1.4 1.273-.65 2.148-2.02 2.148-3.6zm-12.28 4.29l-4.11-4.11 1.41-1.41 2.7 2.7 6.44-6.44 1.41 1.41-7.85 7.85z"/>
                           </svg>
-
-                          <a
-                            href={`https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(previewAuthorName)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="ml-1 inline-flex items-center text-[#0A66C2] hover:text-[#004182] transition-colors p-0.5"
-                            title={`Connect with ${previewAuthorName} on LinkedIn`}
-                          >
-                            <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
-                              <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
-                            </svg>
-                          </a>
                         </div>
                         <p className="text-[12px] text-zinc-500 mt-0.5">{displayDate}</p>
                       </div>
@@ -3854,20 +3862,8 @@ function isWorldOrWorldSub(cat: string): boolean {
                           </span>
                           <svg className="w-4 h-4 text-[#BF1E2D] shrink-0" fill="currentColor" viewBox="0 0 24 24" aria-label="Verified Journalist">
                             <title>Verified Journalist</title>
-                            <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6-.154-.435.238-.905.238-1.4 0-2.34-1.89-4.24-4.23-4.24-.496 0-.966.084-1.4.238C14.31 2.225 12.94 1.35 11.36 1.35c-1.58 0-2.95.875-3.6 2.148-.435-.154-.905-.238-1.4-.238-2.34 0-4.24 1.89-4.24 4.23 0 .496.084.966.238 1.4C1.225 9.55.35 10.92.35 12.5c0 1.58.875 2.95 2.148 3.6-.154.435-.238.905-.238 1.4 0 2.34 1.89 4.24 4.23 4.24.496 0 .966-.084 1.4-.238.65 1.273 2.02 2.148 3.6 2.148 1.58 0 2.95-.875 3.6-2.148.435.154.905.238 1.4.238 2.34 0 4.24-1.89 4.24-4.23 0-.496-.084-.966-.238-1.4 1.273-.65 2.148-2.02 2.148-3.6zm-12.28 4.29l-4.11-4.11 1.41-1.41 2.7 2.7 6.44-6.44 1.41 1.41-7.85 7.85z"/>
+                            <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.34-1.89-4.24-4.23-4.24-.496 0-.966.084-1.4.238C14.31 2.225 12.94 1.35 11.36 1.35c-1.58 0-2.95.875-3.6 2.148-.435-.154-.905-.238-1.4-.238-2.34 0-4.24 1.89-4.24 4.23 0 .496.084.966.238 1.4C1.225 9.55.35 10.92.35 12.5c0 1.58.875 2.95 2.148 3.6-.154.435-.238.905-.238 1.4 0 2.34 1.89 4.24 4.23 4.24.496 0 .966-.084 1.4-.238.65 1.273 2.02 2.148 3.6 2.148 1.58 0 2.95-.875 3.6-2.148.435.154.905.238 1.4.238 2.34 0 4.24-1.89 4.24-4.23 0-.496-.084-.966-.238-1.4 1.273-.65 2.148-2.02 2.148-3.6zm-12.28 4.29l-4.11-4.11 1.41-1.41 2.7 2.7 6.44-6.44 1.41 1.41-7.85 7.85z"/>
                           </svg>
-
-                          <a
-                            href={`https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(previewAuthorName)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center text-[#0A66C2] hover:text-[#004182] transition-colors p-0.5"
-                            title={`Connect with ${previewAuthorName} on LinkedIn`}
-                          >
-                            <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
-                              <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
-                            </svg>
-                          </a>
                         </div>
 
                         <div className="text-[13.5px] sm:text-[14px] text-zinc-900 font-sans leading-relaxed space-y-3">
@@ -4194,7 +4190,7 @@ function isWorldOrWorldSub(cat: string): boolean {
                   // Persist to current editing post in localStorage if present
                   try {
                     const storedPost = localStorage.getItem("dj_editing_post");
-                    if (storedPost) {
+                    if (storedPost && storedPost.trim()) {
                       const parsed = JSON.parse(storedPost);
                       parsed.targetedRecipients = finalRecipients;
                       parsed.broadcastToSubscribers = broadcastToSubscribers;

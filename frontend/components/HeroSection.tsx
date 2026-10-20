@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Check } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useLiveArticles, isHomePageAPlus, isTrendingNow } from "@/lib/articlesSync";
 import { getAuthorAvatarByNameOrEmail, resolveUserAvatar } from "@/lib/userProfiles";
 import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
@@ -124,7 +124,7 @@ export default function HeroSection() {
           date: post.date || "Just now",
           readTime: post.readDuration || "4 MIN READ",
           image: validImg,
-          href: `/${cat.toLowerCase()}/companies/${postSlug}?id=${post.id}`
+          href: `/article/${postSlug}`
         };
       });
       setUserPublishedArticles(formattedAPlus);
@@ -154,7 +154,7 @@ export default function HeroSection() {
           time: displayDate,
           image: post.imageUrl || post.image || (post as any).image_url || "https://images.unsplash.com/photo-1563206767-5b18f218e8de?w=200&h=140&fit=crop",
           hasVideo: false,
-          href: `/${cat.toLowerCase()}/news/${postSlug}?id=${post.id}`
+          href: `/article/${postSlug}`
         };
       });
       setUserTrendingArticles(formattedTrending);
@@ -180,120 +180,6 @@ export default function HeroSection() {
   }, [liveArticles, profileSyncTick, loading]);
 
 
-
-  const carouselArticles = [
-    {
-      id: 1,
-      category: "BUSINESS",
-      title: "What tools business should take from a massive security breach to prevent future attacks",
-      excerpt: "A massive security breach has exposed vulnerable systems. Experts suggest key tools businesses should implement to prevent future data theft and secure infrastructure.",
-      author: "David Potter",
-      authorAvatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop",
-      date: "July 13, 2026",
-      readTime: "5 MIN READ",
-      image: "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=1200&h=800&fit=crop",
-      href: "/business/security/what-tools-business-should-take-from-a-massive-security-breach-to-prevent-future-attacks"
-    },
-    {
-      id: 2,
-      category: "ARTIFICIAL INTELLIGENCE",
-      title: "Can space AI data centres solve Earth's computing crisis?",
-      excerpt: "Aerospace engineers and cloud providers are designing orbital data hubs powered by solar arrays to alleviate terrestrial power grid strains.",
-      author: "Jennifer Friesen",
-      authorAvatar: "/author_woman.jpg",
-      date: "July 28, 2026",
-      readTime: "6 MIN READ",
-      image: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1200&h=800&fit=crop",
-      href: "/technology/artificial-intelligence/can-space-ai-data-centres-solve-earths-computing-crisis"
-    },
-    {
-      id: 3,
-      category: "INNOVATION",
-      title: "Canadian mathematician honoured for reshaping global data networks",
-      excerpt: "Pioneering research in topology and distributed algorithm optimization earns international recognition across scientific institutes.",
-      author: "April Hicke",
-      authorAvatar: "/author_glasses.jpg",
-      date: "July 27, 2026",
-      readTime: "4 MIN READ",
-      image: "https://images.unsplash.com/photo-1509228468518-180dd4864904?w=1200&h=800&fit=crop",
-      href: "/business/companies/canadian-mathematician-honoured-for-reshaping-global-data-networks"
-    },
-    {
-      id: 4,
-      category: "ARTIFICIAL INTELLIGENCE",
-      title: "China's Kimi K3 model rattles US AI technology industry",
-      excerpt: "New benchmark evaluations demonstrate breakthrough efficiency in long-context reasoning, sparking intense architectural debates.",
-      author: "Dr. Tim Sandle",
-      authorAvatar: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&h=100&fit=crop",
-      date: "July 26, 2026",
-      readTime: "5 MIN READ",
-      image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&h=800&fit=crop",
-      href: "/technology/innovations/chinas-kimi-k3-model-rattles-us-ai-technology-industry"
-    },
-    {
-      id: 5,
-      category: "STARTUPS",
-      title: "Startups bet on autonomous AI agents for leaner enterprise operations",
-      excerpt: "Venture firms accelerate funding into specialized AI agentic platforms designed to handle complex multi-step corporate workflows.",
-      author: "Pramod Jain",
-      authorAvatar: "/author_bluesuit.jpg",
-      date: "July 25, 2026",
-      readTime: "4 MIN READ",
-      image: "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=1200&h=800&fit=crop",
-      href: "/business/startups/startups-bet-on-autonomous-ai-agents"
-    },
-    {
-      id: 6,
-      category: "TECHNOLOGY",
-      title: "Next-generation quantum networks achieve milestone in long-distance entanglement",
-      excerpt: "Researchers demonstrate stable quantum communication across terrestrial fiber networks, marking a major leap toward unhackable global infrastructure.",
-      author: "Jennifer Friesen",
-      authorAvatar: "/author_woman.jpg",
-      date: "July 24, 2026",
-      readTime: "5 MIN READ",
-      image: "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=1200&h=800&fit=crop",
-      href: "/technology/innovations/next-generation-quantum-networks-milestone"
-    }
-  ];
-
-  const trendingNowItems = [
-    {
-      number: "01",
-      category: "SECURITY",
-      title: "Major cybersecurity firm warns of new phishing campaign",
-      time: "10 minutes ago",
-      image: "https://images.unsplash.com/photo-1563206767-5b18f218e8de?w=200&h=140&fit=crop",
-      hasVideo: true,
-      href: "/business/security/what-tools-business-should-take-from-a-massive-security-breach-to-prevent-future-attacks"
-    },
-    {
-      number: "02",
-      category: "BUSINESS",
-      title: "Economy shows signs of resilience despite global uncertainty",
-      time: "35 minutes ago",
-      image: "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=200&h=140&fit=crop",
-      hasVideo: false,
-      href: "/business/companies/canadian-mathematician-honoured-for-reshaping-global-data-networks"
-    },
-    {
-      number: "03",
-      category: "TECHNOLOGY",
-      title: "Quantum computing startup raises $200M in Series B",
-      time: "1 hour ago",
-      image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&h=140&fit=crop",
-      hasVideo: false,
-      href: "/technology/innovations/chinas-kimi-k3-model-rattles-us-ai-technology-industry"
-    },
-    {
-      number: "04",
-      category: "WORLD",
-      title: "Humanitarian aid reaches thousands after devastating floods",
-      time: "2 hours ago",
-      image: "https://images.unsplash.com/photo-1547683905-f686c993aae5?w=200&h=140&fit=crop",
-      hasVideo: false,
-      href: "/business/startups/startups-bet-on-autonomous-ai-agents"
-    }
-  ];
 
   // Use only real DB articles — no hardcoded fallback while loading.
   // While loading is true, allCarouselArticles will be [] which keeps the
@@ -426,9 +312,6 @@ export default function HeroSection() {
                     <div className="flex items-center gap-1 text-[11px] font-sans flex-wrap" suppressHydrationWarning>
                       <span className="font-bold text-gray-900">
                         By {authorName}
-                      </span>
-                      <span className="w-3.5 h-3.5 bg-[#D31220] text-white rounded-full inline-flex items-center justify-center flex-shrink-0">
-                        <Check size={8} strokeWidth={3} />
                       </span>
                       <span className="text-gray-400 font-medium ml-1">
                         • {activeArticle.date}
