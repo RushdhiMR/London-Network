@@ -80,6 +80,10 @@ export async function GET(request: NextRequest) {
       imgData = imgData.replace(/https?:\/\/f005\.backblazeb2\.com\/file\/LondonNetwork\//g, "https://LondonNetwork.s3.us-east-005.backblazeb2.com/");
     }
 
+    if (imgData.includes("localhost:") || imgData.includes("127.0.0.1:")) {
+      imgData = imgData.replace(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i, "");
+    }
+
     // 1. If it's a remote URL (e.g. Backblaze B2, Unsplash, Cloudinary), redirect to it
     if (imgData.startsWith("http://") || imgData.startsWith("https://")) {
       return NextResponse.redirect(imgData);

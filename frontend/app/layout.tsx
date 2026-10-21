@@ -4,14 +4,20 @@ import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import GlobalPageLoader from "@/components/GlobalPageLoader";
 
+const CANONICAL_SITE_URL = "https://london-network.vercel.app";
+
 const siteUrl =
   process.env.NEXT_PUBLIC_APP_URL ||
   process.env.FRONTEND_URL ||
   (process.env.VERCEL_PROJECT_PRODUCTION_URL
     ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
     : "") ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
-  "http://localhost:3000";
+  (process.env.VERCEL_URL
+    ? (process.env.VERCEL_URL.startsWith("http")
+        ? process.env.VERCEL_URL
+        : `https://${process.env.VERCEL_URL}`)
+    : "") ||
+  (process.env.NODE_ENV === "production" ? CANONICAL_SITE_URL : "http://localhost:3000");
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -36,14 +42,16 @@ export const metadata: Metadata = {
     locale: "en_US",
     images: [
       {
-        url: "/og-image.png",
+        url: `${siteUrl}/og-image.png`,
+        secureUrl: `${siteUrl}/og-image.png`,
         width: 1200,
         height: 630,
         alt: "London BigBen Network Logo",
         type: "image/png",
       },
       {
-        url: "/logo.png",
+        url: `${siteUrl}/logo.png`,
+        secureUrl: `${siteUrl}/logo.png`,
         width: 600,
         height: 600,
         alt: "London BigBen Network",
@@ -56,7 +64,7 @@ export const metadata: Metadata = {
     title: "London BigBen Network - Smart News. Real Impact.",
     description:
       "London BigBen Network - Smart News. Real Impact. Global news, financial analysis, technology insights, and editorial reporting.",
-    images: ["/og-image.png"],
+    images: [`${siteUrl}/og-image.png`],
   },
 };
 
@@ -72,8 +80,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="w-full max-w-full">
+    <html lang="en" prefix="og: http://ogp.me/ns#" className="w-full max-w-full">
       <head>
+        <link rel="image_src" href={`${siteUrl}/og-image.png`} />
         {/* Comprehensive Google Translate toolbar suppressor - CSS */}
         <style>{`
           body > .skiptranslate:not(#google_translate_element),

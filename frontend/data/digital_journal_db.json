@@ -330,8 +330,8 @@
         "FYJH",
         "FH"
       ],
-      "imageUrl": "http://localhost:3000/ai_hero.png",
-      "image": "http://localhost:3000/ai_hero.png",
+      "imageUrl": "/ai_hero.png",
+      "image": "/ai_hero.png",
       "image_url": "http://localhost:3000/ai_hero.png",
       "caption": "What Makes a Perfect Business in 2026? Three Mistakes Most Founders Still Make.",
       "image_caption": "What Makes a Perfect Business in 2026? Three Mistakes Most Founders Still Make.",
@@ -8071,8 +8071,8 @@
         "DFDGJ",
         "RJOG"
       ],
-      "imageUrl": "http://localhost:3000/uploads/articles/1788989777769-Cute-Tabby-Cat-Selfie-in-Front-of-Black--z95iq.webp",
-      "image": "http://localhost:3000/uploads/articles/1788989777769-Cute-Tabby-Cat-Selfie-in-Front-of-Black--z95iq.webp",
+      "imageUrl": "/uploads/articles/1788989777769-Cute-Tabby-Cat-Selfie-in-Front-of-Black--z95iq.webp",
+      "image": "/uploads/articles/1788989777769-Cute-Tabby-Cat-Selfie-in-Front-of-Black--z95iq.webp",
       "image_url": "http://localhost:3000/uploads/articles/1788989777769-Cute-Tabby-Cat-Selfie-in-Front-of-Black--z95iq.webp",
       "caption": "Op-Ed: Canada and the world vs the hidden risks of tech infrastructure and supply chains.",
       "image_caption": "Op-Ed: Canada and the world vs the hidden risks of tech infrastructure and supply chains.",

@@ -14,6 +14,8 @@ const SITE_NAME = "London BigBen Network";
 const DEFAULT_DESCRIPTION =
   "London BigBen Network - Smart News. Real Impact. Global news, financial analysis, technology insights, and editorial reporting.";
 
+export const CANONICAL_SITE_URL = "https://london-network.vercel.app";
+
 export function getSiteUrl(): string {
   const envUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
@@ -21,12 +23,23 @@ export function getSiteUrl(): string {
     (process.env.VERCEL_PROJECT_PRODUCTION_URL
       ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
       : "") ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
+    (process.env.VERCEL_URL
+      ? (process.env.VERCEL_URL.startsWith("http")
+          ? process.env.VERCEL_URL
+          : `https://${process.env.VERCEL_URL}`)
+      : "") ||
     (typeof window !== "undefined" ? window.location.origin : "");
 
   if (envUrl && envUrl.startsWith("http")) {
     return envUrl.replace(/\/+$/, "");
   }
+
+  // In production (Vercel deployment), always return canonical production URL
+  // so social crawlers (WhatsApp, Facebook, Twitter, LinkedIn) get an absolute HTTPS link
+  if (process.env.NODE_ENV === "production") {
+    return CANONICAL_SITE_URL;
+  }
+
   return "http://localhost:3000";
 }
 
@@ -379,11 +392,20 @@ export function resolvePublicImageUrl(imageUrl?: string, slugOrId?: string): str
     return `${siteUrl}/og-image.png`;
   }
 
-  const trimmed = imageUrl.trim();
+  let trimmed = imageUrl.trim();
+
+  // Strip any localhost / 127.0.0.1 domain stored during development
+  if (trimmed.includes("localhost:") || trimmed.includes("127.0.0.1:")) {
+    trimmed = trimmed.replace(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i, "");
+  }
 
   // 1. If it's already a full HTTP/HTTPS URL (e.g. Backblaze B2, CDN, Unsplash)
   if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-    return trimmed;
+    if (trimmed.startsWith("https://")) {
+      return trimmed;
+    }
+    // Upgrade http to https in production for secure crawlers (WhatsApp requires HTTPS)
+    return trimmed.replace(/^http:\/\//i, "https://");
   }
 
   // 2. If it's a local public file (e.g. /uploads/articles/... or /ai_hero.png)
@@ -501,6 +523,7 @@ export async function generateSocialMetadata({
       images: [
         {
           url: logoBannerUrl,
+          secureUrl: logoBannerUrl.startsWith("https://") ? logoBannerUrl : undefined,
           width: 1200,
           height: 630,
           alt: `${SITE_NAME} Logo`,
@@ -508,6 +531,7 @@ export async function generateSocialMetadata({
         },
         {
           url: logoSquareUrl,
+          secureUrl: logoSquareUrl.startsWith("https://") ? logoSquareUrl : undefined,
           width: 600,
           height: 600,
           alt: `${SITE_NAME}`,
