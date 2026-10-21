@@ -33,7 +33,7 @@ import {
 import { saveUserProfile, getUserProfile, resolveUserAvatar, isUploadedAvatar } from "@/lib/userProfiles";
 import { useLiveArticles, moveArticleToTrashOnServer, deletePermanentlyOnServer, setCachedArticles } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
-import LogoLoader from "@/components/LogoLoader";
+import PageSkeletonLoader from "@/components/PageSkeletonLoader";
 import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
 
 interface ArticlePost {
@@ -208,10 +208,10 @@ export default function WriterDashboardPage() {
   const { articles: liveArticles, loading } = useLiveArticles();
 
   useEffect(() => {
-    if (!loading && !auth.loading) {
+    if (!loading && !auth.loading && !isLoading) {
       dispatchPageDataReady();
     }
-  }, [loading, auth.loading]);
+  }, [loading, auth.loading, isLoading]);
 
   const syncArticlesFromStorageAndServer = useCallback(() => {
     try {
@@ -761,7 +761,7 @@ export default function WriterDashboardPage() {
   });
 
   if (isLoading) {
-    return <LogoLoader text="Verifying Writer Access..." theme="dark" fullScreen={true} />;
+    return <PageSkeletonLoader />;
   }
 
   // Security Lock Screen
