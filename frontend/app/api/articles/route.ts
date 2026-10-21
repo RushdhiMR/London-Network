@@ -46,6 +46,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category');
     const status = searchParams.get('status');
+    const includeTrash = searchParams.get('includeTrash') === 'true' || searchParams.get('include_trash') === 'true';
 
     let articles = await readArticlesStore();
 
@@ -58,7 +59,7 @@ export async function GET(request: Request) {
 
     if (status) {
       articles = articles.filter((a) => (a.status || '').toLowerCase() === status.toLowerCase());
-    } else {
+    } else if (!includeTrash) {
       articles = articles.filter((a) => (a.status || '').toLowerCase() !== 'trash');
     }
 
@@ -180,12 +181,19 @@ export async function PUT(request: Request) {
     }
     const { id, status, ...updates } = body;
 
-    if (!id) {
-      return NextResponse.json({ error: 'Article ID is required' }, { status: 400 });
+    if (!id && !updates.title && !updates.slug) {
+      return NextResponse.json({ error: 'Article ID or Title is required' }, { status: 400 });
     }
 
     const currentArticles = await readArticlesStore();
-    const existing = currentArticles.find((a) => String(a.id) === String(id));
+    const cleanT = (t: any) => String(t || '').trim().toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ');
+    const targetTitle = updates.title ? cleanT(updates.title) : '';
+    const existing = currentArticles.find((a) => 
+      (id && String(a.id) === String(id)) ||
+      (id && a.slug === id) ||
+      (updates.slug && a.slug === updates.slug) ||
+      (targetTitle && cleanT(a.title) === targetTitle)
+    );
 
     if (!existing && !updates.title) {
       return NextResponse.json({ error: 'Article not found' }, { status: 404 });
@@ -198,10 +206,16 @@ export async function PUT(request: Request) {
     const updatedRecord: ArticleRecord = {
       ...(existing || {}),
       ...updates,
-      id,
+      id: existing?.id || id || `art_${Date.now()}`,
       status: targetStatus,
       updated_at: nowIso,
       updatedAt: nowIso,
+      ...(targetStatus === 'Rejected' ? {
+        rejectionReason: updates.rejectionReason || updates.rejection_reason || existing?.rejectionReason,
+        rejection_reason: updates.rejectionReason || updates.rejection_reason || existing?.rejectionReason,
+        rejectedAt: updates.rejectedAt || updates.rejected_at || existing?.rejectedAt || nowIso,
+        rejected_at: updates.rejectedAt || updates.rejected_at || existing?.rejectedAt || nowIso,
+      } : {}),
       ...(targetPublishedAt ? {
         published_at: targetPublishedAt,
         publishedAt: targetPublishedAt,
@@ -236,18 +250,21 @@ export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
+    const title = searchParams.get('title');
+    const slug = searchParams.get('slug');
     const permanent = searchParams.get('permanent') === 'true';
 
-    if (!id) {
-      return NextResponse.json({ error: 'Article ID is required' }, { status: 400 });
+    if (!id && !title && !slug) {
+      return NextResponse.json({ error: 'Article ID or Title is required' }, { status: 400 });
     }
 
+    const targetId = id || slug || title || '';
     let updatedList;
     if (permanent) {
-      updatedList = await deleteArticleStore(id);
+      updatedList = await deleteArticleStore(targetId, title || undefined, slug || undefined);
     } else {
       const { updateArticleStatusStore } = await import('@/lib/serverArticlesStore');
-      updatedList = await updateArticleStatusStore(id, 'Trash');
+      updatedList = await updateArticleStatusStore(targetId, 'Trash', title || undefined);
     }
 
     revalidatePublicPages();

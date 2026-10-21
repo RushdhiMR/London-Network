@@ -1813,7 +1813,7 @@ export default function AdminDashboardPage() {
             "x-admin-portal": "dj_admin_portal_authenticated_2026",
           },
         }),
-        fetch(`/api/articles?_t=${Date.now()}`, {
+        fetch(`/api/articles?includeTrash=true&_t=${Date.now()}`, {
           cache: "no-store",
           headers: {
             "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -1953,8 +1953,8 @@ export default function AdminDashboardPage() {
     }
 
     // 2. Synchronize Live Articles from Backend (Strictly Published Articles Only)
+    let serverArticles: any[] = [];
     try {
-      let serverArticles: any[] = [];
       try {
         if (resArts && resArts.ok) {
           const dataArts = await safeJson(resArts);
@@ -2225,14 +2225,20 @@ export default function AdminDashboardPage() {
       console.warn("Newsletter subscribers sync notice:", err);
     }
 
-    // 5. Trashed Articles Sync
+    // 5. Trashed Articles Sync from Server Database and Local Cache
     try {
-      const trashedStr = localStorage.getItem("dj_trashed_articles");
-      if (trashedStr && trashedStr.trim()) {
-        const parsed = JSON.parse(trashedStr);
-        if (Array.isArray(parsed)) {
-          setTrashedArticles(parsed);
-        }
+      const serverTrashed = (serverArticles || []).filter((a: any) => (a.status || "").toLowerCase().trim() === "trash");
+      const trashedStr = typeof window !== "undefined" ? localStorage.getItem("dj_trashed_articles") : null;
+      const localTrash: any[] = (trashedStr && trashedStr.trim()) ? JSON.parse(trashedStr) : [];
+      const trashMap = new Map<string, any>();
+      serverTrashed.forEach((a: any) => trashMap.set(String(a.id), a));
+      localTrash.forEach((a: any) => {
+        if (!trashMap.has(String(a.id))) trashMap.set(String(a.id), a);
+      });
+      const combinedTrash = Array.from(trashMap.values());
+      setTrashedArticles(combinedTrash);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("dj_trashed_articles", JSON.stringify(combinedTrash));
       }
     } catch (err) {}
 

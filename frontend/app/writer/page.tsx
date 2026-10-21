@@ -206,6 +206,39 @@ export default function WriterDashboardPage() {
   // Initial Posts state
   const [posts, setPosts] = useState<ArticlePost[]>([]);
   const { articles: liveArticles, loading } = useLiveArticles();
+  const [serverArticlesWithTrash, setServerArticlesWithTrash] = useState<ArticlePost[]>([]);
+
+  const fetchServerArticlesWithTrash = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/articles?includeTrash=true&_t=${Date.now()}`, {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache"
+        }
+      });
+      if (res.ok) {
+        const text = await res.text();
+        const data = text && text.trim() ? JSON.parse(text) : null;
+        if (data && Array.isArray(data.articles)) {
+          setServerArticlesWithTrash(data.articles);
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to fetch server articles with trash:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchServerArticlesWithTrash();
+    const handleUpdate = () => {
+      fetchServerArticlesWithTrash();
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("dj_articles_updated", handleUpdate);
+      return () => window.removeEventListener("dj_articles_updated", handleUpdate);
+    }
+  }, [fetchServerArticlesWithTrash]);
 
   useEffect(() => {
     if (!loading && !auth.loading && !isLoading) {
@@ -217,7 +250,10 @@ export default function WriterDashboardPage() {
     try {
       const localSubs = localStorage.getItem("dj_writer_submitted_articles");
       const localArticles: any[] = (localSubs && localSubs.trim()) ? JSON.parse(localSubs) : [];
-      const liveList: any[] = Array.isArray(liveArticles) ? liveArticles : [];
+      const trashedStr = localStorage.getItem("dj_trashed_articles");
+      const localTrash: any[] = (trashedStr && trashedStr.trim()) ? JSON.parse(trashedStr) : [];
+      const serverSource = serverArticlesWithTrash.length > 0 ? serverArticlesWithTrash : (Array.isArray(liveArticles) ? liveArticles : []);
+      const liveList: any[] = serverSource;
 
       const cleanKey = (val: any) => String(val || "").trim().toLowerCase();
       const normalizeTitle = (t: any) =>
@@ -240,6 +276,15 @@ export default function WriterDashboardPage() {
         if (titleKey) mergedMap.set(`t_${titleKey}`, item);
       });
 
+      // Also add local trash items
+      localTrash.forEach((item) => {
+        const idKey = cleanKey(item.id);
+        const titleKey = normalizeTitle(item.title);
+        const trashedItem = { ...item, status: "Trash" };
+        if (idKey && !mergedMap.has(idKey)) mergedMap.set(idKey, trashedItem);
+        if (titleKey && !mergedMap.has(`t_${titleKey}`)) mergedMap.set(`t_${titleKey}`, trashedItem);
+      });
+
       // 2. Overlay server database articles with latest status
       liveList.forEach((item) => {
         const idKey = cleanKey(item.id);
@@ -247,7 +292,8 @@ export default function WriterDashboardPage() {
         const existing = (idKey && mergedMap.get(idKey)) || (titleKey && mergedMap.get(`t_${titleKey}`)) || {};
 
         const targetStatus = item.status || existing.status || "Draft";
-        const isTargetRejected = targetStatus.toLowerCase().trim().includes("reject");
+        const isTargetTrash = targetStatus.toLowerCase().trim() === "trash";
+        const isTargetRejected = !isTargetTrash && targetStatus.toLowerCase().trim().includes("reject");
 
         const resolvedEmail = (item.authorEmail && !item.authorEmail.includes("digitaljournal.com")) ? item.authorEmail : (existing.authorEmail && !existing.authorEmail.includes("digitaljournal.com")) ? existing.authorEmail : (item.authorEmail || existing.authorEmail || item.author_email || existing.author_email);
         const resolvedName = (item.authorName && item.authorName !== "Staff Journalist" && item.authorName !== "Writer") ? item.authorName : (existing.authorName && existing.authorName !== "Staff Journalist" && existing.authorName !== "Writer") ? existing.authorName : (item.authorName || existing.authorName || item.author_name || existing.author_name);
@@ -272,10 +318,17 @@ export default function WriterDashboardPage() {
         const titleKey = normalizeTitle(item.title);
         const existing = (idKey && mergedMap.get(idKey)) || (titleKey && mergedMap.get(`t_${titleKey}`));
 
-        // If the server/admin has marked the article as Rejected or Published, honor the admin decision
+        // If the server/admin has marked the article as Trash, Rejected or Published, honor the server decision
         if (existing) {
           const exSt = (existing.status || "").toLowerCase().trim();
           const itemSt = (item.status || "").toLowerCase().trim();
+          if (exSt === "trash" || itemSt === "trash") {
+            if (item.status !== "Trash") {
+              item.status = "Trash";
+              localUpdated = true;
+            }
+            return;
+          }
           if (exSt.includes("reject") || itemSt.includes("reject") || exSt === "published" || exSt === "approved") {
             const finalStatus = (exSt.includes("reject") || itemSt.includes("reject")) ? "Rejected" : existing.status;
             if (item.status !== finalStatus) {
@@ -335,6 +388,19 @@ export default function WriterDashboardPage() {
         }
       });
 
+      // Local trash items
+      localTrash.forEach((item) => {
+        const idKey = cleanKey(item.id);
+        const titleKey = normalizeTitle(item.title);
+        const isSeen = (idKey && seenKeys.has(idKey)) || (titleKey && seenKeys.has(`t_${titleKey}`));
+        if (!isSeen) {
+          if (idKey) seenKeys.add(idKey);
+          if (titleKey) seenKeys.add(`t_${titleKey}`);
+          const resolved = (idKey && mergedMap.get(idKey)) || (titleKey && mergedMap.get(`t_${titleKey}`)) || { ...item, status: "Trash" };
+          uniqueList.push(resolved);
+        }
+      });
+
       const unifiedMap = new Map<string, any>();
       uniqueList.forEach((post) => {
         const tk = normalizeTitle(post.title);
@@ -344,15 +410,16 @@ export default function WriterDashboardPage() {
           if (tk) unifiedMap.set(`t_${tk}`, post);
           if (ik) unifiedMap.set(ik, post);
         } else {
-          const isRej = (existing.status || "").toLowerCase().includes("reject") || (post.status || "").toLowerCase().includes("reject");
+          const isTrash = (existing.status || "").toLowerCase() === "trash" || (post.status || "").toLowerCase() === "trash";
+          const isRej = !isTrash && ((existing.status || "").toLowerCase().includes("reject") || (post.status || "").toLowerCase().includes("reject"));
           const resolvedEmail = (post.authorEmail && !post.authorEmail.includes("digitaljournal.com")) ? post.authorEmail : (existing.authorEmail && !existing.authorEmail.includes("digitaljournal.com")) ? existing.authorEmail : (post.authorEmail || existing.authorEmail || post.author_email || existing.author_email);
           const resolvedName = (post.authorName && post.authorName !== "Staff Journalist" && post.authorName !== "Writer") ? post.authorName : (existing.authorName && existing.authorName !== "Staff Journalist" && existing.authorName !== "Writer") ? existing.authorName : (post.authorName || existing.authorName || post.author_name || existing.author_name);
           const merged = {
             ...existing,
             ...post,
-            status: isRej ? "Rejected" : (post.status || existing.status),
-            rejectionReason: post.rejectionReason || existing.rejectionReason || post.rejection_reason || existing.rejection_reason,
-            rejectedAt: post.rejectedAt || existing.rejectedAt || post.rejected_at || existing.rejected_at,
+            status: isTrash ? "Trash" : isRej ? "Rejected" : (post.status || existing.status),
+            rejectionReason: isRej ? (post.rejectionReason || existing.rejectionReason || post.rejection_reason || existing.rejection_reason) : undefined,
+            rejectedAt: isRej ? (post.rejectedAt || existing.rejectedAt || post.rejected_at || existing.rejected_at) : undefined,
             authorEmail: resolvedEmail,
             authorName: resolvedName
           };
@@ -387,7 +454,7 @@ export default function WriterDashboardPage() {
     if (Array.isArray(liveArticles) && liveArticles.length > 0) {
       setPosts((prev) => (liveArticles.length > 0 ? (liveArticles as any) : prev));
     }
-  }, [liveArticles]);
+  }, [liveArticles, serverArticlesWithTrash]);
 
   useEffect(() => {
     syncArticlesFromStorageAndServer();
@@ -451,19 +518,10 @@ export default function WriterDashboardPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Update posts state and server store when posts change
-  const updatePostsState = async (newPosts: ArticlePost[]) => {
+  // Update posts state when posts change locally
+  const updatePostsState = (newPosts: ArticlePost[]) => {
     setPosts(newPosts);
-    setCachedArticles(newPosts as any);
-    try {
-      await fetch("/api/articles", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ articles: newPosts })
-      });
-    } catch (e) {
-      console.warn("Failed to sync posts with server API:", e);
-    }
+    setCachedArticles(newPosts as any, false);
   };
 
   const handleEditPost = (post: ArticlePost) => {

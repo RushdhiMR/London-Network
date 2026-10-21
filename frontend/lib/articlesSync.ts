@@ -831,7 +831,10 @@ export async function moveArticleToTrashOnServer(id: string | number, title?: st
   }
 
   try {
-    const res = await fetch(`/api/articles?id=${encodeURIComponent(id)}`, {
+    const qParts = [`id=${encodeURIComponent(id)}`];
+    if (title && title.trim()) qParts.push(`title=${encodeURIComponent(title.trim())}`);
+    if (slug && slug.trim()) qParts.push(`slug=${encodeURIComponent(slug.trim())}`);
+    const res = await fetch(`/api/articles?${qParts.join("&")}`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" }
     });
@@ -891,7 +894,10 @@ export async function deletePermanentlyOnServer(id: string | number, title?: str
   }
 
   try {
-    const res = await fetch(`/api/articles?id=${encodeURIComponent(id)}&permanent=true`, {
+    const qParts = [`id=${encodeURIComponent(id)}`, `permanent=true`];
+    if (title && title.trim()) qParts.push(`title=${encodeURIComponent(title.trim())}`);
+    if (slug && slug.trim()) qParts.push(`slug=${encodeURIComponent(slug.trim())}`);
+    const res = await fetch(`/api/articles?${qParts.join("&")}`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" }
     });

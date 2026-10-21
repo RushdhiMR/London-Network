@@ -1,13 +1,167 @@
 import { getDbPool, isMysqlAvailable, recordMysqlFailure } from '@/lib/db';
 import fs from 'fs';
 import path from 'path';
+import { getB2Client, isB2Configured } from '@/lib/backblaze';
+import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 
 const DB_JSON_PATH = path.join(process.cwd(), 'data', 'digital_journal_db.json');
 const TMP_JSON_PATH = path.join('/tmp', 'digital_journal_db.json');
+const B2_STATE_KEY = 'database/articles_overrides.json';
+
+interface ArticlesB2State {
+  updatedAt: string;
+  overrides: Record<string, Partial<ArticleRecord>>;
+  deletedIds: string[];
+  customArticles: ArticleRecord[];
+}
 
 const globalForArticlesStore = globalThis as unknown as {
   __serverArticlesCache?: ArticleRecord[];
+  __articlesB2StateCache?: ArticlesB2State | null;
+  __articlesB2StateCacheTime?: number;
+  __articlesB2StateInFlight?: Promise<ArticlesB2State | null> | null;
 };
+
+const B2_CACHE_TTL_MS = 2500; // 2.5 seconds in-memory cache for cloud overrides
+
+async function getArticlesB2State(forceFresh = false): Promise<ArticlesB2State | null> {
+  if (!isB2Configured()) return null;
+
+  const now = Date.now();
+  if (!forceFresh && globalForArticlesStore.__articlesB2StateCache && (now - (globalForArticlesStore.__articlesB2StateCacheTime || 0) < B2_CACHE_TTL_MS)) {
+    return globalForArticlesStore.__articlesB2StateCache;
+  }
+
+  if (globalForArticlesStore.__articlesB2StateInFlight && !forceFresh) {
+    return globalForArticlesStore.__articlesB2StateInFlight;
+  }
+
+  const fetchPromise = (async () => {
+    try {
+      const client = getB2Client();
+      const bucket = (process.env.B2_BUCKET_NAME || '').trim();
+      if (!client || !bucket) return null;
+
+      const res = await client.send(new GetObjectCommand({
+        Bucket: bucket,
+        Key: B2_STATE_KEY
+      }));
+
+      const bodyStr = await res.Body?.transformToString();
+      if (!bodyStr || !bodyStr.trim()) return null;
+
+      const parsed: ArticlesB2State = JSON.parse(bodyStr);
+      globalForArticlesStore.__articlesB2StateCache = parsed;
+      globalForArticlesStore.__articlesB2StateCacheTime = Date.now();
+      return parsed;
+    } catch (err: any) {
+      if (err?.name === 'NoSuchKey' || err?.Code === 'NoSuchKey') {
+        const emptyState: ArticlesB2State = {
+          updatedAt: new Date().toISOString(),
+          overrides: {},
+          deletedIds: [],
+          customArticles: []
+        };
+        globalForArticlesStore.__articlesB2StateCache = emptyState;
+        globalForArticlesStore.__articlesB2StateCacheTime = Date.now();
+        return emptyState;
+      }
+      return globalForArticlesStore.__articlesB2StateCache || null;
+    } finally {
+      globalForArticlesStore.__articlesB2StateInFlight = null;
+    }
+  })();
+
+  globalForArticlesStore.__articlesB2StateInFlight = fetchPromise;
+  return fetchPromise;
+}
+
+async function saveArticlesB2State(state: ArticlesB2State): Promise<boolean> {
+  if (!isB2Configured()) return false;
+  try {
+    const client = getB2Client();
+    const bucket = (process.env.B2_BUCKET_NAME || '').trim();
+    if (!client || !bucket) return false;
+
+    state.updatedAt = new Date().toISOString();
+    globalForArticlesStore.__articlesB2StateCache = state;
+    globalForArticlesStore.__articlesB2StateCacheTime = Date.now();
+
+    const jsonStr = JSON.stringify(state, null, 2);
+    await client.send(new PutObjectCommand({
+      Bucket: bucket,
+      Key: B2_STATE_KEY,
+      Body: Buffer.from(jsonStr, 'utf-8'),
+      ContentType: 'application/json'
+    }));
+
+    return true;
+  } catch (err) {
+    console.warn('[serverArticlesStore] B2 state save warning:', err);
+    return false;
+  }
+}
+
+function applyB2StateToArticles(baseArticles: ArticleRecord[], b2State: ArticlesB2State | null): ArticleRecord[] {
+  if (!b2State) return baseArticles;
+
+  const cleanT = (t: any) =>
+    String(t || "")
+      .toLowerCase()
+      .replace(/[\u2018\u2019\u201A\u201B']/g, "'")
+      .replace(/[\u201C\u201D\u201E\u201F"]/g, '"')
+      .replace(/[\u2013\u2014]/g, "-")
+      .replace(/[^\w\s-]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const deletedSet = new Set((b2State.deletedIds || []).map(d => String(d).trim().toLowerCase()));
+
+  const result: ArticleRecord[] = [];
+  const seenIds = new Set<string>();
+  const seenTitles = new Set<string>();
+
+  const processArticle = (art: ArticleRecord) => {
+    const idKey = String(art.id || '').trim().toLowerCase();
+    const slugKey = String(art.slug || '').trim().toLowerCase();
+    const titleKey = cleanT(art.title);
+
+    // If deleted, skip
+    if (
+      (idKey && deletedSet.has(idKey)) ||
+      (slugKey && deletedSet.has(slugKey)) ||
+      (titleKey && deletedSet.has(titleKey))
+    ) {
+      return;
+    }
+
+    const override =
+      (idKey && b2State.overrides[idKey]) ||
+      (idKey && b2State.overrides[String(art.id)]) ||
+      (slugKey && b2State.overrides[slugKey]) ||
+      (titleKey && b2State.overrides[`t_${titleKey}`]) ||
+      (titleKey && b2State.overrides[titleKey]);
+
+    const finalArt: ArticleRecord = override ? { ...art, ...override } : art;
+
+    const dedupId = String(finalArt.id || '');
+    const dedupTitle = cleanT(finalArt.title);
+    if ((dedupId && seenIds.has(dedupId)) || (dedupTitle && seenTitles.has(dedupTitle))) {
+      return;
+    }
+    if (dedupId) seenIds.add(dedupId);
+    if (dedupTitle) seenTitles.add(dedupTitle);
+    result.push(finalArt);
+  };
+
+  if (Array.isArray(b2State.customArticles)) {
+    b2State.customArticles.forEach(processArticle);
+  }
+
+  baseArticles.forEach(processArticle);
+
+  return result;
+}
 
 function readJsonArticles(): ArticleRecord[] {
   // Check in-memory store for active lambda container
@@ -320,7 +474,23 @@ export async function readArticlesStore(): Promise<ArticleRecord[]> {
   }
 
   // Fallback to JSON Database
-  return readJsonArticles();
+  const baseArticles = readJsonArticles();
+
+  // Overlay Backblaze B2 cloud state if configured (critical for persistence on Vercel)
+  if (isB2Configured()) {
+    try {
+      const b2State = await getArticlesB2State();
+      if (b2State) {
+        const merged = applyB2StateToArticles(baseArticles, b2State);
+        globalForArticlesStore.__serverArticlesCache = merged;
+        return merged;
+      }
+    } catch (e) {
+      console.warn('[serverArticlesStore] B2 state apply warning:', e);
+    }
+  }
+
+  return baseArticles;
 }
 
 export async function writeArticlesStore(articles: ArticleRecord[]): Promise<void> {
@@ -630,21 +800,104 @@ export async function upsertArticleStore(article: ArticleRecord): Promise<Articl
     console.warn('[serverArticlesStore] MySQL upsert notice:', err);
   }
 
+  // Persist to Backblaze B2 cloud state (critical on Vercel)
+  if (isB2Configured()) {
+    try {
+      const b2State = (await getArticlesB2State(true)) || {
+        updatedAt: new Date().toISOString(),
+        overrides: {},
+        deletedIds: [],
+        customArticles: []
+      };
+
+      const idKey = String(sanitizedArticle.id || '');
+      const cleanT = (t: any) => String(t || '').trim().toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ');
+      const titleKey = cleanT(sanitizedArticle.title);
+
+      // Un-delete if previously marked deleted
+      b2State.deletedIds = (b2State.deletedIds || []).filter(d =>
+        String(d) !== idKey && cleanT(d) !== titleKey
+      );
+
+      // Set override
+      if (idKey) b2State.overrides[idKey] = sanitizedArticle;
+      if (titleKey) b2State.overrides[`t_${titleKey}`] = sanitizedArticle;
+
+      if (Array.isArray(b2State.customArticles)) {
+        const cIdx = b2State.customArticles.findIndex(ca =>
+          (idKey && String(ca.id) === idKey) || (titleKey && cleanT(ca.title) === titleKey)
+        );
+        if (cIdx >= 0) {
+          b2State.customArticles[cIdx] = sanitizedArticle;
+        } else {
+          b2State.customArticles.unshift(sanitizedArticle);
+        }
+      } else {
+        b2State.customArticles = [sanitizedArticle];
+      }
+
+      await saveArticlesB2State(b2State);
+    } catch (b2Err) {
+      console.warn('[serverArticlesStore] B2 upsert notice:', b2Err);
+    }
+  }
+
   return readArticlesStore();
 }
 
-export async function updateArticleStatusStore(id: string | number, status: string): Promise<ArticleRecord[]> {
+export async function updateArticleStatusStore(
+  id: string | number,
+  status: string,
+  title?: string,
+  rejectionReason?: string,
+  rejectedAt?: string
+): Promise<ArticleRecord[]> {
+  const cleanT = (t: any) =>
+    String(t || "")
+      .toLowerCase()
+      .replace(/[\u2018\u2019\u201A\u201B']/g, "'")
+      .replace(/[\u201C\u201D\u201E\u201F"]/g, '"')
+      .replace(/[\u2013\u2014]/g, "-")
+      .replace(/[^\w\s-]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const nowIso = new Date().toISOString();
+  const overrideUpdate: Partial<ArticleRecord> = {
+    status,
+    updated_at: nowIso,
+    updatedAt: nowIso,
+    ...(status === "Rejected" ? {
+      rejectionReason: rejectionReason || undefined,
+      rejection_reason: rejectionReason || undefined,
+      rejectedAt: rejectedAt || nowIso,
+      rejected_at: rejectedAt || nowIso,
+    } : {}),
+    ...(status === "Published" ? {
+      published_at: nowIso,
+      publishedAt: nowIso,
+      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    } : {})
+  };
+
+  if (status === "Pending review" || status === "Published" || status === "Trash") {
+    delete (overrideUpdate as any).rejectionReason;
+    delete (overrideUpdate as any).rejection_reason;
+    delete (overrideUpdate as any).rejectedAt;
+    delete (overrideUpdate as any).rejected_at;
+  }
+
   try {
     const jsonArticles = readJsonArticles();
+    const targetTitle = title ? cleanT(title) : '';
     const updatedJson = jsonArticles.map((a: any) => {
-      if (String(a.id) === String(id) || String(a.slug) === String(id)) {
-        const up: any = { ...a, status, updated_at: new Date().toISOString() };
-        if (status === "Pending review" || status === "Published") {
-          delete up.rejectionReason;
-          delete up.rejection_reason;
-          delete up.rejectedAt;
-        }
-        return up;
+      const aTitle = cleanT(a.title);
+      if (
+        String(a.id) === String(id) ||
+        String(a.slug) === String(id) ||
+        (targetTitle && aTitle === targetTitle)
+      ) {
+        return { ...a, ...overrideUpdate };
       }
       return a;
     });
@@ -652,22 +905,78 @@ export async function updateArticleStatusStore(id: string | number, status: stri
   } catch (e) {}
 
   try {
-    const db = getDbPool();
-    if (status.toLowerCase() === 'published') {
-      await db.query('UPDATE articles SET status = ?, published_at = NOW(), updated_at = NOW() WHERE id = ? OR slug = ?', [status, id, String(id)]);
-    } else {
-      await db.query('UPDATE articles SET status = ?, updated_at = NOW() WHERE id = ? OR slug = ?', [status, id, String(id)]);
+    if (isMysqlAvailable()) {
+      const db = getDbPool();
+      if (status.toLowerCase() === 'published') {
+        await db.query('UPDATE articles SET status = ?, published_at = NOW(), updated_at = NOW() WHERE id = ? OR slug = ?', [status, id, String(id)]);
+      } else {
+        await db.query('UPDATE articles SET status = ?, updated_at = NOW() WHERE id = ? OR slug = ?', [status, id, String(id)]);
+      }
     }
   } catch (err) {
     console.warn('[serverArticlesStore] MySQL update status notice:', err);
   }
+
+  // Persist to Backblaze B2 cloud state (critical for Vercel persistence)
+  if (isB2Configured()) {
+    try {
+      const b2State = (await getArticlesB2State(true)) || {
+        updatedAt: nowIso,
+        overrides: {},
+        deletedIds: [],
+        customArticles: []
+      };
+
+      const idKey = String(id || '');
+      if (idKey) {
+        b2State.overrides[idKey] = {
+          ...(b2State.overrides[idKey] || {}),
+          ...overrideUpdate
+        };
+      }
+      if (title && title.trim()) {
+        const tKey = `t_${cleanT(title)}`;
+        b2State.overrides[tKey] = {
+          ...(b2State.overrides[tKey] || {}),
+          ...overrideUpdate
+        };
+      }
+
+      if (Array.isArray(b2State.customArticles)) {
+        b2State.customArticles = b2State.customArticles.map(ca => {
+          if (String(ca.id) === idKey || (title && cleanT(ca.title) === cleanT(title))) {
+            return { ...ca, ...overrideUpdate };
+          }
+          return ca;
+        });
+      }
+
+      b2State.deletedIds = (b2State.deletedIds || []).filter(d =>
+        String(d) !== idKey && (!title || cleanT(d) !== cleanT(title))
+      );
+
+      await saveArticlesB2State(b2State);
+    } catch (b2Err) {
+      console.warn('[serverArticlesStore] B2 save status notice:', b2Err);
+    }
+  }
+
   return readArticlesStore();
 }
 
 export async function deleteArticleStore(id: string | number, title?: string, slug?: string): Promise<ArticleRecord[]> {
+  const cleanT = (t: any) =>
+    String(t || "")
+      .toLowerCase()
+      .replace(/[\u2018\u2019\u201A\u201B']/g, "'")
+      .replace(/[\u201C\u201D\u201E\u201F"]/g, '"')
+      .replace(/[\u2013\u2014]/g, "-")
+      .replace(/[^\w\s-]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
   try {
     const jsonArticles = readJsonArticles();
-    const cleanT = (t: any) => String(t || '').trim().toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ');
     const targetTitle = title ? cleanT(title) : '';
     const filtered = jsonArticles.filter(a => 
       String(a.id) !== String(id) && 
@@ -679,15 +988,52 @@ export async function deleteArticleStore(id: string | number, title?: string, sl
   } catch (e) {}
 
   try {
-    const db = getDbPool();
-    if (title && title.trim()) {
-      await db.query('DELETE FROM articles WHERE id = ? OR slug = ? OR LOWER(TRIM(title)) = LOWER(TRIM(?))', [id, String(id), title.trim()]);
-    } else {
-      await db.query('DELETE FROM articles WHERE id = ? OR slug = ?', [id, String(id)]);
+    if (isMysqlAvailable()) {
+      const db = getDbPool();
+      if (title && title.trim()) {
+        await db.query('DELETE FROM articles WHERE id = ? OR slug = ? OR LOWER(TRIM(title)) = LOWER(TRIM(?))', [id, String(id), title.trim()]);
+      } else {
+        await db.query('DELETE FROM articles WHERE id = ? OR slug = ?', [id, String(id)]);
+      }
     }
   } catch (err) {
     console.warn('[serverArticlesStore] MySQL delete notice:', err);
   }
+
+  // Persist permanent deletion to Backblaze B2 cloud state
+  if (isB2Configured()) {
+    try {
+      const b2State = (await getArticlesB2State(true)) || {
+        updatedAt: new Date().toISOString(),
+        overrides: {},
+        deletedIds: [],
+        customArticles: []
+      };
+
+      const keysToAdd = [String(id)];
+      if (slug) keysToAdd.push(String(slug));
+      if (title) keysToAdd.push(cleanT(title));
+
+      keysToAdd.forEach(k => {
+        if (!b2State.deletedIds.includes(k)) b2State.deletedIds.push(k);
+        delete b2State.overrides[k];
+        delete b2State.overrides[`t_${k}`];
+      });
+
+      if (Array.isArray(b2State.customArticles)) {
+        b2State.customArticles = b2State.customArticles.filter(ca =>
+          String(ca.id) !== String(id) &&
+          (!slug || String(ca.slug) !== String(slug)) &&
+          (!title || cleanT(ca.title) !== cleanT(title))
+        );
+      }
+
+      await saveArticlesB2State(b2State);
+    } catch (b2Err) {
+      console.warn('[serverArticlesStore] B2 delete notice:', b2Err);
+    }
+  }
+
   return readArticlesStore();
 }
 
