@@ -165,27 +165,22 @@ export function useLiveAdSlots() {
           if (data && data.success && Array.isArray(data.adSlots) && data.adSlots.length > 0) {
             setAdSlots(data.adSlots);
             try {
-              localStorage.setItem(AD_STORAGE_KEY, JSON.stringify(data.adSlots));
+              const serialized = JSON.stringify(data.adSlots);
+              if (localStorage.getItem(AD_STORAGE_KEY) !== serialized) {
+                localStorage.setItem(AD_STORAGE_KEY, serialized);
+              }
             } catch (e) {}
           }
         })
         .catch(() => {});
     }
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === AD_STORAGE_KEY && e.newValue) {
-        try {
-          const parsed = JSON.parse(e.newValue);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setAdSlots(parsed);
-          }
-        } catch {}
-      }
-    };
+    // NOTE: Do NOT listen to the native "storage" event here.
+    // That event fires in OTHER browser tabs when localStorage changes,
+    // which would cause cross-tab re-renders/reloads. Only use the tab-local
+    // custom event (AD_SYNC_EVENT) for in-tab ad updates.
     window.addEventListener(AD_SYNC_EVENT, loadSlots);
-    window.addEventListener("storage", handleStorage);
     return () => {
       window.removeEventListener(AD_SYNC_EVENT, loadSlots);
-      window.removeEventListener("storage", handleStorage);
     };
   }, [loadSlots]);
 
@@ -501,7 +496,10 @@ export function setCachedArticles(articles: ArticleItem[], notify = true) {
   if (typeof window === "undefined") return;
   try {
     const filtered = articles.filter(a => !isArticleDeleted(a));
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+    const serialized = JSON.stringify(filtered);
+    if (localStorage.getItem(STORAGE_KEY) !== serialized) {
+      localStorage.setItem(STORAGE_KEY, serialized);
+    }
     if (notify) {
       notifyLocalChange();
     }

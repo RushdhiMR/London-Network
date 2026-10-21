@@ -150,7 +150,7 @@ export default function ReaderDashboardPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Listen for bookmark updates across the site & tabs
+  // Listen for bookmark updates within this tab
   useEffect(() => {
     const handleBookmarkSync = () => {
       const activeEmail = currentUser?.email || auth.user?.email;
@@ -161,14 +161,8 @@ export default function ReaderDashboardPage() {
     };
 
     window.addEventListener("dj_bookmarks_updated", handleBookmarkSync);
-    window.addEventListener("storage", handleBookmarkSync);
-    window.addEventListener("focus", handleBookmarkSync);
-    document.addEventListener("visibilitychange", handleBookmarkSync);
     return () => {
       window.removeEventListener("dj_bookmarks_updated", handleBookmarkSync);
-      window.removeEventListener("storage", handleBookmarkSync);
-      window.removeEventListener("focus", handleBookmarkSync);
-      document.removeEventListener("visibilitychange", handleBookmarkSync);
     };
   }, [currentUser?.email, auth.user?.email]);
 

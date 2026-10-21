@@ -495,10 +495,14 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
       setCurrentUser(null);
     }
 
-    const savedToast = localStorage.getItem("dj_toast");
+    let savedToast: string | null = null;
+    try {
+      savedToast = sessionStorage.getItem("dj_toast") || localStorage.getItem("dj_toast");
+      if (sessionStorage.getItem("dj_toast")) sessionStorage.removeItem("dj_toast");
+      if (localStorage.getItem("dj_toast")) localStorage.removeItem("dj_toast");
+    } catch (e) {}
     if (savedToast) {
       setToastMessage(savedToast);
-      localStorage.removeItem("dj_toast");
       setTimeout(() => {
         setToastMessage(null);
       }, 5000);
@@ -515,7 +519,9 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
     localStorage.removeItem("dj_admin_user");
     localStorage.removeItem("dj_writer_user");
     localStorage.removeItem("dj_user_profile");
-    localStorage.setItem("dj_toast", "👋 You have successfully signed out.");
+    try {
+      sessionStorage.setItem("dj_toast", "👋 You have successfully signed out.");
+    } catch (e) {}
     setCurrentUser(null);
     setIsUserDropdownOpen(false);
     if (typeof window !== "undefined") {

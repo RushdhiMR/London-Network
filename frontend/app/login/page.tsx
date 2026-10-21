@@ -121,7 +121,9 @@ function LoginFormContent() {
       }, data.token);
 
       const targetDestination = getRedirectDestination(userRole);
-      localStorage.setItem("dj_toast", `Welcome back, ${authenticatedUser.name}! Signed in successfully.`);
+      try {
+        sessionStorage.setItem("dj_toast", `Welcome back, ${authenticatedUser.name}! Signed in successfully.`);
+      } catch (e) {}
 
       setSuccessMessage(`✓ Authenticated as ${authenticatedUser.name} (${authenticatedUser.email}) with Google! Opening ${targetDestination}...`);
       setTimeout(() => {
@@ -186,7 +188,9 @@ function LoginFormContent() {
       }, data.token);
 
       const targetDestination = getRedirectDestination(userRole);
-      localStorage.setItem("dj_toast", `Welcome back, ${authenticatedUser.name}! Signed in successfully.`);
+      try {
+        sessionStorage.setItem("dj_toast", `Welcome back, ${authenticatedUser.name}! Signed in successfully.`);
+      } catch (e) {}
 
       setSuccessMessage(`✓ Security Verified! Signed in as ${authenticatedUser.name}. Opening ${targetDestination}...`);
       setTimeout(() => {

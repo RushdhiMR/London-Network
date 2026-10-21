@@ -1815,7 +1815,9 @@ function isWorldOrWorldSub(cat: string): boolean {
             ? `✓ Story "${title.trim()}" submitted for review! Admin approval is pending before publication.`
             : `✓ Draft "${title.trim()}" saved successfully.`
         );
-        localStorage.setItem("dj_active_tab", status === "Published" ? "Published" : status === "Pending review" ? "Pending review" : "Drafts");
+        try {
+          sessionStorage.setItem("dj_active_tab", status === "Published" ? "Published" : status === "Pending review" ? "Pending review" : "Drafts");
+        } catch (e) {}
       } catch (e) {}
 
       if (typeof window !== "undefined") {
@@ -1829,7 +1831,7 @@ function isWorldOrWorldSub(cat: string): boolean {
     }
 
     try {
-      localStorage.setItem("dj_active_tab", status === "Published" ? "Published" : status === "Pending review" ? "Pending review" : "Drafts");
+      sessionStorage.setItem("dj_active_tab", status === "Published" ? "Published" : status === "Pending review" ? "Pending review" : "Drafts");
     } catch (e) {}
 
     setIsSubmitting(false);

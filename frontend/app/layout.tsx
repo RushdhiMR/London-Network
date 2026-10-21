@@ -105,6 +105,110 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300;1,400;1,600;1,700&display=swap" rel="stylesheet" />
+        {/* Development mode HMR isolation: prevents cross-tab compilation sync events from reloading other open tabs */}
+        <script
+          id="isolate-tab-hmr-reload"
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                if (typeof window === 'undefined' || !window.WebSocket) return;
+                var OrigWebSocket = window.WebSocket;
+                var initialCompilationHash = null;
+                var initialTurbopackSession = null;
+
+                function transformEvent(e) {
+                  if (typeof e.data !== 'string') return e;
+                  try {
+                    var msg = JSON.parse(e.data);
+                    var modified = false;
+                    if (msg && msg.type === 'sync' && msg.hash) {
+                      if (!initialCompilationHash) {
+                        initialCompilationHash = msg.hash;
+                      } else if (msg.hash !== initialCompilationHash) {
+                        msg.hash = initialCompilationHash;
+                        modified = true;
+                      }
+                    }
+                    if (msg && msg.type === 'turbopack-connected' && msg.data && msg.data.sessionId) {
+                      if (!initialTurbopackSession) {
+                        initialTurbopackSession = msg.data.sessionId;
+                      } else if (msg.data.sessionId !== initialTurbopackSession) {
+                        msg.data.sessionId = initialTurbopackSession;
+                        modified = true;
+                      }
+                    }
+                    if (modified) {
+                      return new MessageEvent('message', {
+                        data: JSON.stringify(msg),
+                        origin: e.origin,
+                        lastEventId: e.lastEventId,
+                        source: e.source,
+                        ports: e.ports
+                      });
+                    }
+                  } catch (_) {}
+                  return e;
+                }
+
+                function PatchedWebSocket(url, protocols) {
+                  var ws = protocols !== undefined ? new OrigWebSocket(url, protocols) : new OrigWebSocket(url);
+                  var isHmr = typeof url === 'string' && url.indexOf('/_next/webpack-hmr') !== -1;
+                  if (!isHmr) return ws;
+
+                  var originalAddEventListener = ws.addEventListener.bind(ws);
+                  var listenersMap = new WeakMap();
+
+                  ws.addEventListener = function(type, listener, options) {
+                    if (type === 'message' && typeof listener === 'function') {
+                      var wrapped = function(event) {
+                        return listener.call(this, transformEvent(event));
+                      };
+                      listenersMap.set(listener, wrapped);
+                      return originalAddEventListener(type, wrapped, options);
+                    }
+                    return originalAddEventListener(type, listener, options);
+                  };
+
+                  var originalRemoveEventListener = ws.removeEventListener.bind(ws);
+                  ws.removeEventListener = function(type, listener, options) {
+                    if (type === 'message' && typeof listener === 'function') {
+                      var wrapped = listenersMap.get(listener) || listener;
+                      return originalRemoveEventListener(type, wrapped, options);
+                    }
+                    return originalRemoveEventListener(type, listener, options);
+                  };
+
+                  var userOnMessage = null;
+                  originalAddEventListener('message', function(event) {
+                    if (userOnMessage) {
+                      userOnMessage.call(ws, transformEvent(event));
+                    }
+                  });
+
+                  Object.defineProperty(ws, 'onmessage', {
+                    get: function() {
+                      return userOnMessage;
+                    },
+                    set: function(fn) {
+                      userOnMessage = typeof fn === 'function' ? fn : null;
+                    },
+                    configurable: true,
+                    enumerable: true
+                  });
+
+                  return ws;
+                }
+
+                PatchedWebSocket.prototype = OrigWebSocket.prototype;
+                PatchedWebSocket.CONNECTING = OrigWebSocket.CONNECTING;
+                PatchedWebSocket.OPEN = OrigWebSocket.OPEN;
+                PatchedWebSocket.CLOSING = OrigWebSocket.CLOSING;
+                PatchedWebSocket.CLOSED = OrigWebSocket.CLOSED;
+                window.WebSocket = PatchedWebSocket;
+              })();
+            `,
+          }}
+        />
       </head>
       <body suppressHydrationWarning className="font-sans antialiased bg-white text-gray-900 w-full max-w-full overflow-x-clip">
         {/* Google Translate hidden container */}

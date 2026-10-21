@@ -79,22 +79,24 @@ export default function WriterDashboardPage() {
   useEffect(() => {
     const handleTabSync = () => {
       const tabParam = (searchParams?.get("tab") || (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null))?.toLowerCase();
-      const savedTab = typeof window !== "undefined" ? localStorage.getItem("dj_active_tab") : null;
+      let savedTab: string | null = null;
+      if (typeof window !== "undefined") {
+        try {
+          savedTab = sessionStorage.getItem("dj_active_tab") || localStorage.getItem("dj_active_tab");
+          if (sessionStorage.getItem("dj_active_tab")) sessionStorage.removeItem("dj_active_tab");
+          if (localStorage.getItem("dj_active_tab")) localStorage.removeItem("dj_active_tab");
+        } catch (e) {}
+      }
       if (tabParam === "pending" || tabParam === "pending review" || tabParam === "review" || savedTab === "Pending review") {
         setActiveTab("Pending review");
-        try { localStorage.removeItem("dj_active_tab"); } catch (e) {}
       } else if (tabParam === "drafts" || tabParam === "draft" || savedTab === "Drafts") {
         setActiveTab("Drafts");
-        try { localStorage.removeItem("dj_active_tab"); } catch (e) {}
       } else if (tabParam === "rejected" || savedTab === "Rejected") {
         setActiveTab("Rejected");
-        try { localStorage.removeItem("dj_active_tab"); } catch (e) {}
       } else if (tabParam === "published" || savedTab === "Published") {
         setActiveTab("Published");
-        try { localStorage.removeItem("dj_active_tab"); } catch (e) {}
       } else if (tabParam === "trash" || savedTab === "Trash") {
         setActiveTab("Trash");
-        try { localStorage.removeItem("dj_active_tab"); } catch (e) {}
       }
     };
 

@@ -173,8 +173,11 @@ export async function fetchServerReels(): Promise<ReelVideo[]> {
       const data = await res.json();
       if (Array.isArray(data.reels) && data.reels.length > 0) {
         if (typeof window !== "undefined") {
-          localStorage.setItem(REELS_STORAGE_KEY, JSON.stringify(data.reels));
-          window.dispatchEvent(new Event(REELS_SYNC_EVENT));
+          const serialized = JSON.stringify(data.reels);
+          if (localStorage.getItem(REELS_STORAGE_KEY) !== serialized) {
+            localStorage.setItem(REELS_STORAGE_KEY, serialized);
+            window.dispatchEvent(new Event(REELS_SYNC_EVENT));
+          }
         }
         return data.reels;
       }
