@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { ChevronDown, ChevronUp, Globe, Mail, MapPin, Phone } from "lucide-react";
+import { ChevronDown, ChevronUp, Mail, MapPin, Phone } from "lucide-react";
 
 interface TocItem {
   id: string;
@@ -64,10 +64,7 @@ export default function CookiePolicyPage() {
 
       <main className="flex-1 max-w-[1240px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
         {/* TOP HEADER SECTION */}
-        <div className="text-center max-w-3xl mx-auto mb-6 sm:mb-8">
-          <p className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.22em] text-[#BF1E2D] mb-3 inline-flex items-center gap-1.5">
-            LEGAL DOCUMENT &bull; COOKIE POLICY
-          </p>
+        <div className="text-left mb-6 sm:mb-8">
           <h1 className="font-serif font-black text-3xl sm:text-5xl md:text-[52px] text-slate-900 tracking-tight leading-[1.1] mb-3">
             Cookie Policy
           </h1>
@@ -85,10 +82,7 @@ export default function CookiePolicyPage() {
             onClick={() => setMobileTocOpen(!mobileTocOpen)}
             className="w-full flex items-center justify-between px-4 py-3 bg-white text-left font-bold text-xs uppercase tracking-wider text-slate-900 border-b border-slate-200"
           >
-            <span className="flex items-center gap-2">
-              <Globe className="w-4 h-4 text-[#BF1E2D]" />
-              Cookie Policy Sections
-            </span>
+            <span>Cookie Policy Sections</span>
             {mobileTocOpen ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
           </button>
           {mobileTocOpen && (
@@ -116,8 +110,7 @@ export default function CookiePolicyPage() {
           {/* LEFT COLUMN: STICKY TABLE OF CONTENTS */}
           <aside className="hidden lg:block lg:col-span-4 sticky top-28">
             <div className="bg-white border border-slate-200/90 rounded-lg p-5 shadow-xs">
-              <div className="flex items-center gap-2 pb-3 mb-3 border-b border-slate-100">
-                <Globe className="w-3.5 h-3.5 text-[#1e3a8a]" />
+              <div className="pb-3 mb-3 border-b border-slate-100">
                 <h2 className="text-[11.5px] font-extrabold uppercase tracking-wider text-slate-900">
                   COOKIE POLICY SECTIONS
                 </h2>
