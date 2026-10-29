@@ -226,10 +226,16 @@ export default function EditorsPicks() {
             {isLoadingMarket && !marketData ? (
               // Loading skeleton matching existing layout and row height
               Array.from({ length: 6 }).map((_, idx) => (
-                <div key={idx} className="flex items-center justify-between py-2.5 animate-pulse">
-                  <div className="h-3.5 bg-gray-200 rounded w-24" />
-                  <div className="h-3.5 bg-gray-100 rounded w-16" />
-                  <div className="h-3.5 bg-gray-100 rounded w-12" />
+                <div key={idx} className="flex items-center py-2.5 animate-pulse">
+                  <div className="flex-1 pr-2">
+                    <div className="h-3.5 bg-gray-200 rounded w-24" />
+                  </div>
+                  <div className="w-[88px] shrink-0 text-left">
+                    <div className="h-3.5 bg-gray-100 rounded w-16" />
+                  </div>
+                  <div className="w-[68px] shrink-0 flex justify-end">
+                    <div className="h-3.5 bg-gray-100 rounded w-12" />
+                  </div>
                 </div>
               ))
             ) : marketError && !marketData ? (
@@ -238,15 +244,15 @@ export default function EditorsPicks() {
               </div>
             ) : (
               (marketData?.[activeTab] || []).map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between py-2.5">
-                  <span className="text-[12.5px] font-bold text-gray-900 uppercase">
+                <div key={idx} className="flex items-center py-2.5">
+                  <span className="flex-1 text-[12.5px] font-bold text-gray-900 uppercase pr-2 truncate">
                     {item.symbol}
                   </span>
-                  <span className="text-[12px] font-medium text-gray-600 font-mono">
+                  <span className="w-[88px] shrink-0 text-left text-[12px] font-medium text-gray-600 font-mono">
                     {item.price}
                   </span>
                   <span
-                    className={`text-[12px] font-bold flex items-center gap-0.5 font-mono ${item.change === "—"
+                    className={`w-[68px] shrink-0 text-right text-[12px] font-bold flex items-center justify-end gap-0.5 font-mono ${item.change === "—"
                         ? "text-gray-400"
                         : item.positive
                           ? "text-emerald-600"
