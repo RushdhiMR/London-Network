@@ -329,7 +329,7 @@ export default function LatestNewsSection() {
           ))}
         </div>
         {/* COLUMN 4: NEWSLETTER CARD */}
-        <div className="lg:col-span-3 bg-transparent rounded-2xl p-4 xl:p-6 pb-6 xl:pb-9 flex flex-col justify-between border border-red-100 shadow-sm min-h-[300px]">
+        <div className="lg:col-span-3 bg-transparent rounded-2xl p-4 xl:p-6 lg:pb-6 xl:pb-9 flex flex-col lg:justify-between border border-red-100 shadow-sm lg:min-h-[300px]">
 
           {/* Header Row & Envelope Graphic */}
           <div className="flex items-start justify-between gap-2 mb-4">
@@ -348,11 +348,11 @@ export default function LatestNewsSection() {
 
           {/* Subscribe Form */}
           {subscribed ? (
-            <div className="bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs p-3 rounded-lg text-center font-bold">
+            <div className="bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs p-3 rounded-lg text-center font-bold lg:mt-auto">
               ✓ Thank you for subscribing!
             </div>
           ) : (
-            <form onSubmit={handleSubscribe} className="space-y-3 mt-auto">
+            <form onSubmit={handleSubscribe} className="space-y-3 lg:mt-auto">
               <input
                 type="email"
                 placeholder="Enter your email address"
