@@ -59,7 +59,7 @@ export default function Footer({ className, hideTopBar = false }: FooterProps = 
   ];
 
   return (
-    <footer className={`bg-black text-white ${className !== undefined ? className : "mt-8"} ${hideTopBar ? "border-t-0" : "border-t border-zinc-900"} relative select-none`}>
+    <footer className={`bg-black text-white ${className !== undefined ? className : "mt-8"} relative select-none`}>
       {/* Top 3px Brand Accent Bar */}
       {!hideTopBar && (
         <div className="h-[3px] w-full bg-gradient-to-r from-[#BF1E2D] via-[#D31220] to-[#8B0E19]" />
