@@ -163,7 +163,7 @@ export default function PageSkeletonLoader() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
           {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="space-y-3">
-              <div className="flex items-center gap-2 pb-2 border-b border-gray-200">
+              <div className="flex items-center gap-2 pb-0 md:pb-2 border-b-0 md:border-b border-gray-200">
                 <div className="w-1.5 h-4 bg-red-300 rounded-none" />
                 <div className="h-4 w-24 bg-gray-200 rounded-none" />
               </div>

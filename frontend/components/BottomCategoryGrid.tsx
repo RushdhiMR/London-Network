@@ -77,7 +77,7 @@ export default function BottomCategoryGrid() {
         {columns.map((col, idx) => (
           <div key={idx} className="flex flex-col">
             {/* Red Bar Title */}
-            <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-200">
+            <div className="flex items-center gap-2 mb-4 pb-0 md:pb-2 border-b-0 md:border-b border-gray-200">
               <div className="w-1.5 h-5 bg-[#BF1E2D]" />
               <h3 className="text-lg font-bold text-gray-900 uppercase tracking-tight">
                 {col.title}
