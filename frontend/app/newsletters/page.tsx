@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Mail, Check, CheckCircle2, ArrowRight, ShieldCheck, Sparkles, Filter, X } from "lucide-react";
@@ -408,9 +409,13 @@ function NewslettersContent() {
           {/* Header Bar */}
           <div className="flex flex-wrap items-center justify-between gap-3 pb-5 mb-6 border-b border-zinc-200">
             <div className="flex items-center gap-3">
-              <span className="w-8 h-8 bg-[#BF1E2D] text-white flex items-center justify-center font-serif font-black text-xs tracking-wider">
-                LBN
-              </span>
+              <Image
+                src="/icon.png"
+                alt="London BigBen"
+                width={32}
+                height={32}
+                className="w-8 h-8 object-contain shrink-0"
+              />
               <div>
                 <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-700 block leading-none">
                   London BigBen Dispatch Desk
