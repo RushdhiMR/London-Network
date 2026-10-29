@@ -5,10 +5,11 @@ import Link from "next/link";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { CheckCircle2, Bookmark, Share2, ArrowLeft, Send, Trash2, MessageSquare, ThumbsUp, Heart, Reply, CornerDownRight, Smile, Plus, X, Image as ImageIcon, Edit3 } from "lucide-react";
+import BottomCategoryGrid from "@/components/BottomCategoryGrid";
+import { CheckCircle2, Bookmark, Share2, ArrowLeft, Send, Trash2, ThumbsUp, Heart, Reply, CornerDownRight, Smile, Plus, X, Image as ImageIcon, Edit3 } from "lucide-react";
 import { generateAutoSEO } from "@/lib/seo";
 import { getUserProfile, getAuthorAvatarByNameOrEmail, getAuthorFullProfileByNameOrEmail, resolveUserAvatar, safeSaveBookmarksToStorage, safeGetBookmarksFromStorage } from "@/lib/userProfiles";
-import { useLiveArticles, useLiveAdSlots, formatAdDimensions, isDuplicateAdImage, isTrendingNow, isLatestNews } from "@/lib/articlesSync";
+import { useLiveArticles, useLiveAdSlots, formatAdDimensions, isDuplicateAdImage, isTrendingNow, articleBelongsToCategory, articleMatchesMainCategory } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
 import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
 
@@ -319,7 +320,7 @@ function ArticlePageContentInner({
     authorName: initialAuthor.name,
     authorAvatar: initialAuthor.avatar,
     authorBio: initialAuthor.bio || newsData?.authorBio || "",
-    category: newsData?.category || parent?.name || category,
+    category: (newsData?.category && newsData.category.toLowerCase() !== "article" ? newsData.category : "") || (parent?.name && parent.name.toLowerCase() !== "article" ? parent.name : "") || (category && category.toLowerCase() !== "article" ? category : "") || "NEWS",
     subcategories: newsData?.subcategories || (subName ? [subName] : []),
     tags: resolveArticleTags(newsData),
     date: newsData?.date || "",
@@ -339,7 +340,7 @@ function ArticlePageContentInner({
         authorName: authInfo.name,
         authorAvatar: authInfo.avatar,
         authorBio: authInfo.bio || newsData.authorBio,
-        category: newsData.category || parent?.name || category,
+        category: (newsData.category && newsData.category.toLowerCase() !== "article" ? newsData.category : "") || (parent?.name && parent.name.toLowerCase() !== "article" ? parent.name : "") || (category && category.toLowerCase() !== "article" ? category : "") || "NEWS",
         subcategories: newsData.subcategories || (subName ? [subName] : []),
         tags: resolveArticleTags(newsData)
       });
@@ -379,18 +380,10 @@ function ArticlePageContentInner({
       return true;
     });
 
-    // 1. Prioritize articles designated as Latest News
-    const latestDesignated = published.filter((p) => isLatestNews(p));
-    latestDesignated.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
+    // Always sort strictly by most recent published timestamp first across overall categories
+    const sorted = [...published].sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
 
-    // 2. Supplement with the newest published articles so there are always fresh articles
-    const remaining = published
-      .filter((p) => !latestDesignated.some((l) => l.id === p.id))
-      .sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
-
-    const sourceList = [...latestDesignated, ...remaining];
-
-    return sourceList.slice(0, 4).map((post, index) => {
+    return sorted.slice(0, 4).map((post, index) => {
       const cat = (post.category || post.category_name || "NEWS").toUpperCase();
       const catSlug = cat.toLowerCase().replace(/[^a-z0-9]+/g, '-');
       const postSlug = (post.slug || post.title || "")
@@ -414,7 +407,7 @@ function ArticlePageContentInner({
 
   const trendingArticles = moreNewsArticles;
 
-  // "Up next" articles: Recent articles across multiple distinct categories
+  // "Up next" articles: Recent articles from the clicked article's category only
   const upNextArticles = useMemo(() => {
     const getTimestamp = (item: any): number => {
       if (!item) return 0;
@@ -427,6 +420,14 @@ function ArticlePageContentInner({
     const currentId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
     const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
 
+    const targetCat = (
+      (activeNewsData?.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "") ||
+      (newsData?.category && newsData.category.toLowerCase() !== "article" ? newsData.category : "") ||
+      (category && category.toLowerCase() !== "article" ? category : "") ||
+      (parent?.name && parent.name.toLowerCase() !== "article" ? parent.name : "") ||
+      ""
+    ).trim();
+
     const published = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
       if (!p || (p.status || "").toLowerCase() !== "published") return false;
       if (String(p.id) === currentId) return false;
@@ -434,32 +435,19 @@ function ArticlePageContentInner({
       return true;
     });
 
-    published.sort((a, b) => getTimestamp(b) - getTimestamp(a));
-
-    // Select recent articles across multiple diverse categories
-    const selectedByCategory: any[] = [];
-    const usedCategories = new Set<string>();
-
-    for (const post of published) {
-      const cat = (post.category || post.category_name || "NEWS").toUpperCase();
-      if (!usedCategories.has(cat)) {
-        usedCategories.add(cat);
-        selectedByCategory.push(post);
-        if (selectedByCategory.length >= 6) break;
-      }
+    let matchingPosts: any[] = [];
+    if (targetCat) {
+      const mainMatches = published.filter((p) => articleMatchesMainCategory(p, targetCat));
+      const subMatches = published.filter((p) => !articleMatchesMainCategory(p, targetCat) && articleBelongsToCategory(p, targetCat));
+      mainMatches.sort((a, b) => getTimestamp(b) - getTimestamp(a));
+      subMatches.sort((a, b) => getTimestamp(b) - getTimestamp(a));
+      matchingPosts = [...mainMatches, ...subMatches];
+    } else {
+      published.sort((a, b) => getTimestamp(b) - getTimestamp(a));
+      matchingPosts = published;
     }
 
-    // If fewer than 6 categories available, fill remaining slots with next most recent
-    if (selectedByCategory.length < 6) {
-      for (const post of published) {
-        if (!selectedByCategory.some((p) => p.id === post.id)) {
-          selectedByCategory.push(post);
-          if (selectedByCategory.length >= 6) break;
-        }
-      }
-    }
-
-    return selectedByCategory.slice(0, 6).map((post) => {
+    return matchingPosts.slice(0, 6).map((post) => {
       const cat = (post.category || post.category_name || "world").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
       const postSlug = (post.slug || post.title || "")
         .toLowerCase()
@@ -479,9 +467,9 @@ function ArticlePageContentInner({
         href: `/article/${post.slug || postSlug}`
       };
     });
-  }, [liveArticles, activeNewsData, newsData]);
+  }, [liveArticles, activeNewsData, newsData, category, parent]);
 
-  // "Most read" articles: 8 top articles sorted by views
+  // "Most read" articles: Top articles sorted by views from the clicked article's category only
   const mostReadArticles = useMemo(() => {
     const currentId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
     const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
@@ -494,6 +482,14 @@ function ArticlePageContentInner({
       return Math.max(45, (seed * 17) % 350 + 55);
     };
 
+    const targetCat = (
+      (activeNewsData?.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "") ||
+      (newsData?.category && newsData.category.toLowerCase() !== "article" ? newsData.category : "") ||
+      (category && category.toLowerCase() !== "article" ? category : "") ||
+      (parent?.name && parent.name.toLowerCase() !== "article" ? parent.name : "") ||
+      ""
+    ).trim();
+
     const published = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
       if (!p || (p.status || "").toLowerCase() !== "published") return false;
       if (String(p.id) === currentId) return false;
@@ -501,9 +497,19 @@ function ArticlePageContentInner({
       return true;
     });
 
-    published.sort((a, b) => getViews(b, 0) - getViews(a, 0));
+    let matchingPosts: any[] = [];
+    if (targetCat) {
+      const mainMatches = published.filter((p) => articleMatchesMainCategory(p, targetCat));
+      const subMatches = published.filter((p) => !articleMatchesMainCategory(p, targetCat) && articleBelongsToCategory(p, targetCat));
+      mainMatches.sort((a, b) => getViews(b, 0) - getViews(a, 0));
+      subMatches.sort((a, b) => getViews(b, 0) - getViews(a, 0));
+      matchingPosts = [...mainMatches, ...subMatches];
+    } else {
+      published.sort((a, b) => getViews(b, 0) - getViews(a, 0));
+      matchingPosts = published;
+    }
 
-    return published.slice(0, 8).map((post) => {
+    return matchingPosts.slice(0, 8).map((post) => {
       const cat = (post.category || post.category_name || "world").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
       const postSlug = (post.slug || post.title || "")
         .toLowerCase()
@@ -517,7 +523,98 @@ function ArticlePageContentInner({
         href: `/article/${post.slug || postSlug}`
       };
     });
-  }, [liveArticles, activeNewsData, newsData]);
+  }, [liveArticles, activeNewsData, newsData, category, parent]);
+
+  // 10 Most popular articles for the right sidebar
+  const popularSidebarArticles = useMemo(() => {
+    const currentId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
+    const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
+
+    const getViews = (a: any, index: number): number => {
+      if (a?.views && typeof a.views === "number" && a.views > 0) return a.views;
+      if (a?.reads_count && typeof a.reads_count === "number" && a.reads_count > 0) return a.reads_count;
+      if (a?.viewsCount && typeof a.viewsCount === "number" && a.viewsCount > 0) return a.viewsCount;
+      const seed = typeof a?.id === "number" ? a.id : (parseInt(String(a?.id || "").replace(/\D/g, ""), 10) || (index + 1) * 37);
+      return Math.max(45, (seed * 17) % 350 + 55);
+    };
+
+    const targetCat = (
+      (activeNewsData?.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "") ||
+      (newsData?.category && newsData.category.toLowerCase() !== "article" ? newsData.category : "") ||
+      (category && category.toLowerCase() !== "article" ? category : "") ||
+      (parent?.name && parent.name.toLowerCase() !== "article" ? parent.name : "") ||
+      ""
+    ).trim();
+
+    const published = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
+      if (!p || (p.status || "").toLowerCase() !== "published") return false;
+      if (String(p.id) === currentId) return false;
+      if ((p.title || "").trim().toLowerCase() === currentTitle) return false;
+      return true;
+    });
+
+    if (published.length === 0 && Array.isArray(sidebarPicks) && sidebarPicks.length > 0) {
+      return sidebarPicks.slice(0, 10);
+    }
+
+    let matchingPosts: any[] = [];
+    if (targetCat && parent?.name && parent.name.toLowerCase() !== "article") {
+      const mainMatches = published.filter((p) => articleMatchesMainCategory(p, targetCat));
+      const subMatches = published.filter((p) => !articleMatchesMainCategory(p, targetCat) && articleBelongsToCategory(p, targetCat));
+      mainMatches.sort((a, b) => getViews(b, 0) - getViews(a, 0));
+      subMatches.sort((a, b) => getViews(b, 0) - getViews(a, 0));
+      matchingPosts = [...mainMatches, ...subMatches];
+    } else {
+      matchingPosts = [...published].sort((a, b) => getViews(b, 0) - getViews(a, 0));
+    }
+
+    // Always ensure 10 articles by filling with top popular articles
+    if (matchingPosts.length < 10) {
+      const remaining = [...published].sort((a, b) => getViews(b, 0) - getViews(a, 0));
+      for (const post of remaining) {
+        if (!matchingPosts.some((p) => String(p.id) === String(post.id))) {
+          matchingPosts.push(post);
+          if (matchingPosts.length >= 10) break;
+        }
+      }
+    }
+
+    const formatSidebarDate = (post: any): string => {
+      if (post.date && post.date !== "Just now" && post.date !== "Today") {
+        if (/^[A-Za-z]{3}\s+\d{1,2},\s+\d{4}$/.test(post.date.trim())) {
+          return post.date.trim();
+        }
+        const d = new Date(post.date);
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+        }
+      }
+      const rawDate = post.published_at || post.publishedAt || post.createdAt || post.updated_at;
+      if (rawDate) {
+        const d = new Date(rawDate);
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+        }
+      }
+      return post.date || "Recently";
+    };
+
+    return matchingPosts.slice(0, 10).map((post) => {
+      const postSlug = (post.slug || post.title || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, "")
+        .trim()
+        .replace(/\s+/g, "-");
+
+      return {
+        id: String(post.id),
+        title: post.title,
+        date: formatSidebarDate(post),
+        image: post.imageUrl || post.image || (post as any).image_url || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=150&h=150&fit=crop",
+        href: `/article/${post.slug || postSlug}`
+      };
+    });
+  }, [liveArticles, activeNewsData, newsData, category, parent, sidebarPicks]);
 
   useEffect(() => {
     // Only run the match once live articles have been fetched (not still loading)
@@ -582,7 +679,7 @@ function ArticlePageContentInner({
             paragraphs = [matched.summary || matched.title];
           }
 
-          const rawCategory = matched.category || matched.category_name || parent?.name || category || "NEWS";
+          const rawCategory = matched.category || matched.category_name || (newsData?.category && newsData.category.toLowerCase() !== "article" ? newsData.category : "") || (parent?.name && parent.name.toLowerCase() !== "article" ? parent.name : "") || (category && category.toLowerCase() !== "article" ? category : "") || "NEWS";
           const rawSubcategories = Array.isArray(matched.subcategories) && matched.subcategories.length > 0
             ? matched.subcategories
             : (Array.isArray(matched.subCategories) && matched.subCategories.length > 0 ? matched.subCategories : (subName ? [subName] : []));
@@ -619,7 +716,7 @@ function ArticlePageContentInner({
       console.warn("Dynamic article page content sync notice:", err);
       setIsArticleResolved(true);
     }
-  }, [liveArticles, liveArticlesLoading, newsData, searchParams]);
+  }, [liveArticles, liveArticlesLoading, newsData, searchParams, pathname]);
 
   // Signal GlobalPageLoader to hide skeleton once article data is resolved
   useEffect(() => {
@@ -1753,7 +1850,6 @@ function ArticlePageContentInner({
                   <div className="mt-8 pt-6 border-t border-zinc-200 font-sans">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-sm font-bold text-black uppercase tracking-wider font-standard-sans flex items-center gap-2">
-                        <MessageSquare size={16} className="text-[#BF1E2D]" />
                         <span>Comments</span>
                         <span className="text-[11px] bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded-full font-mono font-bold">
                           {totalCommentsCount}
@@ -1780,9 +1876,6 @@ function ArticlePageContentInner({
                     {/* Write Opinion / Comment Box */}
                     {!isMounted || !auth.user ? (
                       <div className="bg-slate-50/90 border border-slate-200 rounded-2xl p-6 sm:p-7 mb-8 text-center shadow-2xs">
-                        <div className="w-11 h-11 rounded-full bg-red-50 text-[#BF1E2D] flex items-center justify-center mx-auto mb-3 border border-red-100 shadow-2xs">
-                          <MessageSquare size={20} />
-                        </div>
                         <h4 className="text-sm font-bold text-slate-900 mb-1 font-standard-sans">
                           Sign in to Join the Conversation
                         </h4>
@@ -1869,7 +1962,6 @@ function ArticlePageContentInner({
                           onClick={() => setShowCommentsList(true)}
                           className="w-full py-3.5 px-4 bg-slate-50 hover:bg-slate-100 active:scale-[0.99] border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs hover:border-slate-300"
                         >
-                          <MessageSquare size={16} className="text-[#BF1E2D]" />
                           <span>View Comments ({totalCommentsCount})</span>
                         </button>
                       </div>
@@ -2405,9 +2497,9 @@ function ArticlePageContentInner({
             </div>
 
             <div className="space-y-5 font-sans">
-              {sidebarPicks.map((item, idx) => (
+              {(popularSidebarArticles.length > 0 ? popularSidebarArticles : sidebarPicks.slice(0, 10)).map((item, idx) => (
                 <Link
-                  key={idx}
+                  key={`popular-sidebar-${idx}-${(item as any).id || item.href}`}
                   href={item.href}
                   className="flex gap-3.5 items-start cursor-pointer group pb-4 border-b border-zinc-100 last:border-none"
                 >
@@ -2415,6 +2507,9 @@ function ArticlePageContentInner({
                     <img
                       src={item.image}
                       alt={item.title}
+                      onError={(e) => {
+                        e.currentTarget.src = "https://images.unsplash.com/photo-1518770660439-4636190af475?w=150&h=150&fit=crop";
+                      }}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
                   </div>
@@ -2679,6 +2774,11 @@ function ArticlePageContentInner({
           </div>
         </div>
       )}
+
+      {/* 5-Column Category Grid Section */}
+      <div className="border-t border-zinc-200 mt-6">
+        <BottomCategoryGrid />
+      </div>
 
       <Footer />
       </>

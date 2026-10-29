@@ -118,12 +118,12 @@ export default function EditorsPicks() {
   }
 
   return (
-    <section className="max-w-[1400px] mx-auto px-4 md:px-6 pt-8 pb-0 font-sans">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
-        
+    <section className="max-w-[1400px] mx-auto px-4 md:px-6 pt-6 pb-0 font-sans">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-stretch">
+
         {/* LEFT 4-CARD GRID (~75%) */}
         <div className="lg:col-span-9 flex flex-col justify-between h-full">
-          
+
           {/* Section Title */}
           <div className="flex items-center gap-2 mb-6">
             <div className="w-1.5 h-6 bg-[#D31220]" />
@@ -133,12 +133,12 @@ export default function EditorsPicks() {
           </div>
 
           {/* 4 Enclosed White Card Containers */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 flex-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 xl:gap-4 flex-1">
             {displayPicks.map((item, idx) => (
-              <article key={item.id} className="bg-white border border-gray-200 rounded-none p-3.5 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full group cursor-pointer">
+              <article key={item.id} className="bg-white border border-gray-200 rounded-none p-2.5 sm:p-3 xl:p-3.5 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full group cursor-pointer">
                 <div>
                   {/* Image with Bottom-Left White Overlay Category Tag */}
-                  <Link href={item.href} className="relative w-full aspect-[4/3] overflow-hidden rounded-none bg-gray-100 mb-3 block">
+                  <Link href={item.href} className="relative w-full aspect-[4/3] overflow-hidden rounded-none bg-gray-100 mb-2.5 block">
                     <img
                       src={item.image}
                       alt={item.title}
@@ -156,12 +156,12 @@ export default function EditorsPicks() {
                       }}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 rounded-none"
                     />
-                    <span className="absolute bottom-2.5 left-2.5 bg-white text-[#D31220] text-[10px] font-black uppercase px-2.5 py-1 rounded-none shadow-sm tracking-wider">
+                    <span className="absolute bottom-2 left-2 bg-white text-[#D31220] text-[9.5px] xl:text-[10px] font-black uppercase px-2 py-0.5 rounded-none shadow-sm tracking-wider">
                       {item.category}
                     </span>
                   </Link>
 
-                  <h3 className="text-[14px] font-bold leading-snug text-gray-900 group-hover:text-[#D31220] transition-colors mb-3 line-clamp-3">
+                  <h3 className="text-xs sm:text-[13px] xl:text-[14px] font-bold leading-snug text-gray-900 group-hover:text-[#D31220] transition-colors mb-2.5 line-clamp-3 font-serif">
                     <Link href={item.href}>
                       {item.title}
                     </Link>
@@ -169,8 +169,8 @@ export default function EditorsPicks() {
                 </div>
 
                 {/* Footer Read Time */}
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider pt-2 border-t border-gray-100 mt-auto">
-                  <Clock size={13} strokeWidth={2.2} className="text-gray-400" />
+                <div className="flex items-center gap-1.5 text-[10px] xl:text-[11px] font-semibold text-gray-400 uppercase tracking-wider pt-2 border-t border-gray-100 mt-auto">
+                  <Clock size={12} strokeWidth={2.2} className="text-gray-400" />
                   <span>{item.readTime}</span>
                 </div>
               </article>
@@ -180,8 +180,8 @@ export default function EditorsPicks() {
         </div>
 
         {/* RIGHT MARKET WATCH TABBED WIDGET (~25%) */}
-        <div className="lg:col-span-3 border-t lg:border-t-0 border-l-0 lg:border-l border-gray-200 pt-6 lg:pt-0 lg:pl-6 flex flex-col justify-between h-full">
-          
+        <div className="lg:col-span-3 border-t lg:border-t-0 border-l-0 lg:border-l border-gray-200 pt-6 lg:pt-0 lg:pl-4 xl:pl-6 flex flex-col justify-start">
+
           {/* Market Watch Header */}
           <div className="flex items-center gap-2 mb-4">
             <div className="w-1.5 h-6 bg-[#D31220]" />
@@ -191,41 +191,38 @@ export default function EditorsPicks() {
           </div>
 
           {/* Tab Navigation */}
-          <div className="flex items-center gap-4 text-xs font-semibold border-b border-gray-200 pb-2 mb-3">
+          <div className="flex items-center gap-2.5 sm:gap-4 text-[11.5px] xl:text-xs font-semibold border-b border-gray-200 pb-2 mb-3">
             <button
               onClick={() => setActiveTab("indices")}
-              className={`cursor-pointer transition-colors ${
-                activeTab === "indices"
+              className={`cursor-pointer transition-colors ${activeTab === "indices"
                   ? "text-[#D31220] border-b-2 border-[#D31220] pb-2 font-bold"
                   : "text-gray-400 hover:text-gray-700"
-              }`}
+                }`}
             >
               Indices
             </button>
             <button
               onClick={() => setActiveTab("commodities")}
-              className={`cursor-pointer transition-colors ${
-                activeTab === "commodities"
+              className={`cursor-pointer transition-colors ${activeTab === "commodities"
                   ? "text-[#D31220] border-b-2 border-[#D31220] pb-2 font-bold"
                   : "text-gray-400 hover:text-gray-700"
-              }`}
+                }`}
             >
               Commodities
             </button>
             <button
               onClick={() => setActiveTab("currencies")}
-              className={`cursor-pointer transition-colors ${
-                activeTab === "currencies"
+              className={`cursor-pointer transition-colors ${activeTab === "currencies"
                   ? "text-[#D31220] border-b-2 border-[#D31220] pb-2 font-bold"
                   : "text-gray-400 hover:text-gray-700"
-              }`}
+                }`}
             >
               Currencies
             </button>
           </div>
 
           {/* Tabbed Financial Items Table */}
-          <div className="flex-1 flex flex-col justify-between divide-y divide-gray-100 min-h-[220px]">
+          <div className="flex flex-col divide-y divide-gray-100">
             {isLoadingMarket && !marketData ? (
               // Loading skeleton matching existing layout and row height
               Array.from({ length: 6 }).map((_, idx) => (
@@ -249,13 +246,12 @@ export default function EditorsPicks() {
                     {item.price}
                   </span>
                   <span
-                    className={`text-[12px] font-bold flex items-center gap-0.5 font-mono ${
-                      item.change === "—"
+                    className={`text-[12px] font-bold flex items-center gap-0.5 font-mono ${item.change === "—"
                         ? "text-gray-400"
                         : item.positive
-                        ? "text-emerald-600"
-                        : "text-red-600"
-                    }`}
+                          ? "text-emerald-600"
+                          : "text-red-600"
+                      }`}
                   >
                     <span>{item.change}</span>
                     {item.change !== "—" && (

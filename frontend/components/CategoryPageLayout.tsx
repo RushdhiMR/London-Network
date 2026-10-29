@@ -310,10 +310,11 @@ export default function CategoryPageLayout({
           {/* Right Column (4 cols): Category Header + Break + Articles Box */}
           <div className="lg:col-span-4 flex flex-col justify-start">
             {/* Category Heading with Underline */}
-            <div className="border-b-2 border-black pb-1.5 mb-3">
+            <div className="border-b-2 border-black pb-1.5 mb-3 flex items-center gap-2">
               <h1 className="text-[22px] md:text-[25px] font-bold leading-[1.05] tracking-tight text-black font-standard-sans">
                 {categoryName}
               </h1>
+              <span className="w-2.5 h-2.5 bg-[#BF1E2D] inline-block shrink-0" aria-hidden="true" />
             </div>
 
             {/* Articles Box / Section - Plain Background */}

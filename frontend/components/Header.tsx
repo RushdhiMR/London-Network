@@ -102,6 +102,22 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
   const worldCloseTimer = useRef<NodeJS.Timeout | null>(null);
   const [worldDropdownLeft, setWorldDropdownLeft] = useState<number | null>(null);
 
+  // Category navigation swipe & drag-scrolling state
+  const categoryNavRef = useRef<HTMLElement>(null);
+  const isNavDragging = useRef(false);
+  const navStartX = useRef(0);
+  const navScrollLeft = useRef(0);
+  const hasMovedNav = useRef(false);
+
+  const handleCategoryMouseDown = (e: React.MouseEvent<HTMLElement>) => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) return;
+    if (!categoryNavRef.current) return;
+    isNavDragging.current = true;
+    hasMovedNav.current = false;
+    navStartX.current = e.pageX - categoryNavRef.current.offsetLeft;
+    navScrollLeft.current = categoryNavRef.current.scrollLeft;
+  };
+
   const updateWorldPos = useCallback(() => {
     if (worldBtnRef.current && row2ContainerRef.current) {
       const btnRect = worldBtnRef.current.getBoundingClientRect();
@@ -111,6 +127,26 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
       setWorldDropdownLeft(Math.min(Math.max(8, calculatedLeft), maxLeft));
     }
   }, []);
+
+  const handleCategoryMouseLeave = () => {
+    isNavDragging.current = false;
+  };
+
+  const handleCategoryMouseUp = () => {
+    isNavDragging.current = false;
+  };
+
+  const handleCategoryMouseMove = (e: React.MouseEvent<HTMLElement>) => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) return;
+    if (!isNavDragging.current || !categoryNavRef.current) return;
+    const x = e.pageX - categoryNavRef.current.offsetLeft;
+    const walk = (x - navStartX.current) * 1.5;
+    if (Math.abs(walk) > 4) {
+      hasMovedNav.current = true;
+    }
+    categoryNavRef.current.scrollLeft = navScrollLeft.current - walk;
+    updateWorldPos();
+  };
 
   const handleWorldOpen = useCallback(() => {
     if (worldCloseTimer.current) {
@@ -253,7 +289,7 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
           const region = tz.split("/")[1]?.replace(/_/g, " ");
           if (region) setCountryName(region);
         }
-      } catch {}
+      } catch { }
     };
 
     fetchCountryAndWeather();
@@ -427,7 +463,7 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
         if (b2Url && b2Url.startsWith("http")) {
           finalAvatar = b2Url;
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     const updatedUser = {
@@ -467,7 +503,7 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
   useEffect(() => {
     try {
       router.prefetch("/search");
-    } catch (e) {}
+    } catch (e) { }
   }, [router]);
 
   useEffect(() => {
@@ -500,7 +536,7 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
       savedToast = sessionStorage.getItem("dj_toast") || localStorage.getItem("dj_toast");
       if (sessionStorage.getItem("dj_toast")) sessionStorage.removeItem("dj_toast");
       if (localStorage.getItem("dj_toast")) localStorage.removeItem("dj_toast");
-    } catch (e) {}
+    } catch (e) { }
     if (savedToast) {
       setToastMessage(savedToast);
       setTimeout(() => {
@@ -521,7 +557,7 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
     localStorage.removeItem("dj_user_profile");
     try {
       sessionStorage.setItem("dj_toast", "👋 You have successfully signed out.");
-    } catch (e) {}
+    } catch (e) { }
     setCurrentUser(null);
     setIsUserDropdownOpen(false);
     if (typeof window !== "undefined") {
@@ -718,7 +754,7 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
             }
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     };
     syncTrending();
     // NOTE: Do NOT listen to the native "storage" event — it fires in OTHER
@@ -731,6 +767,7 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
   }, []);
 
   const worldRegionsList = [
+    { name: "World News", href: "/category/world" },
     { name: "China", href: "/category/china" },
     { name: "United States", href: "/category/united-states" },
     { name: "Europe", href: "/category/europe" },
@@ -742,7 +779,7 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
 
   return (
     <header className="relative w-full bg-white text-gray-900 font-sans">
-      
+
       {/* Sign-in Toast Banner */}
       {toastMessage && (
         <div className="w-full bg-[#BF1E2D] text-white text-[12px] font-bold py-2 px-4 text-center flex items-center justify-center gap-3">
@@ -756,334 +793,334 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
       {/* ================= ROW 1 (FIXED TOP): BRAND LOGO, SEARCH, & ACTION BUTTONS ================= */}
       <div ref={row1Ref} className="fixed top-0 left-0 right-0 z-50 w-full bg-white border-b border-gray-200 shadow-xs">
         <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-2.5 sm:py-4 flex items-center justify-between gap-2 sm:gap-6 relative z-50 w-full min-w-0">
-        
-        {/* LOGO & BRAND */}
-        <Link href="/" className="flex items-center group shrink-0 py-0.5" aria-label="London BigBen">
-          <Image
-            src="/header_logo.png"
-            alt="London BigBen Network"
-            width={240}
-            height={42}
-            className="h-7 sm:h-9 md:h-10 w-auto max-w-[165px] sm:max-w-none object-contain transition-transform group-hover:scale-[1.02]"
-            priority
-          />
-        </Link>
 
-        {/* SEARCH INPUT BAR (hidden when already on /search) */}
-        {pathname !== "/search" ? (
-          <div ref={headerSearchRef} className="hidden md:block relative flex-1 max-w-[460px] lg:max-w-[540px] mx-4 lg:mx-8">
-            <form onSubmit={handleSearchSubmit} className="relative w-full">
-              <input
-                type="text"
-                value={searchQuery}
-                onFocus={() => setIsSearchFocused(true)}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setIsSearchFocused(true);
-                }}
-                placeholder="Search for news, topics, companies..."
-                className="w-full pl-4 pr-16 py-2 text-[13px] border border-gray-300 rounded-full bg-gray-50/70 hover:bg-white focus:bg-white hover:border-[#BF1E2D] focus:border-[#BF1E2D] text-gray-800 placeholder-gray-400 transition-all outline-none shadow-2xs group"
-                aria-label="Search"
-              />
-              {searchQuery.length > 0 && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSearchQuery("");
-                    setSuggestedArticles([]);
-                    setIsSearchLoading(false);
+          {/* LOGO & BRAND */}
+          <Link href="/" className="flex items-center group shrink-0 py-0.5" aria-label="London BigBen">
+            <Image
+              src="/header_logo.png"
+              alt="London BigBen Network"
+              width={240}
+              height={42}
+              className="h-7 sm:h-9 md:h-10 w-auto max-w-[165px] sm:max-w-none object-contain transition-transform group-hover:scale-[1.02]"
+              priority
+            />
+          </Link>
+
+          {/* SEARCH INPUT BAR (hidden when already on /search) */}
+          {pathname !== "/search" ? (
+            <div ref={headerSearchRef} className="hidden md:block relative flex-1 max-w-[340px] lg:max-w-[400px] xl:max-w-[540px] mx-2 lg:mx-4 xl:mx-8">
+              <form onSubmit={handleSearchSubmit} className="relative w-full">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setIsSearchFocused(true);
                   }}
-                  className="absolute right-9 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 transition-colors cursor-pointer p-0.5"
-                  aria-label="Clear search"
-                  title="Clear search"
+                  placeholder="Search for news, topics, companies..."
+                  className="w-full pl-4 pr-16 py-2 text-[13px] border border-gray-300 rounded-full bg-gray-50/70 hover:bg-white focus:bg-white hover:border-[#BF1E2D] focus:border-[#BF1E2D] text-gray-800 placeholder-gray-400 transition-all outline-none shadow-2xs group"
+                  aria-label="Search"
+                />
+                {searchQuery.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSearchQuery("");
+                      setSuggestedArticles([]);
+                      setIsSearchLoading(false);
+                    }}
+                    className="absolute right-9 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 transition-colors cursor-pointer p-0.5"
+                    aria-label="Clear search"
+                    title="Clear search"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#BF1E2D] transition-colors cursor-pointer"
+                  aria-label="Submit search"
                 >
-                  <X size={14} />
+                  <Search size={16} strokeWidth={2.2} />
                 </button>
-              )}
-              <button
-                type="submit"
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#BF1E2D] transition-colors cursor-pointer"
-                aria-label="Submit search"
-              >
-                <Search size={16} strokeWidth={2.2} />
-              </button>
-            </form>
+              </form>
 
-            {/* Suggestions Dropdown */}
-            {isSearchFocused && searchQuery.trim().length > 0 && (
-              <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-2xl border border-gray-200/90 overflow-hidden z-50 py-2 divide-y divide-gray-100 animate-in fade-in zoom-in-95 duration-150">
-                {isSearchLoading ? (
-                  /* Skeleton Loader while suggestions are loading */
-                  <div className="px-4 py-3 space-y-3">
-                    <div className="flex items-center justify-between text-[11px] font-mono uppercase tracking-wider text-gray-400 font-bold mb-1">
-                      <span>Searching articles...</span>
-                      <span className="w-2 h-2 rounded-full bg-[#BF1E2D] animate-ping" />
-                    </div>
-                    {[1, 2, 3].map((n) => (
-                      <div key={n} className="flex items-center gap-3 animate-pulse py-1">
-                        <div className="w-10 h-10 bg-gray-200 rounded-lg shrink-0" />
-                        <div className="min-w-0 flex-1 space-y-1.5">
-                          <div className="h-3.5 bg-gray-200 rounded-sm w-4/5" />
-                          <div className="flex items-center gap-2">
-                            <div className="h-2.5 bg-red-100 rounded-sm w-16" />
-                            <div className="h-2.5 bg-gray-100 rounded-sm w-24" />
-                          </div>
-                        </div>
+              {/* Suggestions Dropdown */}
+              {isSearchFocused && searchQuery.trim().length > 0 && (
+                <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-2xl border border-gray-200/90 overflow-hidden z-50 py-2 divide-y divide-gray-100 animate-in fade-in zoom-in-95 duration-150">
+                  {isSearchLoading ? (
+                    /* Skeleton Loader while suggestions are loading */
+                    <div className="px-4 py-3 space-y-3">
+                      <div className="flex items-center justify-between text-[11px] font-mono uppercase tracking-wider text-gray-400 font-bold mb-1">
+                        <span>Searching articles...</span>
+                        <span className="w-2 h-2 rounded-full bg-[#BF1E2D] animate-ping" />
                       </div>
-                    ))}
-                  </div>
-                ) : suggestedArticles.length > 0 ? (
-                  <>
-                    <div className="px-4 py-1.5 flex items-center justify-between text-[11px] font-mono uppercase tracking-wider text-gray-400 font-bold">
-                      <span>Suggested Articles</span>
-                      <span>{suggestedArticles.length} found</span>
-                    </div>
-                    <div className="py-1 max-h-[360px] overflow-y-auto">
-                      {suggestedArticles.map((art) => (
-                        <Link
-                          key={art.id}
-                          href={art.href}
-                          onClick={() => setIsSearchFocused(false)}
-                          className="flex items-center gap-3 px-4 py-2.5 hover:bg-red-50/60 transition-colors group cursor-pointer"
-                        >
-                          <img
-                            src={art.image || "/argentina_vs_switzerland.png"}
-                            alt={art.title}
-                            onError={(e) => { e.currentTarget.src = "/argentina_vs_switzerland.png"; }}
-                            className="w-10 h-10 rounded-lg object-cover shrink-0 border border-gray-100"
-                          />
-                          <div className="min-w-0 flex-1">
-                            <h4 className="text-xs font-bold text-gray-900 group-hover:text-[#BF1E2D] line-clamp-1 transition-colors">
-                              {art.title}
-                            </h4>
-                            <div className="flex items-center gap-2 mt-0.5 text-[10.5px] text-gray-400 font-mono">
-                              <span className="text-[#BF1E2D] font-bold">{art.category}</span>
-                              {art.date && (
-                                <>
-                                  <span>•</span>
-                                  <span className="truncate">{art.date}</span>
-                                </>
-                              )}
+                      {[1, 2, 3].map((n) => (
+                        <div key={n} className="flex items-center gap-3 animate-pulse py-1">
+                          <div className="w-10 h-10 bg-gray-200 rounded-lg shrink-0" />
+                          <div className="min-w-0 flex-1 space-y-1.5">
+                            <div className="h-3.5 bg-gray-200 rounded-sm w-4/5" />
+                            <div className="flex items-center gap-2">
+                              <div className="h-2.5 bg-red-100 rounded-sm w-16" />
+                              <div className="h-2.5 bg-gray-100 rounded-sm w-24" />
                             </div>
                           </div>
-                          <span className="text-gray-300 group-hover:text-[#BF1E2D] shrink-0 text-xs transition-colors">
-                            ↗
-                          </span>
-                        </Link>
+                        </div>
                       ))}
                     </div>
-                    <div className="px-4 pt-2 pb-1 bg-gray-50/70">
+                  ) : suggestedArticles.length > 0 ? (
+                    <>
+                      <div className="px-4 py-1.5 flex items-center justify-between text-[11px] font-mono uppercase tracking-wider text-gray-400 font-bold">
+                        <span>Suggested Articles</span>
+                        <span>{suggestedArticles.length} found</span>
+                      </div>
+                      <div className="py-1 max-h-[360px] overflow-y-auto">
+                        {suggestedArticles.map((art) => (
+                          <Link
+                            key={art.id}
+                            href={art.href}
+                            onClick={() => setIsSearchFocused(false)}
+                            className="flex items-center gap-3 px-4 py-2.5 hover:bg-red-50/60 transition-colors group cursor-pointer"
+                          >
+                            <img
+                              src={art.image || "/argentina_vs_switzerland.png"}
+                              alt={art.title}
+                              onError={(e) => { e.currentTarget.src = "/argentina_vs_switzerland.png"; }}
+                              className="w-10 h-10 rounded-lg object-cover shrink-0 border border-gray-100"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <h4 className="text-xs font-bold text-gray-900 group-hover:text-[#BF1E2D] line-clamp-1 transition-colors">
+                                {art.title}
+                              </h4>
+                              <div className="flex items-center gap-2 mt-0.5 text-[10.5px] text-gray-400 font-mono">
+                                <span className="text-[#BF1E2D] font-bold">{art.category}</span>
+                                {art.date && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="truncate">{art.date}</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <span className="text-gray-300 group-hover:text-[#BF1E2D] shrink-0 text-xs transition-colors">
+                              ↗
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
+                      <div className="px-4 pt-2 pb-1 bg-gray-50/70">
+                        <button
+                          type="button"
+                          onClick={handleSearchSubmit}
+                          className="w-full text-center text-xs font-bold text-[#BF1E2D] hover:underline flex items-center justify-center gap-1.5 py-1 cursor-pointer"
+                        >
+                          <span>See all results for &quot;{searchQuery}&quot;</span>
+                          <Search size={13} />
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="p-5 text-center">
+                      <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-gray-100 flex items-center justify-center text-gray-400">
+                        <Search size={18} />
+                      </div>
+                      <p className="text-xs font-bold text-gray-800">
+                        No results found for &quot;{searchQuery}&quot;
+                      </p>
+                      <p className="text-[11px] text-gray-500 mt-1 max-w-[280px] mx-auto">
+                        Try searching for a different keyword, category, topic, or company name.
+                      </p>
                       <button
                         type="button"
                         onClick={handleSearchSubmit}
-                        className="w-full text-center text-xs font-bold text-[#BF1E2D] hover:underline flex items-center justify-center gap-1.5 py-1 cursor-pointer"
+                        className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 hover:bg-black text-white text-xs font-bold transition-colors cursor-pointer"
                       >
-                        <span>See all results for &quot;{searchQuery}&quot;</span>
                         <Search size={13} />
+                        <span>Search All Archives</span>
                       </button>
                     </div>
-                  </>
-                ) : (
-                  <div className="p-5 text-center">
-                    <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-gray-100 flex items-center justify-center text-gray-400">
-                      <Search size={18} />
-                    </div>
-                    <p className="text-xs font-bold text-gray-800">
-                      No results found for &quot;{searchQuery}&quot;
-                    </p>
-                    <p className="text-[11px] text-gray-500 mt-1 max-w-[280px] mx-auto">
-                      Try searching for a different keyword, category, topic, or company name.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleSearchSubmit}
-                      className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 hover:bg-black text-white text-xs font-bold transition-colors cursor-pointer"
-                    >
-                      <Search size={13} />
-                      <span>Search All Archives</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="hidden md:block flex-1 mx-4 lg:mx-8" />
-        )}
-
-        {/* RIGHT ACTION BUTTONS */}
-        <div className="flex items-center gap-2 sm:gap-3.5 text-[13px] font-medium shrink-0">
-          
-          {/* Newsletter Signup Button */}
-          <Link
-            href="/newsletters"
-            className="hidden lg:inline-flex items-center gap-1.5 bg-gray-900 hover:bg-black text-white font-bold text-[12px] px-3.5 py-2 rounded-md transition-colors whitespace-nowrap shadow-xs"
-          >
-            <Mail size={14} />
-            <span>Newsletter Signup</span>
-          </Link>
-
-          {/* Red Subscribe Button */}
-          <Link
-            href="/subscribe"
-            className="hidden md:flex bg-[#BF1E2D] hover:bg-red-700 text-white font-bold text-[10px] sm:text-[12px] px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md transition-colors whitespace-nowrap shadow-xs uppercase tracking-wider items-center justify-center shrink-0"
-          >
-            Subscribe
-          </Link>
-
-          {/* User Sign In / Profile Dropdown */}
-          {currentUser ? (
-            <div className="relative hidden md:block z-[100]" ref={userDropdownRef}>
-              <button
-                type="button"
-                onClick={() => setIsUserDropdownOpen((prev) => !prev)}
-                className="relative flex items-center gap-1.5 cursor-pointer focus:outline-none p-0.5 rounded-full hover:ring-2 hover:ring-[#BF1E2D]/20 transition-all bg-gray-100"
-                aria-label="User Account Menu"
-              >
-                <div className="relative w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full overflow-hidden border border-gray-300 shadow-xs bg-gray-100 flex-shrink-0">
-                  {currentUser.avatar ? (
-                    <img
-                      src={currentUser.avatar}
-                      alt={currentUser.name || "rushdhi"}
-                      className="w-full h-full object-cover rounded-full"
-                      onError={(e) => {
-                        (e.target as HTMLElement).style.display = "none";
-                      }}
-                    />
-                  ) : (
-                    <User size={18} className="text-[#BF1E2D]" />
                   )}
-                  {/* Green status online dot */}
-                  <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white absolute bottom-0 right-0 shadow-xs z-10"></span>
-                </div>
-              </button>
-
-              {/* USER ACCOUNT DROPDOWN POPOVER */}
-              {isUserDropdownOpen && (
-                <div className="absolute right-0 top-full mt-1.5 w-52 bg-white border border-slate-200 shadow-xl rounded-xl text-left z-[1000] overflow-hidden font-sans animate-in fade-in slide-in-from-top-1 duration-150">
-                  
-                  {/* Section 1: User Profile Header */}
-                  <div className="px-3.5 py-2.5 border-b border-slate-100 bg-slate-50/50">
-                    <p className="text-[12.5px] font-extrabold text-slate-900 leading-snug tracking-tight truncate">
-                      {currentUser.name || "rushdi admin"}
-                    </p>
-                    <p className="text-[10px] text-slate-400 font-mono tracking-tight mt-0.5 truncate">
-                      {currentUser.email || "rushdhi5002@gmail.com"}
-                    </p>
-                  </div>
-
-                  {/* Admin Option: Admin Control Panel */}
-                  {((currentUser.role || "").toLowerCase() === "admin" || (currentUser.role || "").toLowerCase() === "co-admin" || (currentUser.email || "").toLowerCase().includes("admin")) && (
-                    <Link
-                      href="/admin"
-                      onClick={() => setIsUserDropdownOpen(false)}
-                      className="px-3.5 py-2 flex items-center gap-2.5 border-b border-slate-100 hover:bg-red-50/50 transition-colors cursor-pointer group"
-                    >
-                      <ShieldCheck size={15} className="text-[#D31220] flex-shrink-0" />
-                      <span className="text-[#D31220] font-bold text-xs tracking-tight">
-                        Admin Control Panel
-                      </span>
-                    </Link>
-                  )}
-
-                  {/* Author Workspace Option */}
-                  {!((currentUser.role || "").toLowerCase() === "admin" || (currentUser.role || "").toLowerCase() === "co-admin" || (currentUser.email || "").toLowerCase().includes("admin")) &&
-                    ((currentUser.role || "").toLowerCase() === "writer" || (currentUser.role || "").toLowerCase() === "editor" || (currentUser.email || "").toLowerCase().includes("writer")) && (
-                    <Link
-                      href="/writer"
-                      onClick={() => setIsUserDropdownOpen(false)}
-                      className="px-3.5 py-2 flex items-center gap-2.5 border-b border-slate-100 hover:bg-blue-50/50 transition-colors cursor-pointer group"
-                    >
-                      <PenTool size={15} className="text-[#1B50E8] flex-shrink-0" />
-                      <span className="text-[#1B50E8] font-bold text-xs tracking-tight">
-                        Author Workspace
-                      </span>
-                    </Link>
-                  )}
-
-                  {/* Reader Dashboard Option */}
-                  {((currentUser.role || "").toLowerCase() === "reader" || (currentUser.role || "").toLowerCase() === "user" || (!(currentUser.role || "").toLowerCase().includes("writer") && !(currentUser.role || "").toLowerCase().includes("admin") && !(currentUser.role || "").toLowerCase().includes("editor") && !(currentUser.email || "").toLowerCase().includes("writer") && !(currentUser.email || "").toLowerCase().includes("admin"))) && (
-                    <Link
-                      href="/reader"
-                      onClick={() => setIsUserDropdownOpen(false)}
-                      className="px-3.5 py-2 flex items-center gap-2.5 border-b border-slate-100 hover:bg-red-50/40 transition-colors cursor-pointer group"
-                    >
-                      <BookOpen size={15} className="text-[#BF1E2D] flex-shrink-0" />
-                      <span className="text-[#BF1E2D] font-bold text-xs tracking-tight">
-                        Reader Dashboard
-                      </span>
-                    </Link>
-                  )}
-
-                  {/* Profile Settings Option */}
-                  <button
-                    onClick={() => {
-                      setIsUserDropdownOpen(false);
-                      setIsProfileSettingsOpen(true);
-                    }}
-                    className="w-full text-left px-3.5 py-2 flex items-center gap-2.5 border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer group"
-                  >
-                    <User size={15} className="text-slate-400 group-hover:text-slate-700 flex-shrink-0" />
-                    <span className="text-slate-800 font-bold text-xs tracking-tight">
-                      Profile Settings
-                    </span>
-                  </button>
-
-                  {/* Sign Out Terminal Option */}
-                  <button
-                    onClick={handleSignOut}
-                    className="w-full text-left px-3.5 py-2 flex items-center gap-2.5 hover:bg-slate-50 transition-colors cursor-pointer group"
-                  >
-                    <LogOut size={15} className="text-slate-400 group-hover:text-slate-700 flex-shrink-0" />
-                    <span className="text-slate-800 font-bold text-xs tracking-tight">
-                      Sign Out Terminal
-                    </span>
-                  </button>
-
                 </div>
               )}
             </div>
           ) : (
-            <Link 
-              href={loginHref} 
-              className="hidden md:flex items-center gap-1.5 text-gray-800 hover:text-[#BF1E2D] font-bold text-xs sm:text-sm px-2.5 py-1.5 rounded-md hover:bg-gray-100 transition-colors"
-            >
-              <User size={17} strokeWidth={2.2} className="text-[#BF1E2D]" />
-              <span className="hidden sm:inline">Sign In</span>
-            </Link>
+            <div className="hidden md:block flex-1 mx-4 lg:mx-8" />
           )}
 
-          {/* Mobile Menu Toggle */}
-          <button
-            onClick={() => {
-              setActiveMenu(null);
-              setIsMobileMenuOpen(!isMobileMenuOpen);
-            }}
-            className="md:hidden text-gray-800 hover:text-[#BF1E2D] p-1 rounded-md hover:bg-gray-100 transition-colors shrink-0 cursor-pointer"
-            aria-label="Toggle menu"
-          >
-            {isMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
-          </button>
+          {/* RIGHT ACTION BUTTONS */}
+          <div className="flex items-center gap-2 sm:gap-3.5 text-[13px] font-medium shrink-0">
+
+            {/* Newsletter Signup Button */}
+            <Link
+              href="/newsletters"
+              className="hidden xl:inline-flex items-center gap-1.5 bg-gray-900 hover:bg-black text-white font-bold text-[12px] px-3.5 py-2 rounded-md transition-colors whitespace-nowrap shadow-xs"
+            >
+              <Mail size={14} />
+              <span>Newsletter Signup</span>
+            </Link>
+
+            {/* Red Subscribe Button */}
+            <Link
+              href="/subscribe"
+              className="hidden md:flex bg-[#BF1E2D] hover:bg-red-700 text-white font-bold text-[10px] sm:text-[12px] px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md transition-colors whitespace-nowrap shadow-xs uppercase tracking-wider items-center justify-center shrink-0"
+            >
+              Subscribe
+            </Link>
+
+            {/* User Sign In / Profile Dropdown */}
+            {currentUser ? (
+              <div className="relative hidden md:block z-[100]" ref={userDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsUserDropdownOpen((prev) => !prev)}
+                  className="relative flex items-center gap-1.5 cursor-pointer focus:outline-none p-0.5 rounded-full hover:ring-2 hover:ring-[#BF1E2D]/20 transition-all bg-gray-100"
+                  aria-label="User Account Menu"
+                >
+                  <div className="relative w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full overflow-hidden border border-gray-300 shadow-xs bg-gray-100 flex-shrink-0">
+                    {currentUser.avatar ? (
+                      <img
+                        src={currentUser.avatar}
+                        alt={currentUser.name || "rushdhi"}
+                        className="w-full h-full object-cover rounded-full"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = "none";
+                        }}
+                      />
+                    ) : (
+                      <User size={18} className="text-[#BF1E2D]" />
+                    )}
+                    {/* Green status online dot */}
+                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white absolute bottom-0 right-0 shadow-xs z-10"></span>
+                  </div>
+                </button>
+
+                {/* USER ACCOUNT DROPDOWN POPOVER */}
+                {isUserDropdownOpen && (
+                  <div className="absolute right-0 top-full mt-1.5 w-52 bg-white border border-slate-200 shadow-xl rounded-xl text-left z-[1000] overflow-hidden font-sans animate-in fade-in slide-in-from-top-1 duration-150">
+
+                    {/* Section 1: User Profile Header */}
+                    <div className="px-3.5 py-2.5 border-b border-slate-100 bg-slate-50/50">
+                      <p className="text-[12.5px] font-extrabold text-slate-900 leading-snug tracking-tight truncate">
+                        {currentUser.name || "rushdi admin"}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-mono tracking-tight mt-0.5 truncate">
+                        {currentUser.email || "rushdhi5002@gmail.com"}
+                      </p>
+                    </div>
+
+                    {/* Admin Option: Admin Control Panel */}
+                    {((currentUser.role || "").toLowerCase() === "admin" || (currentUser.role || "").toLowerCase() === "co-admin" || (currentUser.email || "").toLowerCase().includes("admin")) && (
+                      <Link
+                        href="/admin"
+                        onClick={() => setIsUserDropdownOpen(false)}
+                        className="px-3.5 py-2 flex items-center gap-2.5 border-b border-slate-100 hover:bg-red-50/50 transition-colors cursor-pointer group"
+                      >
+                        <ShieldCheck size={15} className="text-[#D31220] flex-shrink-0" />
+                        <span className="text-[#D31220] font-bold text-xs tracking-tight">
+                          Admin Control Panel
+                        </span>
+                      </Link>
+                    )}
+
+                    {/* Author Workspace Option */}
+                    {!((currentUser.role || "").toLowerCase() === "admin" || (currentUser.role || "").toLowerCase() === "co-admin" || (currentUser.email || "").toLowerCase().includes("admin")) &&
+                      ((currentUser.role || "").toLowerCase() === "writer" || (currentUser.role || "").toLowerCase() === "editor" || (currentUser.email || "").toLowerCase().includes("writer")) && (
+                        <Link
+                          href="/writer"
+                          onClick={() => setIsUserDropdownOpen(false)}
+                          className="px-3.5 py-2 flex items-center gap-2.5 border-b border-slate-100 hover:bg-blue-50/50 transition-colors cursor-pointer group"
+                        >
+                          <PenTool size={15} className="text-[#1B50E8] flex-shrink-0" />
+                          <span className="text-[#1B50E8] font-bold text-xs tracking-tight">
+                            Author Workspace
+                          </span>
+                        </Link>
+                      )}
+
+                    {/* Reader Dashboard Option */}
+                    {((currentUser.role || "").toLowerCase() === "reader" || (currentUser.role || "").toLowerCase() === "user" || (!(currentUser.role || "").toLowerCase().includes("writer") && !(currentUser.role || "").toLowerCase().includes("admin") && !(currentUser.role || "").toLowerCase().includes("editor") && !(currentUser.email || "").toLowerCase().includes("writer") && !(currentUser.email || "").toLowerCase().includes("admin"))) && (
+                      <Link
+                        href="/reader"
+                        onClick={() => setIsUserDropdownOpen(false)}
+                        className="px-3.5 py-2 flex items-center gap-2.5 border-b border-slate-100 hover:bg-red-50/40 transition-colors cursor-pointer group"
+                      >
+                        <BookOpen size={15} className="text-[#BF1E2D] flex-shrink-0" />
+                        <span className="text-[#BF1E2D] font-bold text-xs tracking-tight">
+                          Reader Dashboard
+                        </span>
+                      </Link>
+                    )}
+
+                    {/* Profile Settings Option */}
+                    <button
+                      onClick={() => {
+                        setIsUserDropdownOpen(false);
+                        setIsProfileSettingsOpen(true);
+                      }}
+                      className="w-full text-left px-3.5 py-2 flex items-center gap-2.5 border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer group"
+                    >
+                      <User size={15} className="text-slate-400 group-hover:text-slate-700 flex-shrink-0" />
+                      <span className="text-slate-800 font-bold text-xs tracking-tight">
+                        Profile Settings
+                      </span>
+                    </button>
+
+                    {/* Sign Out Terminal Option */}
+                    <button
+                      onClick={handleSignOut}
+                      className="w-full text-left px-3.5 py-2 flex items-center gap-2.5 hover:bg-slate-50 transition-colors cursor-pointer group"
+                    >
+                      <LogOut size={15} className="text-slate-400 group-hover:text-slate-700 flex-shrink-0" />
+                      <span className="text-slate-800 font-bold text-xs tracking-tight">
+                        Sign Out Terminal
+                      </span>
+                    </button>
+
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Link
+                href={loginHref}
+                className="hidden md:flex items-center gap-1.5 text-gray-800 hover:text-[#BF1E2D] font-bold text-xs sm:text-sm px-2.5 py-1.5 rounded-md hover:bg-gray-100 transition-colors"
+              >
+                <User size={17} strokeWidth={2.2} className="text-[#BF1E2D]" />
+                <span className="hidden sm:inline">Sign In</span>
+              </Link>
+            )}
+
+            {/* Mobile Menu Toggle */}
+            <button
+              onClick={() => {
+                setActiveMenu(null);
+                setIsMobileMenuOpen(!isMobileMenuOpen);
+              }}
+              className="md:hidden text-gray-800 hover:text-[#BF1E2D] p-1 rounded-md hover:bg-gray-100 transition-colors shrink-0 cursor-pointer"
+              aria-label="Toggle menu"
+            >
+              {isMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+            </button>
+
+          </div>
 
         </div>
+
+        {/* Article Reading Completion Bar */}
+        {(showProgressBar || readingProgress > 0) && (
+          <div
+            className="absolute bottom-0 left-0 right-0 w-full h-[3.5px] bg-transparent pointer-events-none z-50 overflow-hidden"
+            aria-hidden="true"
+          >
+            <div
+              className="h-full bg-[#BF1E2D] transition-[width] duration-75 ease-out"
+              style={{ width: `${readingProgress}%` }}
+            />
+          </div>
+        )}
 
       </div>
-
-      {/* Article Reading Completion Bar */}
-      {(showProgressBar || readingProgress > 0) && (
-        <div 
-          className="absolute bottom-0 left-0 right-0 w-full h-[3.5px] bg-transparent pointer-events-none z-50 overflow-hidden"
-          aria-hidden="true"
-        >
-          <div 
-            className="h-full bg-[#BF1E2D] transition-[width] duration-75 ease-out"
-            style={{ width: `${readingProgress}%` }}
-          />
-        </div>
-      )}
-
-    </div>
 
       {/* Spacer placeholder matching fixed Row 1 height */}
       <div style={{ height: row1Height ? `${row1Height}px` : undefined }} className="h-[58px] sm:h-[68px] md:h-[76px] w-full" aria-hidden="true" />
@@ -1091,11 +1128,16 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
       {/* ================= ROW 2: CATEGORY NAVIGATION BAR ================= */}
       <div className="w-full border-b border-gray-200 bg-white relative z-40 overflow-visible">
         <div ref={row2ContainerRef} className="max-w-[1400px] mx-auto px-3 sm:px-6 flex items-center justify-between gap-4 w-full min-w-0 relative overflow-visible">
-          
+
           {/* Main Horizontal Category Nav Items */}
           <nav
+            ref={categoryNavRef}
             onScroll={updateWorldPos}
-            className="flex items-center justify-center md:justify-start gap-3.5 sm:gap-5 md:gap-6 lg:gap-6 xl:gap-7 py-2.5 sm:py-3 text-[12px] sm:text-[13.5px] font-bold overflow-x-auto md:overflow-visible scrollbar-none flex-1 min-w-0 md:pr-4"
+            onMouseDown={handleCategoryMouseDown}
+            onMouseLeave={handleCategoryMouseLeave}
+            onMouseUp={handleCategoryMouseUp}
+            onMouseMove={handleCategoryMouseMove}
+            className="flex items-center justify-between md:justify-start gap-1 sm:gap-3 md:gap-4 lg:gap-2.5 xl:gap-5 2xl:gap-6 py-2.5 sm:py-3 text-[12px] sm:text-[12.5px] lg:text-[12px] xl:text-[13px] 2xl:text-[13.5px] font-bold overflow-x-hidden md:overflow-x-auto scrollbar-none flex-1 min-w-0 md:pr-4 md:touch-pan-x select-none md:cursor-grab md:active:cursor-grabbing"
           >
             {navCategories.map((cat, index) => {
               const isWorld = cat.name === "World";
@@ -1111,6 +1153,10 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
                   <Link
                     href={cat.href}
                     onClick={(e) => {
+                      if (hasMovedNav.current) {
+                        e.preventDefault();
+                        return;
+                      }
                       if (isWorld) {
                         toggleWorldMenu(e);
                         return;
@@ -1118,22 +1164,20 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
                       setActiveMenu(null);
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`flex items-center gap-1 py-1 px-1 sm:px-1.5 transition-colors font-bold whitespace-nowrap border-t-2 border-transparent cursor-pointer ${
-                      isActive
-                        ? "text-gray-900 border-b-2 border-[#BF1E2D]"
-                        : "text-gray-800 hover:text-[#BF1E2D] border-b-2 border-transparent"
-                    }`}
+                    className={`flex items-center gap-0.5 sm:gap-1 py-1 px-0.5 sm:px-1 lg:px-1.5 xl:px-2 transition-colors font-bold whitespace-nowrap border-t-2 border-transparent cursor-pointer ${isActive
+                      ? "text-gray-900 border-b-2 border-[#BF1E2D]"
+                      : "text-gray-800 hover:text-[#BF1E2D] border-b-2 border-transparent"
+                      }`}
                   >
                     <span>{cat.name}</span>
                     {isWorld && (
                       <ChevronDown
                         size={12}
                         strokeWidth={2.5}
-                        className={`text-gray-500 transition-transform duration-200 ${
-                          isWorldActive
-                            ? "rotate-180 text-[#BF1E2D]"
-                            : "group-hover:text-[#BF1E2D]"
-                        }`}
+                        className={`text-gray-500 transition-transform duration-200 ${isWorldActive
+                          ? "rotate-180 text-[#BF1E2D]"
+                          : "group-hover:text-[#BF1E2D]"
+                          }`}
                       />
                     )}
                   </Link>
@@ -1159,11 +1203,10 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
                   <button
                     key={lang.code}
                     onClick={() => applyLanguage(lang.code, lang.label)}
-                    className={`w-full text-left px-3 py-1.5 text-xs font-semibold transition-colors ${
-                      selectedLang === lang.label
-                        ? "bg-red-50 text-[#BF1E2D]"
-                        : "text-gray-700 hover:bg-red-50 hover:text-[#BF1E2D]"
-                    }`}
+                    className={`w-full text-left px-3 py-1.5 text-xs font-semibold transition-colors ${selectedLang === lang.label
+                      ? "bg-red-50 text-[#BF1E2D]"
+                      : "text-gray-700 hover:bg-red-50 hover:text-[#BF1E2D]"
+                      }`}
                   >
                     {lang.label}
                   </button>
@@ -1173,16 +1216,15 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
           </div>
 
           {/* World Dropdown Menu: rendered outside <nav> so mobile overflow-x-auto does NOT clip it */}
-          <div 
+          <div
             ref={worldDropdownRef}
             style={{
               left: worldDropdownLeft !== null ? `${worldDropdownLeft}px` : undefined,
             }}
-            className={`absolute top-full left-3 sm:left-6 pt-2 w-[230px] sm:w-[250px] z-[100] transition-all duration-200 ${
-              activeMenu === "WORLD"
-                ? "opacity-100 visible pointer-events-auto translate-y-0"
-                : "opacity-0 invisible pointer-events-none -translate-y-1"
-            }`}
+            className={`absolute top-full left-3 sm:left-6 pt-2 w-[230px] sm:w-[250px] z-[100] transition-all duration-200 ${activeMenu === "WORLD"
+              ? "opacity-100 visible pointer-events-auto translate-y-0"
+              : "opacity-0 invisible pointer-events-none -translate-y-1"
+              }`}
           >
             <div className="bg-white border border-gray-200/90 shadow-2xl rounded-2xl p-3.5 text-left font-sans ring-1 ring-black/5">
               <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-150">
@@ -1224,7 +1266,7 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
       {/* ================= ROW 3: TRENDING TOPICS & WEATHER UTILITY BAR ================= */}
       <div className="w-full bg-[#F8F9FA] border-b border-gray-200 py-1.5 text-xs font-medium text-gray-700">
         <div className="max-w-[1400px] mx-auto px-3 sm:px-6 flex items-center justify-between gap-4 min-w-0">
-          
+
           {/* LEFT: TRENDING LABEL & TOPICS */}
           <div className="flex items-center gap-2 sm:gap-2.5 overflow-x-auto scrollbar-none py-0.5 min-w-0 flex-1">
             <span className="bg-[#BF1E2D]/10 text-[#BF1E2D] font-extrabold uppercase text-[10px] sm:text-[11px] px-2 py-0.5 rounded tracking-wider shrink-0">
@@ -1249,7 +1291,7 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
             {currentDate && countryName && <span className="text-gray-300">•</span>}
             {countryName && <span>{countryName}</span>}
             {(countryName || currentDate) && weatherTemp !== null && <span className="text-gray-300">•</span>}
-            
+
             {/* Weather Pill */}
             {weatherTemp !== null && (
               <div className="flex items-center gap-1 text-gray-800 font-semibold cursor-pointer hover:text-[#BF1E2D] bg-white px-2 py-0.5 rounded border border-gray-200 shadow-2xs transition-colors">
@@ -1287,7 +1329,7 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
           }}
           className="md:hidden fixed top-[58px] sm:top-[68px] left-0 right-0 z-40 bg-white text-gray-900 border-t border-b border-gray-200 py-4 px-4 space-y-4 shadow-2xl animate-in slide-in-from-top-2 duration-200 max-h-[calc(100dvh-58px)] sm:max-h-[calc(100dvh-68px)] overflow-y-auto"
         >
-          
+
           {/* Mobile Search Input */}
           {pathname !== "/search" && (
             <div ref={mobileSearchRef} className="relative w-full">
@@ -1713,11 +1755,10 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
                     <button
                       key={lang.code}
                       onClick={() => { applyLanguage(lang.code, lang.label); setIsMobileMenuOpen(false); }}
-                      className={`text-left py-2 px-3 text-xs font-bold rounded-lg border transition-colors cursor-pointer ${
-                        selectedLang === lang.label
-                          ? "bg-red-50 text-[#BF1E2D] border-red-200 font-extrabold shadow-2xs"
-                          : "text-gray-800 bg-white border-gray-200/70 hover:bg-red-50 hover:text-[#BF1E2D]"
-                      }`}
+                      className={`text-left py-2 px-3 text-xs font-bold rounded-lg border transition-colors cursor-pointer ${selectedLang === lang.label
+                        ? "bg-red-50 text-[#BF1E2D] border-red-200 font-extrabold shadow-2xs"
+                        : "text-gray-800 bg-white border-gray-200/70 hover:bg-red-50 hover:text-[#BF1E2D]"
+                        }`}
                     >
                       {lang.label}
                     </button>
@@ -1733,7 +1774,7 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
       {isProfileSettingsOpen && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200 font-sans">
           <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl relative text-left overflow-hidden border-t-[5px] border-[#BF1E2D]">
-            
+
             {/* Close Button */}
             <button
               onClick={() => setIsProfileSettingsOpen(false)}
@@ -1779,13 +1820,12 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
                 <p className="text-xs text-slate-500 font-sans tracking-tight mt-0.5">
                   {currentUser?.email || "nestosuper2024@gmail.com"}
                 </p>
-                <span className={`px-2.5 py-0.5 text-[10px] font-extrabold tracking-wider rounded uppercase inline-block mt-1.5 font-sans ${
-                  (currentUser?.role || "").toUpperCase() === "ADMIN"
-                    ? "bg-rose-50 text-rose-700 border border-rose-200"
-                    : (currentUser?.role || "").toUpperCase() === "WRITER"
+                <span className={`px-2.5 py-0.5 text-[10px] font-extrabold tracking-wider rounded uppercase inline-block mt-1.5 font-sans ${(currentUser?.role || "").toUpperCase() === "ADMIN"
+                  ? "bg-rose-50 text-rose-700 border border-rose-200"
+                  : (currentUser?.role || "").toUpperCase() === "WRITER"
                     ? "bg-blue-50 text-blue-700 border border-blue-200"
                     : "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                }`}>
+                  }`}>
                   {(currentUser?.role || "READER").toUpperCase()}
                 </span>
               </div>
@@ -1793,7 +1833,7 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
 
             {/* Profile Form */}
             <form onSubmit={handleSaveProfileSettings} className="px-6 pt-4 pb-6 space-y-4 font-sans">
-              
+
               {/* Field 1: FULL NAME */}
               <div>
                 <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">
@@ -1832,7 +1872,7 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
                     className="w-5 h-5 text-[#005691] fill-[#005691] flex-shrink-0"
                     viewBox="0 0 24 24"
                   >
-                    <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z"/>
+                    <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z" />
                   </svg>
                   <input
                     type="url"

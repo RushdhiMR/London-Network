@@ -291,6 +291,7 @@ export function isHomePageAPlus3(post: any): boolean {
     pl === "home page a+ section 3" ||
     pl === "a+ section 3" ||
     pl === "a+3" ||
+    pl === "home_page_a_plus_3" ||
     pl.includes("a+ section 3") ||
     pl.includes("section 3") ||
     pl.includes("main news 3")

@@ -187,30 +187,39 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col font-sans text-slate-900 selection:bg-red-100 selection:text-red-900">
-      {/* MAIN PLAIN PAGE CONTAINER */}
-      <main className="flex-1 bg-white py-12 lg:py-16 flex items-center justify-center">
-        <div className="w-full max-w-[440px] mx-auto px-4 font-sans text-slate-900">
+    <div className="h-screen max-h-screen w-full bg-white flex font-sans text-slate-900 selection:bg-red-100 selection:text-red-900 overflow-hidden">
+      {/* LEFT COLUMN: LONDON WALLPAPER (DESKTOP) */}
+      <div className="hidden lg:block lg:w-1/2 relative h-full overflow-hidden border-r-[3px] border-[#BF1E2D]">
+        <img
+          src="/register_bg.jpg"
+          alt="London City - Big Ben & Westminster"
+          className="absolute inset-0 w-full h-full object-cover object-left"
+        />
+      </div>
+
+      {/* RIGHT COLUMN: REGISTER CARD */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-3 sm:p-4 lg:p-6 h-full bg-white overflow-hidden">
+        <div className="w-full max-w-[420px] bg-white border border-slate-100/90 rounded-2xl p-5 sm:p-6 lg:p-7 shadow-[0_10px_40px_rgba(0,0,0,0.06)] font-sans text-slate-900 my-auto">
           
           {/* Logo & Corporate Title */}
-          <div className="flex flex-col items-center mb-8 text-center">
-            <Link href="/" className="inline-block hover:opacity-90 transition-opacity mb-4">
+          <div className="flex flex-col items-center mb-4 text-center">
+            <Link href="/" className="inline-block hover:opacity-90 transition-opacity mb-2">
               <img
                 src="/header_logo.png"
                 alt="London BigBen Network"
-                className="h-9 sm:h-10 w-auto object-contain"
+                className="h-7 sm:h-8 w-auto object-contain"
               />
             </Link>
 
             <h1 className="text-xl font-bold text-slate-900">Create your account</h1>
-            <p className="text-xs text-slate-500 font-medium mt-1">
-              Join London BigBen to access personalized feeds, bookmarks, and author tools.
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
+              Join London BigBen Network.
             </p>
           </div>
 
           {/* Success Banner */}
           {successMessage && (
-            <div className="mb-6 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold p-4 rounded-xl text-center shadow-xs flex items-center justify-center gap-2">
+            <div className="mb-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold p-2.5 rounded-xl text-center shadow-xs flex items-center justify-center gap-2">
               <span className="text-base">✓</span>
               <span>{successMessage}</span>
             </div>
@@ -218,20 +227,20 @@ export default function RegisterPage() {
 
           {/* Error Banner */}
           {errorMessage && (
-            <div className="mb-6 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold p-4 rounded-xl text-center shadow-xs flex items-center justify-center gap-2">
+            <div className="mb-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold p-2.5 rounded-xl text-center shadow-xs flex items-center justify-center gap-2">
               <span className="text-base">⚠</span>
               <span>{errorMessage}</span>
             </div>
           )}
 
           {/* Official Google Sign In Section */}
-          <div className="w-full mb-6">
+          <div className="w-full mb-3.5">
             <button 
               onClick={handleGoogleSignIn}
               disabled={isSubmitting || isGoogleLoading}
               type="button"
               aria-label="Continue with Google"
-              className="w-full h-11 sm:h-12 flex items-center justify-center gap-3 bg-white hover:bg-slate-50/90 active:bg-slate-100 active:scale-[0.99] border border-slate-200 hover:border-slate-300 rounded-xl text-sm font-semibold text-slate-700 hover:text-slate-900 shadow-2xs hover:shadow-xs transition-all duration-150 cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-300/40 focus:border-slate-400 disabled:opacity-60 disabled:cursor-not-allowed select-none"
+              className="w-full h-10 flex items-center justify-center gap-3 bg-white hover:bg-slate-50/90 active:bg-slate-100 active:scale-[0.99] border border-slate-200 hover:border-slate-300 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 hover:text-slate-900 shadow-2xs hover:shadow-xs transition-all duration-150 cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-300/40 focus:border-slate-400 disabled:opacity-60 disabled:cursor-not-allowed select-none"
             >
               {isGoogleLoading ? (
                 <>
@@ -239,7 +248,7 @@ export default function RegisterPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <span className="font-medium text-slate-600 text-sm">Connecting to Google...</span>
+                  <span className="font-medium text-slate-600 text-xs sm:text-sm">Connecting to Google...</span>
                 </>
               ) : (
                 <>
@@ -275,54 +284,54 @@ export default function RegisterPage() {
           </div>
 
           {/* Separator */}
-          <div className="relative flex items-center mb-6">
+          <div className="relative flex items-center mb-3.5">
             <div className="flex-grow border-t border-slate-200"></div>
-            <span className="flex-shrink mx-4 text-xs font-medium text-slate-400">
-              or continue with email
+            <span className="flex-shrink mx-3 text-[11px] font-medium text-slate-400">
+              or register with email
             </span>
             <div className="flex-grow border-t border-slate-200"></div>
           </div>
 
           {/* Form Fields */}
-          <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
+          <form onSubmit={handleSubmit} autoComplete="off" className="space-y-2.5">
             {/* Fake hidden inputs to trap browser autofill heuristics */}
             <input type="text" name="fake_autofill_email" style={{ display: 'none' }} tabIndex={-1} aria-hidden="true" autoComplete="off" />
             <input type="password" name="fake_autofill_password" style={{ display: 'none' }} tabIndex={-1} aria-hidden="true" autoComplete="new-password" />
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-2">
+              <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
                 FULL NAME
               </label>
               <input
                 type="text"
                 name="dj_register_name_no_autofill"
                 autoComplete="off"
-                placeholder="e.g. John Doe"
+                placeholder="Enter your full name"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/50 focus:bg-white font-medium"
+                className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/30 focus:bg-white"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-2">
-                EMAIL ADDRESS
+              <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                BUSINESS EMAIL ADDRESS
               </label>
               <input
                 type="email"
                 name="dj_register_email_no_autofill"
                 autoComplete="off"
-                placeholder="e.g. yourname@example.com"
+                placeholder="e.g. yourname@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/50 focus:bg-white font-medium"
+                className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/30 focus:bg-white"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-2">
+              <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
                 CREATE PASSWORD
               </label>
               <div className="relative">
@@ -330,16 +339,16 @@ export default function RegisterPage() {
                   type={showPassword ? "text" : "password"}
                   name="dj_register_pass_no_autofill"
                   autoComplete="new-password"
-                  placeholder="At least 6 characters"
+                  placeholder="Enter password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 pr-10 py-3 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/50 focus:bg-white"
+                  className="w-full px-3.5 pr-10 py-2 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/30 focus:bg-white"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer p-1"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer p-1"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
@@ -354,10 +363,13 @@ export default function RegisterPage() {
                   )}
                 </button>
               </div>
+              <span className="text-[10px] text-slate-400 font-medium block mt-0.5">
+                Use at least 8 characters.
+              </span>
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-2">
+              <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
                 CONFIRM PASSWORD
               </label>
               <div className="relative">
@@ -365,16 +377,16 @@ export default function RegisterPage() {
                   type={showConfirmPassword ? "text" : "password"}
                   name="dj_register_confirm_pass_no_autofill"
                   autoComplete="new-password"
-                  placeholder="Re-enter password"
+                  placeholder="Confirm password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-4 pr-10 py-3 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/50 focus:bg-white"
+                  className="w-full px-3.5 pr-10 py-2 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/30 focus:bg-white"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer p-1"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer p-1"
                   aria-label={showConfirmPassword ? "Hide password" : "Show password"}
                 >
                   {showConfirmPassword ? (
@@ -391,11 +403,11 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            <div className="pt-3">
+            <div className="pt-1.5">
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full bg-[#0F172A] hover:bg-[#1E293B] active:scale-[0.99] text-white font-bold text-sm py-3.5 rounded-xl transition-all uppercase tracking-wider cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2 shadow-md"
+                className="w-full bg-[#111827] hover:bg-[#1f2937] active:scale-[0.99] text-white font-semibold text-xs uppercase tracking-wider py-2.5 rounded-lg transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
               >
                 {isSubmitting ? (
                   <>
@@ -403,26 +415,23 @@ export default function RegisterPage() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    CREATING ACCOUNT...
+                    <span>CREATING ACCOUNT...</span>
                   </>
                 ) : (
-                  <>
-                    <UserPlus size={16} />
-                    <span>CREATE ACCOUNT</span>
-                  </>
+                  <span>CREATE ACCOUNT →</span>
                 )}
               </button>
             </div>
           </form>
 
-          <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+          <div className="mt-4 pt-2 text-center">
             <Link href="/login" className="text-xs text-slate-600 hover:text-slate-900 transition-colors font-medium">
-              Already registered? <span className="text-[#BF1E2D] font-bold hover:underline">Sign in instead</span>
+              Already have an account? <span className="text-[#BF1E2D] font-bold hover:underline">Sign in</span>
             </Link>
           </div>
 
         </div>
-      </main>
+      </div>
     </div>
   );
 }

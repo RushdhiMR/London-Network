@@ -176,22 +176,23 @@ export default function MostReadSection() {
   });
   aPlus3Articles.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
 
-  const sortedByTime = [...published].sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
-  const featuredRaw = aPlus3Articles[0] || sortedByTime.find((a) => a.imageUrl || a.image) || sortedByTime[0];
+  const featuredRaw = aPlus3Articles[0] || null;
 
-  const featured = {
-    id: featuredRaw.id,
-    title: featuredRaw.title,
-    description: featuredRaw.description || featuredRaw.summary || "",
-    category: (featuredRaw.category || "WORLD").toUpperCase(),
-    author: (featuredRaw.authorName || (featuredRaw as any).author_name || featuredRaw.author || "Ronda B").trim(),
-    image: featuredRaw.imageUrl || featuredRaw.image || "https://images.unsplash.com/photo-1540573133985-87b6da6d54a9?w=1200&h=800&fit=crop",
-    href: `/article/${featuredRaw.slug || String(featuredRaw.id)}`
-  };
+  const featured = featuredRaw
+    ? {
+        id: featuredRaw.id,
+        title: featuredRaw.title,
+        description: featuredRaw.description || featuredRaw.summary || "",
+        category: (featuredRaw.category || "WORLD").toUpperCase(),
+        author: (featuredRaw.authorName || (featuredRaw as any).author_name || featuredRaw.author || "Ronda B").trim(),
+        image: featuredRaw.imageUrl || featuredRaw.image || "https://images.unsplash.com/photo-1540573133985-87b6da6d54a9?w=1200&h=800&fit=crop",
+        href: `/article/${featuredRaw.slug || String(featuredRaw.id)}`
+      }
+    : null;
 
   // 7 articles for the "Most Read" right column (excluding the featured one and any A+ Section 3 if possible)
-  const remaining = published.filter((a) => a.id !== featuredRaw.id && !isHomePageAPlus3(a));
-  const pool = remaining.length >= 7 ? remaining : published.filter((a) => a.id !== featuredRaw.id);
+  const remaining = published.filter((a) => (featuredRaw ? a.id !== featuredRaw.id : true) && !isHomePageAPlus3(a));
+  const pool = remaining.length >= 7 ? remaining : published.filter((a) => (featuredRaw ? a.id !== featuredRaw.id : true));
 
   // Sort by popularity / view count from database
   const sortedByViews = [...pool].sort((a, b) => {
@@ -214,52 +215,54 @@ export default function MostReadSection() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         
         {/* LEFT COLUMN: LARGE FEATURED ARTICLE (~58% WIDTH) */}
-        <div className="lg:col-span-7 flex flex-col group">
-          <div className="relative w-full mb-5">
-            <Link
-              href={featured.href}
-              className="relative w-full aspect-[16/10] overflow-hidden bg-gray-100 rounded-none block"
-            >
-              <img
-                src={featured.image}
-                alt={featured.title}
-                onError={(e) => {
-                  e.currentTarget.src = "https://images.unsplash.com/photo-1540573133985-87b6da6d54a9?w=1200&h=800&fit=crop";
-                }}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-              />
-            </Link>
-            {/* Category Name Centered Across Bottom Edge of Image */}
-            <Link
-              href={featured.href}
-              className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 text-[10px] font-bold tracking-wider text-gray-700 bg-gray-100 px-3 py-1 uppercase rounded-none shadow-sm border border-gray-200/60 z-10 whitespace-nowrap hover:bg-gray-200 transition-colors"
-            >
-              {featured.category}
-            </Link>
-          </div>
+        {featured ? (
+          <div className="lg:col-span-7 flex flex-col group">
+            <div className="relative w-full mb-5">
+              <Link
+                href={featured.href}
+                className="relative w-full aspect-[16/10] overflow-hidden bg-gray-100 rounded-none block"
+              >
+                <img
+                  src={featured.image}
+                  alt={featured.title}
+                  onError={(e) => {
+                    e.currentTarget.src = "https://images.unsplash.com/photo-1540573133985-87b6da6d54a9?w=1200&h=800&fit=crop";
+                  }}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+              </Link>
+              {/* Category Name Centered Across Bottom Edge of Image */}
+              <Link
+                href={featured.href}
+                className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 text-[10px] font-bold tracking-wider text-gray-700 bg-gray-100 px-3 py-1 uppercase rounded-none shadow-sm border border-gray-200/60 z-10 whitespace-nowrap hover:bg-gray-200 transition-colors"
+              >
+                {featured.category}
+              </Link>
+            </div>
 
-          {/* Centered Headline */}
-          <h3 className="text-center font-serif font-bold text-2xl lg:text-[26px] text-gray-900 leading-snug group-hover:text-[#D31220] transition-colors mb-2 max-w-xl mx-auto">
-            <Link href={featured.href}>
-              {featured.title}
-            </Link>
-          </h3>
+            {/* Centered Headline */}
+            <h3 className="text-center font-serif font-bold text-2xl lg:text-[26px] text-gray-900 leading-snug group-hover:text-[#D31220] transition-colors mb-2 max-w-xl mx-auto">
+              <Link href={featured.href}>
+                {featured.title}
+              </Link>
+            </h3>
 
-          {/* Centered Author Byline */}
-          <p className="text-center text-xs text-gray-500 font-sans mb-3">
-            By <span className="font-semibold text-gray-700">{featured.author}</span>, <span className="italic">Senior Contributor</span>
-          </p>
-
-          {/* Centered Excerpt */}
-          {featured.description && (
-            <p className="text-center text-[13px] text-gray-600 font-sans leading-relaxed line-clamp-3 max-w-xl mx-auto">
-              {featured.description}
+            {/* Centered Author Byline */}
+            <p className="text-center text-xs text-gray-500 font-sans mb-3">
+              By <span className="font-semibold text-gray-700">{featured.author}</span>, <span className="italic">Senior Contributor</span>
             </p>
-          )}
-        </div>
+
+            {/* Centered Excerpt */}
+            {featured.description && (
+              <p className="text-center text-[13px] text-gray-600 font-sans leading-relaxed line-clamp-3 max-w-xl mx-auto">
+                {featured.description}
+              </p>
+            )}
+          </div>
+        ) : null}
 
         {/* RIGHT COLUMN: MOST READ LIST (~42% WIDTH) */}
-        <div className="lg:col-span-5 flex flex-col">
+        <div className={featured ? "lg:col-span-5 flex flex-col" : "lg:col-span-12 max-w-3xl mx-auto w-full flex flex-col"}>
           {/* Header with Title "Most Read" */}
           <div className="mb-1">
             <h2 className="font-serif font-bold text-2xl text-gray-900 tracking-tight">

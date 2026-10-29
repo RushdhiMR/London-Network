@@ -218,15 +218,15 @@ export default function LatestNewsSection() {
         </h2>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-start">
 
         {/* COLUMN 1 & 2: FEATURED ARTICLE (IMAGE & TEXT SYNCHRONIZED) */}
-        <div className="lg:col-span-6 grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
+        <div className="lg:col-span-6 grid grid-cols-1 md:grid-cols-2 gap-6 xl:gap-8 items-stretch">
           {/* FEATURED IMAGE */}
-          <div className="w-full">
+          <div className="w-full h-full">
             <Link
               href={mainFeatured.href}
-              className="block w-full overflow-hidden group"
+              className="block w-full aspect-[4/3] md:aspect-auto md:h-full min-h-[190px] relative overflow-hidden group bg-gray-100"
             >
               <img
                 src={mainFeatured.image}
@@ -236,7 +236,7 @@ export default function LatestNewsSection() {
                     e.currentTarget.src = "https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=700&h=525&fit=crop";
                   }
                 }}
-                className="w-full h-auto block object-contain group-hover:scale-105 transition-transform duration-300"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               />
             </Link>
           </div>
@@ -329,7 +329,7 @@ export default function LatestNewsSection() {
           ))}
         </div>
         {/* COLUMN 4: NEWSLETTER CARD */}
-        <div className="lg:col-span-3 bg-transparent rounded-2xl p-6 pb-9 flex flex-col justify-between border border-red-100 shadow-sm min-h-[320px]">
+        <div className="lg:col-span-3 bg-transparent rounded-2xl p-4 xl:p-6 pb-6 xl:pb-9 flex flex-col justify-between border border-red-100 shadow-sm min-h-[300px]">
 
           {/* Header Row & Envelope Graphic */}
           <div className="flex items-start justify-between gap-2 mb-4">

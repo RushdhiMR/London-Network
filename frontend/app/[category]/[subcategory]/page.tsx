@@ -1479,32 +1479,46 @@ export default async function SubcategoryPage({ params }: PageProps) {
       const allArticles = await readArticlesStore();
       const clean = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
       const currentSlugClean = clean(subcategory);
-      const catClean = clean(category);
-      const categoryArticles = allArticles.filter((a) => {
+      const effectiveCat = (category && category.toLowerCase() !== "article") ? category : (newsData?.category && newsData.category.toLowerCase() !== "article" ? newsData.category : "");
+      const catClean = clean(effectiveCat);
+
+      const published = allArticles.filter((a) => {
         if ((a.status || "").toLowerCase() !== "published") return false;
-        // Exclude the current article
         const aSlug = clean(a.slug || "");
         const aTitle = clean(a.title || "");
         if (aSlug === currentSlugClean || aTitle === currentSlugClean) return false;
-        // Match by category slug or category name
-        const aCatSlug = clean(a.category_slug || "");
-        const aCatName = clean(a.category_name || a.category || "");
-        return aCatSlug === catClean || aCatName === catClean || aCatSlug.includes(catClean) || catClean.includes(aCatSlug);
+        return true;
       });
-      // Sort by most recent
-      categoryArticles.sort((a, b) => {
-        const da = a.published_at ? new Date(a.published_at).getTime() : 0;
-        const db2 = b.published_at ? new Date(b.published_at).getTime() : 0;
-        return db2 - da;
-      });
-      sidebarPicks = categoryArticles.slice(0, 10).map((a) => {
+
+      const getViews = (a: any) => Number(a.views || a.reads_count || a.reads || 0);
+
+      let matching = (catClean && category !== "article")
+        ? published.filter((a) => {
+            const aCatSlug = clean(a.category_slug || "");
+            const aCatName = clean(a.category_name || a.category || "");
+            return aCatSlug === catClean || aCatName === catClean || aCatSlug.includes(catClean) || catClean.includes(aCatSlug);
+          })
+        : published;
+
+      matching.sort((a, b) => getViews(b) - getViews(a));
+
+      if (matching.length < 10) {
+        const remaining = [...published].sort((a, b) => getViews(b) - getViews(a));
+        for (const post of remaining) {
+          if (!matching.some((m) => String(m.id) === String(post.id))) {
+            matching.push(post);
+            if (matching.length >= 10) break;
+          }
+        }
+      }
+
+      sidebarPicks = matching.slice(0, 10).map((a) => {
         const artSlug = a.slug || a.title?.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "";
-        const artCatSlug = a.category_slug || category;
-        const href = `/${artCatSlug}/${artSlug}`;
+        const href = `/article/${artSlug}`;
         const image = (a.imageUrl || a.image || a.image_url || "").trim() || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=150&h=150&fit=crop";
         return {
           title: a.title,
-          date: a.date || (a.published_at ? new Date(a.published_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : ""),
+          date: a.date || (a.published_at ? new Date(a.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""),
           image,
           href,
         };

@@ -40,7 +40,6 @@ import {
   Search,
   Bookmark,
   Share2,
-  MessageSquare,
   Loader2,
   Edit3,
   Type,
@@ -110,6 +109,7 @@ const ALL_SUB_CATEGORIES = [
 ];
 
 const WORLD_SUBCATEGORIES = [
+  "World News",
   "China",
   "United States",
   "Europe",
@@ -3057,7 +3057,7 @@ function isWorldOrWorldSub(cat: string): boolean {
                             <span className="text-[10px] font-extrabold uppercase text-[#D31220] tracking-wider font-mono">
                               World Regions
                             </span>
-                            <span className="text-[9px] text-slate-400 font-mono">7 Regions</span>
+                            <span className="text-[9px] text-slate-400 font-mono">{WORLD_SUBCATEGORIES.length} Regions</span>
                           </div>
                           
                           <div className="space-y-0.5 flex-1">
@@ -3889,7 +3889,6 @@ function isWorldOrWorldSub(cat: string): boolean {
                 <div className="mt-8 pt-6 border-t border-zinc-200 font-sans">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-bold text-black uppercase tracking-wider font-standard-sans flex items-center gap-2">
-                      <MessageSquare size={16} className="text-[#BF1E2D]" />
                       <span>Comments</span>
                       <span className="text-[11px] bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded-full font-mono font-bold">
                         0
@@ -3898,9 +3897,6 @@ function isWorldOrWorldSub(cat: string): boolean {
                   </div>
 
                   <div className="bg-slate-50/90 border border-slate-200 rounded-2xl p-6 sm:p-7 mb-8 text-center shadow-2xs">
-                    <div className="w-11 h-11 rounded-full bg-red-50 text-[#BF1E2D] flex items-center justify-center mx-auto mb-3 border border-red-100 shadow-2xs">
-                      <MessageSquare size={20} />
-                    </div>
                     <h4 className="text-sm font-bold text-slate-900 mb-1 font-standard-sans">
                       Sign in to Join the Conversation
                     </h4>

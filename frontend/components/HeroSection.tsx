@@ -231,18 +231,18 @@ export default function HeroSection() {
 
   return (
     <section className="max-w-[1400px] mx-auto px-4 md:px-6 pt-6 pb-0 font-sans">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-stretch">
         
         {/* LEFT CARD: FEATURED ARTICLE CAROUSEL (~67% GRID WIDTH, FIXED HEIGHT FOR EXACT SAME IMAGE SIZE) */}
         <div
-          className="lg:col-span-8 bg-white border border-gray-200 rounded-none flex flex-col lg:flex-row items-stretch min-h-[360px] h-auto lg:h-[360px] overflow-hidden"
+          className="lg:col-span-8 bg-white border border-gray-200 rounded-none flex flex-col lg:flex-row items-stretch min-h-[300px] h-auto lg:h-[320px] xl:h-[335px] overflow-hidden"
           onMouseEnter={() => { isPaused.current = true; }}
           onMouseLeave={() => { isPaused.current = false; }}
         >
           
-          {/* WIDESCREEN RECTANGLE IMAGE (60% Width, Exact Same Size & Aspect Ratio Across All Slides) */}
-          <div className="lg:w-[60%] w-full h-[260px] sm:h-[300px] lg:h-full relative flex-shrink-0 group overflow-hidden bg-gray-900">
-            <Link href={activeArticle.href} className="block w-full h-full">
+          {/* WIDESCREEN RECTANGLE IMAGE (Exact Same Size & Aspect Ratio Across All Slides) */}
+          <div className="lg:w-[56%] xl:w-[58%] w-full h-[240px] sm:h-[280px] lg:h-full relative flex-shrink-0 group overflow-hidden bg-gray-900">
+            <Link href={activeArticle.href} className="block w-full h-full relative">
               <img
                 src={activeArticle.image}
                 alt={activeArticle.title}
@@ -260,23 +260,23 @@ export default function HeroSection() {
             </Link>
           </div>
 
-          {/* RIGHT TEXT DETAILS (40% Width Desktop, Fixed Card Height Matching Image Height) */}
-          <div className="w-full lg:w-[40%] p-4 sm:p-5 flex flex-col justify-between h-auto lg:h-full bg-white min-w-0">
+          {/* RIGHT TEXT DETAILS (Fixed Card Height Matching Image Height) */}
+          <div className="w-full lg:w-[44%] xl:w-[42%] p-3.5 sm:p-4 xl:p-4.5 flex flex-col justify-between h-auto lg:h-full bg-white min-w-0">
             <div className="w-full">
               {/* Category Subtitle */}
-              <span className="text-[#D31220] font-black text-[11px] tracking-wider uppercase mb-1.5 block font-sans">
+              <span className="text-[#D31220] font-black text-[11px] tracking-wider uppercase mb-1 block font-sans">
                 {activeArticle.category}
               </span>
 
               {/* Main Title - FULL UNTRUNCATED TITLE */}
-              <h1 className="text-base sm:text-lg lg:text-[20px] font-bold leading-snug mb-2.5 text-gray-900 font-serif whitespace-normal break-words line-clamp-3">
+              <h1 className="text-base sm:text-lg lg:text-[17.5px] xl:text-[19px] font-bold leading-snug mb-2 text-gray-900 font-serif whitespace-normal break-words line-clamp-2 sm:line-clamp-3">
                 <Link href={activeArticle.href} className="hover:text-[#D31220] transition-colors block">
                   {activeArticle.title}
                 </Link>
               </h1>
 
               {/* Excerpt - FULL UNTRUNCATED DESCRIPTION */}
-              <p className="text-gray-600 text-xs sm:text-[13px] leading-relaxed mb-4 font-sans whitespace-normal break-words line-clamp-3">
+              <p className="text-gray-600 text-xs sm:text-[12.5px] xl:text-[13px] leading-relaxed mb-2.5 font-sans whitespace-normal break-words line-clamp-2 sm:line-clamp-3">
                 {activeArticle.excerpt}
               </p>
 
@@ -293,8 +293,8 @@ export default function HeroSection() {
                 });
 
                 return (
-                  <div className="flex items-center gap-2 mb-3" suppressHydrationWarning>
-                    <div className="w-6 h-6 rounded-full overflow-hidden bg-[#1E293B] text-white flex items-center justify-center font-bold text-[10px] flex-shrink-0" suppressHydrationWarning>
+                  <div className="flex items-center gap-2 mb-2" suppressHydrationWarning>
+                    <div className="w-5.5 h-5.5 rounded-full overflow-hidden bg-[#1E293B] text-white flex items-center justify-center font-bold text-[9.5px] flex-shrink-0" suppressHydrationWarning>
                       {liveAvatar && liveAvatar.length > 5 ? (
                         <img
                           src={liveAvatar}
@@ -309,7 +309,7 @@ export default function HeroSection() {
                         <span>{(authorName || "RM").slice(0, 2).toUpperCase()}</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 text-[11px] font-sans flex-wrap" suppressHydrationWarning>
+                    <div className="flex items-center gap-1 text-[10.5px] font-sans flex-wrap" suppressHydrationWarning>
                       <span className="font-bold text-gray-900">
                         By {authorName}
                       </span>
@@ -323,7 +323,7 @@ export default function HeroSection() {
             </div>
 
             {/* Bottom Control Bar: Dots & Nav Arrows */}
-            <div className="flex items-center justify-between pt-3 border-t border-gray-100 mt-auto w-full">
+            <div className="flex items-center justify-between pt-2 border-t border-gray-100 mt-auto w-full">
               {/* Carousel Dots */}
               <div className="flex items-center gap-1.5">
                 {allCarouselArticles.map((_, idx) => (
@@ -341,20 +341,20 @@ export default function HeroSection() {
               </div>
 
               {/* Nav Arrows (< and >) */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <button
                   onClick={handlePrevSlide}
-                  className="w-9 h-9 border border-gray-200 rounded-none flex items-center justify-center text-gray-700 hover:border-gray-400 hover:text-black transition-colors cursor-pointer bg-white shadow-sm"
+                  className="w-8 h-8 border border-gray-200 rounded-none flex items-center justify-center text-gray-700 hover:border-gray-400 hover:text-black transition-colors cursor-pointer bg-white shadow-sm"
                   aria-label="Previous slide"
                 >
-                  <ChevronLeft size={18} strokeWidth={2.2} />
+                  <ChevronLeft size={16} strokeWidth={2.2} />
                 </button>
                 <button
                   onClick={handleNextSlide}
-                  className="w-9 h-9 border border-gray-200 rounded-none flex items-center justify-center text-gray-700 hover:border-gray-400 hover:text-black transition-colors cursor-pointer bg-white shadow-sm"
+                  className="w-8 h-8 border border-gray-200 rounded-none flex items-center justify-center text-gray-700 hover:border-gray-400 hover:text-black transition-colors cursor-pointer bg-white shadow-sm"
                   aria-label="Next slide"
                 >
-                  <ChevronRight size={18} strokeWidth={2.2} />
+                  <ChevronRight size={16} strokeWidth={2.2} />
                 </button>
               </div>
             </div>
@@ -364,7 +364,7 @@ export default function HeroSection() {
         </div>
 
         {/* RIGHT CARD: TRENDING NOW BOX (~33% GRID WIDTH, MATCHES LEFT CARD EXACT HEIGHT) */}
-        <div className="w-full lg:col-span-4 bg-white border border-gray-200 rounded-none p-3.5 sm:p-4 flex flex-col justify-between h-auto lg:h-[360px]">
+        <div className="w-full lg:col-span-4 bg-white border border-gray-200 rounded-none p-3 sm:p-3.5 xl:p-4 flex flex-col justify-between min-h-[300px] h-auto lg:h-[320px] xl:h-[335px] overflow-hidden">
           <div className="flex flex-col justify-between h-full">
             {/* Header */}
             <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-gray-100">
@@ -377,14 +377,14 @@ export default function HeroSection() {
             </div>
 
             {/* List */}
-            <div className="space-y-2.5 flex-1 flex flex-col justify-between">
+            <div className="space-y-1.5 lg:space-y-1.5 xl:space-y-2 flex-1 flex flex-col justify-between">
               {trendingList.map((item, idx) => (
                 <div 
                   key={`trending-item-${idx}-${item.title || item.href}`}
                   className="flex items-center gap-3 p-1.5 rounded hover:bg-gray-50 transition-colors group cursor-pointer"
                 >
                   {/* Item Image */}
-                  <div className="relative w-16 h-12 flex-shrink-0 bg-gray-100 overflow-hidden border border-gray-200">
+                  <div className="relative w-14 h-11 lg:w-14 lg:h-11 xl:w-16 xl:h-12 flex-shrink-0 bg-gray-100 overflow-hidden border border-gray-200">
                     <img 
                       src={item.image} 
                       alt={item.title}
@@ -412,7 +412,7 @@ export default function HeroSection() {
                       </span>
                       <span className="text-[9px] text-gray-400">• {item.time}</span>
                     </div>
-                    <Link href={item.href} className="text-xs font-bold text-gray-900 group-hover:text-[#D31220] transition-colors line-clamp-1 leading-snug block font-serif">
+                    <Link href={item.href} className="text-xs lg:text-[11.5px] xl:text-xs font-bold text-gray-900 group-hover:text-[#D31220] transition-colors line-clamp-2 leading-snug block font-serif">
                       {item.title}
                     </Link>
                   </div>
@@ -426,7 +426,7 @@ export default function HeroSection() {
       </div>
 
       {/* SECTION DIVIDER LINE MATCHING CONTENT WIDTH */}
-      <div className="border-b border-gray-200 mt-6 w-full" />
+      <div className="border-b border-gray-200 mt-8 mb-2 w-full" />
     </section>
   );
 }

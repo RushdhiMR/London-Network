@@ -204,18 +204,18 @@ function LoginFormContent() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col font-sans text-slate-900 selection:bg-red-100 selection:text-red-900">
-      {/* MAIN PLAIN PAGE CONTAINER */}
-      <main className="flex-1 bg-white py-12 lg:py-16 flex items-center justify-center">
-        <div className="w-full max-w-[440px] mx-auto px-4 font-sans text-slate-900">
+    <div className="min-h-screen w-full bg-white flex font-sans text-slate-900 selection:bg-red-100 selection:text-red-900">
+      {/* LEFT COLUMN: LOGIN CARD */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-8 lg:p-12 min-h-screen bg-slate-50/40">
+        <div className="w-full max-w-[420px] bg-white border border-slate-100/80 rounded-2xl p-6 sm:p-8 shadow-[0_10px_40px_rgba(0,0,0,0.06)] font-sans text-slate-900">
           
           {/* Logo & Corporate Title */}
-          <div className="flex flex-col items-center mb-8 text-center">
-            <Link href="/" className="inline-block hover:opacity-90 transition-opacity mb-4">
+          <div className="flex flex-col items-center mb-6 text-center">
+            <Link href="/" className="inline-block hover:opacity-90 transition-opacity mb-3">
               <img
                 src="/header_logo.png"
                 alt="London BigBen Network"
-                className="h-9 sm:h-10 w-auto object-contain"
+                className="h-8 sm:h-9 w-auto object-contain"
               />
             </Link>
 
@@ -227,7 +227,7 @@ function LoginFormContent() {
 
           {/* Success Banner */}
           {successMessage && (
-            <div className="mb-6 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold p-4 rounded-xl text-center shadow-xs flex items-center justify-center gap-2">
+            <div className="mb-5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold p-3.5 rounded-xl text-center shadow-xs flex items-center justify-center gap-2">
               <span className="text-base">✓</span>
               <span>{successMessage}</span>
             </div>
@@ -235,20 +235,20 @@ function LoginFormContent() {
 
           {/* Error Banner */}
           {errorMessage && (
-            <div className="mb-6 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold p-4 rounded-xl text-center shadow-xs flex items-center justify-center gap-2">
+            <div className="mb-5 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold p-3.5 rounded-xl text-center shadow-xs flex items-center justify-center gap-2">
               <span className="text-base">⚠</span>
               <span>{errorMessage}</span>
             </div>
           )}
 
           {/* Official Google Sign In Section */}
-          <div className="w-full mb-6">
+          <div className="w-full mb-5">
             <button 
               onClick={handleGoogleSignIn}
               disabled={isSubmitting || isGoogleLoading}
               type="button"
               aria-label="Continue with Google"
-              className="w-full h-11 sm:h-12 flex items-center justify-center gap-3 bg-white hover:bg-slate-50/90 active:bg-slate-100 active:scale-[0.99] border border-slate-200 hover:border-slate-300 rounded-xl text-sm font-semibold text-slate-700 hover:text-slate-900 shadow-2xs hover:shadow-xs transition-all duration-150 cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-300/40 focus:border-slate-400 disabled:opacity-60 disabled:cursor-not-allowed select-none"
+              className="w-full h-11 flex items-center justify-center gap-3 bg-white hover:bg-slate-50/90 active:bg-slate-100 active:scale-[0.99] border border-slate-200 hover:border-slate-300 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 hover:text-slate-900 shadow-2xs hover:shadow-xs transition-all duration-150 cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-300/40 focus:border-slate-400 disabled:opacity-60 disabled:cursor-not-allowed select-none"
             >
               {isGoogleLoading ? (
                 <>
@@ -256,7 +256,7 @@ function LoginFormContent() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <span className="font-medium text-slate-600 text-sm">Connecting to Google...</span>
+                  <span className="font-medium text-slate-600 text-xs sm:text-sm">Connecting to Google...</span>
                 </>
               ) : (
                 <>
@@ -292,9 +292,9 @@ function LoginFormContent() {
           </div>
 
           {/* Separator */}
-          <div className="relative flex items-center mb-6">
+          <div className="relative flex items-center mb-5">
             <div className="flex-grow border-t border-slate-200"></div>
-            <span className="flex-shrink mx-4 text-xs font-medium text-slate-400">
+            <span className="flex-shrink mx-3 text-xs font-medium text-slate-400">
               or continue with email
             </span>
             <div className="flex-grow border-t border-slate-200"></div>
@@ -307,7 +307,7 @@ function LoginFormContent() {
             <input type="password" name="fake_autofill_password" style={{ display: 'none' }} tabIndex={-1} aria-hidden="true" autoComplete="new-password" />
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-2">
+              <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
                 BUSINESS EMAIL ADDRESS
               </label>
               <input
@@ -317,15 +317,15 @@ function LoginFormContent() {
                 placeholder="e.g. yourname@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/50 focus:bg-white font-medium"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/30 focus:bg-white"
                 required
               />
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                  PASSCODE / PASSWORD
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+                  PASSWORD
                 </label>
                 <Link
                   href="/forgot-password"
@@ -340,16 +340,16 @@ function LoginFormContent() {
                   type={showPassword ? "text" : "password"}
                   name="dj_login_pass_no_autofill"
                   autoComplete="new-password"
-                  placeholder="Enter passcode"
+                  placeholder="Enter password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 pr-10 py-3 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/50 focus:bg-white"
+                  className="w-full px-3.5 pr-10 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/30 focus:bg-white"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer p-1"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer p-1"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
@@ -366,11 +366,11 @@ function LoginFormContent() {
               </div>
             </div>
 
-            <div className="pt-3">
+            <div className="pt-2">
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full bg-[#0F172A] hover:bg-[#1E293B] active:scale-[0.99] text-white font-bold text-sm py-3.5 rounded-xl transition-all uppercase tracking-wider cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2 shadow-md"
+                className="w-full bg-[#111827] hover:bg-[#1f2937] active:scale-[0.99] text-white font-semibold text-sm py-3 rounded-xl transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
               >
                 {isSubmitting ? (
                   <>
@@ -378,19 +378,16 @@ function LoginFormContent() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    VERIFYING IDENTITY...
+                    <span>Signing in...</span>
                   </>
                 ) : (
-                  <>
-                    <Lock size={15} />
-                    <span>SIGN IN TO ACCOUNT</span>
-                  </>
+                  <span>Sign in to account →</span>
                 )}
               </button>
             </div>
           </form>
 
-          <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+          <div className="mt-6 pt-4 text-center">
             <Link
               href={searchParams?.get("redirect") ? `/register?redirect=${encodeURIComponent(searchParams.get("redirect")!)}` : "/register"}
               className="text-xs text-slate-600 hover:text-slate-900 transition-colors font-medium"
@@ -400,7 +397,16 @@ function LoginFormContent() {
           </div>
 
         </div>
-      </main>
+      </div>
+
+      {/* RIGHT COLUMN: LONDON WALLPAPER (DESKTOP) */}
+      <div className="hidden lg:block lg:w-1/2 relative min-h-screen overflow-hidden">
+        <img
+          src="/login_bg.jpg"
+          alt="London City - Big Ben & Westminster"
+          className="absolute inset-0 w-full h-full object-cover object-center"
+        />
+      </div>
     </div>
   );
 }

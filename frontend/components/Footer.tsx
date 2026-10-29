@@ -6,7 +6,12 @@ import Image from "next/image";
 import { FaFacebook, FaInstagram, FaLinkedin } from "react-icons/fa";
 import { SiRumble } from "react-icons/si";
 
-export default function Footer() {
+interface FooterProps {
+  className?: string;
+  hideTopBar?: boolean;
+}
+
+export default function Footer({ className, hideTopBar = false }: FooterProps = {}) {
   const [activeEdition, setActiveEdition] = useState("United States");
 
   const newsCategories = [
@@ -54,9 +59,11 @@ export default function Footer() {
   ];
 
   return (
-    <footer className="bg-black text-white mt-20 border-t border-zinc-900 relative select-none">
+    <footer className={`bg-black text-white ${className !== undefined ? className : "mt-8"} ${hideTopBar ? "border-t-0" : "border-t border-zinc-900"} relative select-none`}>
       {/* Top 3px Brand Accent Bar */}
-      <div className="h-[3px] w-full bg-gradient-to-r from-[#BF1E2D] via-[#D31220] to-[#8B0E19]" />
+      {!hideTopBar && (
+        <div className="h-[3px] w-full bg-gradient-to-r from-[#BF1E2D] via-[#D31220] to-[#8B0E19]" />
+      )}
 
       <div className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8">
         {/* BRAND TOP ROW */}
@@ -177,7 +184,7 @@ export default function Footer() {
             <ul className="space-y-2.5 text-[13px]">
               <li>
                 <a
-                  href="https://facebook.com"
+                  href="https://www.facebook.com/profile.php?id=61595875686714"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2.5 text-zinc-400 hover:text-white hover:translate-x-1 transition-all group"
@@ -188,7 +195,7 @@ export default function Footer() {
               </li>
               <li>
                 <a
-                  href="https://linkedin.com"
+                  href="https://www.linkedin.com/company/london-bigben"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2.5 text-zinc-400 hover:text-white hover:translate-x-1 transition-all group"
@@ -199,7 +206,7 @@ export default function Footer() {
               </li>
               <li>
                 <a
-                  href="https://instagram.com"
+                  href="https://www.instagram.com/news.londonbigben/"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2.5 text-zinc-400 hover:text-white hover:translate-x-1 transition-all group"

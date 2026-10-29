@@ -269,3 +269,14 @@ body.translated-rtl {
   background-color: transparent !important;
   box-shadow: none !important;
 }
+
+/* PC VIEW: Match laptop view layout with balanced proportional empty space on both sides */
+@media (min-width: 1400px) {
+  .max-w-\[1400px\],
+  .max-w-\[1360px\] {
+    max-width: min(92vw, 1750px) !important;
+  }
+  .max-w-\[1180px\] {
+    max-width: min(85vw, 1480px) !important;
+  }
+}
