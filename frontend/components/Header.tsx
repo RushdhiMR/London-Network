@@ -631,8 +631,13 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
     setIsSearchFocused(false);
   }, [pathname]);
 
-  // Scroll progress / Article reading completion tracking
+  // Scroll progress / Article reading completion tracking (only active on article pages)
   useEffect(() => {
+    if (!showProgressBar) {
+      setReadingProgress(0);
+      return;
+    }
+
     let ticking = false;
 
     const calculateProgress = () => {
@@ -689,7 +694,7 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
       window.removeEventListener("scroll", handleScroll);
       window.removeEventListener("resize", handleScroll);
     };
-  }, [pathname]);
+  }, [pathname, showProgressBar]);
 
   const isCurrentCategoryActive = (cat: { name: string; href: string }) => {
     if (!pathname) return false;
@@ -1108,7 +1113,7 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
         </div>
 
         {/* Article Reading Completion Bar */}
-        {(showProgressBar || readingProgress > 0) && (
+        {showProgressBar && readingProgress > 0 && (
           <div
             className="absolute bottom-0 left-0 right-0 w-full h-[3.5px] bg-transparent pointer-events-none z-50 overflow-hidden"
             aria-hidden="true"
