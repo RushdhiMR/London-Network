@@ -83,7 +83,7 @@ export default function BusinessGrid() {
     <section className="max-w-[1400px] mx-auto px-4 md:px-6 py-8 font-sans">
       
       {/* SECTION HEADER: Red Accent Bar + Title */}
-      <div className="flex items-center gap-2 mb-2.5">
+      <div className="flex items-center gap-2 mb-6 md:mb-2.5">
         <div className="w-[4px] h-5 bg-[#D31220]" />
         <h2 className="text-lg md:text-xl font-bold text-gray-900 tracking-tight font-sans">
           Business
@@ -91,7 +91,7 @@ export default function BusinessGrid() {
       </div>
 
       {/* FULL-WIDTH DIVIDER LINE */}
-      <div className="border-b-2 border-gray-400/80 mb-8 w-full" />
+      <div className="hidden md:block border-b-2 border-gray-400/80 mb-8 w-full" />
 
       {/* TOP ROW: 4-Column Grid (3 columns for Main Story + 1 column for Top-Right Ad Box) */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-stretch mb-8">
