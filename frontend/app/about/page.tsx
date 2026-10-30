@@ -475,7 +475,7 @@ export default function AboutUsPage() {
                 Our team brings together experienced journalists, editors, creators, and industry experts from around the world.
               </p>
               <Link
-                href="/about#team"
+                href="/team"
                 className="text-[#BF1E2D] hover:underline text-xs sm:text-sm font-semibold flex items-center gap-1 shrink-0 whitespace-nowrap"
               >
                 <span>View All Team Members</span>

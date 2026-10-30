@@ -40,6 +40,8 @@ const STATIC_PREFIXES = [
   "/advertise",
   "/advertise-with-us",
   "/journal-of-record",
+  "/team",
+  "/our-team",
   // Dynamic routes (/, /news, /business, /newsletters, /subscribe, /reader, /writer, /admin, etc.)
   // must wait for real database/API data and dispatchPageDataReady().
 ];
