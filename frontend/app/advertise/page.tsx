@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { Send, CheckCircle2, AlertCircle, ChevronDown, Building2, User, Mail, Phone, MessageSquare, Newspaper, Sparkles } from "lucide-react";
+import { Send, CheckCircle2, AlertCircle, ChevronDown, Building2, User, Mail, Phone, MessageSquare, Newspaper } from "lucide-react";
 
 export default function AdvertiseWithUsPage() {
   const [formData, setFormData] = useState({
@@ -131,12 +131,11 @@ export default function AdvertiseWithUsPage() {
         
         {/* BRAND EMBLEM TITLE OVERLAY */}
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 select-none">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white text-[11px] font-mono font-bold uppercase tracking-widest mb-3">
-            <Sparkles className="w-3.5 h-3.5 text-[#D31220]" />
+          <div className="inline-flex items-center px-3.5 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white text-[11px] font-mono font-bold uppercase tracking-widest mb-3">
             Commercial Solutions &amp; Partnerships
           </div>
-          <h1 className="font-serif font-black text-3xl sm:text-5xl lg:text-6xl text-white tracking-tight uppercase drop-shadow-md">
-            LONDON BIGBEN
+          <h1 className="font-sans font-bold text-3xl sm:text-5xl lg:text-6xl text-white tracking-tight drop-shadow-md">
+            London Bigben
           </h1>
           <div className="w-16 h-1 bg-[#D31220] mt-3"></div>
         </div>
