@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { Mail, Phone, MapPin, Send, CheckCircle2, AlertCircle, Clock, ShieldCheck, MessageSquare } from "lucide-react";
+import { Send, CheckCircle2, AlertCircle, MessageSquare } from "lucide-react";
 
 export default function ContactUsPage() {
   const [formData, setFormData] = useState({
@@ -155,55 +155,39 @@ export default function ContactUsPage() {
               {/* DIRECT CHANNELS */}
               <div className="space-y-4">
                 <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-sm hover:border-slate-300 transition-colors">
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-red-50 text-[#BF1E2D] flex items-center justify-center shrink-0 border border-red-100 font-bold">
-                      <Mail className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="font-serif font-bold text-slate-900 text-base">Press &amp; Newsroom</h3>
-                      <p className="text-xs text-slate-500 mt-0.5">News tips, media inquiries, press releases &amp; corrections</p>
-                      <a href="mailto:press@londonbigben.com" className="inline-block mt-2 font-mono text-xs font-bold text-[#BF1E2D] hover:underline">
-                        press@londonbigben.com
-                      </a>
-                    </div>
+                  <div>
+                    <h3 className="font-serif font-bold text-slate-900 text-base">Press &amp; Newsroom</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">News tips, media inquiries, press releases &amp; corrections</p>
+                    <a href="mailto:press@londonbigben.com" className="inline-block mt-2 font-mono text-xs font-bold text-[#BF1E2D] hover:underline">
+                      press@londonbigben.com
+                    </a>
                   </div>
                 </div>
 
                 <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-sm hover:border-slate-300 transition-colors">
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100 font-bold">
-                      <ShieldCheck className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="font-serif font-bold text-slate-900 text-base">Advertising &amp; Partnerships</h3>
-                      <p className="text-xs text-slate-500 mt-0.5">Commercial campaigns, brand sponsorships &amp; partnerships</p>
-                      <a href="mailto:press@londonbigben.com" className="inline-block mt-2 font-mono text-xs font-bold text-blue-600 hover:underline">
-                        press@londonbigben.com
-                      </a>
-                    </div>
+                  <div>
+                    <h3 className="font-serif font-bold text-slate-900 text-base">Advertising &amp; Partnerships</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Commercial campaigns, brand sponsorships &amp; partnerships</p>
+                    <a href="mailto:press@londonbigben.com" className="inline-block mt-2 font-mono text-xs font-bold text-blue-600 hover:underline">
+                      press@londonbigben.com
+                    </a>
                   </div>
                 </div>
 
                 <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-sm hover:border-slate-300 transition-colors">
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-800 flex items-center justify-center shrink-0 border border-slate-200 font-bold">
-                      <MapPin className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="font-serif font-bold text-slate-900 text-base">Headquarters & Press Bureau</h3>
-                      <p className="text-xs text-slate-500 mt-0.5">1 Canada Square, Canary Wharf, London E14 5AA, United Kingdom</p>
-                      <p className="mt-2 font-mono text-xs text-slate-700 font-semibold">
-                        Tel: +44 20 7946 0912
-                      </p>
-                    </div>
+                  <div>
+                    <h3 className="font-serif font-bold text-slate-900 text-base">Headquarters &amp; Press Bureau</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">1 Canada Square, Canary Wharf, London E14 5AA, United Kingdom</p>
+                    <p className="mt-2 font-mono text-xs text-slate-700 font-semibold">
+                      Tel: +44 20 7946 0912
+                    </p>
                   </div>
                 </div>
               </div>
 
               {/* OPERATING HOURS */}
               <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/60">
-                <div className="flex items-center gap-2 text-xs font-mono font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  <Clock className="w-4 h-4 text-[#BF1E2D]" />
+                <div className="text-xs font-mono font-bold text-slate-700 uppercase tracking-wider mb-2">
                   Editorial Desk Hours
                 </div>
                 <p className="text-xs text-slate-600 leading-relaxed">
