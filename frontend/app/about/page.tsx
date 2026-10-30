@@ -423,32 +423,32 @@ export default function AboutUsPage() {
 
               {/* 3 Pillars */}
               <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-0 divide-y sm:divide-y-0 sm:divide-x divide-slate-300/80">
-                <div className="sm:pr-6 lg:pr-8">
-                  <h3 className="font-serif font-bold text-base sm:text-lg text-slate-900 mb-1.5">
+                <div className="pb-6 sm:pb-0 sm:pr-6 lg:pr-8">
+                  <h3 className="font-serif font-bold text-xl sm:text-2xl text-slate-900 mb-2">
                     Accuracy
                   </h3>
-                  <div className="w-5 h-[2px] bg-[#BF1E2D] mb-3" />
-                  <p className="text-slate-600 text-xs sm:text-[13px] leading-relaxed">
+                  <div className="w-8 h-[3px] bg-[#BF1E2D] mb-3" />
+                  <p className="text-slate-700 text-sm sm:text-[15px] leading-relaxed">
                     We verify, fact-check, and report with integrity.
                   </p>
                 </div>
 
-                <div className="pt-5 sm:pt-0 sm:px-6 lg:px-8">
-                  <h3 className="font-serif font-bold text-base sm:text-lg text-slate-900 mb-1.5">
+                <div className="py-6 sm:py-0 sm:px-6 lg:px-8">
+                  <h3 className="font-serif font-bold text-xl sm:text-2xl text-slate-900 mb-2">
                     Independence
                   </h3>
-                  <div className="w-5 h-[2px] bg-[#BF1E2D] mb-3" />
-                  <p className="text-slate-600 text-xs sm:text-[13px] leading-relaxed">
+                  <div className="w-8 h-[3px] bg-[#BF1E2D] mb-3" />
+                  <p className="text-slate-700 text-sm sm:text-[15px] leading-relaxed">
                     No agendas. No affiliations. Just the truth.
                   </p>
                 </div>
 
-                <div className="pt-5 sm:pt-0 sm:pl-6 lg:pl-8">
-                  <h3 className="font-serif font-bold text-base sm:text-lg text-slate-900 mb-1.5">
+                <div className="pt-6 sm:pt-0 sm:pl-6 lg:pl-8">
+                  <h3 className="font-serif font-bold text-xl sm:text-2xl text-slate-900 mb-2">
                     Public Interest
                   </h3>
-                  <div className="w-5 h-[2px] bg-[#BF1E2D] mb-3" />
-                  <p className="text-slate-600 text-xs sm:text-[13px] leading-relaxed">
+                  <div className="w-8 h-[3px] bg-[#BF1E2D] mb-3" />
+                  <p className="text-slate-700 text-sm sm:text-[15px] leading-relaxed">
                     We inform, empower, and give a voice to what matters.
                   </p>
                 </div>
