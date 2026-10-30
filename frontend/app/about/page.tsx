@@ -233,10 +233,10 @@ export default function AboutUsPage() {
                   Who We Are
                 </h2>
                 <div className="w-7 h-[2.5px] bg-[#BF1E2D] mb-4" />
-                <p className="text-slate-600 text-xs sm:text-[13.5px] leading-relaxed mb-4">
+                <p className="text-slate-700 text-sm sm:text-base leading-relaxed mb-4">
                   London BigBen Network is an independent digital news platform committed to delivering credible, balanced, and insightful journalism from around the globe. We bring together a team of experienced journalists, editors, and creators who are passionate about telling stories that matter — locally, nationally, and internationally.
                 </p>
-                <p className="text-slate-600 text-xs sm:text-[13.5px] leading-relaxed">
+                <p className="text-slate-700 text-sm sm:text-base leading-relaxed">
                   Our newsroom is built on trust, integrity, and a deep respect for the public&apos;s right to know.
                 </p>
               </div>
@@ -328,21 +328,21 @@ export default function AboutUsPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8">
                 <div>
-                  <h3 className="font-serif font-bold text-base sm:text-lg text-slate-900 mb-1.5">
+                  <h3 className="font-serif font-bold text-lg sm:text-xl text-slate-900 mb-1.5">
                     Our Mission
                   </h3>
-                  <div className="w-5 h-[2px] bg-[#BF1E2D] mb-3" />
-                  <p className="text-slate-600 text-xs sm:text-[13px] leading-relaxed">
+                  <div className="w-7 h-[2.5px] bg-[#BF1E2D] mb-3" />
+                  <p className="text-slate-700 text-sm sm:text-base leading-relaxed">
                     To empower individuals through credible journalism by providing fair, accurate, and accessible news.
                   </p>
                 </div>
 
                 <div className="border-t sm:border-t-0 sm:border-l border-slate-200 pt-5 sm:pt-0 sm:pl-8">
-                  <h3 className="font-serif font-bold text-base sm:text-lg text-slate-900 mb-1.5">
+                  <h3 className="font-serif font-bold text-lg sm:text-xl text-slate-900 mb-1.5">
                     Our Vision
                   </h3>
-                  <div className="w-5 h-[2px] bg-[#BF1E2D] mb-3" />
-                  <p className="text-slate-600 text-xs sm:text-[13px] leading-relaxed">
+                  <div className="w-7 h-[2.5px] bg-[#BF1E2D] mb-3" />
+                  <p className="text-slate-700 text-sm sm:text-base leading-relaxed">
                     To become a global platform known for trust, integrity, innovation, and meaningful public dialogue.
                   </p>
                 </div>
@@ -363,7 +363,7 @@ export default function AboutUsPage() {
                 A Wide Range of Topics
               </h2>
             </div>
-            <p className="text-slate-600 text-xs sm:text-[13px] leading-relaxed max-w-md">
+            <p className="text-slate-700 text-sm sm:text-base leading-relaxed max-w-lg">
               We publish professional content across key areas, providing in-depth analysis, expert insights, and diverse perspectives to keep you informed.
             </p>
           </div>
@@ -471,7 +471,7 @@ export default function AboutUsPage() {
               </h2>
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
-              <p className="text-slate-600 text-xs sm:text-[13px] max-w-md">
+              <p className="text-slate-700 text-sm sm:text-base max-w-lg">
                 Our team brings together experienced journalists, editors, creators, and industry experts from around the world.
               </p>
               <Link
