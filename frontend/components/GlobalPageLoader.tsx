@@ -42,6 +42,8 @@ const STATIC_PREFIXES = [
   "/journal-of-record",
   "/team",
   "/our-team",
+  "/site-map",
+  "/sitemap",
   // Dynamic routes (/, /news, /business, /newsletters, /subscribe, /reader, /writer, /admin, etc.)
   // must wait for real database/API data and dispatchPageDataReady().
 ];

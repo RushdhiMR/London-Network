@@ -48,6 +48,7 @@ export default function Footer({ className, hideTopBar = false }: FooterProps = 
     { name: "Editorial Policy", href: "/editorial-policy" },
     { name: "Advertise with us", href: "/advertise" },
     { name: "RSS Feed", href: "/sitemap.xml" },
+    { name: "Site Map", href: "/sitemap" },
   ];
 
   const editions = [
