@@ -195,7 +195,7 @@ export default function AboutUsPage() {
                   </h1>
 
                   {/* Description */}
-                  <p className="text-slate-600 text-xs sm:text-[13px] md:text-[13.5px] leading-relaxed max-w-sm sm:max-w-md mb-5 sm:mb-6 font-sans">
+                  <p className="text-slate-600 text-xs sm:text-[13px] md:text-[13.5px] leading-relaxed max-w-[210px] sm:max-w-md mb-5 sm:mb-6 font-sans">
                     We deliver accurate, timely, and impactful journalism that informs, educates, and empowers people around the world.
                   </p>
 
