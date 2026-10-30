@@ -173,25 +173,15 @@ export default function AboutUsPage() {
                     "linear-gradient(to right, #FAF7F3 0%, #FAF7F3 32%, rgba(250, 247, 243, 0.45) 55%, rgba(250, 247, 243, 0) 75%), url('/about_hero_bg_fade.jpg')",
                 }}
               >
-                <div className="relative z-10 w-full max-w-[540px] py-8 sm:py-10 lg:py-12 pl-6 sm:pl-10 lg:pl-12 pr-4 flex flex-col justify-center">
-                  {/* Logo */}
-                  <Link
-                    href="/"
-                    title="London BigBen Network Home"
-                    className="inline-block mb-3.5 sm:mb-4 lg:mb-5 group w-fit"
-                  >
-                    <img
-                      src="/header_logo.png"
-                      alt="London BigBen Network"
-                      className="h-7 sm:h-8 lg:h-9 w-auto object-contain"
-                    />
-                  </Link>
-
+                <div className="relative z-10 w-full max-w-[540px] pt-6 pb-8 sm:py-10 lg:py-12 pl-6 sm:pl-10 lg:pl-12 pr-4 flex flex-col justify-center">
                   {/* Main Heading */}
                   <h1 className="font-serif font-black text-2xl sm:text-3xl md:text-4xl lg:text-[40px] text-slate-900 leading-[1.12] tracking-tight mb-2.5 sm:mb-3">
                     Independent<br />
                     News for a<br />
-                    <span className="text-[#BF1E2D]">Brighter Tomorrow.</span>
+                    <span className="text-[#BF1E2D]">
+                      Brighter<br />
+                      Tomorrow.
+                    </span>
                   </h1>
 
                   {/* Description */}
