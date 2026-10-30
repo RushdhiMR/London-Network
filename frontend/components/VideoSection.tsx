@@ -17,7 +17,7 @@ const isDirectVideo = (url: string) => Boolean(url && (/\.(mp4|webm|mov|ogg)($|\
 
 export default function VideoSection() {
   const [videos, setVideos] = useState<ReelVideo[]>(DEFAULT_REELS_VIDEOS);
-  const [activePlayingSlot, setActivePlayingSlot] = useState<number | null>(null);
+  const [activePlayingVideo, setActivePlayingVideo] = useState<ReelVideo | null>(null);
   const [mainVideoHeight, setMainVideoHeight] = useState<number | null>(null);
   const [isDesktop, setIsDesktop] = useState(false);
   const mainVideoRef = useRef<HTMLDivElement>(null);
@@ -77,15 +77,46 @@ export default function VideoSection() {
   // Find right-side advertisement if configured in admin
   const sidebarAd = adSlots.find((s) => s.id === "slot-homepage-7" || s.id === "slot-video-sidebar");
 
-  const isMainPlaying = activePlayingSlot === 1;
-
-  const handlePlaySlot = (slotNum: number) => {
-    setActivePlayingSlot(slotNum);
+  const handlePlayVideo = (video: ReelVideo) => {
+    setActivePlayingVideo(video);
+    if (mainVideoRef.current) {
+      const rect = mainVideoRef.current.getBoundingClientRect();
+      if (rect.top < 60 || rect.bottom < 200) {
+        mainVideoRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
   };
 
-  const handleStopSlot = () => {
-    setActivePlayingSlot(null);
+  const handleStopVideo = () => {
+    setActivePlayingVideo(null);
   };
+
+  // Automatically reset to original state when YouTube video ends
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        if (data?.event === "onStateChange" && (data?.info === 0 || data?.data === 0)) {
+          handleStopVideo();
+        }
+      } catch {
+        // ignore non-JSON messages
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
+
+  // Allow closing video with Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && activePlayingVideo) {
+        handleStopVideo();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activePlayingVideo]);
 
   return (
     <section className="max-w-[1400px] mx-auto px-4 md:px-6 pt-10 pb-4 font-sans">
@@ -104,20 +135,21 @@ export default function VideoSection() {
             ref={mainVideoRef}
             className="group relative w-full aspect-[16/9] md:aspect-[16/9.2] bg-slate-900 overflow-hidden shadow-sm"
           >
-            {isMainPlaying ? (
+            {activePlayingVideo ? (
               <div className="w-full h-full relative bg-black">
-                {isDirectVideo(mainVideo.videoUrl) ? (
+                {isDirectVideo(activePlayingVideo.videoUrl) ? (
                   <video
-                    src={mainVideo.videoUrl}
+                    src={activePlayingVideo.videoUrl}
                     controls
                     autoPlay
                     playsInline
+                    onEnded={handleStopVideo}
                     className="w-full h-full object-contain bg-black"
                   />
                 ) : (
                   <iframe
-                    src={getEmbedVideoUrl(mainVideo.videoUrl)}
-                    title={mainVideo.title}
+                    src={getEmbedVideoUrl(activePlayingVideo.videoUrl)}
+                    title={activePlayingVideo.title}
                     className="w-full h-full border-0"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                     allowFullScreen
@@ -127,7 +159,7 @@ export default function VideoSection() {
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleStopSlot();
+                    handleStopVideo();
                   }}
                   className="absolute top-3 right-3 z-20 px-3 py-1.5 rounded-lg bg-black/80 hover:bg-black text-white text-xs font-bold border border-white/20 transition-all flex items-center gap-1.5 cursor-pointer shadow-lg backdrop-blur-xs"
                   title="Close player"
@@ -138,7 +170,7 @@ export default function VideoSection() {
               </div>
             ) : (
               <div
-                onClick={() => handlePlaySlot(1)}
+                onClick={() => handlePlayVideo(mainVideo)}
                 className="w-full h-full cursor-pointer relative"
               >
                 {/* Background Thumbnail */}
@@ -185,81 +217,60 @@ export default function VideoSection() {
             )}
           </div>
 
-          {/* 3 Bottom Videos in a 3-Column Row (Each plays in its own place) */}
+          {/* 3 Bottom Videos in a 3-Column Row */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-5 mt-5">
             {filledBottomVideos.map((item, idx) => {
               const itemSlot = item.slot || (idx + 2);
-              const isItemPlaying = activePlayingSlot === itemSlot;
+              const isThisItemPlayingAbove =
+                activePlayingVideo?.id === item.id ||
+                (activePlayingVideo?.videoUrl === item.videoUrl && activePlayingVideo?.title === item.title);
               return (
                 <div
                   key={`video-slot-${itemSlot}`}
                   className="group flex flex-col"
                 >
-                  {/* Container: Plays in place if active, else shows thumbnail with transparent play button */}
-                  <div className="relative aspect-[16/10] w-full bg-slate-900 overflow-hidden shadow-xs">
-                    {isItemPlaying ? (
-                      <div className="w-full h-full relative bg-black">
-                        {isDirectVideo(item.videoUrl) ? (
-                          <video
-                            src={item.videoUrl}
-                            controls
-                            autoPlay
-                            playsInline
-                            className="w-full h-full object-contain bg-black"
-                          />
-                        ) : (
-                          <iframe
-                            src={getEmbedVideoUrl(item.videoUrl)}
-                            title={item.title}
-                            className="w-full h-full border-0"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                            allowFullScreen
-                          />
-                        )}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleStopSlot();
-                          }}
-                          className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded bg-black/80 hover:bg-black text-white text-[10.5px] font-bold border border-white/25 transition-all flex items-center gap-1 cursor-pointer shadow-md backdrop-blur-xs"
-                          title="Close player"
-                        >
-                          <X className="w-3 h-3" />
-                          <span>Close</span>
-                        </button>
+                  {/* Container: Clicking promotes video to the bigger position to play */}
+                  <div
+                    onClick={() => handlePlayVideo(item)}
+                    className="relative aspect-[16/10] w-full bg-slate-900 overflow-hidden shadow-xs cursor-pointer"
+                  >
+                    <img
+                      src={item.thumbnailUrl}
+                      alt={item.title}
+                      className={`w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 ${
+                        isThisItemPlayingAbove ? "opacity-75" : ""
+                      }`}
+                    />
+
+                    {/* If playing above: display active playing indicator; else normal transparent play button */}
+                    {isThisItemPlayingAbove ? (
+                      <div className="absolute inset-0 bg-black/55 backdrop-blur-xs flex items-center justify-center">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#D31220] text-white text-[11px] font-bold shadow-md">
+                          <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                          Playing Above
+                        </span>
                       </div>
                     ) : (
-                      <div
-                        onClick={() => handlePlaySlot(itemSlot)}
-                        className="w-full h-full relative cursor-pointer"
-                      >
-                        <img
-                          src={item.thumbnailUrl}
-                          alt={item.title}
-                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                        />
-
-                        {/* Center Transparent Play Button */}
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <div className="w-10 h-10 md:w-11 md:h-11 aspect-square shrink-0 rounded-full bg-black/40 hover:bg-black/60 border border-white/80 text-white flex items-center justify-center backdrop-blur-md shadow-lg transition-all duration-300 group-hover:scale-110 group-hover:border-white">
-                            <Play className="w-4 h-4 md:w-4.5 md:h-4.5 fill-white text-white translate-x-0.5 drop-shadow-sm" />
-                          </div>
-                        </div>
-
-                        {/* Duration Pill at bottom left */}
-                        <div className="absolute bottom-2 left-2 bg-black/80 text-white text-[10px] font-mono px-1.5 py-0.5 rounded flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-white/80" />
-                          <span>{item.duration}</span>
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="w-10 h-10 md:w-11 md:h-11 aspect-square shrink-0 rounded-full bg-black/40 hover:bg-black/60 border border-white/80 text-white flex items-center justify-center backdrop-blur-md shadow-lg transition-all duration-300 group-hover:scale-110 group-hover:border-white">
+                          <Play className="w-4 h-4 md:w-4.5 md:h-4.5 fill-white text-white translate-x-0.5 drop-shadow-sm" />
                         </div>
                       </div>
                     )}
+
+                    {/* Duration Pill at bottom left */}
+                    <div className="absolute bottom-2 left-2 bg-black/80 text-white text-[10px] font-mono px-1.5 py-0.5 rounded flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-white/80" />
+                      <span>{item.duration}</span>
+                    </div>
                   </div>
 
                   {/* Title */}
                   <h4
-                    onClick={() => handlePlaySlot(itemSlot)}
-                    className="font-serif font-bold text-slate-900 text-xs sm:text-[13px] md:text-sm leading-snug line-clamp-2 mt-2.5 cursor-pointer hover:text-[#D31220] transition-colors"
+                    onClick={() => handlePlayVideo(item)}
+                    className={`font-serif font-bold text-slate-900 text-xs sm:text-[13px] md:text-sm leading-snug line-clamp-2 mt-2.5 cursor-pointer hover:text-[#D31220] transition-colors ${
+                      isThisItemPlayingAbove ? "text-[#D31220]" : ""
+                    }`}
                   >
                     {item.title}
                   </h4>
@@ -306,70 +317,53 @@ export default function VideoSection() {
 
           {/* Video Section Under Ad Banner (Slot 5) */}
           <div className="group flex flex-col mt-5">
-            <div className="relative aspect-[16/10] w-full bg-slate-900 overflow-hidden shadow-xs">
-              {activePlayingSlot === (slot5.slot || 5) ? (
-                <div className="w-full h-full relative bg-black">
-                  {isDirectVideo(slot5.videoUrl) ? (
-                    <video
-                      src={slot5.videoUrl}
-                      controls
-                      autoPlay
-                      playsInline
-                      className="w-full h-full object-contain bg-black"
-                    />
-                  ) : (
-                    <iframe
-                      src={getEmbedVideoUrl(slot5.videoUrl)}
-                      title={slot5.title}
-                      className="w-full h-full border-0"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                      allowFullScreen
-                    />
-                  )}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleStopSlot();
-                    }}
-                    className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded bg-black/80 hover:bg-black text-white text-[10.5px] font-bold border border-white/25 transition-all flex items-center gap-1 cursor-pointer shadow-md backdrop-blur-xs"
-                    title="Close player"
-                  >
-                    <X className="w-3 h-3" />
-                    <span>Close</span>
-                  </button>
+            <div
+              onClick={() => handlePlayVideo(slot5)}
+              className="relative aspect-[16/10] w-full bg-slate-900 overflow-hidden shadow-xs cursor-pointer"
+            >
+              <img
+                src={slot5.thumbnailUrl}
+                alt={slot5.title}
+                className={`w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 ${
+                  activePlayingVideo?.id === slot5.id ||
+                  (activePlayingVideo?.videoUrl === slot5.videoUrl && activePlayingVideo?.title === slot5.title)
+                    ? "opacity-75"
+                    : ""
+                }`}
+              />
+
+              {activePlayingVideo?.id === slot5.id ||
+              (activePlayingVideo?.videoUrl === slot5.videoUrl && activePlayingVideo?.title === slot5.title) ? (
+                <div className="absolute inset-0 bg-black/55 backdrop-blur-xs flex items-center justify-center">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#D31220] text-white text-[11px] font-bold shadow-md">
+                    <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                    Playing Above
+                  </span>
                 </div>
               ) : (
-                <div
-                  onClick={() => handlePlaySlot(slot5.slot || 5)}
-                  className="w-full h-full relative cursor-pointer"
-                >
-                  <img
-                    src={slot5.thumbnailUrl}
-                    alt={slot5.title}
-                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  />
-
-                  {/* Center Transparent Play Button */}
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-10 h-10 md:w-11 md:h-11 aspect-square shrink-0 rounded-full bg-black/40 hover:bg-black/60 border border-white/80 text-white flex items-center justify-center backdrop-blur-md shadow-lg transition-all duration-300 group-hover:scale-110 group-hover:border-white">
-                      <Play className="w-4 h-4 md:w-4.5 md:h-4.5 fill-white text-white translate-x-0.5 drop-shadow-sm" />
-                    </div>
-                  </div>
-
-                  {/* Duration Pill at bottom left */}
-                  <div className="absolute bottom-2 left-2 bg-black/80 text-white text-[10px] font-mono px-1.5 py-0.5 rounded flex items-center gap-1">
-                    <Clock className="w-3 h-3 text-white/80" />
-                    <span>{slot5.duration}</span>
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-10 h-10 md:w-11 md:h-11 aspect-square shrink-0 rounded-full bg-black/40 hover:bg-black/60 border border-white/80 text-white flex items-center justify-center backdrop-blur-md shadow-lg transition-all duration-300 group-hover:scale-110 group-hover:border-white">
+                    <Play className="w-4 h-4 md:w-4.5 md:h-4.5 fill-white text-white translate-x-0.5 drop-shadow-sm" />
                   </div>
                 </div>
               )}
+
+              {/* Duration Pill at bottom left */}
+              <div className="absolute bottom-2 left-2 bg-black/80 text-white text-[10px] font-mono px-1.5 py-0.5 rounded flex items-center gap-1">
+                <Clock className="w-3 h-3 text-white/80" />
+                <span>{slot5.duration}</span>
+              </div>
             </div>
 
             {/* Title */}
             <h4
-              onClick={() => handlePlaySlot(slot5.slot || 5)}
-              className="font-serif font-bold text-slate-900 text-xs sm:text-[13px] md:text-sm leading-snug line-clamp-2 mt-2.5 cursor-pointer hover:text-[#D31220] transition-colors"
+              onClick={() => handlePlayVideo(slot5)}
+              className={`font-serif font-bold text-slate-900 text-xs sm:text-[13px] md:text-sm leading-snug line-clamp-2 mt-2.5 cursor-pointer hover:text-[#D31220] transition-colors ${
+                activePlayingVideo?.id === slot5.id ||
+                (activePlayingVideo?.videoUrl === slot5.videoUrl && activePlayingVideo?.title === slot5.title)
+                  ? "text-[#D31220]"
+                  : ""
+              }`}
             >
               {slot5.title}
             </h4>

@@ -36,7 +36,7 @@ export const DEFAULT_REELS_VIDEOS: ReelVideo[] = [
     platform: "YouTube Shorts",
     status: "Active",
     title: "Mortgage Rates Hit 7 Percent: What's Next for the Housing Market?",
-    videoUrl: "https://www.youtube.com/watch?v=p7HKvqZ_J2E",
+    videoUrl: "https://www.youtube.com/watch?v=ScMzIvxBSi4",
     thumbnailUrl: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=600&h=400&fit=crop",
     duration: "4:15",
     sourceBadge: "YouTube Shorts",
@@ -224,7 +224,7 @@ export function getEmbedVideoUrl(url: string): string {
   // 1. YouTube
   const ytId = extractYouTubeId(clean);
   if (ytId) {
-    return `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&rel=0`;
+    return `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&rel=0&enablejsapi=1`;
   }
 
   // 2. Rumble
