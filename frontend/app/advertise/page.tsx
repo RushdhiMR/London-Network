@@ -160,47 +160,47 @@ export default function AdvertiseWithUsPage() {
 
             {/* SERVICES SECTION */}
             <div className="pt-2">
-              <h3 className="text-[11px] font-extrabold font-mono uppercase tracking-widest text-slate-900 mb-6 border-b border-slate-200/80 pb-2">
+              <h3 className="text-xs sm:text-[13px] font-extrabold font-mono uppercase tracking-widest text-slate-900 mb-6 border-b border-slate-200/80 pb-2.5">
                 OUR SERVICES
               </h3>
 
-              <div className="space-y-6">
+              <div className="space-y-7 sm:space-y-8">
                 {/* Service 1 */}
                 <div className="group">
-                  <h4 className="text-sm font-black text-slate-900 group-hover:text-[#D31220] transition-colors">
+                  <h4 className="text-lg sm:text-xl font-bold text-slate-900 group-hover:text-[#D31220] transition-colors">
                     Publish Company Article
                   </h4>
-                  <p className="text-xs text-slate-500 leading-relaxed mt-1">
+                  <p className="text-sm sm:text-[15px] text-slate-600 leading-relaxed mt-1.5">
                     Feature your brand&apos;s growth, announcement, or milestone with our premium editorial formatting.
                   </p>
                 </div>
 
                 {/* Service 2 */}
                 <div className="group">
-                  <h4 className="text-sm font-black text-slate-900 group-hover:text-[#D31220] transition-colors">
+                  <h4 className="text-lg sm:text-xl font-bold text-slate-900 group-hover:text-[#D31220] transition-colors">
                     Publish CEO Profile
                   </h4>
-                  <p className="text-xs text-slate-500 leading-relaxed mt-1">
+                  <p className="text-sm sm:text-[15px] text-slate-600 leading-relaxed mt-1.5">
                     Get an exclusive written interview profiling your CEO&apos;s vision, leadership, and company direction.
                   </p>
                 </div>
 
                 {/* Service 3 */}
                 <div className="group">
-                  <h4 className="text-sm font-black text-slate-900 group-hover:text-[#D31220] transition-colors">
+                  <h4 className="text-lg sm:text-xl font-bold text-slate-900 group-hover:text-[#D31220] transition-colors">
                     Report News
                   </h4>
-                  <p className="text-xs text-slate-500 leading-relaxed mt-1">
+                  <p className="text-sm sm:text-[15px] text-slate-600 leading-relaxed mt-1.5">
                     Collaborate with our reporting team to share key press developments or exclusive industry insights.
                   </p>
                 </div>
 
                 {/* Service 4 */}
                 <div className="group">
-                  <h4 className="text-sm font-black text-slate-900 group-hover:text-[#D31220] transition-colors">
+                  <h4 className="text-lg sm:text-xl font-bold text-slate-900 group-hover:text-[#D31220] transition-colors">
                     London BigBen Magazine
                   </h4>
-                  <p className="text-xs text-slate-500 leading-relaxed mt-1">
+                  <p className="text-sm sm:text-[15px] text-slate-600 leading-relaxed mt-1.5">
                     Reserve a premium print or digital full-page ad placement inside our quarterly business magazine.
                   </p>
                 </div>
