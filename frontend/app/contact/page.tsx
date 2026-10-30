@@ -128,8 +128,8 @@ export default function ContactUsPage() {
               <MessageSquare className="w-3.5 h-3.5" />
               Direct Communication Desk
             </div>
-            <h1 className="text-3xl md:text-5xl lg:text-6xl font-serif font-black tracking-tight text-white uppercase max-w-4xl leading-tight drop-shadow-md">
-              Contact London BigBen Network
+            <h1 className="text-3xl md:text-5xl lg:text-6xl font-sans font-bold tracking-tight text-white max-w-4xl leading-tight drop-shadow-md">
+              Contact London Bigben Network
             </h1>
             <p className="mt-4 text-zinc-200 text-base md:text-lg max-w-2xl font-light leading-relaxed drop-shadow-sm">
               Reach our global editorial newsroom, commercial partnerships division, executive team, or support desk.
