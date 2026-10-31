@@ -48,7 +48,7 @@ export default function AuthorProfileContent({
   const [authorProfile, setAuthorProfile] = useState(author);
   const [articlesList, setArticlesList] = useState<ArticleItem[]>([]);
   const [mostReadItems, setMostReadItems] = useState<SidebarItem[]>(mostReadSidebar);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [visibleCount, setVisibleCount] = useState(10);
   const [isLoaded, setIsLoaded] = useState(false);
   const [profileVersion, setProfileVersion] = useState(0);
   const { articles: liveArticles } = useLiveArticles();
@@ -70,6 +70,7 @@ export default function AuthorProfileContent({
   }, []);
 
   useEffect(() => {
+    setVisibleCount(10);
     try {
       const slugClean = slug.toLowerCase().replace(/-/g, " ").trim();
 
@@ -265,18 +266,12 @@ export default function AuthorProfileContent({
     };
   }, [slug, authorProfile.name]);
 
-  const ITEMS_PER_PAGE = 10;
-  const totalPages = Math.max(1, Math.ceil(articlesList.length / ITEMS_PER_PAGE));
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const paginatedArticles = articlesList.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  const PAGE_SIZE = 10;
+  const visibleArticles = articlesList.slice(0, visibleCount);
+  const hasMore = visibleCount < articlesList.length;
 
-  const handlePageChange = (newPage: number) => {
-    if (newPage >= 1 && newPage <= totalPages) {
-      setCurrentPage(newPage);
-      if (typeof window !== "undefined") {
-        window.scrollTo({ top: 280, behavior: "smooth" });
-      }
-    }
+  const handleLoadMore = () => {
+    setVisibleCount((prev) => prev + PAGE_SIZE);
   };
 
   return (
@@ -329,8 +324,8 @@ export default function AuthorProfileContent({
 
           {/* Left Column: Author Articles List */}
           <div className="lg:col-span-8 space-y-8">
-            {paginatedArticles.length > 0 ? (
-              paginatedArticles.map((article, idx) => (
+            {visibleArticles.length > 0 ? (
+              visibleArticles.map((article, idx) => (
                 <div key={idx} className="flex flex-col sm:flex-row gap-5 pb-8 border-b border-zinc-100 last:border-none group cursor-pointer">
                   {/* Thumbnail Image */}
                   <Link href={article.href} className="relative w-full sm:w-[220px] h-[180px] sm:h-[140px] flex-shrink-0 overflow-hidden bg-gray-100 rounded-lg border border-zinc-200 block">
@@ -410,42 +405,14 @@ export default function AuthorProfileContent({
               </div>
             )}
 
-            {/* Dynamic Interactive Pagination Controls (10 items per page) */}
-            {articlesList.length > 0 && (
-              <div className="flex items-center justify-center gap-2 pt-8 font-sans text-[12px] flex-wrap">
+            {/* Load More Button */}
+            {hasMore && (
+              <div className="flex items-center justify-center pt-8">
                 <button
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className={`px-4 py-2 border font-bold rounded transition-colors ${currentPage === 1
-                      ? "border-zinc-200 text-zinc-400 cursor-not-allowed bg-zinc-50"
-                      : "border-zinc-300 text-slate-800 hover:border-[#BF1E2D] hover:text-[#BF1E2D] cursor-pointer bg-white"
-                    }`}
+                  onClick={handleLoadMore}
+                  className="px-8 py-3 bg-white hover:bg-[#BF1E2D] text-slate-800 hover:text-white border-2 border-zinc-300 hover:border-[#BF1E2D] font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-xs rounded"
                 >
-                  PREV
-                </button>
-
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
-                  <button
-                    key={`page-${pageNum}`}
-                    onClick={() => handlePageChange(pageNum)}
-                    className={`w-9 h-9 font-bold flex items-center justify-center rounded border transition-colors cursor-pointer ${currentPage === pageNum
-                        ? "border-[#BF1E2D] bg-[#BF1E2D] text-white shadow-sm"
-                        : "border-zinc-200 bg-white text-slate-700 hover:border-[#BF1E2D] hover:text-[#BF1E2D]"
-                      }`}
-                  >
-                    {pageNum}
-                  </button>
-                ))}
-
-                <button
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                  className={`px-4 py-2 border font-bold rounded transition-colors ${currentPage === totalPages
-                      ? "border-zinc-200 text-zinc-400 cursor-not-allowed bg-zinc-50"
-                      : "border-zinc-300 text-slate-800 hover:border-[#BF1E2D] hover:text-[#BF1E2D] cursor-pointer bg-white"
-                    }`}
-                >
-                  NEXT
+                  Load More
                 </button>
               </div>
             )}
