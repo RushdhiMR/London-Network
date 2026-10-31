@@ -407,12 +407,12 @@ export default function HeroSection() {
                   {/* Content */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-[9.5px] font-extrabold text-[#D31220] uppercase tracking-wider">
+                      <span className="text-[10.5px] lg:text-[10px] xl:text-[11px] font-extrabold text-[#D31220] uppercase tracking-wider">
                         {item.category}
                       </span>
-                      <span className="text-[9px] text-gray-400">• {item.time}</span>
+                      <span className="text-[10px] lg:text-[9.5px] xl:text-[10px] text-gray-400">• {item.time}</span>
                     </div>
-                    <Link href={item.href} className="text-xs lg:text-[11.5px] xl:text-xs font-bold text-gray-900 group-hover:text-[#D31220] transition-colors line-clamp-2 leading-snug block font-serif">
+                    <Link href={item.href} className="text-[13.5px] sm:text-sm lg:text-[12.5px] xl:text-[13.5px] font-bold text-gray-900 group-hover:text-[#D31220] transition-colors line-clamp-2 leading-snug block font-serif">
                       {item.title}
                     </Link>
                   </div>
