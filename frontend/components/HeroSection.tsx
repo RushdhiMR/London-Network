@@ -235,13 +235,13 @@ export default function HeroSection() {
         
         {/* LEFT CARD: FEATURED ARTICLE CAROUSEL (~67% GRID WIDTH, FIXED HEIGHT FOR EXACT SAME IMAGE SIZE) */}
         <div
-          className="lg:col-span-8 bg-white border border-gray-200 rounded-none flex flex-col lg:flex-row items-stretch min-h-[300px] h-auto lg:h-[320px] xl:h-[335px] overflow-hidden"
+          className="lg:col-span-8 bg-white border border-gray-200 rounded-none flex flex-col lg:flex-row items-stretch min-h-[320px] h-auto lg:h-[355px] xl:h-[370px] overflow-hidden"
           onMouseEnter={() => { isPaused.current = true; }}
           onMouseLeave={() => { isPaused.current = false; }}
         >
           
           {/* WIDESCREEN RECTANGLE IMAGE (Exact Same Size & Aspect Ratio Across All Slides) */}
-          <div className="lg:w-[56%] xl:w-[58%] w-full h-[240px] sm:h-[280px] lg:h-full relative flex-shrink-0 group overflow-hidden bg-gray-900">
+          <div className="lg:w-[56%] xl:w-[58%] w-full h-[260px] sm:h-[300px] lg:h-full relative flex-shrink-0 group overflow-hidden bg-gray-900">
             <Link href={activeArticle.href} className="block w-full h-full relative">
               <img
                 src={activeArticle.image}
@@ -364,7 +364,7 @@ export default function HeroSection() {
         </div>
 
         {/* RIGHT CARD: TRENDING NOW BOX (~33% GRID WIDTH, MATCHES LEFT CARD EXACT HEIGHT) */}
-        <div className="w-full lg:col-span-4 bg-white border border-gray-200 rounded-none p-3 sm:p-3.5 xl:p-4 flex flex-col justify-between min-h-[300px] h-auto lg:h-[320px] xl:h-[335px] overflow-hidden">
+        <div className="w-full lg:col-span-4 bg-white border border-gray-200 rounded-none p-3 sm:p-3.5 xl:p-4 flex flex-col justify-between min-h-[320px] h-auto lg:h-[355px] xl:h-[370px] overflow-hidden">
           <div className="flex flex-col justify-between h-full">
             {/* Header */}
             <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-gray-100">
