@@ -250,10 +250,10 @@ export default function HeroSection() {
                 className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300 rounded-none"
               />
               <div className="absolute bottom-3 left-3 flex items-center gap-1.5 z-10">
-                <span className="bg-[#D31220] text-white text-[10px] font-black uppercase px-2.5 py-0.5 tracking-wider">
+                <span className="bg-[#D31220] text-white text-[10px] font-poppins font-normal uppercase px-2.5 py-0.5 tracking-wider">
                   {activeArticle.category}
                 </span>
-                <span className="bg-black/80 text-white text-[10px] font-black uppercase px-2.5 py-0.5 tracking-wider">
+                <span className="bg-black/80 text-white text-[10px] font-poppins font-normal uppercase px-2.5 py-0.5 tracking-wider">
                   {activeArticle.readTime}
                 </span>
               </div>
