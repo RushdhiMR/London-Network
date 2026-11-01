@@ -1,5 +1,5 @@
 /* Global styles for London BigBen */
-@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300;1,400;1,600;1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400;1,700&family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300;1,400;1,600;1,700&display=swap');
 @import "tailwindcss";
 
 @layer base {
@@ -38,12 +38,20 @@
   .font-poppins {
     font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif !important;
   }
+  .font-editorial-serif {
+    font-family: 'Merriweather', Georgia, 'Times New Roman', serif !important;
+  }
   .article-body-poppins,
   .article-body-poppins *,
   .article-content-editor,
   .article-content-editor * {
     font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif !important;
   }
+}
+
+.font-editorial-serif,
+.font-editorial-serif * {
+  font-family: 'Merriweather', Georgia, 'Times New Roman', serif !important;
 }
 
 .font-poppins,
@@ -214,9 +222,8 @@ p.has-drop-cap-box::first-letter {
   margin-top: 0.5rem !important;
   text-align: left !important;
   clear: both !important;
-  display: flex !important;
-  justify-content: space-between !important;
-  align-items: center !important;
+  display: block !important;
+  line-height: 1.4 !important;
 }
 
 .prose p {

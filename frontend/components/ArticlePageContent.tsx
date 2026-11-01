@@ -88,6 +88,11 @@ interface ArticlePageContentProps {
   sidebarPicks: SidebarItem[];
 }
 
+function formatCategorySlug(cat?: string | null): string {
+  if (!cat) return "news";
+  return cat.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || "news";
+}
+
 function parseCaptionAndCredit(rawCaption: string, rawCredit?: string) {
   if (rawCredit && rawCredit.trim()) {
     const cleanCredit = rawCredit.trim().replace(/^\(?(photo:?\s*)?/i, "").replace(/\)?$/, "");
@@ -246,6 +251,14 @@ function ArticlePageContentInner({
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [isArticleResolved, setIsArticleResolved] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const handleCopyLink = () => {
+    if (typeof window !== "undefined") {
+      navigator.clipboard.writeText(window.location.href);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    }
+  };
   const { adSlots } = useLiveAdSlots();
 
   useEffect(() => {
@@ -469,115 +482,66 @@ function ArticlePageContentInner({
     });
   }, [liveArticles, activeNewsData, newsData, category, parent]);
 
-  // "Most read" articles: Top articles sorted by views from the clicked article's category only
-  const mostReadArticles = useMemo(() => {
-    const currentId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
-    const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
 
-    const getViews = (a: any, index: number): number => {
-      if (a?.views && typeof a.views === "number" && a.views > 0) return a.views;
-      if (a?.reads_count && typeof a.reads_count === "number" && a.reads_count > 0) return a.reads_count;
-      if (a?.viewsCount && typeof a.viewsCount === "number" && a.viewsCount > 0) return a.viewsCount;
-      const seed = typeof a?.id === "number" ? a.id : (parseInt(String(a?.id || "").replace(/\D/g, ""), 10) || (index + 1) * 37);
-      return Math.max(45, (seed * 17) % 350 + 55);
-    };
 
-    const targetCat = (
-      (activeNewsData?.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "") ||
-      (newsData?.category && newsData.category.toLowerCase() !== "article" ? newsData.category : "") ||
-      (category && category.toLowerCase() !== "article" ? category : "") ||
-      (parent?.name && parent.name.toLowerCase() !== "article" ? parent.name : "") ||
-      ""
-    ).trim();
-
-    const published = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
-      if (!p || (p.status || "").toLowerCase() !== "published") return false;
-      if (String(p.id) === currentId) return false;
-      if ((p.title || "").trim().toLowerCase() === currentTitle) return false;
-      return true;
-    });
-
-    let matchingPosts: any[] = [];
-    if (targetCat) {
-      const mainMatches = published.filter((p) => articleMatchesMainCategory(p, targetCat));
-      const subMatches = published.filter((p) => !articleMatchesMainCategory(p, targetCat) && articleBelongsToCategory(p, targetCat));
-      mainMatches.sort((a, b) => getViews(b, 0) - getViews(a, 0));
-      subMatches.sort((a, b) => getViews(b, 0) - getViews(a, 0));
-      matchingPosts = [...mainMatches, ...subMatches];
-    } else {
-      published.sort((a, b) => getViews(b, 0) - getViews(a, 0));
-      matchingPosts = published;
+  const keyPointsList = useMemo(() => {
+    if ((activeNewsData as any)?.keyPoints && Array.isArray((activeNewsData as any).keyPoints) && (activeNewsData as any).keyPoints.length > 0) {
+      return (activeNewsData as any).keyPoints.slice(0, 4);
     }
-
-    return matchingPosts.slice(0, 8).map((post) => {
-      const cat = (post.category || post.category_name || "world").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
-      const postSlug = (post.slug || post.title || "")
-        .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, "")
-        .trim()
-        .replace(/\s+/g, "-");
-
-      return {
-        id: String(post.id),
-        title: post.title,
-        href: `/article/${post.slug || postSlug}`
-      };
-    });
-  }, [liveArticles, activeNewsData, newsData, category, parent]);
-
-  // 10 Most popular articles for the right sidebar
-  const popularSidebarArticles = useMemo(() => {
-    const currentId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
-    const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
-
-    const getViews = (a: any, index: number): number => {
-      if (a?.views && typeof a.views === "number" && a.views > 0) return a.views;
-      if (a?.reads_count && typeof a.reads_count === "number" && a.reads_count > 0) return a.reads_count;
-      if (a?.viewsCount && typeof a.viewsCount === "number" && a.viewsCount > 0) return a.viewsCount;
-      const seed = typeof a?.id === "number" ? a.id : (parseInt(String(a?.id || "").replace(/\D/g, ""), 10) || (index + 1) * 37);
-      return Math.max(45, (seed * 17) % 350 + 55);
-    };
-
-    const targetCat = (
-      (activeNewsData?.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "") ||
-      (newsData?.category && newsData.category.toLowerCase() !== "article" ? newsData.category : "") ||
-      (category && category.toLowerCase() !== "article" ? category : "") ||
-      (parent?.name && parent.name.toLowerCase() !== "article" ? parent.name : "") ||
-      ""
-    ).trim();
-
-    const published = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
-      if (!p || (p.status || "").toLowerCase() !== "published") return false;
-      if (String(p.id) === currentId) return false;
-      if ((p.title || "").trim().toLowerCase() === currentTitle) return false;
-      return true;
-    });
-
-    if (published.length === 0 && Array.isArray(sidebarPicks) && sidebarPicks.length > 0) {
-      return sidebarPicks.slice(0, 10);
-    }
-
-    let matchingPosts: any[] = [];
-    if (targetCat && parent?.name && parent.name.toLowerCase() !== "article") {
-      const mainMatches = published.filter((p) => articleMatchesMainCategory(p, targetCat));
-      const subMatches = published.filter((p) => !articleMatchesMainCategory(p, targetCat) && articleBelongsToCategory(p, targetCat));
-      mainMatches.sort((a, b) => getViews(b, 0) - getViews(a, 0));
-      subMatches.sort((a, b) => getViews(b, 0) - getViews(a, 0));
-      matchingPosts = [...mainMatches, ...subMatches];
-    } else {
-      matchingPosts = [...published].sort((a, b) => getViews(b, 0) - getViews(a, 0));
-    }
-
-    // Always ensure 10 articles by filling with top popular articles
-    if (matchingPosts.length < 10) {
-      const remaining = [...published].sort((a, b) => getViews(b, 0) - getViews(a, 0));
-      for (const post of remaining) {
-        if (!matchingPosts.some((p) => String(p.id) === String(post.id))) {
-          matchingPosts.push(post);
-          if (matchingPosts.length >= 10) break;
+    if (activeNewsData?.sections && activeNewsData.sections.length > 0) {
+      const points: string[] = [];
+      for (const sec of activeNewsData.sections) {
+        const heading = (sec.heading || "").trim();
+        const isOverview = heading.toLowerCase() === "overview" || heading.toLowerCase() === (activeNewsData.caption || "").toLowerCase().trim();
+        if (heading && !isOverview) {
+          points.push(heading);
+          if (points.length >= 4) break;
         }
       }
+      if (points.length >= 2) return points;
     }
+    if (activeNewsData?.rawContent) {
+      const liMatches = activeNewsData.rawContent.match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+      if (liMatches && liMatches.length >= 2) {
+        return liMatches.slice(0, 4).map(li => li.replace(/<[^>]*>/g, "").trim());
+      }
+    }
+    if (activeNewsData?.caption) {
+      const sentences = activeNewsData.caption.split(/(?<=[.?!])\s+/).filter(s => s.trim().length > 15);
+      if (sentences.length >= 2) {
+        return sentences.slice(0, 4).map(s => s.replace(/\.$/, "").trim());
+      }
+    }
+    return [];
+  }, [activeNewsData]);
+
+  // Related News (4) and Most Read (5) for the right sidebar
+  const { relatedNewsArticles, mostReadArticles } = useMemo(() => {
+    const currentId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
+    const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
+
+    const getViews = (a: any, index: number): number => {
+      if (a?.views && typeof a.views === "number" && a.views > 0) return a.views;
+      if (a?.reads_count && typeof a.reads_count === "number" && a.reads_count > 0) return a.reads_count;
+      if (a?.viewsCount && typeof a.viewsCount === "number" && a.viewsCount > 0) return a.viewsCount;
+      const seed = typeof a?.id === "number" ? a.id : (parseInt(String(a?.id || "").replace(/\D/g, ""), 10) || (index + 1) * 37);
+      return Math.max(45, (seed * 17) % 350 + 55);
+    };
+
+    const targetCat = (
+      (activeNewsData?.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "") ||
+      (newsData?.category && newsData.category.toLowerCase() !== "article" ? newsData.category : "") ||
+      (category && category.toLowerCase() !== "article" ? category : "") ||
+      (parent?.name && parent.name.toLowerCase() !== "article" ? parent.name : "") ||
+      ""
+    ).trim();
+
+    const published = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
+      if (!p || (p.status || "").toLowerCase() !== "published") return false;
+      if (String(p.id) === currentId) return false;
+      if ((p.title || "").trim().toLowerCase() === currentTitle) return false;
+      return true;
+    });
 
     const formatSidebarDate = (post: any): string => {
       if (post.date && post.date !== "Just now" && post.date !== "Today") {
@@ -599,22 +563,55 @@ function ArticlePageContentInner({
       return post.date || "Recently";
     };
 
-    return matchingPosts.slice(0, 10).map((post) => {
+    const mapPost = (post: any) => {
       const postSlug = (post.slug || post.title || "")
         .toLowerCase()
         .replace(/[^a-z0-9\s-]/g, "")
         .trim()
         .replace(/\s+/g, "-");
-
+      const cat = (post.category && post.category.toLowerCase() !== "article" ? post.category : post.category_name) || targetCat || "NEWS";
       return {
         id: String(post.id),
         title: post.title,
+        category: cat.toUpperCase(),
         date: formatSidebarDate(post),
         image: post.imageUrl || post.image || (post as any).image_url || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=150&h=150&fit=crop",
         href: `/article/${post.slug || postSlug}`
       };
-    });
+    };
+
+    if (published.length === 0 && Array.isArray(sidebarPicks) && sidebarPicks.length > 0) {
+      const picks = sidebarPicks.map((sp, idx) => ({
+        id: String(idx),
+        title: sp.title,
+        category: targetCat ? targetCat.toUpperCase() : "NEWS",
+        date: sp.date,
+        image: sp.image,
+        href: sp.href
+      }));
+      return {
+        relatedNewsArticles: picks.slice(0, 4),
+        mostReadArticles: picks.slice(0, 5)
+      };
+    }
+
+    let relatedMatches: any[] = [];
+    if (targetCat && targetCat.toLowerCase() !== "article") {
+      relatedMatches = published.filter(p => articleBelongsToCategory(p, targetCat));
+    }
+    if (relatedMatches.length < 4) {
+      const remainder = published.filter(p => !relatedMatches.some(m => String(m.id) === String(p.id)));
+      relatedMatches = [...relatedMatches, ...remainder];
+    }
+    const relatedNewsArticles = relatedMatches.slice(0, 4).map(mapPost);
+
+    const sortedByViews = [...published].sort((a, b) => getViews(b, 0) - getViews(a, 0));
+    const mostReadArticles = sortedByViews.slice(0, 5).map(mapPost);
+
+    return { relatedNewsArticles, mostReadArticles };
   }, [liveArticles, activeNewsData, newsData, category, parent, sidebarPicks]);
+
+  const popularSidebarArticles = mostReadArticles;
 
   useEffect(() => {
     // Only run the match once live articles have been fetched (not still loading)
@@ -1651,55 +1648,180 @@ function ArticlePageContentInner({
               const mainCategorySlug = formatCategorySlug(mainCategoryName);
               const mainCategoryHref = `/category/${mainCategorySlug}`;
 
+              const resolveSecondaryCategory = (): string => {
+                const main = mainCategoryName.toLowerCase();
+                if (subName && subName.trim() && subName.toLowerCase() !== main) {
+                  return subName;
+                }
+                if (subcategory && subcategory.trim() && subcategory.toLowerCase() !== main) {
+                  return subcategory.replace(/-/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+                }
+                if (activeNewsData?.subcategories && activeNewsData.subcategories.length > 0) {
+                  const sc = activeNewsData.subcategories[0];
+                  if (sc && sc.toLowerCase() !== main) return sc;
+                }
+                if (activeNewsData?.tags && activeNewsData.tags.length > 0) {
+                  const tg = activeNewsData.tags[0];
+                  if (tg && tg.toLowerCase() !== main) return tg;
+                }
+                return `${mainCategoryName.toUpperCase()} BRIEFING`;
+              };
+
+              const secondaryCategoryName = resolveSecondaryCategory().trim();
+
               return (
-                <div className="flex items-center gap-2 mb-3 font-standard-sans">
-                  <Link
-                    href={mainCategoryHref}
-                    className="inline-flex items-center text-[#BF1E2D] hover:text-[#a61724] text-[12px] font-black uppercase tracking-wider transition-colors"
-                  >
-                    {mainCategoryName}
-                  </Link>
+                <div className="mb-4 font-sans">
+                  {/* Breadcrumb Navigation */}
+                  <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-slate-500 font-sans mb-3 flex-wrap">
+                    <Link href="/" className="hover:text-[#BF1E2D] transition-colors">Home</Link>
+                    <span className="text-slate-400">›</span>
+                    <Link href={mainCategoryHref} className="hover:text-[#BF1E2D] transition-colors">{mainCategoryName}</Link>
+                    {secondaryCategoryName && (
+                      <>
+                        <span className="text-slate-400">›</span>
+                        <span className="text-slate-700 font-medium">{secondaryCategoryName}</span>
+                      </>
+                    )}
+                  </nav>
+
+                  {/* Dual Category Badges */}
+                  <div className="flex items-center gap-2 mb-3.5">
+                    <Link
+                      href={mainCategoryHref}
+                      className="inline-flex items-center bg-[#BF1E2D] text-white text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-none hover:bg-[#a61724] transition-colors font-sans"
+                    >
+                      {mainCategoryName}
+                    </Link>
+                    {secondaryCategoryName && (
+                      <span className="inline-flex items-center border border-slate-300 bg-white text-slate-800 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-none font-sans">
+                        {secondaryCategoryName}
+                      </span>
+                    )}
+                  </div>
                 </div>
               );
             })()}
 
-            {/* Main Title */}
-            <h1 className="font-poppins text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 leading-tight mb-3 tracking-tight">
+            {/* Main Title - Classic Editorial Serif */}
+            <h1 className="font-editorial-serif text-3xl sm:text-4xl lg:text-[42px] font-bold text-slate-900 leading-[1.18] mb-3.5 tracking-tight">
               {activeNewsData.title}
             </h1>
 
-            {/* Subheadline */}
+            {/* Subheadline / Deck - Upright Regular Editorial Serif */}
             {activeNewsData.caption && (
-              <p className="font-poppins text-lg sm:text-xl text-slate-600 italic mb-6 sm:mb-8 leading-relaxed">
+              <p className="font-editorial-serif text-lg sm:text-[20px] text-slate-700 font-normal leading-relaxed mb-6 not-italic">
                 {activeNewsData.caption.split('.')[0] + '.'}
               </p>
             )}
 
-            {/* Author Metadata Bar */}
+            {/* Author Metadata Bar with GMT & 4 Circular Social Share Buttons */}
             {(() => {
               const cleanAuth = resolveCleanAuthor(activeNewsData.authorName, activeNewsData.authorAvatar, activeNewsData.authorEmail);
               const authorSlug = cleanAuth.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+              const mainCat = (activeNewsData?.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "") || parent?.name || "News";
+
+              let displayDate = (activeNewsData.date || "").trim();
+              if (displayDate && !displayDate.includes("GMT")) {
+                displayDate = `${displayDate} | 14:25 GMT`;
+              } else if (!displayDate) {
+                displayDate = "Recently | 14:25 GMT";
+              }
 
               return (
-                <div className="flex items-center gap-3.5 mb-4 pb-3.5 border-b border-zinc-200 font-sans" suppressHydrationWarning>
-                  <Link href={`/author/${authorSlug}`} className="w-11 h-11 rounded-full overflow-hidden bg-[#1E293B] flex-shrink-0 border border-zinc-300 hover:opacity-80 transition-opacity flex items-center justify-center text-white font-bold text-sm" suppressHydrationWarning>
-                    {cleanAuth.avatar && cleanAuth.avatar.length > 5 ? (
-                      <img src={cleanAuth.avatar} alt={cleanAuth.name} className="w-full h-full object-cover" suppressHydrationWarning />
-                    ) : (
-                      <span suppressHydrationWarning>{(cleanAuth.name || "RM").slice(0, 2).toUpperCase()}</span>
-                    )}
-                  </Link>
-                  <div>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <p className="text-[14px] font-bold text-black font-sans leading-tight">
-                        By <Link href={`/author/${authorSlug}`} className="underline hover:text-[#BF1E2D] transition-colors">{cleanAuth.name}</Link>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-zinc-200 font-sans" suppressHydrationWarning>
+                  {/* Left: Author Avatar & Name */}
+                  <div className="flex items-center gap-3">
+                    <Link href={`/author/${authorSlug}`} className="w-11 h-11 rounded-full overflow-hidden bg-[#1E293B] flex-shrink-0 border border-zinc-300 hover:opacity-80 transition-opacity flex items-center justify-center text-white font-bold text-sm" suppressHydrationWarning>
+                      {cleanAuth.avatar && cleanAuth.avatar.length > 5 ? (
+                        <img src={cleanAuth.avatar} alt={cleanAuth.name} className="w-full h-full object-cover" suppressHydrationWarning />
+                      ) : (
+                        <span suppressHydrationWarning>{(cleanAuth.name || "RM").slice(0, 2).toUpperCase()}</span>
+                      )}
+                    </Link>
+                    <div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="text-[14px] font-bold text-black font-sans leading-tight">
+                          By <Link href={`/author/${authorSlug}`} className="hover:text-[#BF1E2D] transition-colors">{cleanAuth.name}</Link>
+                        </p>
+                      </div>
+                      <p className="text-[12px] text-zinc-500 font-sans mt-0.5 leading-tight">
+                        {cleanAuth.bio && cleanAuth.bio.length < 50 ? cleanAuth.bio : `${mainCat} Correspondent | London BigBen Network`}
                       </p>
-                      <svg className="w-4 h-4 text-[#BF1E2D]" fill="currentColor" viewBox="0 0 24 24" aria-label="Verified Journalist">
-                        <title>Verified Journalist</title>
-                        <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.34-1.89-4.24-4.23-4.24-.496 0-.966.084-1.4.238C14.31 2.225 12.94 1.35 11.36 1.35c-1.58 0-2.95.875-3.6 2.148-.435-.154-.905-.238-1.4-.238-2.34 0-4.24 1.89-4.24 4.23 0 .496.084.966.238 1.4C1.225 9.55.35 10.92.35 12.5c0 1.58.875 2.95 2.148 3.6-.154.435-.238.905-.238 1.4 0 2.34 1.89 4.24 4.23 4.24.496 0 .966-.084 1.4-.238.65 1.273 2.02 2.148 3.6 2.148 1.58 0 2.95-.875 3.6-2.148.435.154.905.238 1.4.238 2.34 0 4.24-1.89 4.24-4.23 0-.496-.084-.966-.238-1.4 1.273-.65 2.148-2.02 2.148-3.6zm-12.28 4.29l-4.11-4.11 1.41-1.41 2.7 2.7 6.44-6.44 1.41 1.41-7.85 7.85z"/>
-                      </svg>
                     </div>
-                    <p className="text-[12px] text-zinc-500 mt-0.5">{activeNewsData.date}</p>
+                  </div>
+
+                  {/* Right: Date & 4 Circular Social Share Buttons */}
+                  <div className="flex items-center gap-3.5 flex-wrap sm:flex-nowrap">
+                    <p className="text-[12px] text-zinc-500 font-sans whitespace-nowrap">
+                      {displayDate}
+                    </p>
+
+                    <div className="flex items-center gap-2 relative">
+                      {/* Facebook */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (typeof window !== "undefined") {
+                            window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`, '_blank', 'noopener,noreferrer');
+                          }
+                        }}
+                        aria-label="Share on Facebook"
+                        className="w-8 h-8 rounded-full bg-[#1877F2] hover:opacity-90 transition-opacity flex items-center justify-center text-white cursor-pointer"
+                      >
+                        <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24">
+                          <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                        </svg>
+                      </button>
+
+                      {/* X / Twitter */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (typeof window !== "undefined") {
+                            window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(activeNewsData.title)}&url=${encodeURIComponent(window.location.href)}`, '_blank', 'noopener,noreferrer');
+                          }
+                        }}
+                        aria-label="Share on X"
+                        className="w-8 h-8 rounded-full bg-black hover:opacity-90 transition-opacity flex items-center justify-center text-white cursor-pointer"
+                      >
+                        <svg className="w-3.5 h-3.5 fill-white" viewBox="0 0 24 24">
+                          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                        </svg>
+                      </button>
+
+                      {/* LinkedIn */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (typeof window !== "undefined") {
+                            window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(window.location.href)}`, '_blank', 'noopener,noreferrer');
+                          }
+                        }}
+                        aria-label="Share on LinkedIn"
+                        className="w-8 h-8 rounded-full bg-[#0A66C2] hover:opacity-90 transition-opacity flex items-center justify-center text-white cursor-pointer"
+                      >
+                        <svg className="w-3.5 h-3.5 fill-white" viewBox="0 0 24 24">
+                          <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
+                        </svg>
+                      </button>
+
+                      {/* Copy Link */}
+                      <button
+                        type="button"
+                        onClick={handleCopyLink}
+                        aria-label="Copy article link"
+                        className="w-8 h-8 rounded-full bg-[#475569] hover:bg-[#334155] transition-colors flex items-center justify-center text-white cursor-pointer relative"
+                      >
+                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                        </svg>
+                      </button>
+                      {copiedLink && (
+                        <span className="absolute -top-7 right-0 bg-black text-white text-[10px] px-2 py-0.5 rounded shadow whitespace-nowrap">
+                          Copied!
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -1734,7 +1856,25 @@ function ArticlePageContentInner({
 
             {/* News Body Content */}
             {activeNewsData.rawContent ? (
-              <div className="prose prose-slate max-w-none text-zinc-900 leading-[1.8] font-poppins article-body-poppins text-[17px] md:text-[18px] space-y-4 flow-root [&_figure]:my-5 [&_figure]:max-w-full [&_figcaption]:flex [&_figcaption]:items-center [&_figcaption]:justify-between [&_figcaption]:gap-3 [&_figcaption]:text-xs [&_figcaption]:text-slate-500 [&_figcaption]:mt-1.5 [&_a]:text-[#BF1E2D] [&_a]:font-semibold [&_a]:underline hover:[&_a]:text-[#901320] [&_b]:font-bold [&_strong]:font-bold [&_blockquote]:border-l-4 [&_blockquote]:border-[#F97316] [&_blockquote]:pl-4 [&_blockquote]:py-2.5 [&_blockquote]:my-4 [&_blockquote]:italic [&_blockquote]:text-slate-700 [&_blockquote]:bg-slate-50/80 [&_blockquote]:rounded-r-xl [&_pre]:bg-slate-100/90 [&_pre]:p-3.5 [&_pre]:my-4 [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-slate-200/80 [&_pre]:overflow-x-auto [&_pre]:font-mono [&_pre]:text-sm [&_pre]:text-slate-800 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6">
+              <div className="prose prose-slate max-w-none text-zinc-900 leading-[1.8] font-editorial-serif article-body-editorial text-[17px] md:text-[18px] space-y-4 flow-root [&_figure]:my-5 [&_figure]:max-w-full [&_figcaption]:text-xs [&_figcaption]:text-slate-500 [&_figcaption]:mt-1.5 [&_a]:text-[#BF1E2D] [&_a]:font-semibold [&_a]:underline hover:[&_a]:text-[#901320] [&_b]:font-bold [&_strong]:font-bold [&_blockquote]:border-l-4 [&_blockquote]:border-[#BF1E2D] [&_blockquote]:pl-4 [&_blockquote]:py-2.5 [&_blockquote]:my-4 [&_blockquote]:italic [&_blockquote]:text-slate-700 [&_blockquote]:bg-slate-50/80 [&_blockquote]:rounded-none [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&>p:first-of-type]:border-l-4 [&>p:first-of-type]:border-[#BF1E2D] [&>p:first-of-type]:pl-4 [&>p:first-of-type]:font-medium [&>p:first-of-type]:text-slate-800">
+                {/* KEY POINTS Callout Box */}
+                {keyPointsList.length > 0 && (
+                  <aside aria-label="Key Points" className="my-5 md:float-right md:w-[280px] md:ml-6 md:mb-4 bg-[#F8FAFC] border border-slate-200/90 p-4 rounded-none">
+                    <h3 className="text-xs font-bold text-[#BF1E2D] uppercase tracking-wider font-sans mb-3 flex items-center gap-1.5">
+                      KEY POINTS
+                    </h3>
+                    <ul className="space-y-2.5 text-xs text-slate-700 font-sans">
+                      {keyPointsList.map((pt: string, i: number) => (
+                        <li key={i} className="flex items-start gap-2.5 leading-snug">
+                          <span className="w-5 h-5 rounded-full bg-[#BF1E2D] text-white flex-shrink-0 flex items-center justify-center text-[10px] font-bold">
+                            {i + 1}
+                          </span>
+                          <span className="font-medium text-slate-800">{pt}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </aside>
+                )}
                 {(() => {
                   let rawHtml = activeNewsData.rawContent;
                   if (rawHtml.startsWith("<") && rawHtml.includes("&lt;")) {
@@ -1747,27 +1887,44 @@ function ArticlePageContentInner({
                   }
                   rawHtml = processContentLinks(rawHtml);
 
-                  return <div className="font-poppins article-body-poppins" dangerouslySetInnerHTML={{ __html: rawHtml }} />;
+                  return <div className="font-editorial-serif article-body-editorial" dangerouslySetInnerHTML={{ __html: rawHtml }} />;
                 })()}
               </div>
             ) : (
               /* Fallback for static legacy articles */
-              <div className="space-y-4 font-poppins article-body-poppins text-[17px] md:text-[18px] text-zinc-900 leading-[1.8] tracking-normal mt-0">
+              <div className="space-y-4 font-editorial-serif article-body-editorial text-[17px] md:text-[18px] text-zinc-900 leading-[1.8] tracking-normal mt-0 [&>div:first-of-type_p:first-of-type]:border-l-4 [&>div:first-of-type_p:first-of-type]:border-[#BF1E2D] [&>div:first-of-type_p:first-of-type]:pl-4 [&>div:first-of-type_p:first-of-type]:font-medium [&>div:first-of-type_p:first-of-type]:text-slate-800">
+                {keyPointsList.length > 0 && (
+                  <aside aria-label="Key Points" className="my-5 md:float-right md:w-[280px] md:ml-6 md:mb-4 bg-[#F8FAFC] border border-slate-200/90 p-4 rounded-none">
+                    <h3 className="text-xs font-bold text-[#BF1E2D] uppercase tracking-wider font-sans mb-3 flex items-center gap-1.5">
+                      KEY POINTS
+                    </h3>
+                    <ul className="space-y-2.5 text-xs text-slate-700 font-sans">
+                      {keyPointsList.map((pt: string, i: number) => (
+                        <li key={i} className="flex items-start gap-2.5 leading-snug">
+                          <span className="w-5 h-5 rounded-full bg-[#BF1E2D] text-white flex-shrink-0 flex items-center justify-center text-[10px] font-bold">
+                            {i + 1}
+                          </span>
+                          <span className="font-medium text-slate-800">{pt}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </aside>
+                )}
                 {activeNewsData.sections.map((sec, secIdx) => {
                   const cleanHeading = (sec.heading || "").trim();
                   const isOverview = cleanHeading.toLowerCase() === "overview" || cleanHeading.toLowerCase() === (activeNewsData.caption || "").toLowerCase().trim();
 
                   return (
-                    <div key={secIdx} className="space-y-4 font-poppins article-body-poppins">
+                    <div key={secIdx} className="space-y-4 font-editorial-serif">
                       {cleanHeading && !isOverview && (
-                        <h2 className="font-poppins text-[22px] md:text-[24px] font-bold text-black mt-4 mb-2 leading-snug">
+                        <h2 className="font-editorial-serif text-[22px] md:text-[24px] font-bold text-black mt-4 mb-2 leading-snug">
                           {sec.heading}
                         </h2>
                       )}
                       {sec.paragraphs.map((p, pIdx) => (
                         <div key={pIdx} className="space-y-5">
                           <p 
-                            className="font-poppins text-zinc-900 [&_a]:text-[#BF1E2D] [&_a]:underline [&_a]:font-semibold hover:[&_a]:text-[#901320] transition-colors"
+                            className="font-editorial-serif text-zinc-900 [&_a]:text-[#BF1E2D] [&_a]:underline [&_a]:font-semibold hover:[&_a]:text-[#901320] transition-colors"
                             dangerouslySetInnerHTML={{ __html: processContentLinks(p) }}
                           />
                         </div>
@@ -2505,38 +2662,100 @@ function ArticlePageContentInner({
           </div>
 
           {/* Right Column: Sidebar Feed */}
-          <div className="lg:col-span-4 lg:pl-4 font-standard-sans border-l border-zinc-100 lg:border-zinc-200 pt-2 lg:pt-0">
-            <div className="border-b-2 border-black pb-2 mb-6 w-full flex items-center justify-between">
-              <h3 className="text-[13.5px] font-bold text-black uppercase tracking-wider font-standard-sans">
-                MOST POPULAR IN {parent.name.toUpperCase()}
-              </h3>
+          <div className="lg:col-span-4 lg:pl-6 font-standard-sans border-l border-zinc-100 lg:border-zinc-200 pt-2 lg:pt-0">
+            {/* SECTION 1: RELATED NEWS */}
+            <div className="mb-8">
+              <div className="flex items-center justify-between pb-2 mb-4 border-b border-zinc-200 font-sans">
+                <h3 className="text-[14px] font-bold text-slate-900 uppercase tracking-wider font-sans">
+                  RELATED NEWS
+                </h3>
+                {(() => {
+                  const catSlug = formatCategorySlug(
+                    (activeNewsData?.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "") ||
+                    parent?.name ||
+                    "news"
+                  );
+                  return (
+                    <Link
+                      href={`/category/${catSlug}`}
+                      className="text-[#BF1E2D] hover:underline text-xs font-semibold flex items-center gap-0.5"
+                    >
+                      <span>View All</span>
+                      <span>→</span>
+                    </Link>
+                  );
+                })()}
+              </div>
+
+              <div className="space-y-3.5 font-sans">
+                {relatedNewsArticles.map((item, idx) => (
+                  <Link
+                    key={`related-sidebar-${idx}-${item.id || item.href}`}
+                    href={item.href}
+                    className="flex gap-3 items-start cursor-pointer group pb-3.5 border-b border-zinc-100 last:border-none"
+                  >
+                    <div className="relative w-[105px] h-[72px] flex-shrink-0 overflow-hidden bg-slate-100 rounded-none">
+                      <img
+                        src={item.image}
+                        alt={item.title}
+                        onError={(e) => {
+                          e.currentTarget.src = "https://images.unsplash.com/photo-1518770660439-4636190af475?w=150&h=150&fit=crop";
+                        }}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    </div>
+                    <div className="flex flex-col text-left flex-1 min-w-0">
+                      <span className="text-[10px] font-bold text-[#BF1E2D] uppercase tracking-wider font-sans mb-0.5">
+                        {item.category}
+                      </span>
+                      <h4 className="text-[13px] md:text-[13.5px] font-bold leading-snug text-slate-900 group-hover:text-[#BF1E2D] transition-colors mb-1 font-editorial-serif line-clamp-2">
+                        {item.title}
+                      </h4>
+                      <p className="text-[11px] text-zinc-400 font-normal font-sans">{item.date}</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
             </div>
 
-            <div className="space-y-5 font-sans">
-              {(popularSidebarArticles.length > 0 ? popularSidebarArticles : sidebarPicks.slice(0, 10)).map((item, idx) => (
-                <Link
-                  key={`popular-sidebar-${idx}-${(item as any).id || item.href}`}
-                  href={item.href}
-                  className="flex gap-3.5 items-start cursor-pointer group pb-4 border-b border-zinc-100 last:border-none"
-                >
-                  <div className="relative w-[75px] h-[65px] flex-shrink-0 overflow-hidden bg-gray-100 rounded border border-zinc-200">
-                    <img
-                      src={item.image}
-                      alt={item.title}
-                      onError={(e) => {
-                        e.currentTarget.src = "https://images.unsplash.com/photo-1518770660439-4636190af475?w=150&h=150&fit=crop";
-                      }}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  </div>
-                  <div className="flex flex-col text-left">
-                    <h4 className="text-[13px] md:text-[13.5px] font-bold leading-snug text-black group-hover:text-[#BF1E2D] transition-colors mb-1 font-serif">
-                      {item.title}
-                    </h4>
-                    <p className="text-[11px] text-zinc-500 font-normal font-sans">{item.date}</p>
-                  </div>
-                </Link>
-              ))}
+            {/* SECTION 2: MOST READ */}
+            <div className="mb-8">
+              <div className="flex items-center gap-2 pb-2 mb-4 border-b border-zinc-200 font-sans">
+                <span className="w-1.5 h-4 bg-[#BF1E2D] inline-block"></span>
+                <h3 className="text-[14px] font-bold text-slate-900 uppercase tracking-wider font-sans">
+                  MOST READ
+                </h3>
+              </div>
+
+              <div className="space-y-3 font-sans">
+                {mostReadArticles.map((item, idx) => (
+                  <Link
+                    key={`most-read-sidebar-${idx}-${item.id || item.href}`}
+                    href={item.href}
+                    className="flex items-center gap-3 cursor-pointer group pb-3 border-b border-zinc-100 last:border-none"
+                  >
+                    <span className="w-5 text-center font-editorial-serif font-bold text-lg text-[#BF1E2D] flex-shrink-0">
+                      {idx + 1}
+                    </span>
+                    <div className="relative w-[72px] h-[50px] flex-shrink-0 overflow-hidden bg-slate-100 rounded-none">
+                      <img
+                        src={item.image}
+                        alt={item.title}
+                        onError={(e) => {
+                          e.currentTarget.src = "https://images.unsplash.com/photo-1518770660439-4636190af475?w=150&h=150&fit=crop";
+                        }}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    </div>
+                    <div className="flex flex-col text-left flex-1 min-w-0">
+                      <h4 className="text-[12.5px] font-bold leading-snug text-slate-900 group-hover:text-[#BF1E2D] transition-colors font-editorial-serif line-clamp-2">
+                        {item.title}
+                      </h4>
+                      <p className="text-[11px] text-zinc-400 font-normal font-sans mt-0.5">{item.date}</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
             </div>
 
             {/* Category Pages — Sidebar Top Ad Box (Slot 4) */}
