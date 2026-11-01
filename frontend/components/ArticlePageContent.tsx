@@ -70,6 +70,8 @@ interface ArticleData {
   subcategories?: string[];
   tags?: string[];
   rawContent?: string;
+  keyPoints?: string[];
+  key_points?: string[];
 }
 
 interface SidebarItem {
@@ -203,6 +205,132 @@ function resolveArticleTags(article: any): string[] {
     }
   }
   return [];
+}
+
+function resolveKeyPoints(article: any): string[] {
+  if (!article) return [];
+
+  const explicit = article.key_points || article.keyPoints;
+  if (Array.isArray(explicit) && explicit.length >= 4) {
+    return explicit.slice(0, 6).map((p: any) => String(p).trim()).filter(Boolean);
+  }
+
+  let sourceText = (article.rawContent || article.content || "")
+    .replace(/<figure[\s\S]*?<\/figure>/gi, "")
+    .replace(/<figcaption[\s\S]*?<\/figcaption>/gi, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/Reference:\s*https?:\/\/\S+/gi, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // Strip leading photo/credit artifacts e.g. "flood (PHOTO: J)"
+  sourceText = sourceText.replace(/^[a-z0-9\s_-]*\(photo:[^)]*\)\s*/i, "");
+
+  if (!sourceText && Array.isArray(article.sections) && article.sections.length > 0) {
+    sourceText = article.sections
+      .map((s: any) => `${s.heading || ""} ${(s.paragraphs || []).join(" ")}`)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  const candidates: string[] = [];
+
+  // Check <li> tags first
+  if (article.rawContent || article.content) {
+    const liMatches = (article.rawContent || article.content).match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+    if (liMatches && liMatches.length >= 3) {
+      for (const li of liMatches) {
+        const text = li.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").trim();
+        if (text.length >= 20 && text.length <= 160) {
+          candidates.push(text);
+          if (candidates.length >= 6) break;
+        }
+      }
+    }
+  }
+
+  // Split into sentences
+  if (candidates.length < 4 && sourceText) {
+    const rawSentences = sourceText
+      .split(/(?<=[.?!])\s+/)
+      .map((s: string) => s.trim())
+      .filter((s: string) => {
+        if (s.length < 25 || s.length > 220) return false;
+        if (/^https?:\/\//i.test(s)) return false;
+        if (/^(photo|image|source|credit|read more|click here|reference):/i.test(s)) return false;
+        return true;
+      });
+
+    for (const raw of rawSentences) {
+      let clean = raw
+        .replace(/^[a-z0-9\s_-]*\(photo:[^)]*\)\s*/i, "")
+        .replace(/^\([A-Za-z\s]+\)\s*/, "")
+        .replace(/^[•\-\*]\s*/, "")
+        .replace(/\.$/, "")
+        .trim();
+
+      if (clean) {
+        clean = clean.charAt(0).toUpperCase() + clean.slice(1);
+      }
+
+      if (
+        clean.length >= 25 &&
+        !candidates.some(c => c.toLowerCase().slice(0, 25) === clean.toLowerCase().slice(0, 25))
+      ) {
+        candidates.push(clean);
+        if (candidates.length >= 6) break;
+      }
+    }
+  }
+
+  // Fallbacks using summary / caption
+  if (candidates.length < 4) {
+    const extraSources = [article.summary, article.caption, article.description, article.subheading]
+      .filter(Boolean)
+      .join(". ");
+
+    if (extraSources) {
+      const extraSentences = extraSources
+        .split(/(?<=[.?!])\s+/)
+        .map((s: string) => s.trim().replace(/\.$/, ""))
+        .filter((s: string) => s.length >= 20 && s.length <= 160);
+
+      for (const s of extraSentences) {
+        const clean = s.charAt(0).toUpperCase() + s.slice(1);
+        if (!candidates.some(c => c.toLowerCase().slice(0, 20) === clean.toLowerCase().slice(0, 20))) {
+          candidates.push(clean);
+          if (candidates.length >= 6) break;
+        }
+      }
+    }
+  }
+
+  // Default contextual fallbacks if still < 4
+  if (candidates.length < 4) {
+    const title = (article.title || "Key Update").replace(/\.$/, "");
+    const category = (article.category || "General").trim();
+    const defaults = [
+      `${title}`,
+      `Key developments reported across the ${category.toLowerCase()} sector`,
+      `Authorities and industry specialists are actively monitoring outcomes`,
+      `Further official statements and market reactions are expected`
+    ];
+    for (const d of defaults) {
+      if (!candidates.some(c => c.toLowerCase().slice(0, 15) === d.toLowerCase().slice(0, 15))) {
+        candidates.push(d);
+        if (candidates.length >= 4) break;
+      }
+    }
+  }
+
+  return candidates.slice(0, 6);
 }
 
 function parseHtmlToParagraphs(html: string): string[] {
@@ -485,34 +613,7 @@ function ArticlePageContentInner({
 
 
   const keyPointsList = useMemo(() => {
-    if ((activeNewsData as any)?.keyPoints && Array.isArray((activeNewsData as any).keyPoints) && (activeNewsData as any).keyPoints.length > 0) {
-      return (activeNewsData as any).keyPoints.slice(0, 4);
-    }
-    if (activeNewsData?.sections && activeNewsData.sections.length > 0) {
-      const points: string[] = [];
-      for (const sec of activeNewsData.sections) {
-        const heading = (sec.heading || "").trim();
-        const isOverview = heading.toLowerCase() === "overview" || heading.toLowerCase() === (activeNewsData.caption || "").toLowerCase().trim();
-        if (heading && !isOverview) {
-          points.push(heading);
-          if (points.length >= 4) break;
-        }
-      }
-      if (points.length >= 2) return points;
-    }
-    if (activeNewsData?.rawContent) {
-      const liMatches = activeNewsData.rawContent.match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
-      if (liMatches && liMatches.length >= 2) {
-        return liMatches.slice(0, 4).map(li => li.replace(/<[^>]*>/g, "").trim());
-      }
-    }
-    if (activeNewsData?.caption) {
-      const sentences = activeNewsData.caption.split(/(?<=[.?!])\s+/).filter(s => s.trim().length > 15);
-      if (sentences.length >= 2) {
-        return sentences.slice(0, 4).map(s => s.replace(/\.$/, "").trim());
-      }
-    }
-    return [];
+    return resolveKeyPoints(activeNewsData);
   }, [activeNewsData]);
 
   // Related News (4) and Most Read (5) for the right sidebar
@@ -699,6 +800,7 @@ function ArticlePageContentInner({
               return fromNews.length > 0 ? fromNews : [];
             })(),
             rawContent: matched.content || "",
+            keyPoints: (matched as any).key_points || (matched as any).keyPoints,
             sections: [
               {
                 heading: "",
@@ -1859,17 +1961,22 @@ function ArticlePageContentInner({
               <div className="prose prose-slate max-w-none text-zinc-900 leading-[1.8] font-editorial-serif article-body-editorial text-[17px] md:text-[18px] space-y-4 flow-root [&_figure]:my-5 [&_figure]:max-w-full [&_figcaption]:text-xs [&_figcaption]:text-slate-500 [&_figcaption]:mt-1.5 [&_a]:text-[#BF1E2D] [&_a]:font-semibold [&_a]:underline hover:[&_a]:text-[#901320] [&_b]:font-bold [&_strong]:font-bold [&_blockquote]:border-l-4 [&_blockquote]:border-[#BF1E2D] [&_blockquote]:pl-4 [&_blockquote]:py-2.5 [&_blockquote]:my-4 [&_blockquote]:italic [&_blockquote]:text-slate-700 [&_blockquote]:bg-slate-50/80 [&_blockquote]:rounded-none [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&>p:first-of-type]:border-l-4 [&>p:first-of-type]:border-[#BF1E2D] [&>p:first-of-type]:pl-4 [&>p:first-of-type]:font-medium [&>p:first-of-type]:text-slate-800">
                 {/* KEY POINTS Callout Box */}
                 {keyPointsList.length > 0 && (
-                  <aside aria-label="Key Points" className="my-5 md:float-right md:w-[280px] md:ml-6 md:mb-4 bg-[#F8FAFC] border border-slate-200/90 p-4 rounded-none">
-                    <h3 className="text-xs font-bold text-[#BF1E2D] uppercase tracking-wider font-sans mb-3 flex items-center gap-1.5">
+                  <aside
+                    aria-label="Key Points"
+                    className="not-prose my-5 md:float-right md:w-[320px] md:ml-6 md:mb-5 md:mt-1 bg-[#F8F9FA] border border-slate-200/90 p-4 sm:p-5 rounded-none shadow-2xs clear-right"
+                  >
+                    <h3 className="text-xs font-bold text-[#BF1E2D] uppercase tracking-wider font-sans mb-3.5">
                       KEY POINTS
                     </h3>
-                    <ul className="space-y-2.5 text-xs text-slate-700 font-sans">
+                    <ul className="space-y-3 font-sans list-none p-0 m-0">
                       {keyPointsList.map((pt: string, i: number) => (
-                        <li key={i} className="flex items-start gap-2.5 leading-snug">
-                          <span className="w-5 h-5 rounded-full bg-[#BF1E2D] text-white flex-shrink-0 flex items-center justify-center text-[10px] font-bold">
+                        <li key={i} className="flex items-start gap-3 leading-snug p-0 m-0">
+                          <span className="w-[22px] h-[22px] min-w-[22px] min-h-[22px] rounded-full bg-[#BF1E2D] text-white flex-shrink-0 flex items-center justify-center font-bold text-[11px] leading-none mt-0.5">
                             {i + 1}
                           </span>
-                          <span className="font-medium text-slate-800">{pt}</span>
+                          <span className="text-slate-800 font-medium text-xs sm:text-[13px] leading-snug">
+                            {pt}
+                          </span>
                         </li>
                       ))}
                     </ul>
@@ -1894,17 +2001,22 @@ function ArticlePageContentInner({
               /* Fallback for static legacy articles */
               <div className="space-y-4 font-editorial-serif article-body-editorial text-[17px] md:text-[18px] text-zinc-900 leading-[1.8] tracking-normal mt-0 [&>div:first-of-type_p:first-of-type]:border-l-4 [&>div:first-of-type_p:first-of-type]:border-[#BF1E2D] [&>div:first-of-type_p:first-of-type]:pl-4 [&>div:first-of-type_p:first-of-type]:font-medium [&>div:first-of-type_p:first-of-type]:text-slate-800">
                 {keyPointsList.length > 0 && (
-                  <aside aria-label="Key Points" className="my-5 md:float-right md:w-[280px] md:ml-6 md:mb-4 bg-[#F8FAFC] border border-slate-200/90 p-4 rounded-none">
-                    <h3 className="text-xs font-bold text-[#BF1E2D] uppercase tracking-wider font-sans mb-3 flex items-center gap-1.5">
+                  <aside
+                    aria-label="Key Points"
+                    className="not-prose my-5 md:float-right md:w-[320px] md:ml-6 md:mb-5 md:mt-1 bg-[#F8F9FA] border border-slate-200/90 p-4 sm:p-5 rounded-none shadow-2xs clear-right"
+                  >
+                    <h3 className="text-xs font-bold text-[#BF1E2D] uppercase tracking-wider font-sans mb-3.5">
                       KEY POINTS
                     </h3>
-                    <ul className="space-y-2.5 text-xs text-slate-700 font-sans">
+                    <ul className="space-y-3 font-sans list-none p-0 m-0">
                       {keyPointsList.map((pt: string, i: number) => (
-                        <li key={i} className="flex items-start gap-2.5 leading-snug">
-                          <span className="w-5 h-5 rounded-full bg-[#BF1E2D] text-white flex-shrink-0 flex items-center justify-center text-[10px] font-bold">
+                        <li key={i} className="flex items-start gap-3 leading-snug p-0 m-0">
+                          <span className="w-[22px] h-[22px] min-w-[22px] min-h-[22px] rounded-full bg-[#BF1E2D] text-white flex-shrink-0 flex items-center justify-center font-bold text-[11px] leading-none mt-0.5">
                             {i + 1}
                           </span>
-                          <span className="font-medium text-slate-800">{pt}</span>
+                          <span className="text-slate-800 font-medium text-xs sm:text-[13px] leading-snug">
+                            {pt}
+                          </span>
                         </li>
                       ))}
                     </ul>
