@@ -2662,7 +2662,7 @@ function ArticlePageContentInner({
           </div>
 
           {/* Right Column: Sidebar Feed */}
-          <div className="lg:col-span-4 lg:pl-6 font-standard-sans border-l border-zinc-100 lg:border-zinc-200 pt-2 lg:pt-0">
+          <div className="lg:col-span-4 lg:pl-6 font-standard-sans border-l border-zinc-100 lg:border-zinc-200 pt-2 lg:pt-0 self-stretch">
             {/* SECTION 1: RELATED NEWS */}
             <div className="mb-8">
               <div className="flex items-center justify-between pb-2 mb-4 border-b border-zinc-200 font-sans">
@@ -2758,92 +2758,95 @@ function ArticlePageContentInner({
               </div>
             </div>
 
-            {/* Category Pages — Sidebar Top Ad Box (Slot 4) */}
-            {(() => {
-              const adSlot4 = adSlots.find(s => s.id === "slot-4" || (s.categoryGroup === "CATEGORY" && s.dimensions.includes("250")) || s.title.includes("Sidebar Top"));
-              if (!adSlot4 || !adSlot4.isActive) return null;
-              const slot4Dimensions = formatAdDimensions(adSlot4.dimensions || "300X250");
-              const hasSlot4Image =
-                adSlot4.imageUrl &&
-                adSlot4.imageUrl.trim() !== "" &&
-                !isDuplicateAdImage(adSlot4.imageUrl, adSlot4.id, adSlots);
-              const isExternal = (adSlot4.actionType || "").toLowerCase().includes("external") || (adSlot4.targetUrl || "").startsWith("http");
-              return (
-                <div className="pt-6 border-t border-zinc-200 mt-6 w-full flex flex-col items-start">
-                  {hasSlot4Image ? (
-                    <a
-                      href={adSlot4.targetUrl || "#"}
-                      target={isExternal ? "_blank" : "_self"}
-                      rel={isExternal ? "noopener noreferrer" : undefined}
-                      className="block group relative overflow-hidden rounded-xs border border-zinc-200 bg-black w-full max-w-[340px] aspect-[300/250]"
-                    >
-                      <img
-                        src={adSlot4.imageUrl}
-                        alt={adSlot4.title || "Ad"}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                      <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-xs px-2 py-0.5 text-[9px] font-mono tracking-widest uppercase text-white border border-white/10">
-                        Ad
+            {/* Sticky Advertisement Section */}
+            <div className="sticky top-20 z-10 w-full flex flex-col items-start space-y-6">
+              {/* Category Pages — Sidebar Top Ad Box (Slot 4) */}
+              {(() => {
+                const adSlot4 = adSlots.find(s => s.id === "slot-4" || (s.categoryGroup === "CATEGORY" && s.dimensions.includes("250")) || s.title.includes("Sidebar Top"));
+                if (!adSlot4 || !adSlot4.isActive) return null;
+                const slot4Dimensions = formatAdDimensions(adSlot4.dimensions || "300X250");
+                const hasSlot4Image =
+                  adSlot4.imageUrl &&
+                  adSlot4.imageUrl.trim() !== "" &&
+                  !isDuplicateAdImage(adSlot4.imageUrl, adSlot4.id, adSlots);
+                const isExternal = (adSlot4.actionType || "").toLowerCase().includes("external") || (adSlot4.targetUrl || "").startsWith("http");
+                return (
+                  <div className="pt-6 border-t border-zinc-200 mt-6 w-full flex flex-col items-start">
+                    {hasSlot4Image ? (
+                      <a
+                        href={adSlot4.targetUrl || "#"}
+                        target={isExternal ? "_blank" : "_self"}
+                        rel={isExternal ? "noopener noreferrer" : undefined}
+                        className="block group relative overflow-hidden rounded-xs border border-zinc-200 bg-black w-full max-w-[340px] aspect-[300/250]"
+                      >
+                        <img
+                          src={adSlot4.imageUrl}
+                          alt={adSlot4.title || "Ad"}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                        <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-xs px-2 py-0.5 text-[9px] font-mono tracking-widest uppercase text-white border border-white/10">
+                          Ad
+                        </div>
+                      </a>
+                    ) : (
+                      <div className="w-full max-w-[340px] aspect-[300/250] bg-[#111827] border border-dashed border-gray-700 rounded-xs flex flex-col items-center justify-center p-4 text-center">
+                        <span className="text-white font-mono font-bold text-sm tracking-widest">
+                          {slot4Dimensions}
+                        </span>
+                        <span className="text-[10px] font-mono text-gray-400 mt-1">
+                          Size: {slot4Dimensions} px
+                        </span>
                       </div>
-                    </a>
-                  ) : (
-                    <div className="w-full max-w-[340px] aspect-[300/250] bg-[#111827] border border-dashed border-gray-700 rounded-xs flex flex-col items-center justify-center p-4 text-center">
-                      <span className="text-white font-mono font-bold text-sm tracking-widest">
-                        {slot4Dimensions}
-                      </span>
-                      <span className="text-[10px] font-mono text-gray-400 mt-1">
-                        Size: {slot4Dimensions} px
-                      </span>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
+                    )}
+                  </div>
+                );
+              })()}
 
-            {/* Category Pages — Sidebar Bottom Tall Ad Box (Slot 5: 300x600 skyscraper) */}
-            {(() => {
-              const adSlot5 = adSlots.find(s => s.id === "slot-5" || (s.categoryGroup === "CATEGORY" && s.dimensions.includes("600")) || s.title.includes("Tall Ad"));
-              if (!adSlot5 || !adSlot5.isActive) return null;
-              const slot5Dimensions = formatAdDimensions(adSlot5.dimensions || "300X600");
-              const hasSlot5Image =
-                adSlot5.imageUrl &&
-                adSlot5.imageUrl.trim() !== "" &&
-                !isDuplicateAdImage(adSlot5.imageUrl, adSlot5.id, adSlots);
-              const isExternal = (adSlot5.actionType || "").toLowerCase().includes("external") || (adSlot5.targetUrl || "").startsWith("http");
-              return (
-                <div className="pt-8 border-t border-zinc-200 mt-8 flex flex-col items-start w-full sticky top-24">
-                  {hasSlot5Image ? (
-                    <a
-                      href={adSlot5.targetUrl || "#"}
-                      target={isExternal ? "_blank" : "_self"}
-                      rel={isExternal ? "noopener noreferrer" : undefined}
-                      className="block group relative overflow-hidden rounded-xs border border-zinc-200 bg-black w-full max-w-[340px] h-[550px]"
-                    >
-                      <img
-                        src={adSlot5.imageUrl}
-                        alt={adSlot5.title || "Ad"}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
-                      <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-xs px-2 py-0.5 text-[9px] font-mono tracking-widest uppercase text-white border border-white/10">
-                        Ad
+              {/* Category Pages — Sidebar Bottom Tall Ad Box (Slot 5: 300x600 skyscraper) */}
+              {(() => {
+                const adSlot5 = adSlots.find(s => s.id === "slot-5" || (s.categoryGroup === "CATEGORY" && s.dimensions.includes("600")) || s.title.includes("Tall Ad"));
+                if (!adSlot5 || !adSlot5.isActive) return null;
+                const slot5Dimensions = formatAdDimensions(adSlot5.dimensions || "300X600");
+                const hasSlot5Image =
+                  adSlot5.imageUrl &&
+                  adSlot5.imageUrl.trim() !== "" &&
+                  !isDuplicateAdImage(adSlot5.imageUrl, adSlot5.id, adSlots);
+                const isExternal = (adSlot5.actionType || "").toLowerCase().includes("external") || (adSlot5.targetUrl || "").startsWith("http");
+                return (
+                  <div className="pt-6 border-t border-zinc-200 w-full flex flex-col items-start">
+                    {hasSlot5Image ? (
+                      <a
+                        href={adSlot5.targetUrl || "#"}
+                        target={isExternal ? "_blank" : "_self"}
+                        rel={isExternal ? "noopener noreferrer" : undefined}
+                        className="block group relative overflow-hidden rounded-xs border border-zinc-200 bg-black w-full max-w-[340px] h-[550px]"
+                      >
+                        <img
+                          src={adSlot5.imageUrl}
+                          alt={adSlot5.title || "Ad"}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                        <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-xs px-2 py-0.5 text-[9px] font-mono tracking-widest uppercase text-white border border-white/10">
+                          Ad
+                        </div>
+                      </a>
+                    ) : (
+                      <div className="w-full max-w-[340px] h-[550px] bg-[#111827] border border-dashed border-gray-700 rounded-xs flex flex-col items-center justify-center p-6 text-center">
+                        <span className="text-white font-mono font-bold text-base tracking-widest">
+                          {slot5Dimensions}
+                        </span>
+                        <span className="text-[11px] font-mono text-gray-400 mt-2">
+                          Size: {slot5Dimensions} px
+                        </span>
+                        <span className="text-[10px] font-mono text-gray-500 mt-1">
+                          Tall Skyscraper Ad
+                        </span>
                       </div>
-                    </a>
-                  ) : (
-                    <div className="w-full max-w-[340px] h-[550px] bg-[#111827] border border-dashed border-gray-700 rounded-xs flex flex-col items-center justify-center p-6 text-center">
-                      <span className="text-white font-mono font-bold text-base tracking-widest">
-                        {slot5Dimensions}
-                      </span>
-                      <span className="text-[11px] font-mono text-gray-400 mt-2">
-                        Size: {slot5Dimensions} px
-                      </span>
-                      <span className="text-[10px] font-mono text-gray-500 mt-1">
-                        Tall Skyscraper Ad
-                      </span>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
           </div>
 
         </div>
