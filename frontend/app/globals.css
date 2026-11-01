@@ -116,7 +116,8 @@ p.has-drop-cap-box::first-letter {
 .rounded-full.overflow-hidden,
 img.rounded-full,
 a.rounded-full.overflow-hidden,
-div.rounded-full.overflow-hidden {
+div.rounded-full.overflow-hidden,
+span.rounded-full {
   border-radius: 50% !important;
 }
 
