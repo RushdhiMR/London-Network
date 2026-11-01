@@ -1956,36 +1956,35 @@ function ArticlePageContentInner({
               </figure>
             )}
 
-            {/* KEY POINTS Callout Box - Placed directly under the image */}
-            {keyPointsList.length > 0 && (
-              <aside
-                aria-label="Key Points"
-                className="w-full my-6 bg-[#F8F9FA] border border-slate-200/90 p-5 sm:p-6 rounded-none shadow-2xs font-poppins"
-              >
-                <h3 className="text-xs font-bold text-[#BF1E2D] uppercase tracking-wider font-poppins mb-3.5">
-                  KEY POINTS
-                </h3>
-                <ul className="space-y-3 font-poppins list-none p-0 m-0">
-                  {keyPointsList.map((pt: string, i: number) => (
-                    <li key={i} className="flex items-start gap-3 leading-snug p-0 m-0 font-poppins">
-                      <span
-                        style={{ borderRadius: "50%" }}
-                        className="w-[22px] h-[22px] min-w-[22px] min-h-[22px] rounded-full bg-[#BF1E2D] text-white flex-shrink-0 flex items-center justify-center font-bold text-[11px] leading-none mt-0.5"
-                      >
-                        {i + 1}
-                      </span>
-                      <span className="text-slate-800 font-medium text-[13.5px] sm:text-[14px] leading-snug font-poppins">
-                        {pt}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </aside>
-            )}
-
             {/* News Body Content */}
             {activeNewsData.rawContent ? (
-              <div className="prose prose-slate max-w-none text-zinc-900 leading-[1.8] font-poppins article-body-poppins text-[16px] md:text-[17px] space-y-4 flow-root [&_figure]:my-5 [&_figure]:max-w-full [&_figcaption]:text-xs [&_figcaption]:text-slate-500 [&_figcaption]:mt-1.5 [&_a]:text-[#BF1E2D] [&_a]:font-semibold [&_a]:underline hover:[&_a]:text-[#901320] [&_b]:font-bold [&_strong]:font-bold [&_blockquote]:border-l-4 [&_blockquote]:border-[#BF1E2D] [&_blockquote]:pl-4 [&_blockquote]:py-2.5 [&_blockquote]:my-4 [&_blockquote]:italic [&_blockquote]:text-slate-700 [&_blockquote]:bg-slate-50/80 [&_blockquote]:rounded-none [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&>p:first-of-type]:border-l-4 [&>p:first-of-type]:border-[#BF1E2D] [&>p:first-of-type]:pl-4 [&>p:first-of-type]:font-medium [&>p:first-of-type]:text-slate-800">
+              <div className="prose prose-slate max-w-none text-zinc-900 leading-[1.8] font-poppins article-body-poppins text-[16px] md:text-[17px] flow-root [&_figure]:my-5 [&_figure]:max-w-full [&_figcaption]:text-xs [&_figcaption]:text-slate-500 [&_figcaption]:mt-1.5 [&_a]:text-[#BF1E2D] [&_a]:font-semibold [&_a]:underline hover:[&_a]:text-[#901320] [&_b]:font-bold [&_strong]:font-bold [&_blockquote]:border-l-4 [&_blockquote]:border-[#BF1E2D] [&_blockquote]:pl-4 [&_blockquote]:py-2.5 [&_blockquote]:my-4 [&_blockquote]:italic [&_blockquote]:text-slate-700 [&_blockquote]:bg-slate-50/80 [&_blockquote]:rounded-none [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_p:first-of-type]:border-l-4 [&_p:first-of-type]:border-[#BF1E2D] [&_p:first-of-type]:pl-4 [&_p:first-of-type]:font-medium [&_p:first-of-type]:text-slate-800">
+                {/* KEY POINTS Callout Box - Positioned on the right side next to lead text */}
+                {keyPointsList.length > 0 && (
+                  <aside
+                    aria-label="Key Points"
+                    className="not-prose w-full my-4 md:my-1 md:float-right md:w-[300px] lg:w-[320px] md:ml-6 md:mb-5 bg-[#F8F9FA] border border-slate-200/90 p-4 sm:p-5 rounded-none shadow-2xs font-poppins clear-right"
+                  >
+                    <h3 className="text-xs font-bold text-[#BF1E2D] uppercase tracking-wider font-poppins mb-3.5">
+                      KEY POINTS
+                    </h3>
+                    <ul className="space-y-3 font-poppins list-none p-0 m-0">
+                      {keyPointsList.map((pt: string, i: number) => (
+                        <li key={i} className="flex items-start gap-3 leading-snug p-0 m-0 font-poppins">
+                          <span
+                            style={{ borderRadius: "50%" }}
+                            className="w-[22px] h-[22px] min-w-[22px] min-h-[22px] rounded-full bg-[#BF1E2D] text-white flex-shrink-0 flex items-center justify-center font-bold text-[11px] leading-none mt-0.5"
+                          >
+                            {i + 1}
+                          </span>
+                          <span className="text-slate-800 font-medium text-[13px] sm:text-[13.5px] leading-snug font-poppins">
+                            {pt}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </aside>
+                )}
                 {(() => {
                   let rawHtml = activeNewsData.rawContent;
                   if (rawHtml.startsWith("<") && rawHtml.includes("&lt;")) {
@@ -1998,12 +1997,37 @@ function ArticlePageContentInner({
                   }
                   rawHtml = processContentLinks(rawHtml);
 
-                  return <div className="font-poppins article-body-poppins" dangerouslySetInnerHTML={{ __html: rawHtml }} />;
+                  return <div className="font-poppins article-body-poppins space-y-4" dangerouslySetInnerHTML={{ __html: rawHtml }} />;
                 })()}
               </div>
             ) : (
               /* Fallback for static legacy articles */
-              <div className="space-y-4 font-poppins article-body-poppins text-[16px] md:text-[17px] text-zinc-900 leading-[1.8] tracking-normal mt-0 [&>div:first-of-type_p:first-of-type]:border-l-4 [&>div:first-of-type_p:first-of-type]:border-[#BF1E2D] [&>div:first-of-type_p:first-of-type]:pl-4 [&>div:first-of-type_p:first-of-type]:font-medium [&>div:first-of-type_p:first-of-type]:text-slate-800">
+              <div className="font-poppins article-body-poppins text-[16px] md:text-[17px] text-zinc-900 leading-[1.8] tracking-normal mt-0 flow-root [&_p:first-of-type]:border-l-4 [&_p:first-of-type]:border-[#BF1E2D] [&_p:first-of-type]:pl-4 [&_p:first-of-type]:font-medium [&_p:first-of-type]:text-slate-800">
+                {keyPointsList.length > 0 && (
+                  <aside
+                    aria-label="Key Points"
+                    className="not-prose w-full my-4 md:my-1 md:float-right md:w-[300px] lg:w-[320px] md:ml-6 md:mb-5 bg-[#F8F9FA] border border-slate-200/90 p-4 sm:p-5 rounded-none shadow-2xs font-poppins clear-right"
+                  >
+                    <h3 className="text-xs font-bold text-[#BF1E2D] uppercase tracking-wider font-poppins mb-3.5">
+                      KEY POINTS
+                    </h3>
+                    <ul className="space-y-3 font-poppins list-none p-0 m-0">
+                      {keyPointsList.map((pt: string, i: number) => (
+                        <li key={i} className="flex items-start gap-3 leading-snug p-0 m-0 font-poppins">
+                          <span
+                            style={{ borderRadius: "50%" }}
+                            className="w-[22px] h-[22px] min-w-[22px] min-h-[22px] rounded-full bg-[#BF1E2D] text-white flex-shrink-0 flex items-center justify-center font-bold text-[11px] leading-none mt-0.5"
+                          >
+                            {i + 1}
+                          </span>
+                          <span className="text-slate-800 font-medium text-[13px] sm:text-[13.5px] leading-snug font-poppins">
+                            {pt}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </aside>
+                )}
                 {activeNewsData.sections.map((sec, secIdx) => {
                   const cleanHeading = (sec.heading || "").trim();
                   const isOverview = cleanHeading.toLowerCase() === "overview" || cleanHeading.toLowerCase() === (activeNewsData.caption || "").toLowerCase().trim();
