@@ -210,14 +210,14 @@ export default function CreatePostPage() {
   const [imageCredit, setImageCredit] = useState("");
   const [imageKeywords, setImageKeywords] = useState<string[]>([]);
   const [imageKeywordInput, setImageKeywordInput] = useState("");
-  const [imageSize, setImageSize] = useState("Medium (Width: 450px)");
+  const [imageSize, setImageSize] = useState("Full Width (100%)");
   const [imageAlignment, setImageAlignment] = useState("Center (No Wrap)");
   const [imageFileName, setImageFileName] = useState("No file chosen");
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   // Selected Image Element in Editor for Interactive Resizing & Adjustment
   const [selectedImg, setSelectedImg] = useState<HTMLImageElement | null>(null);
-  const [selectedImgWidth, setSelectedImgWidth] = useState<number>(450);
+  const [selectedImgWidth, setSelectedImgWidth] = useState<number>(900);
   const [selectedImgAlign, setSelectedImgAlign] = useState<"left" | "center" | "right">("center");
   const [imgBoundingRect, setImgBoundingRect] = useState<{
     top: number;
@@ -1012,17 +1012,17 @@ export default function CreatePostPage() {
       }
       selectedImg.style.cssText = "width: 100%; display: block; border-radius: 0; object-fit: cover;";
 
-      let maxWidthVal = "450px";
-      let chosenWidthPx = 450;
+      let maxWidthVal = "100%";
+      let chosenWidthPx = 900;
       if (imageSize.includes("Small") || imageSize.includes("300")) {
         maxWidthVal = "300px";
         chosenWidthPx = 300;
-      } else if (imageSize.includes("Full") || imageSize.includes("100%")) {
-        maxWidthVal = "100%";
-        chosenWidthPx = 900;
-      } else {
+      } else if (imageSize.includes("Medium") || imageSize.includes("450")) {
         maxWidthVal = "450px";
         chosenWidthPx = 450;
+      } else {
+        maxWidthVal = "100%";
+        chosenWidthPx = 900;
       }
 
       let chosenAlign: "left" | "center" | "right" = "center";
@@ -1084,10 +1084,10 @@ export default function CreatePostPage() {
     }
 
     // INSERT NEW IMAGE
-    let maxWidthVal = "450px";
+    let maxWidthVal = "100%";
     if (imageSize.includes("Small") || imageSize.includes("300")) maxWidthVal = "300px";
-    else if (imageSize.includes("Full") || imageSize.includes("100%")) maxWidthVal = "100%";
-    else maxWidthVal = "450px";
+    else if (imageSize.includes("Medium") || imageSize.includes("450")) maxWidthVal = "450px";
+    else maxWidthVal = "100%";
 
     let alignStyle = `float: none; margin: 1.25rem auto; max-width: ${maxWidthVal}; width: 100%; display: block; clear: both;`;
     if (imageAlignment.includes("Left")) {

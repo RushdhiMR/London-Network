@@ -1707,13 +1707,29 @@ function ArticlePageContentInner({
 
             {/* Featured Hero Thumbnail Image - only show above content if content doesn't already have inline image(s) */}
             {activeNewsData.image && !(/<img\b/i.test(activeNewsData.rawContent || "")) && (
-              <div className="w-full max-h-[520px] rounded-2xl overflow-hidden mb-5 border border-slate-200 shadow-sm flex items-center justify-center bg-transparent">
-                <img
-                  src={activeNewsData.image}
-                  alt={activeNewsData.title || "Article Image"}
-                  className="w-full h-auto max-h-[520px] object-cover mx-auto block"
-                />
-              </div>
+              <figure className="w-full mb-6 block">
+                <div className="w-full overflow-hidden bg-transparent">
+                  <img
+                    src={activeNewsData.image}
+                    alt={activeNewsData.title || "Article Image"}
+                    className="w-full h-auto aspect-[16/9] object-cover block mx-auto rounded-none border-0 shadow-none"
+                  />
+                </div>
+                {(() => {
+                  const capInfo = parseCaptionAndCredit(activeNewsData.caption || "", (activeNewsData as any).credit || (activeNewsData as any).imageCredit);
+                  const displayCredit = capInfo.credit.replace(/^\(PHOTO:\s*/i, "").replace(/\)$/, "").trim();
+                  if (!capInfo.caption && !displayCredit) return null;
+                  return (
+                    <figcaption className="text-xs text-slate-500 font-sans mt-2 text-left leading-normal">
+                      {capInfo.caption && displayCredit
+                        ? `${capInfo.caption} | Image: ${displayCredit}`
+                        : capInfo.caption
+                        ? capInfo.caption
+                        : `Image: ${displayCredit}`}
+                    </figcaption>
+                  );
+                })()}
+              </figure>
             )}
 
             {/* News Body Content */}
