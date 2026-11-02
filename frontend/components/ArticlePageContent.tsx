@@ -1970,7 +1970,7 @@ function ArticlePageContentInner({
                 {keyPointsList.length > 0 && (
                   <aside
                     aria-label="Key Points"
-                    className="not-prose w-full my-4 md:my-1 md:float-right md:w-[300px] lg:w-[320px] md:ml-6 md:mb-5 bg-[#F8F9FA] border border-slate-200/90 p-4 sm:p-5 rounded-none shadow-2xs font-poppins clear-right"
+                    className="not-prose w-full my-4 md:my-1 md:float-right md:w-[300px] lg:w-[320px] md:ml-6 md:mb-5 lg:-mr-12 bg-transparent border-0 shadow-none pt-1 pb-3 pl-2 pr-4 sm:pr-6 font-poppins clear-right"
                   >
                     <h3 className="text-xs font-bold text-[#BF1E2D] uppercase tracking-wider font-poppins mb-3.5">
                       KEY POINTS
@@ -2051,7 +2051,7 @@ function ArticlePageContentInner({
                 {keyPointsList.length > 0 && (
                   <aside
                     aria-label="Key Points"
-                    className="not-prose w-full my-4 md:my-1 md:float-right md:w-[300px] lg:w-[320px] md:ml-6 md:mb-5 bg-[#F8F9FA] border border-slate-200/90 p-4 sm:p-5 rounded-none shadow-2xs font-poppins clear-right"
+                    className="not-prose w-full my-4 md:my-1 md:float-right md:w-[300px] lg:w-[320px] md:ml-6 md:mb-5 lg:-mr-12 bg-transparent border-0 shadow-none pt-1 pb-3 pl-2 pr-4 sm:pr-6 font-poppins clear-right"
                   >
                     <h3 className="text-xs font-bold text-[#BF1E2D] uppercase tracking-wider font-poppins mb-3.5">
                       KEY POINTS
