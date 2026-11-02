@@ -207,12 +207,81 @@ function resolveArticleTags(article: any): string[] {
   return [];
 }
 
+function simplifyKeyPoint(raw: string): string {
+  if (!raw) return "";
+
+  let s = String(raw)
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/^[a-z0-9\s_-]*\(photo:[^)]*\)\s*/i, "")
+    .replace(/^\([A-Za-z\s]+\)\s*/, "")
+    .replace(/^[0-9]+[\.\)]\s*/, "")
+    .replace(/^[•\-\*]\s*/, "")
+    .replace(/\s*,\s*/g, ", ")
+    .replace(/"\s*([^"]+?)\s*"/g, '"$1"')
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // Reject questions or conversational rhetoric
+  if (s.endsWith("?") || /^(so\b|why\b|how\b|what\b|who\b|where\b|when\b|is\b|are\b|was\b|were\b|can\b|could\b|do\b|does\b|did\b)/i.test(s)) {
+    return "";
+  }
+
+  // Reject sentence fragments that start with conjunctions or prepositions
+  if (/^(and\b|or\b|but\b|in war\b|for that\b|because\b|which\b|that\b|while\b|whereas\b|meanwhile\b|moreover\b|furthermore\b|additionally\b)/i.test(s)) {
+    return "";
+  }
+
+  // Trim subordinate clauses to keep it short & simple (e.g. ", which left...", ", citing...")
+  const trimmed = s.split(/;\s*|,\s*(?:which|who|where|whose|citing|leaving|leading to|sparking)\b/i)[0].trim();
+  if (trimmed.length >= 30) {
+    s = trimmed;
+  }
+
+  // Cap length to ~75-80 chars cleanly at comma or word boundary
+  if (s.length > 80) {
+    const sub = s.slice(0, 80);
+    const lastComma = sub.lastIndexOf(",");
+    if (lastComma >= 35) {
+      s = sub.slice(0, lastComma).trim();
+    } else {
+      const lastSpace = sub.lastIndexOf(" ");
+      if (lastSpace >= 35) {
+        s = sub.slice(0, lastSpace).trim();
+      }
+    }
+  }
+
+  // Strip trailing punctuation
+  s = s.replace(/[,:\-\.]+$/, "").trim();
+
+  if (s) {
+    s = s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  return s.length >= 25 ? s : "";
+}
+
 function resolveKeyPoints(article: any): string[] {
   if (!article) return [];
 
+  const candidates: string[] = [];
+
   const explicit = article.key_points || article.keyPoints;
-  if (Array.isArray(explicit) && explicit.length >= 4) {
-    return explicit.slice(0, 6).map((p: any) => String(p).trim()).filter(Boolean);
+  if (Array.isArray(explicit) && explicit.length > 0) {
+    for (const p of explicit) {
+      const clean = simplifyKeyPoint(String(p));
+      if (clean && !candidates.some(c => c.toLowerCase().slice(0, 20) === clean.toLowerCase().slice(0, 20))) {
+        candidates.push(clean);
+        if (candidates.length >= 6) break;
+      }
+    }
+    if (candidates.length >= 4) {
+      return candidates.slice(0, 6);
+    }
   }
 
   let sourceText = (article.rawContent || article.content || "")
@@ -240,16 +309,14 @@ function resolveKeyPoints(article: any): string[] {
       .trim();
   }
 
-  const candidates: string[] = [];
-
   // Check <li> tags first
-  if (article.rawContent || article.content) {
+  if (candidates.length < 6 && (article.rawContent || article.content)) {
     const liMatches = (article.rawContent || article.content).match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
     if (liMatches && liMatches.length >= 3) {
       for (const li of liMatches) {
-        const text = li.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").trim();
-        if (text.length >= 20 && text.length <= 160) {
-          candidates.push(text);
+        const clean = simplifyKeyPoint(li);
+        if (clean && !candidates.some(c => c.toLowerCase().slice(0, 20) === clean.toLowerCase().slice(0, 20))) {
+          candidates.push(clean);
           if (candidates.length >= 6) break;
         }
       }
@@ -257,7 +324,7 @@ function resolveKeyPoints(article: any): string[] {
   }
 
   // Split into sentences
-  if (candidates.length < 4 && sourceText) {
+  if (candidates.length < 6 && sourceText) {
     const rawSentences = sourceText
       .split(/(?<=[.?!])\s+/)
       .map((s: string) => s.trim())
@@ -269,21 +336,8 @@ function resolveKeyPoints(article: any): string[] {
       });
 
     for (const raw of rawSentences) {
-      let clean = raw
-        .replace(/^[a-z0-9\s_-]*\(photo:[^)]*\)\s*/i, "")
-        .replace(/^\([A-Za-z\s]+\)\s*/, "")
-        .replace(/^[•\-\*]\s*/, "")
-        .replace(/\.$/, "")
-        .trim();
-
-      if (clean) {
-        clean = clean.charAt(0).toUpperCase() + clean.slice(1);
-      }
-
-      if (
-        clean.length >= 25 &&
-        !candidates.some(c => c.toLowerCase().slice(0, 25) === clean.toLowerCase().slice(0, 25))
-      ) {
+      const clean = simplifyKeyPoint(raw);
+      if (clean && !candidates.some(c => c.toLowerCase().slice(0, 20) === clean.toLowerCase().slice(0, 20))) {
         candidates.push(clean);
         if (candidates.length >= 6) break;
       }
@@ -303,8 +357,8 @@ function resolveKeyPoints(article: any): string[] {
         .filter((s: string) => s.length >= 20 && s.length <= 160);
 
       for (const s of extraSentences) {
-        const clean = s.charAt(0).toUpperCase() + s.slice(1);
-        if (!candidates.some(c => c.toLowerCase().slice(0, 20) === clean.toLowerCase().slice(0, 20))) {
+        const clean = simplifyKeyPoint(s);
+        if (clean && !candidates.some(c => c.toLowerCase().slice(0, 20) === clean.toLowerCase().slice(0, 20))) {
           candidates.push(clean);
           if (candidates.length >= 6) break;
         }
@@ -314,13 +368,13 @@ function resolveKeyPoints(article: any): string[] {
 
   // Default contextual fallbacks if still < 4
   if (candidates.length < 4) {
-    const title = (article.title || "Key Update").replace(/\.$/, "");
+    const title = simplifyKeyPoint(article.title || "Key Update") || "Key update from official report";
     const category = (article.category || "General").trim();
     const defaults = [
-      `${title}`,
+      title,
       `Key developments reported across the ${category.toLowerCase()} sector`,
-      `Authorities and industry specialists are actively monitoring outcomes`,
-      `Further official statements and market reactions are expected`
+      `Authorities and specialists are actively monitoring outcomes`,
+      `Further official statements expected as situation develops`
     ];
     for (const d of defaults) {
       if (!candidates.some(c => c.toLowerCase().slice(0, 15) === d.toLowerCase().slice(0, 15))) {
@@ -1970,7 +2024,7 @@ function ArticlePageContentInner({
                 {keyPointsList.length > 0 && (
                   <aside
                     aria-label="Key Points"
-                    className="not-prose w-full my-4 md:my-1 md:float-right md:w-[380px] lg:w-[420px] xl:w-[440px] md:ml-6 md:mb-5 lg:-mr-12 bg-transparent border-0 shadow-none pt-1 pb-3 pl-1 pr-4 sm:pr-6 font-poppins clear-right"
+                    className="not-prose w-full my-4 md:my-1 md:float-right md:w-[290px] lg:w-[310px] xl:w-[325px] md:ml-6 md:mb-5 lg:-mr-12 bg-transparent border-0 shadow-none pt-1 pb-3 pl-1 pr-4 sm:pr-6 font-poppins clear-right"
                   >
                     <h3 className="text-xs font-bold text-[#BF1E2D] uppercase tracking-wider font-poppins mb-3.5">
                       KEY POINTS
@@ -2051,7 +2105,7 @@ function ArticlePageContentInner({
                 {keyPointsList.length > 0 && (
                   <aside
                     aria-label="Key Points"
-                    className="not-prose w-full my-4 md:my-1 md:float-right md:w-[380px] lg:w-[420px] xl:w-[440px] md:ml-6 md:mb-5 lg:-mr-12 bg-transparent border-0 shadow-none pt-1 pb-3 pl-1 pr-4 sm:pr-6 font-poppins clear-right"
+                    className="not-prose w-full my-4 md:my-1 md:float-right md:w-[290px] lg:w-[310px] xl:w-[325px] md:ml-6 md:mb-5 lg:-mr-12 bg-transparent border-0 shadow-none pt-1 pb-3 pl-1 pr-4 sm:pr-6 font-poppins clear-right"
                   >
                     <h3 className="text-xs font-bold text-[#BF1E2D] uppercase tracking-wider font-poppins mb-3.5">
                       KEY POINTS
