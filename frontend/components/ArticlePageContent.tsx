@@ -2003,24 +2003,42 @@ function ArticlePageContentInner({
                       .replace(/&amp;/g, "&");
                   }
 
-                  // Strip leading hero figure or image from body content so it doesn't appear twice or push KEY POINTS down
-                  const figMatch = rawHtml.match(/^\s*<figure[^>]*>[\s\S]*?<\/figure>/i);
-                  if (figMatch) {
-                    rawHtml = rawHtml.slice(figMatch[0].length).trim();
+                  // 1. Strip leading empty paragraphs, divs, brs before the image
+                  rawHtml = rawHtml.replace(/^(\s*<(p|div)[^>]*>\s*(<br\s*\/?>|&nbsp;|\s*)*<\/\2>\s*)+/i, '');
+
+                  // 2. Strip leading hero figure or image so it never shows two images
+                  const divFigMatch = rawHtml.match(/^\s*<div[^>]*>\s*<figure[^>]*>[\s\S]*?<\/figure>[\s\S]*?<\/div>\s*/i);
+                  if (divFigMatch) {
+                    rawHtml = rawHtml.slice(divFigMatch[0].length).trim();
                   } else {
-                    const pImgMatch = rawHtml.match(/^\s*<p[^>]*>\s*<img[^>]+src=["']([^"']+)["'][^>]*>\s*<\/p>/i);
-                    if (pImgMatch) {
-                      rawHtml = rawHtml.slice(pImgMatch[0].length).trim();
+                    const figMatch = rawHtml.match(/^\s*<figure[^>]*>[\s\S]*?<\/figure>\s*/i);
+                    if (figMatch) {
+                      rawHtml = rawHtml.slice(figMatch[0].length).trim();
                     } else {
-                      const imgMatch = rawHtml.match(/^\s*<img[^>]+src=["']([^"']+)["'][^>]*>/i);
-                      if (imgMatch) {
-                        rawHtml = rawHtml.slice(imgMatch[0].length).trim();
+                      const pImgMatch = rawHtml.match(/^\s*<p[^>]*>\s*<img[^>]+src=["']([^"']+)["'][^>]*>\s*<\/p>\s*/i);
+                      if (pImgMatch) {
+                        rawHtml = rawHtml.slice(pImgMatch[0].length).trim();
+                      } else {
+                        const imgMatch = rawHtml.match(/^\s*<img[^>]+src=["']([^"']+)["'][^>]*>\s*/i);
+                        if (imgMatch) {
+                          rawHtml = rawHtml.slice(imgMatch[0].length).trim();
+                        }
                       }
                     }
                   }
 
-                  // Strip leading empty paragraphs/divs like <p><br></p>
-                  rawHtml = rawHtml.replace(/^(\s*<(p|div)>\s*(<br\s*\/?>|&nbsp;|\s*)*<\/\2>\s*)+/i, '');
+                  // 3. Strip any empty paragraphs, divs left behind after the image
+                  rawHtml = rawHtml.replace(/^(\s*<(p|div)[^>]*>\s*(<br\s*\/?>|&nbsp;|\s*)*<\/\2>\s*)+/i, '');
+
+                  // 4. If text starts with bare text (not an HTML tag), wrap first text paragraph in <p>
+                  if (rawHtml && !rawHtml.startsWith('<')) {
+                    const nextTag = rawHtml.indexOf('<');
+                    if (nextTag !== -1) {
+                      rawHtml = '<p>' + rawHtml.slice(0, nextTag) + '</p>' + rawHtml.slice(nextTag);
+                    } else {
+                      rawHtml = '<p>' + rawHtml + '</p>';
+                    }
+                  }
 
                   rawHtml = processContentLinks(rawHtml);
 
