@@ -1970,12 +1970,12 @@ function ArticlePageContentInner({
                 {keyPointsList.length > 0 && (
                   <aside
                     aria-label="Key Points"
-                    className="not-prose w-full my-4 md:my-1 md:float-right md:w-[300px] lg:w-[320px] md:ml-6 md:mb-5 lg:-mr-12 bg-transparent border-0 shadow-none pt-1 pb-3 pl-2 pr-4 sm:pr-6 font-poppins clear-right"
+                    className="not-prose w-full my-4 md:my-1 md:float-right md:w-[380px] lg:w-[420px] xl:w-[440px] md:ml-6 md:mb-5 lg:-mr-12 bg-transparent border-0 shadow-none pt-1 pb-3 pl-1 pr-4 sm:pr-6 font-poppins clear-right"
                   >
                     <h3 className="text-xs font-bold text-[#BF1E2D] uppercase tracking-wider font-poppins mb-3.5">
                       KEY POINTS
                     </h3>
-                    <ul className="space-y-3 font-poppins list-none p-0 m-0">
+                    <ul className="space-y-4 sm:space-y-[18px] font-poppins list-none p-0 m-0">
                       {keyPointsList.map((pt: string, i: number) => (
                         <li key={i} className="flex items-start gap-3 leading-snug p-0 m-0 font-poppins">
                           <span
@@ -2051,12 +2051,12 @@ function ArticlePageContentInner({
                 {keyPointsList.length > 0 && (
                   <aside
                     aria-label="Key Points"
-                    className="not-prose w-full my-4 md:my-1 md:float-right md:w-[300px] lg:w-[320px] md:ml-6 md:mb-5 lg:-mr-12 bg-transparent border-0 shadow-none pt-1 pb-3 pl-2 pr-4 sm:pr-6 font-poppins clear-right"
+                    className="not-prose w-full my-4 md:my-1 md:float-right md:w-[380px] lg:w-[420px] xl:w-[440px] md:ml-6 md:mb-5 lg:-mr-12 bg-transparent border-0 shadow-none pt-1 pb-3 pl-1 pr-4 sm:pr-6 font-poppins clear-right"
                   >
                     <h3 className="text-xs font-bold text-[#BF1E2D] uppercase tracking-wider font-poppins mb-3.5">
                       KEY POINTS
                     </h3>
-                    <ul className="space-y-3 font-poppins list-none p-0 m-0">
+                    <ul className="space-y-4 sm:space-y-[18px] font-poppins list-none p-0 m-0">
                       {keyPointsList.map((pt: string, i: number) => (
                         <li key={i} className="flex items-start gap-3 leading-snug p-0 m-0 font-poppins">
                           <span
