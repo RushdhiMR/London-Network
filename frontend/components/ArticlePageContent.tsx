@@ -1929,21 +1929,28 @@ function ArticlePageContentInner({
               );
             })()}
 
-            {/* Featured Hero Thumbnail Image - only show above content if content doesn't already have inline image(s) */}
-            {activeNewsData.image && !(/<img\b/i.test(activeNewsData.rawContent || "")) && (
-              <figure className="w-full mb-6 block">
-                <div className="w-full overflow-hidden bg-transparent">
-                  <img
-                    src={activeNewsData.image}
-                    alt={activeNewsData.title || "Article Image"}
-                    className="w-full h-auto aspect-[16/9] object-cover block mx-auto rounded-none border-0 shadow-none"
-                  />
-                </div>
-                {(() => {
-                  const capInfo = parseCaptionAndCredit(activeNewsData.caption || "", (activeNewsData as any).credit || (activeNewsData as any).imageCredit);
-                  const displayCredit = capInfo.credit.replace(/^\(PHOTO:\s*/i, "").replace(/\)$/, "").trim();
-                  if (!capInfo.caption && !displayCredit) return null;
-                  return (
+            {/* Featured Hero Thumbnail Image */}
+            {(() => {
+              let heroImage = activeNewsData.image;
+              if (!heroImage && activeNewsData.rawContent) {
+                const srcMatch = activeNewsData.rawContent.match(/<img[^>]+src=["']([^"']+)["']/i);
+                if (srcMatch) heroImage = srcMatch[1];
+              }
+              if (!heroImage) return null;
+
+              const capInfo = parseCaptionAndCredit(activeNewsData.caption || "", (activeNewsData as any).credit || (activeNewsData as any).imageCredit);
+              const displayCredit = capInfo.credit.replace(/^\(PHOTO:\s*/i, "").replace(/\)$/, "").trim();
+
+              return (
+                <figure className="w-full mb-6 block">
+                  <div className="w-full overflow-hidden bg-transparent">
+                    <img
+                      src={heroImage}
+                      alt={activeNewsData.title || "Article Image"}
+                      className="w-full h-auto aspect-[16/9] object-cover block mx-auto rounded-none border-0 shadow-none"
+                    />
+                  </div>
+                  {(capInfo.caption || displayCredit) && (
                     <figcaption className="text-xs text-slate-500 font-poppins mt-2 text-left leading-normal">
                       {capInfo.caption && displayCredit
                         ? `${capInfo.caption} | Image: ${displayCredit}`
@@ -1951,15 +1958,15 @@ function ArticlePageContentInner({
                         ? capInfo.caption
                         : `Image: ${displayCredit}`}
                     </figcaption>
-                  );
-                })()}
-              </figure>
-            )}
+                  )}
+                </figure>
+              );
+            })()}
 
             {/* News Body Content */}
             {activeNewsData.rawContent ? (
               <div className="prose prose-slate max-w-none text-zinc-900 leading-[1.8] font-poppins article-body-poppins text-[16px] md:text-[17px] flow-root [&_figure]:my-5 [&_figure]:max-w-full [&_figcaption]:text-xs [&_figcaption]:text-slate-500 [&_figcaption]:mt-1.5 [&_a]:text-[#BF1E2D] [&_a]:font-semibold [&_a]:underline hover:[&_a]:text-[#901320] [&_b]:font-bold [&_strong]:font-bold [&_blockquote]:border-l-4 [&_blockquote]:border-[#BF1E2D] [&_blockquote]:pl-4 [&_blockquote]:py-2.5 [&_blockquote]:my-4 [&_blockquote]:italic [&_blockquote]:text-slate-700 [&_blockquote]:bg-slate-50/80 [&_blockquote]:rounded-none [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_p:first-of-type]:border-l-4 [&_p:first-of-type]:border-[#BF1E2D] [&_p:first-of-type]:pl-4 [&_p:first-of-type]:font-medium [&_p:first-of-type]:text-slate-800">
-                {/* KEY POINTS Callout Box - Positioned on the right side next to lead text */}
+                {/* KEY POINTS Callout Box - Positioned on the right side next to lead text below the image */}
                 {keyPointsList.length > 0 && (
                   <aside
                     aria-label="Key Points"
@@ -1995,6 +2002,26 @@ function ArticlePageContentInner({
                       .replace(/&#39;/g, "'")
                       .replace(/&amp;/g, "&");
                   }
+
+                  // Strip leading hero figure or image from body content so it doesn't appear twice or push KEY POINTS down
+                  const figMatch = rawHtml.match(/^\s*<figure[^>]*>[\s\S]*?<\/figure>/i);
+                  if (figMatch) {
+                    rawHtml = rawHtml.slice(figMatch[0].length).trim();
+                  } else {
+                    const pImgMatch = rawHtml.match(/^\s*<p[^>]*>\s*<img[^>]+src=["']([^"']+)["'][^>]*>\s*<\/p>/i);
+                    if (pImgMatch) {
+                      rawHtml = rawHtml.slice(pImgMatch[0].length).trim();
+                    } else {
+                      const imgMatch = rawHtml.match(/^\s*<img[^>]+src=["']([^"']+)["'][^>]*>/i);
+                      if (imgMatch) {
+                        rawHtml = rawHtml.slice(imgMatch[0].length).trim();
+                      }
+                    }
+                  }
+
+                  // Strip leading empty paragraphs/divs like <p><br></p>
+                  rawHtml = rawHtml.replace(/^(\s*<(p|div)>\s*(<br\s*\/?>|&nbsp;|\s*)*<\/\2>\s*)+/i, '');
+
                   rawHtml = processContentLinks(rawHtml);
 
                   return <div className="font-poppins article-body-poppins space-y-4" dangerouslySetInnerHTML={{ __html: rawHtml }} />;
