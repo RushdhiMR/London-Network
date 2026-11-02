@@ -897,22 +897,33 @@ export default function CreatePostPage() {
       setImageKeywordInput("");
       const fig = imgToEdit.closest("figure");
       if (fig) {
-        const spans = fig.querySelectorAll("figcaption span");
-        if (spans.length >= 2) {
-          setImageCaption(spans[0].textContent?.trim() || "");
-          const cred = spans[1].textContent?.replace(/[()]/g, "").replace(/^PHOTO:\s*/i, "").trim() || "";
-          setImageCredit(cred);
-        } else if (spans.length === 1) {
-          const capText = spans[0].textContent?.trim() || "";
-          const match = capText.match(/\((?:photo:?\s*)?([^)]+)\)$/i);
-          if (match) {
-            setImageCredit(match[1].trim().toUpperCase());
-            setImageCaption(capText.replace(match[0], "").trim());
+        const figcap = fig.querySelector("figcaption");
+        if (figcap) {
+          const capText = figcap.textContent?.trim() || "";
+          const pipeMatch = capText.match(/^(.*?)\s*\|\s*(?:Image|Photo):\s*(.+)$/i);
+          if (pipeMatch) {
+            setImageCaption(pipeMatch[1].trim());
+            setImageCredit(pipeMatch[2].trim());
           } else {
-            setImageCaption(capText);
+            const spans = figcap.querySelectorAll("span");
+            if (spans.length >= 2) {
+              setImageCaption(spans[0].textContent?.trim() || "");
+              const cred = spans[1].textContent?.replace(/[()]/g, "").replace(/^(?:photo|image):\s*/i, "").trim() || "";
+              setImageCredit(cred);
+            } else {
+              const match = capText.match(/\((?:photo:?\s*|image:?\s*)?([^)]+)\)$/i);
+              if (match) {
+                setImageCredit(match[1].trim());
+                setImageCaption(capText.replace(match[0], "").trim());
+              } else {
+                setImageCaption(capText);
+                setImageCredit("");
+              }
+            }
           }
         } else {
           setImageCaption(imgToEdit.alt || "");
+          setImageCredit("");
         }
 
         if (fig.style.float === "left") setImageAlignment("Left (Wrap Text)");
@@ -979,24 +990,33 @@ export default function CreatePostPage() {
     let rawCred = imageCredit.trim();
 
     if (!rawCred && rawCap) {
-      const match = rawCap.match(/\((?:photo:?\s*)?([^)]+)\)$/i);
-      if (match) {
-        rawCred = match[1].trim().toUpperCase();
-        rawCap = rawCap.replace(match[0], "").trim();
+      const pipeMatch = rawCap.match(/^(.*?)\s*\|\s*(?:Image|Photo):\s*(.+)$/i);
+      if (pipeMatch) {
+        rawCap = pipeMatch[1].trim();
+        rawCred = pipeMatch[2].trim();
+      } else {
+        const match = rawCap.match(/\((?:photo:?\s*|image:?\s*)?([^)]+)\)$/i);
+        if (match) {
+          rawCred = match[1].trim();
+          rawCap = rawCap.replace(match[0], "").trim();
+        }
       }
     }
 
-    const leftSpan = rawCap
-      ? `<span style="font-style: italic; color: #475569; font-size: 0.75rem;">${rawCap}</span>`
-      : `<span></span>`;
+    if (rawCred) {
+      rawCred = rawCred.replace(/^\(?(?:photo:?\s*|image:?\s*)/i, "").replace(/\)$/, "").trim();
+    }
 
-    const rightSpan = rawCred
-      ? `<span style="font-weight: 700; color: #94A3B8; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.05em; flex-shrink: 0;">${
-          rawCred.startsWith("PHOTO:") ? `(${rawCred})` : `(PHOTO: ${rawCred.toUpperCase()})`
-        }</span>`
-      : "";
+    let captionText = "";
+    if (rawCap && rawCred) {
+      captionText = `${rawCap} | Image: ${rawCred}`;
+    } else if (rawCap) {
+      captionText = rawCap;
+    } else if (rawCred) {
+      captionText = `Image: ${rawCred}`;
+    }
 
-    const captionInnerHtml = `${leftSpan}${rightSpan}`;
+    const captionInnerHtml = captionText;
     const kwString = imageKeywords.join(", ");
 
     if (selectedImg) {
@@ -1053,7 +1073,7 @@ export default function CreatePostPage() {
           figcaption = document.createElement("figcaption");
           fig.appendChild(figcaption);
         }
-        figcaption.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.75rem; color: #64748B; margin-top: 0.4rem; width: 100%; font-family: sans-serif; box-sizing: border-box;";
+        figcaption.style.cssText = "font-size: 0.75rem; color: #64748B; margin-top: 0.4rem; width: 100%; font-family: Poppins, sans-serif; text-align: left; line-height: 1.4; box-sizing: border-box;";
         figcaption.innerHTML = captionInnerHtml;
       } else if (figcaption) {
         figcaption.remove();
@@ -1098,10 +1118,8 @@ export default function CreatePostPage() {
       alignStyle = `float: right; margin: 0.5rem 0 0.5rem 1.25rem; max-width: ${floatMaxWidth}; width: 100%; display: block;`;
     }
 
-    const captionHtml = (rawCap || rawCred)
-      ? `<figcaption style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.75rem; color: #64748B; margin-top: 0.35rem; width: 100%; font-family: sans-serif; box-sizing: border-box;">
-          ${captionInnerHtml}
-        </figcaption>`
+    const captionHtml = captionText
+      ? `<figcaption style="font-size: 0.75rem; color: #64748B; margin-top: 0.35rem; width: 100%; font-family: Poppins, sans-serif; text-align: left; line-height: 1.4; box-sizing: border-box;">${captionInnerHtml}</figcaption>`
       : "";
 
     const kwAttr = kwString ? ` data-keywords="${kwString}" data-seo-keywords="${kwString}"` : "";

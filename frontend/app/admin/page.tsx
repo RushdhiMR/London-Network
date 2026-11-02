@@ -7654,9 +7654,8 @@ export default function AdminDashboardPage() {
                         className="w-full h-full object-cover"
                       />
                     </div>
-                    <div className="flex items-center justify-between text-xs text-slate-400 italic font-sans px-1">
-                      <span>Evolution or the creation of a new bubble?</span>
-                      <span className="uppercase font-mono text-[10px] font-bold text-slate-500">(PHOTO: GETTY IMAGES)</span>
+                    <div className="text-xs text-slate-500 font-poppins px-1 text-left leading-normal">
+                      <span>Evolution or the creation of a new bubble? | Image: Getty Images</span>
                     </div>
                   </div>
                 )}

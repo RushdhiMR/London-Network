@@ -95,12 +95,25 @@ function formatCategorySlug(cat?: string | null): string {
   return cat.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || "news";
 }
 
+function cleanCreditName(str: string): string {
+  let c = str.trim()
+    .replace(/^\(?(?:photo\s+courtesy\s+of\s+|courtesy\s+of\s+|photo:?\s*|image:?\s*)/i, "")
+    .replace(/[\(\)]/g, "")
+    .trim();
+  if (c.toUpperCase() === "LONDON BIGBEN") return "London BigBen";
+  if (c.toUpperCase() === "GETTY IMAGES") return "Getty Images";
+  if (c.toUpperCase() === "AFP/FILE" || c.toUpperCase() === "AFP / FILE") return "AFP/File";
+  if (c.toUpperCase() === "REUTERS") return "Reuters";
+  if (c.toUpperCase() === "AP PHOTO" || c.toUpperCase() === "AP") return "AP Photo";
+  return c;
+}
+
 function parseCaptionAndCredit(rawCaption: string, rawCredit?: string) {
   if (rawCredit && rawCredit.trim()) {
-    const cleanCredit = rawCredit.trim().replace(/^\(?(photo:?\s*)?/i, "").replace(/\)?$/, "");
+    const cleanCredit = cleanCreditName(rawCredit);
     return {
       caption: rawCaption.trim(),
-      credit: `(PHOTO: ${cleanCredit.toUpperCase()})`
+      credit: cleanCredit
     };
   }
 
@@ -109,30 +122,37 @@ function parseCaptionAndCredit(rawCaption: string, rawCredit?: string) {
     return { caption: "", credit: "" };
   }
 
-  const bracketMatch = str.match(/\((?:photo:?\s*)?([^)]+)\)$/i);
-  if (bracketMatch) {
-    const creditText = bracketMatch[1].trim().toUpperCase();
-    const cleanCaption = str.replace(bracketMatch[0], "").trim();
-    const formattedCredit = creditText.startsWith("PHOTO:") ? `(${creditText})` : `(PHOTO: ${creditText})`;
+  const pipeMatch = str.match(/^(.*?)\s*\|\s*(?:Image|Photo):\s*(.+)$/i);
+  if (pipeMatch) {
     return {
-      caption: cleanCaption || str,
-      credit: formattedCredit
+      caption: pipeMatch[1].trim(),
+      credit: cleanCreditName(pipeMatch[2])
     };
   }
 
-  const dashMatch = str.match(/—\s*photo\s+courtesy\s+of\s+(.+)$/i);
+  const bracketMatch = str.match(/\((?:photo:?\s*|image:?\s*|photo courtesy of\s*)?([^)]+)\)$/i);
+  if (bracketMatch) {
+    const creditText = cleanCreditName(bracketMatch[1]);
+    const cleanCaption = str.replace(bracketMatch[0], "").trim();
+    return {
+      caption: cleanCaption || str,
+      credit: creditText
+    };
+  }
+
+  const dashMatch = str.match(/—\s*(?:photo\s+courtesy\s+of|courtesy\s+of|photo|image)\s*[:\s]+(.+)$/i);
   if (dashMatch) {
-    const creditText = dashMatch[1].trim().toUpperCase();
+    const creditText = cleanCreditName(dashMatch[1]);
     const cleanCaption = str.replace(dashMatch[0], "").trim();
     return {
       caption: cleanCaption || str,
-      credit: `(PHOTO: ${creditText})`
+      credit: creditText
     };
   }
 
   return {
     caption: str,
-    credit: "(PHOTO: LONDON BIGBEN)"
+    credit: ""
   };
 }
 
@@ -1993,7 +2013,7 @@ function ArticlePageContentInner({
               if (!heroImage) return null;
 
               const capInfo = parseCaptionAndCredit(activeNewsData.caption || "", (activeNewsData as any).credit || (activeNewsData as any).imageCredit);
-              const displayCredit = capInfo.credit.replace(/^\(PHOTO:\s*/i, "").replace(/\)$/, "").trim();
+              const displayCredit = capInfo.credit;
 
               return (
                 <figure className="w-full mb-6 block">
@@ -2095,6 +2115,33 @@ function ArticlePageContentInner({
                   }
 
                   rawHtml = processContentLinks(rawHtml);
+
+                  // Normalize any body figure captions into uniform "Caption | Image: Credit"
+                  rawHtml = rawHtml.replace(/<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/gi, (_fullMatch, innerContent) => {
+                    const spanMatches = Array.from(innerContent.matchAll(/<span[^>]*>([\s\S]*?)<\/span>/gi)).map((m: any) => m[1]);
+                    let cap = "";
+                    let cred = "";
+                    if (spanMatches.length >= 2) {
+                      cap = String(spanMatches[0]).replace(/<[^>]+>/g, "").trim();
+                      cred = String(spanMatches[1]).replace(/<[^>]+>/g, "").trim();
+                    } else if (spanMatches.length === 1) {
+                      cap = String(spanMatches[0]).replace(/<[^>]+>/g, "").trim();
+                    } else {
+                      cap = innerContent.replace(/<[^>]+>/g, "").trim();
+                    }
+
+                    const parsed = parseCaptionAndCredit(cap, cred);
+                    let finalText = "";
+                    if (parsed.caption && parsed.credit) {
+                      finalText = `${parsed.caption} | Image: ${parsed.credit}`;
+                    } else if (parsed.caption) {
+                      finalText = parsed.caption;
+                    } else if (parsed.credit) {
+                      finalText = `Image: ${parsed.credit}`;
+                    }
+
+                    return `<figcaption class="text-xs text-slate-500 font-poppins mt-2 text-left leading-normal">${finalText}</figcaption>`;
+                  });
 
                   return <div className="font-poppins article-body-poppins space-y-4" dangerouslySetInnerHTML={{ __html: rawHtml }} />;
                 })()}
