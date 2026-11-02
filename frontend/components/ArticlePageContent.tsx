@@ -1965,7 +1965,7 @@ function ArticlePageContentInner({
 
             {/* News Body Content */}
             {activeNewsData.rawContent ? (
-              <div className="prose prose-slate max-w-none text-zinc-900 leading-[1.8] font-poppins article-body-poppins text-[16px] md:text-[17px] flow-root [&_figure]:my-5 [&_figure]:max-w-full [&_figcaption]:text-xs [&_figcaption]:text-slate-500 [&_figcaption]:mt-1.5 [&_a]:text-[#BF1E2D] [&_a]:font-semibold [&_a]:underline hover:[&_a]:text-[#901320] [&_b]:font-bold [&_strong]:font-bold [&_blockquote]:border-l-4 [&_blockquote]:border-[#BF1E2D] [&_blockquote]:pl-4 [&_blockquote]:py-2.5 [&_blockquote]:my-4 [&_blockquote]:italic [&_blockquote]:text-slate-700 [&_blockquote]:bg-slate-50/80 [&_blockquote]:rounded-none [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_p:first-of-type]:border-l-4 [&_p:first-of-type]:border-[#BF1E2D] [&_p:first-of-type]:pl-4 [&_p:first-of-type]:font-medium [&_p:first-of-type]:text-slate-800">
+              <div className="prose prose-slate max-w-none text-zinc-900 leading-[1.8] font-poppins article-body-poppins text-[16px] md:text-[17px] flow-root [&_figure]:my-5 [&_figure]:max-w-full [&_figcaption]:text-xs [&_figcaption]:text-slate-500 [&_figcaption]:mt-1.5 [&_a]:text-[#BF1E2D] [&_a]:font-semibold [&_a]:underline hover:[&_a]:text-[#901320] [&_b]:font-bold [&_strong]:font-bold [&_blockquote]:border-l-4 [&_blockquote]:border-[#BF1E2D] [&_blockquote]:pl-4 [&_blockquote]:py-2.5 [&_blockquote]:my-4 [&_blockquote]:italic [&_blockquote]:text-slate-700 [&_blockquote]:bg-slate-50/80 [&_blockquote]:rounded-none [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6">
                 {/* KEY POINTS Callout Box - Positioned on the right side next to lead text below the image */}
                 {keyPointsList.length > 0 && (
                   <aside
@@ -2047,7 +2047,7 @@ function ArticlePageContentInner({
               </div>
             ) : (
               /* Fallback for static legacy articles */
-              <div className="font-poppins article-body-poppins text-[16px] md:text-[17px] text-zinc-900 leading-[1.8] tracking-normal mt-0 flow-root [&_p:first-of-type]:border-l-4 [&_p:first-of-type]:border-[#BF1E2D] [&_p:first-of-type]:pl-4 [&_p:first-of-type]:font-medium [&_p:first-of-type]:text-slate-800">
+              <div className="font-poppins article-body-poppins text-[16px] md:text-[17px] text-zinc-900 leading-[1.8] tracking-normal mt-0 flow-root">
                 {keyPointsList.length > 0 && (
                   <aside
                     aria-label="Key Points"
