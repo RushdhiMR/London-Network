@@ -205,6 +205,15 @@ const DEFAULT_TRENDING_WORDS: TrendingWordItem[] = [
   { id: "6", word: "Inflation Rate", category: "Economy", searchVolume: "110K", addedDate: "2026-09-15", status: "Active", url: "/search?q=Inflation+Rate" }
 ];
 
+const DEFAULT_ARTICLE_TRENDING_TOPICS: string[] = [
+  "UK Economy",
+  "Prime Minister",
+  "EU-UK Relations",
+  "Defence Policy",
+  "Immigration",
+  "Parliament"
+];
+
 interface Stats {
   totalArticles: number;
   totalAuthors: number;
@@ -998,6 +1007,49 @@ export default function AdminDashboardPage() {
       (tw.category && tw.category.toLowerCase().includes(trendingSearchQuery.toLowerCase()));
     return matchesQuery;
   });
+
+  // Article Section Trending Topics (6 Slots) State
+  const [articleTrendingTopics, setArticleTrendingTopics] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("article_trending_topics");
+        if (saved && saved.trim()) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const slots: string[] = [];
+            for (let i = 0; i < 6; i++) {
+              slots.push(typeof parsed[i] === "string" ? parsed[i] : (DEFAULT_ARTICLE_TRENDING_TOPICS[i] || ""));
+            }
+            return slots;
+          }
+        }
+      } catch (e) {}
+    }
+    return [...DEFAULT_ARTICLE_TRENDING_TOPICS];
+  });
+  const [trendingSubTab, setTrendingSubTab] = useState<"article_section" | "header_ticker">("article_section");
+
+  const handleSaveArticleTrendingTopics = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    try {
+      localStorage.setItem("article_trending_topics", JSON.stringify(articleTrendingTopics));
+      window.dispatchEvent(new Event("article_trending_topics_change"));
+      showNotification("✓ Article section trending topics (6 slots) saved successfully!");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleResetArticleTrendingTopics = () => {
+    if (confirm("Reset article section trending topics to default 6 slots?")) {
+      setArticleTrendingTopics([...DEFAULT_ARTICLE_TRENDING_TOPICS]);
+      try {
+        localStorage.setItem("article_trending_topics", JSON.stringify(DEFAULT_ARTICLE_TRENDING_TOPICS));
+        window.dispatchEvent(new Event("article_trending_topics_change"));
+        showNotification("✓ Reset to default 6 trending topics!");
+      } catch (err) {}
+    }
+  };
 
   // Reels Management State (10 Dedicated Slots)
   const [reelsVideos, setReelsVideos] = useState<ReelVideo[]>(() => {
@@ -6444,9 +6496,200 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-        {/* TAB 9: TRENDING WORDS */}
+        {/* TAB 9: TRENDING WORDS & TOPICS */}
         {activeTab === "trending_words" && (
           <div className="space-y-6">
+
+            {/* Sub-Tab Navigation: Article Section (6 Slots) vs Header Ticker Words */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTrendingSubTab("article_section")}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                    trendingSubTab === "article_section"
+                      ? "bg-[#D31220] text-white shadow-sm"
+                      : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                  }`}
+                >
+                  <TrendingUp className="w-4 h-4" />
+                  <span>Article Trending Topics (6 Slots)</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${
+                    trendingSubTab === "article_section" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"
+                  }`}>
+                    6
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setTrendingSubTab("header_ticker")}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                    trendingSubTab === "header_ticker"
+                      ? "bg-[#D31220] text-white shadow-sm"
+                      : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>Header Ticker Words</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${
+                    trendingSubTab === "header_ticker" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"
+                  }`}>
+                    {trendingWords.length}
+                  </span>
+                </button>
+              </div>
+
+              {trendingSubTab === "article_section" && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleResetArticleTrendingTopics}
+                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer font-sans"
+                  >
+                    Reset Defaults
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSaveArticleTrendingTopics()}
+                    className="px-4 py-2 bg-[#D31220] hover:bg-[#b91522] text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer font-sans shadow-sm"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>SAVE 6 SLOTS</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* SUB-VIEW 1: ARTICLE SECTION TRENDING TOPICS (6 SLOTS) */}
+            {trendingSubTab === "article_section" && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-xl font-extrabold font-sans text-slate-900 tracking-tight flex items-center gap-2.5">
+                    <TrendingUp className="w-5 h-5 text-[#D31220]" />
+                    <span>Article Section Trending Topics (6 Slots)</span>
+                  </h2>
+                  <p className="text-xs font-mono text-slate-400 mt-0.5">
+                    Configure the 6 numbered trending topics displayed in the right sidebar under &ldquo;Latest in [Category]&rdquo; across all article pages.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                  {/* Left Column: 6 Slots Configuration */}
+                  <div className="lg:col-span-7 space-y-3.5">
+                    {[0, 1, 2, 3, 4, 5].map((slotIdx) => (
+                      <div
+                        key={`admin-slot-${slotIdx}`}
+                        className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center gap-3.5"
+                      >
+                        <div className="flex items-center gap-2.5 sm:w-28 flex-shrink-0">
+                          <span className="w-7 h-7 rounded-lg bg-[#D31220] text-white font-bold text-xs flex items-center justify-center font-mono">
+                            {slotIdx + 1}
+                          </span>
+                          <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-500">
+                            Slot {slotIdx + 1}
+                          </span>
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <input
+                            type="text"
+                            value={articleTrendingTopics[slotIdx] || ""}
+                            onChange={(e) => {
+                              const updated = [...articleTrendingTopics];
+                              updated[slotIdx] = e.target.value;
+                              setArticleTrendingTopics(updated);
+                            }}
+                            placeholder={`e.g. ${DEFAULT_ARTICLE_TRENDING_TOPICS[slotIdx] || "Topic name"}`}
+                            className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:border-[#D31220] focus:bg-white transition-all font-sans"
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = [...articleTrendingTopics];
+                              updated[slotIdx] = DEFAULT_ARTICLE_TRENDING_TOPICS[slotIdx] || "";
+                              setArticleTrendingTopics(updated);
+                            }}
+                            title="Reset to default"
+                            className="px-2.5 py-1.5 text-[10.5px] font-mono text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+                          >
+                            Reset
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = [...articleTrendingTopics];
+                              updated[slotIdx] = "";
+                              setArticleTrendingTopics(updated);
+                            }}
+                            title="Clear slot"
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                    <div className="pt-2 flex items-center justify-between">
+                      <p className="text-[11px] font-mono text-slate-400">
+                        Changes immediately reflect across all article sidebars upon saving.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => handleSaveArticleTrendingTopics()}
+                        className="px-5 py-2.5 bg-[#D31220] hover:bg-[#b91522] text-white rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer font-sans shadow-sm"
+                      >
+                        <Check className="w-4 h-4" />
+                        <span>SAVE ALL 6 SLOTS</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Live Article Sidebar Preview */}
+                  <div className="lg:col-span-5 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+                    <div className="flex items-center justify-between pb-2 mb-3 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-500">
+                          Article Sidebar Live Preview
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono text-slate-400">6 Slots</span>
+                    </div>
+
+                    <div className="p-4 bg-slate-50/70 border border-slate-200/80 rounded-xl">
+                      <div className="flex items-center gap-2 pb-2 mb-3.5 border-b border-zinc-200 font-sans">
+                        <span className="w-1.5 h-4 bg-[#BF1E2D] inline-block"></span>
+                        <h3 className="text-[13px] font-bold text-slate-900 uppercase tracking-wider font-sans">
+                          TRENDING TOPICS
+                        </h3>
+                      </div>
+
+                      <ol className="space-y-2.5 font-sans list-none p-0 m-0">
+                        {articleTrendingTopics.map((topic, idx) => (
+                          <li key={`preview-topic-${idx}`} className="flex items-center gap-3">
+                            <span className="w-4 text-left font-sans font-bold text-xs text-[#BF1E2D] flex-shrink-0">
+                              {idx + 1}
+                            </span>
+                            <span className="text-xs font-medium text-slate-800 leading-snug font-sans truncate">
+                              {topic || <span className="text-slate-400 italic font-mono">Empty Slot</span>}
+                            </span>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SUB-VIEW 2: HEADER TICKER WORDS */}
+            {trendingSubTab === "header_ticker" && (
+              <div className="space-y-6">
             
             {/* Header & Search Toolbar */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -6589,6 +6832,8 @@ export default function AdminDashboardPage() {
                 </table>
               </div>
             </div>
+              </div>
+            )}
 
           </div>
         )}

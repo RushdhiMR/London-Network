@@ -90,6 +90,15 @@ interface ArticlePageContentProps {
   sidebarPicks: SidebarItem[];
 }
 
+const DEFAULT_ARTICLE_TRENDING_TOPICS = [
+  "UK Economy",
+  "Prime Minister",
+  "EU-UK Relations",
+  "Defence Policy",
+  "Immigration",
+  "Parliament"
+];
+
 function formatCategorySlug(cat?: string | null): string {
   if (!cat) return "news";
   return cat.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || "news";
@@ -544,6 +553,42 @@ function ArticlePageContentInner({
     sections: newsData?.sections || []
   });
   const { articles: liveArticles, loading: liveArticlesLoading } = useLiveArticles();
+
+  // Article Section Trending Topics (6 slots) synced with Admin
+  const [articleTrendingTopics, setArticleTrendingTopics] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("article_trending_topics");
+        if (saved && saved.trim()) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.filter((t: any) => typeof t === "string" && t.trim() !== "").slice(0, 6);
+          }
+        }
+      } catch (e) {}
+    }
+    return DEFAULT_ARTICLE_TRENDING_TOPICS;
+  });
+
+  useEffect(() => {
+    const handleSync = () => {
+      try {
+        const saved = localStorage.getItem("article_trending_topics");
+        if (saved && saved.trim()) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setArticleTrendingTopics(parsed.filter((t: any) => typeof t === "string" && t.trim() !== "").slice(0, 6));
+          }
+        }
+      } catch (e) {}
+    };
+    window.addEventListener("article_trending_topics_change", handleSync);
+    window.addEventListener("storage", handleSync);
+    return () => {
+      window.removeEventListener("article_trending_topics_change", handleSync);
+      window.removeEventListener("storage", handleSync);
+    };
+  }, []);
 
   // Reset resolution state on route or article prop changes so previous article never flashes
   useEffect(() => {
@@ -3126,6 +3171,36 @@ function ArticlePageContentInner({
                     </Link>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* SECTION 4: TRENDING TOPICS (6 SLOTS) */}
+            {articleTrendingTopics.length > 0 && (
+              <div className="mb-8 font-sans">
+                <div className="flex items-center gap-2 pb-2 mb-4 border-b border-zinc-200 font-sans">
+                  <span className="w-1.5 h-4 bg-[#BF1E2D] inline-block"></span>
+                  <h3 className="text-[14px] font-bold text-slate-900 uppercase tracking-wider font-sans">
+                    TRENDING TOPICS
+                  </h3>
+                </div>
+
+                <ol className="space-y-3 font-sans list-none p-0 m-0">
+                  {articleTrendingTopics.map((topic, idx) => (
+                    <li key={`article-trending-topic-${idx}`}>
+                      <Link
+                        href={`/search?q=${encodeURIComponent(topic)}`}
+                        className="flex items-center gap-3.5 group cursor-pointer"
+                      >
+                        <span className="w-4 text-left font-sans font-bold text-sm text-[#BF1E2D] flex-shrink-0">
+                          {idx + 1}
+                        </span>
+                        <span className="text-[13px] md:text-[13.5px] font-medium text-slate-800 group-hover:text-[#BF1E2D] transition-colors leading-snug font-sans">
+                          {topic}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ol>
               </div>
             )}
 
