@@ -690,8 +690,8 @@ function ArticlePageContentInner({
     return resolveKeyPoints(activeNewsData);
   }, [activeNewsData]);
 
-  // Related News (4) and Most Read (5) for the right sidebar
-  const { relatedNewsArticles, mostReadArticles } = useMemo(() => {
+  // Related News (4), Most Read (5), and Latest in Category (5) for the right sidebar
+  const { relatedNewsArticles, mostReadArticles, latestInCategoryArticles, targetCat: sidebarTargetCat } = useMemo(() => {
     const currentId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
     const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
 
@@ -766,7 +766,9 @@ function ArticlePageContentInner({
       }));
       return {
         relatedNewsArticles: picks.slice(0, 4),
-        mostReadArticles: picks.slice(0, 5)
+        mostReadArticles: picks.slice(0, 5),
+        latestInCategoryArticles: picks.slice(0, 5),
+        targetCat
       };
     }
 
@@ -783,7 +785,54 @@ function ArticlePageContentInner({
     const sortedByViews = [...published].sort((a, b) => getViews(b, 0) - getViews(a, 0));
     const mostReadArticles = sortedByViews.slice(0, 5).map(mapPost);
 
-    return { relatedNewsArticles, mostReadArticles };
+    // Track all article IDs and titles already shown above in the sidebar or active article
+    const shownIds = new Set<string>();
+    const shownTitles = new Set<string>();
+
+    if (currentId) shownIds.add(currentId);
+    if (currentTitle) shownTitles.add(currentTitle);
+
+    relatedNewsArticles.forEach((a) => {
+      if (a.id) shownIds.add(String(a.id));
+      if (a.title) shownTitles.add(a.title.trim().toLowerCase());
+    });
+
+    mostReadArticles.forEach((a) => {
+      if (a.id) shownIds.add(String(a.id));
+      if (a.title) shownTitles.add(a.title.trim().toLowerCase());
+    });
+
+    const getPostTime = (p: any): number => {
+      const raw = p.published_at || p.publishedAt || p.createdAt || p.date || p.updated_at;
+      if (!raw) return 0;
+      const t = new Date(raw).getTime();
+      return isNaN(t) ? 0 : t;
+    };
+
+    const latestSorted = [...published].sort((a, b) => getPostTime(b) - getPostTime(a));
+
+    let catMatches = targetCat && targetCat.toLowerCase() !== "article"
+      ? latestSorted.filter(
+          (p) =>
+            articleBelongsToCategory(p, targetCat) &&
+            !shownIds.has(String(p.id)) &&
+            !shownTitles.has((p.title || "").trim().toLowerCase())
+        )
+      : [];
+
+    if (catMatches.length < 5) {
+      const remainder = latestSorted.filter(
+        (p) =>
+          !shownIds.has(String(p.id)) &&
+          !shownTitles.has((p.title || "").trim().toLowerCase()) &&
+          !catMatches.some((m) => String(m.id) === String(p.id))
+      );
+      catMatches = [...catMatches, ...remainder];
+    }
+
+    const latestInCategoryArticles = catMatches.slice(0, 5).map(mapPost);
+
+    return { relatedNewsArticles, mostReadArticles, latestInCategoryArticles, targetCat };
   }, [liveArticles, activeNewsData, newsData, category, parent, sidebarPicks]);
 
   const popularSidebarArticles = mostReadArticles;
@@ -3021,6 +3070,64 @@ function ArticlePageContentInner({
                 ))}
               </div>
             </div>
+
+            {/* SECTION 3: LATEST IN CATEGORY */}
+            {latestInCategoryArticles.length > 0 && (
+              <div className="mb-8">
+                <div className="flex items-center justify-between pb-2 mb-4 border-b border-zinc-200 font-sans">
+                  <h3 className="text-[14px] font-bold text-slate-900 uppercase tracking-wider font-sans">
+                    LATEST IN {((sidebarTargetCat && sidebarTargetCat.toLowerCase() !== "article" ? sidebarTargetCat : activeNewsData?.category || "NEWS")).toUpperCase()}
+                  </h3>
+                  {(() => {
+                    const catSlug = formatCategorySlug(
+                      (sidebarTargetCat && sidebarTargetCat.toLowerCase() !== "article" ? sidebarTargetCat : "") ||
+                      (activeNewsData?.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "") ||
+                      parent?.name ||
+                      "news"
+                    );
+                    return (
+                      <Link
+                        href={`/category/${catSlug}`}
+                        className="text-[#BF1E2D] hover:underline text-xs font-semibold flex items-center gap-0.5"
+                      >
+                        <span>View All</span>
+                        <span>→</span>
+                      </Link>
+                    );
+                  })()}
+                </div>
+
+                <div className="space-y-3.5 font-sans">
+                  {latestInCategoryArticles.map((item, idx) => (
+                    <Link
+                      key={`latest-cat-sidebar-${idx}-${item.id || item.href}`}
+                      href={item.href}
+                      className="flex gap-3 items-start cursor-pointer group pb-3.5 border-b border-zinc-100 last:border-none"
+                    >
+                      <div className="relative w-[105px] h-[72px] flex-shrink-0 overflow-hidden bg-slate-100 rounded-none">
+                        <img
+                          src={item.image}
+                          alt={item.title}
+                          onError={(e) => {
+                            e.currentTarget.src = "https://images.unsplash.com/photo-1518770660439-4636190af475?w=150&h=150&fit=crop";
+                          }}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      </div>
+                      <div className="flex flex-col text-left flex-1 min-w-0">
+                        <span className="text-[10px] font-bold text-[#BF1E2D] uppercase tracking-wider font-sans mb-0.5">
+                          {item.category}
+                        </span>
+                        <h4 className="text-[13px] md:text-[13.5px] font-bold leading-snug text-slate-900 group-hover:text-[#BF1E2D] transition-colors mb-1 font-editorial-serif line-clamp-2">
+                          {item.title}
+                        </h4>
+                        <p className="text-[11px] text-zinc-400 font-normal font-sans">{item.date}</p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Sticky Advertisement Section */}
             <div className="sticky top-20 z-10 w-full flex flex-col items-start space-y-6">
