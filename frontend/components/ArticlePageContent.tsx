@@ -2483,7 +2483,7 @@ function ArticlePageContentInner({
               const displayBio = cleanAuth.bio || `${cleanAuth.name} is a ${authorRole.toLowerCase()} covering UK government, Parliament, policy and international relations. She has reported on political developments across Europe for over a decade.`;
 
               return (
-                <div className="mt-8 pt-6 border-t border-zinc-200 font-sans" suppressHydrationWarning>
+                <div className="mt-6 pt-5 border-t border-zinc-200 font-sans" suppressHydrationWarning>
                   <div className="flex items-start gap-4 sm:gap-5">
                     {/* Circular Avatar */}
                     <Link
@@ -2589,7 +2589,7 @@ function ArticlePageContentInner({
               if (!tagsList || tagsList.length === 0) return null;
 
               return (
-                <div className="mt-5 flex items-center gap-2 flex-wrap font-sans">
+                <div className="mt-3.5 flex items-center gap-2 flex-wrap font-sans">
                   <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500 font-sans mr-1 shrink-0">
                     TAGS
                   </span>
@@ -2607,7 +2607,7 @@ function ArticlePageContentInner({
             })()}
 
             {/* ── 3. SHARE THIS ARTICLE ROW ── */}
-            <div className="mt-4 flex items-center gap-2.5 flex-wrap font-sans">
+            <div className="mt-3 flex items-center gap-2.5 flex-wrap font-sans">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-900 font-sans mr-1 shrink-0">
                 SHARE THIS ARTICLE
               </span>
@@ -2709,7 +2709,7 @@ function ArticlePageContentInner({
 
             {/* ── 4. PREVIOUS ARTICLE / NEXT ARTICLE NAVIGATION ROW ── */}
             {(prevArticle || nextArticle) && (
-              <div className="my-6 py-3.5 border-y border-zinc-200 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center font-sans">
+              <div className="mt-4 mb-3.5 py-2.5 border-y border-zinc-200 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center font-sans">
                 {/* Previous Article */}
                 {prevArticle ? (
                   <Link
@@ -2775,7 +2775,7 @@ function ArticlePageContentInner({
             )}
 
             {/* ── 5. NEWSLETTER SIGNUP CARD ── */}
-            <div className="bg-[#F8FAFC] border border-slate-200/90 p-5 sm:p-6 my-6 font-sans">
+            <div className="bg-[#F8FAFC] border border-slate-200/90 p-4 sm:p-5 mb-4 font-sans">
               <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
                 <div className="md:col-span-6 lg:col-span-7">
                   <h3 className="font-serif font-bold text-base sm:text-lg lg:text-[19px] text-slate-900 leading-snug">
@@ -2830,8 +2830,8 @@ function ArticlePageContentInner({
 
             {/* ── 6. RELATED CATEGORY NEWS (4-Column Card Grid) ── */}
             {relatedNewsArticles.length > 0 && (
-              <div className="mt-8 mb-8 font-sans">
-                <div className="flex items-center justify-between pb-2 mb-4 border-b border-zinc-200">
+              <div className="mb-4 font-sans">
+                <div className="flex items-center justify-between pb-1.5 mb-3 border-b border-zinc-200">
                   <div className="relative pb-2 -mb-[9px] border-b-2 border-[#BF1E2D]">
                     <h3 className="text-sm sm:text-[15px] font-bold text-slate-900 uppercase tracking-wider font-sans">
                       RELATED {activeNewsData.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category.toUpperCase() : "POLITICAL"} NEWS
@@ -2884,8 +2884,8 @@ function ArticlePageContentInner({
               return (
                 <>
                   {/* INTERACTIVE COMMENTS & OPINIONS SECTION */}
-                  <div className="mt-8 pt-6 border-t border-zinc-200 font-sans">
-                    <div className="flex items-center justify-between mb-4">
+                  <div className="pt-4 border-t border-zinc-200 font-sans">
+                    <div className="flex items-center justify-between mb-3">
                       <h3 className="text-sm font-bold text-black uppercase tracking-wider font-standard-sans flex items-center gap-2">
                         <span>Comments</span>
                         <span className="text-[11px] bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded-full font-mono font-bold">
@@ -2912,7 +2912,7 @@ function ArticlePageContentInner({
 
                     {/* Write Opinion / Comment Box */}
                     {!isMounted || !auth.user ? (
-                      <div className="bg-slate-50/90 border border-slate-200 rounded-2xl p-6 sm:p-7 mb-8 text-center shadow-2xs">
+                      <div className="bg-slate-50/90 border border-slate-200 rounded-xl p-4 sm:p-5 mb-3.5 text-center shadow-2xs">
                         <h4 className="text-sm font-bold text-slate-900 mb-1 font-standard-sans">
                           Sign in to Join the Conversation
                         </h4>
@@ -2936,7 +2936,7 @@ function ArticlePageContentInner({
                         </div>
                       </div>
                     ) : (
-                      <form onSubmit={handlePostComment} className="bg-slate-50/80 border border-slate-200 rounded-2xl p-4 sm:p-5 mb-8 shadow-2xs">
+                      <form onSubmit={handlePostComment} className="bg-slate-50/80 border border-slate-200 rounded-xl p-3.5 sm:p-4 mb-3.5 shadow-2xs">
                         <div className="mb-3">
                           <textarea
                             value={newCommentText}
@@ -2989,7 +2989,7 @@ function ArticlePageContentInner({
 
                     {/* Comments Feed List */}
                     {comments.length === 0 ? (
-                      <div className="text-center py-6 text-zinc-400 text-xs italic bg-slate-50/50 rounded-xl border border-dashed border-zinc-200">
+                      <div className="text-center py-3 text-zinc-400 text-xs italic bg-slate-50/50 rounded-xl border border-dashed border-zinc-200 mb-2">
                         No opinions shared yet. Be the first to share your thoughts on this story!
                       </div>
                     ) : !showCommentsList ? (
@@ -3805,8 +3805,8 @@ function ArticlePageContentInner({
 
         {/* More News Section (Linked with Latest News) */}
         {moreNewsArticles.length > 0 && (
-          <div className="mt-14 pt-10 border-t border-zinc-200 font-sans w-full">
-            <div className="flex items-center gap-2 mb-6">
+          <div className="mt-6 pt-5 border-t border-zinc-200 font-sans w-full">
+            <div className="flex items-center gap-2 mb-3.5">
               <div className="w-1.5 h-6 bg-[#D31220]" />
               <h2 className="text-xl font-extrabold text-gray-900 tracking-tight uppercase font-sans">
                 <Link href="/news" className="hover:text-[#BF1E2D] transition-colors">
@@ -3858,12 +3858,12 @@ function ArticlePageContentInner({
 
         {/* ── UP NEXT & MOST READ SECTION ── */}
         {(upNextArticles.length > 0 || mostReadArticles.length > 0) && (
-          <div className="mt-14 pt-10 border-t border-zinc-200 font-sans w-full">
+          <div className="mt-6 pt-5 border-t border-zinc-200 font-sans w-full">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
               
               {/* Left Column: Up next (Recent articles across multiple categories) */}
               <div className="lg:col-span-8">
-                <h2 className="text-xl sm:text-2xl font-bold font-sans text-zinc-950 tracking-tight mb-6">
+                <h2 className="text-xl sm:text-2xl font-bold font-sans text-zinc-950 tracking-tight mb-3.5">
                   Up next
                 </h2>
 
@@ -3897,7 +3897,7 @@ function ArticlePageContentInner({
 
               {/* Right Column: Most read (Numbered 1-8 List) */}
               <div className="lg:col-span-4 lg:pl-2">
-                <h2 className="text-xl sm:text-2xl font-bold font-sans text-zinc-950 tracking-tight mb-6">
+                <h2 className="text-xl sm:text-2xl font-bold font-sans text-zinc-950 tracking-tight mb-3.5">
                   Most read
                 </h2>
 
