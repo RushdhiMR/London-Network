@@ -8,6 +8,7 @@ import Footer from "@/components/Footer";
 import BottomCategoryGrid from "@/components/BottomCategoryGrid";
 import { CheckCircle2, Bookmark, Share2, ArrowLeft, Send, Trash2, ThumbsUp, Heart, Reply, CornerDownRight, Smile, Plus, X, Image as ImageIcon, Edit3 } from "lucide-react";
 import { generateAutoSEO } from "@/lib/seo";
+import { getCategoryData } from "@/lib/categoryData";
 import { getUserProfile, getAuthorAvatarByNameOrEmail, getAuthorFullProfileByNameOrEmail, resolveUserAvatar, safeSaveBookmarksToStorage, safeGetBookmarksFromStorage } from "@/lib/userProfiles";
 import { useLiveArticles, useLiveAdSlots, formatAdDimensions, isDuplicateAdImage, isTrendingNow, articleBelongsToCategory, articleMatchesMainCategory } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
@@ -884,12 +885,49 @@ function ArticlePageContentInner({
   }, [liveArticles, activeNewsData, newsData, category, parent, sidebarPicks]);
 
   const { prevArticle, nextArticle } = useMemo(() => {
-    const published = (Array.isArray(liveArticles) ? liveArticles : []).filter(
-      (p) => p && (p.status || "").toLowerCase() === "published"
-    );
-
     const currentId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
     const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
+
+    // 1. Collect all article IDs and titles shown on other panels in the article section
+    const shownOnOtherPanelsIds = new Set<string>();
+    const shownOnOtherPanelsTitles = new Set<string>();
+
+    if (currentId) shownOnOtherPanelsIds.add(currentId);
+    if (currentTitle) shownOnOtherPanelsTitles.add(currentTitle);
+
+    relatedNewsArticles.forEach((a) => {
+      if (a.id) shownOnOtherPanelsIds.add(String(a.id));
+      if (a.title) shownOnOtherPanelsTitles.add(a.title.trim().toLowerCase());
+    });
+
+    mostReadArticles.forEach((a) => {
+      if (a.id) shownOnOtherPanelsIds.add(String(a.id));
+      if (a.title) shownOnOtherPanelsTitles.add(a.title.trim().toLowerCase());
+    });
+
+    latestInCategoryArticles.forEach((a) => {
+      if (a.id) shownOnOtherPanelsIds.add(String(a.id));
+      if (a.title) shownOnOtherPanelsTitles.add(a.title.trim().toLowerCase());
+    });
+
+    const targetCat = (
+      (activeNewsData?.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "") ||
+      (newsData?.category && newsData.category.toLowerCase() !== "article" ? newsData.category : "") ||
+      (category && category.toLowerCase() !== "article" ? category : "") ||
+      (parent?.name && parent.name.toLowerCase() !== "article" ? parent.name : "") ||
+      sidebarTargetCat ||
+      ""
+    ).trim();
+
+    const getPostTime = (p: any): number => {
+      const raw = p.published_at || p.publishedAt || p.createdAt || p.date || p.updated_at;
+      if (!raw) return 0;
+      const t = new Date(raw).getTime();
+      if (!isNaN(t) && t > 0) return t;
+      if (typeof p.id === "number") return p.id;
+      const num = parseInt(String(p.id).replace(/\D/g, ""), 10);
+      return isNaN(num) ? 0 : num;
+    };
 
     const formatNavArticle = (post: any) => {
       if (!post) return null;
@@ -906,44 +944,111 @@ function ArticlePageContentInner({
       };
     };
 
-    if (published.length === 0) {
-      if (Array.isArray(sidebarPicks) && sidebarPicks.length >= 2) {
-        return {
-          prevArticle: {
-            id: "sp-prev",
-            title: sidebarPicks[0].title,
-            image: sidebarPicks[0].image,
-            href: sidebarPicks[0].href
-          },
-          nextArticle: {
-            id: "sp-next",
-            title: sidebarPicks[1].title,
-            image: sidebarPicks[1].image,
-            href: sidebarPicks[1].href
-          }
-        };
-      }
-      return { prevArticle: null, nextArticle: null };
-    }
+    // Filter published articles
+    const published = (Array.isArray(liveArticles) ? liveArticles : []).filter(
+      (p) => p && (p.status || "").toLowerCase() === "published"
+    );
 
-    const currentIndex = published.findIndex(
+    // 2. Select only articles added in that category, sorted in their natural added order (newest to oldest)
+    const categoryArticles = published
+      .filter((p) => !targetCat || targetCat.toLowerCase() === "article" || targetCat.toLowerCase() === "news" || articleBelongsToCategory(p, targetCat))
+      .sort((a, b) => {
+        const timeA = getPostTime(a);
+        const timeB = getPostTime(b);
+        if (timeA !== timeB) return timeB - timeA;
+        const aId = Number(a.id) || 0;
+        const bId = Number(b.id) || 0;
+        return bId - aId;
+      });
+
+    // Current article index in the category order
+    const currentIdx = categoryArticles.findIndex(
       (p) => String(p.id) === currentId || (p.title || "").trim().toLowerCase() === currentTitle
     );
 
-    if (currentIndex === -1) {
-      const prev = published.length > 0 ? formatNavArticle(published[0]) : null;
-      const next = published.length > 1 ? formatNavArticle(published[1]) : null;
-      return { prevArticle: prev, nextArticle: next };
+    // 3. Exclude any article that is ALREADY on other panels in the article section
+    const isAvailable = (p: any): boolean => {
+      if (!p) return false;
+      const pid = String(p.id);
+      const ptitle = (p.title || "").trim().toLowerCase();
+      if (shownOnOtherPanelsIds.has(pid)) return false;
+      if (shownOnOtherPanelsTitles.has(ptitle)) return false;
+      return true;
+    };
+
+    // Pick according to the category order
+    const beforeAvailable = currentIdx !== -1
+      ? categoryArticles.slice(0, currentIdx).filter(isAvailable)
+      : [];
+
+    const afterAvailable = currentIdx !== -1
+      ? categoryArticles.slice(currentIdx + 1).filter(isAvailable)
+      : [];
+
+    const allAvailable = categoryArticles.filter(isAvailable);
+
+    let prevSelected: any = null;
+    let nextSelected: any = null;
+
+    if (beforeAvailable.length > 0 && afterAvailable.length > 0) {
+      prevSelected = beforeAvailable[beforeAvailable.length - 1];
+      nextSelected = afterAvailable[0];
+    } else if (afterAvailable.length >= 2) {
+      prevSelected = afterAvailable[0];
+      nextSelected = afterAvailable[1];
+    } else if (beforeAvailable.length >= 2) {
+      prevSelected = beforeAvailable[beforeAvailable.length - 1];
+      nextSelected = beforeAvailable[beforeAvailable.length - 2];
+    } else if (allAvailable.length >= 2) {
+      prevSelected = allAvailable[0];
+      nextSelected = allAvailable[1];
+    } else if (allAvailable.length === 1) {
+      prevSelected = allAvailable[0];
     }
 
-    const prevIdx = (currentIndex - 1 + published.length) % published.length;
-    const nextIdx = (currentIndex + 1) % published.length;
+    // Fallback: If category has fewer than 2 available articles, pull from category static articles without duplicates
+    if (!prevSelected || !nextSelected) {
+      try {
+        const catSlug = (targetCat || "politics").toLowerCase().replace(/[^a-z0-9]/g, "");
+        const catData = getCategoryData(catSlug);
+        const staticList = [
+          ...(catData?.newsArticles || []),
+          ...(catData?.secondaryArticles || []),
+          ...(catData?.featured ? [catData.featured] : [])
+        ];
+
+        for (const sa of staticList) {
+          const saTitle = (sa.title || "").trim();
+          const saClean = saTitle.toLowerCase();
+          if (
+            saTitle &&
+            !shownOnOtherPanelsTitles.has(saClean) &&
+            (!prevSelected || (prevSelected.title || "").trim().toLowerCase() !== saClean) &&
+            (!nextSelected || (nextSelected.title || "").trim().toLowerCase() !== saClean)
+          ) {
+            const formatted = {
+              id: `cat-fallback-${saClean.slice(0, 20)}`,
+              title: saTitle,
+              image: sa.image || "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=300&h=200&fit=crop",
+              href: `/article/${saClean.replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-")}`
+            };
+
+            if (!prevSelected) {
+              prevSelected = formatted;
+            } else if (!nextSelected) {
+              nextSelected = formatted;
+              break;
+            }
+          }
+        }
+      } catch (e) {}
+    }
 
     return {
-      prevArticle: prevIdx !== currentIndex ? formatNavArticle(published[prevIdx]) : null,
-      nextArticle: nextIdx !== currentIndex && nextIdx !== prevIdx ? formatNavArticle(published[nextIdx]) : null
+      prevArticle: prevSelected ? formatNavArticle(prevSelected) : null,
+      nextArticle: nextSelected ? formatNavArticle(nextSelected) : null
     };
-  }, [liveArticles, activeNewsData, newsData, sidebarPicks]);
+  }, [liveArticles, activeNewsData, newsData, sidebarPicks, relatedNewsArticles, mostReadArticles, latestInCategoryArticles, sidebarTargetCat]);
 
   const popularSidebarArticles = mostReadArticles;
 
