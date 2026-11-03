@@ -570,6 +570,9 @@ function ArticlePageContentInner({
     return DEFAULT_ARTICLE_TRENDING_TOPICS;
   });
 
+  const [newsletterEmail, setNewsletterEmail] = useState("");
+  const [newsletterSubscribed, setNewsletterSubscribed] = useState(false);
+
   useEffect(() => {
     const handleSync = () => {
       try {
@@ -879,6 +882,68 @@ function ArticlePageContentInner({
 
     return { relatedNewsArticles, mostReadArticles, latestInCategoryArticles, targetCat };
   }, [liveArticles, activeNewsData, newsData, category, parent, sidebarPicks]);
+
+  const { prevArticle, nextArticle } = useMemo(() => {
+    const published = (Array.isArray(liveArticles) ? liveArticles : []).filter(
+      (p) => p && (p.status || "").toLowerCase() === "published"
+    );
+
+    const currentId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
+    const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
+
+    const formatNavArticle = (post: any) => {
+      if (!post) return null;
+      const postSlug = (post.slug || post.title || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, "")
+        .trim()
+        .replace(/\s+/g, "-");
+      return {
+        id: String(post.id),
+        title: post.title,
+        image: post.imageUrl || post.image || (post as any).image_url || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=150&h=150&fit=crop",
+        href: `/article/${post.slug || postSlug}`
+      };
+    };
+
+    if (published.length === 0) {
+      if (Array.isArray(sidebarPicks) && sidebarPicks.length >= 2) {
+        return {
+          prevArticle: {
+            id: "sp-prev",
+            title: sidebarPicks[0].title,
+            image: sidebarPicks[0].image,
+            href: sidebarPicks[0].href
+          },
+          nextArticle: {
+            id: "sp-next",
+            title: sidebarPicks[1].title,
+            image: sidebarPicks[1].image,
+            href: sidebarPicks[1].href
+          }
+        };
+      }
+      return { prevArticle: null, nextArticle: null };
+    }
+
+    const currentIndex = published.findIndex(
+      (p) => String(p.id) === currentId || (p.title || "").trim().toLowerCase() === currentTitle
+    );
+
+    if (currentIndex === -1) {
+      const prev = published.length > 0 ? formatNavArticle(published[0]) : null;
+      const next = published.length > 1 ? formatNavArticle(published[1]) : null;
+      return { prevArticle: prev, nextArticle: next };
+    }
+
+    const prevIdx = (currentIndex - 1 + published.length) % published.length;
+    const nextIdx = (currentIndex + 1) % published.length;
+
+    return {
+      prevArticle: prevIdx !== currentIndex ? formatNavArticle(published[prevIdx]) : null,
+      nextArticle: nextIdx !== currentIndex && nextIdx !== prevIdx ? formatNavArticle(published[nextIdx]) : null
+    };
+  }, [liveArticles, activeNewsData, newsData, sidebarPicks]);
 
   const popularSidebarArticles = mostReadArticles;
 
@@ -1716,6 +1781,7 @@ function ArticlePageContentInner({
   };
 
   const [authorLinkedinUrl, setAuthorLinkedinUrl] = useState<string>("https://www.linkedin.com");
+  const [authorXUrl, setAuthorXUrl] = useState<string>("https://x.com");
 
   useEffect(() => {
     try {
@@ -1724,8 +1790,13 @@ function ArticlePageContentInner({
         const activeUser = JSON.parse(activeUserStr);
         if (activeUser.linkedin && activeUser.linkedin.trim()) {
           setAuthorLinkedinUrl(activeUser.linkedin.trim());
-          return;
         }
+        if (activeUser.xTwitter && activeUser.xTwitter.trim()) {
+          setAuthorXUrl(activeUser.xTwitter.trim());
+        } else if (activeUser.twitter && activeUser.twitter.trim()) {
+          setAuthorXUrl(activeUser.twitter.trim());
+        }
+        if (activeUser.linkedin && activeUser.linkedin.trim()) return;
       }
 
       const dbStr = typeof window !== "undefined" ? localStorage.getItem("dj_user_profiles_db") : null;
@@ -1737,6 +1808,11 @@ function ArticlePageContentInner({
         );
         if (match?.linkedin && match.linkedin.trim()) {
           setAuthorLinkedinUrl(match.linkedin.trim());
+        }
+        if (match?.xTwitter && match.xTwitter.trim()) {
+          setAuthorXUrl(match.xTwitter.trim());
+        } else if (match?.twitter && match.twitter.trim()) {
+          setAuthorXUrl(match.twitter.trim());
         }
       }
     } catch (e) {}
@@ -2293,84 +2369,409 @@ function ArticlePageContentInner({
               </div>
             )}
 
-            {/* HASHTAGS SECTION */}
-            {(() => {
-              const displayTags = resolveArticleTags(activeNewsData);
-              if (!displayTags || displayTags.length === 0) return null;
-              return (
-                <div className="mt-6 flex flex-wrap items-center gap-3">
-                  {displayTags.map((t: string) => {
-                    const cleanTag = (t || "").replace(/^#+/, "").trim();
-                    if (!cleanTag) return null;
-                    return (
-                      <span
-                        key={cleanTag}
-                        className="text-slate-800 hover:text-[#BF1E2D] font-bold text-xs cursor-pointer transition-colors"
-                      >
-                        #{cleanTag}
-                      </span>
-                    );
-                  })}
-                </div>
-              );
-            })()}
-
-            {/* Author Metadata Bar Under Article */}
+            {/* ── 1. AUTHOR BIO CARD (Matching reference image design) ── */}
             {(() => {
               const cleanAuth = resolveCleanAuthor(activeNewsData.authorName, activeNewsData.authorAvatar, activeNewsData.authorEmail, activeNewsData.authorBio);
               const authorSlug = cleanAuth.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+              const authorCategory = (activeNewsData.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "") || (newsData?.category && newsData.category.toLowerCase() !== "article" ? newsData.category : "") || "Political";
+              const authorRole = (activeNewsData as any).authorRole || `${authorCategory} Correspondent`;
+              const displayBio = cleanAuth.bio || `${cleanAuth.name} is a ${authorRole.toLowerCase()} covering UK government, Parliament, policy and international relations. She has reported on political developments across Europe for over a decade.`;
 
               return (
-                <div className="flex flex-col sm:flex-row items-start gap-5 sm:gap-7 mt-8 pt-6 border-t border-zinc-200 font-sans" suppressHydrationWarning>
-                  {/* Author Circular Avatar */}
-                  <Link
-                    href={`/author/${authorSlug}`}
-                    className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full overflow-hidden bg-[#1E293B] flex-shrink-0 border border-zinc-200 hover:opacity-85 transition-opacity flex items-center justify-center text-white font-bold text-xl shadow-2xs"
-                    suppressHydrationWarning
-                  >
-                    {cleanAuth.avatar && cleanAuth.avatar.length > 5 ? (
-                      <img src={cleanAuth.avatar} alt={cleanAuth.name} className="w-full h-full object-cover" suppressHydrationWarning />
-                    ) : (
-                      <span suppressHydrationWarning>{(cleanAuth.name || "RM").slice(0, 2).toUpperCase()}</span>
-                    )}
-                  </Link>
+                <div className="mt-8 pt-6 border-t border-zinc-200 font-sans" suppressHydrationWarning>
+                  <div className="flex items-start gap-4 sm:gap-5">
+                    {/* Circular Avatar */}
+                    <Link
+                      href={`/author/${authorSlug}`}
+                      className="w-16 h-16 sm:w-18 sm:h-18 rounded-full overflow-hidden bg-slate-200 flex-shrink-0 border border-slate-200 hover:opacity-90 transition-opacity flex items-center justify-center text-slate-700 font-bold text-base shadow-xs"
+                    >
+                      {cleanAuth.avatar && cleanAuth.avatar.length > 5 ? (
+                        <img src={cleanAuth.avatar} alt={cleanAuth.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span>{(cleanAuth.name || "SM").slice(0, 2).toUpperCase()}</span>
+                      )}
+                    </Link>
 
-                  {/* Author Details & Bio matching requested format */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[11px] sm:text-xs font-bold tracking-wider text-black uppercase font-sans mb-1">
-                      WRITTEN BY
-                    </p>
-                    <div className="flex items-center gap-2 flex-wrap mb-3.5">
-                      <Link
-                        href={`/author/${authorSlug}`}
-                        className="text-xl sm:text-2xl font-bold text-black font-sans underline underline-offset-4 decoration-2 decoration-black hover:text-[#BF1E2D] hover:decoration-[#BF1E2D] transition-colors"
-                      >
-                        {cleanAuth.name}
-                      </Link>
-                      <svg className="w-4 h-4 text-[#BF1E2D] shrink-0" fill="currentColor" viewBox="0 0 24 24" aria-label="Verified Journalist">
-                        <title>Verified Journalist</title>
-                        <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.34-1.89-4.24-4.23-4.24-.496 0-.966.084-1.4.238C14.31 2.225 12.94 1.35 11.36 1.35c-1.58 0-2.95.875-3.6 2.148-.435-.154-.905-.238-1.4-.238-2.34 0-4.24 1.89-4.24 4.23 0 .496.084.966.238 1.4C1.225 9.55.35 10.92.35 12.5c0 1.58.875 2.95 2.148 3.6-.154.435-.238.905-.238 1.4 0 2.34 1.89 4.24 4.23 4.24.496 0 .966-.084 1.4-.238.65 1.273 2.02 2.148 3.6 2.148 1.58 0 2.95-.875 3.6-2.148.435.154.905.238 1.4.238 2.34 0 4.24-1.89 4.24-4.23 0-.496-.084-.966-.238-1.4 1.273-.65 2.148-2.02 2.148-3.6zm-12.28 4.29l-4.11-4.11 1.41-1.41 2.7 2.7 6.44-6.44 1.41 1.41-7.85 7.85z"/>
-                      </svg>
-                    </div>
+                    {/* Author Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-[13px] sm:text-[14px] text-slate-800 font-sans">
+                            <span>By </span>
+                            <Link
+                              href={`/author/${authorSlug}`}
+                              className="font-bold text-slate-900 hover:text-[#BF1E2D] hover:underline transition-colors"
+                            >
+                              {cleanAuth.name}
+                            </Link>
+                          </div>
+                          <p className="text-[11px] sm:text-xs text-slate-500 font-sans mt-0.5">
+                            {authorRole} | London BigBen Network
+                          </p>
+                        </div>
 
-                    {/* Author Bio Paragraphs */}
-                    <div className="text-[13.5px] sm:text-[14px] text-zinc-900 font-sans leading-relaxed space-y-3">
-                      {cleanAuth.bio
-                        ? cleanAuth.bio
-                            .split(/\r?\n+/)
-                            .map((p) => p.trim())
-                            .filter((p) => p.length > 0)
-                            .map((paragraph, pIdx) => (
-                              <p key={pIdx}>{paragraph}</p>
-                            ))
-                        : (
-                          <p>{cleanAuth.name} is a journalist for London BigBen.</p>
-                        )}
+                        {/* Top-Right Social Icons: X & LinkedIn */}
+                        <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
+                          {/* X / Twitter */}
+                          <a
+                            href={authorXUrl || "https://x.com"}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`${cleanAuth.name} on X`}
+                            className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-black hover:opacity-80 transition-opacity flex items-center justify-center text-white cursor-pointer"
+                          >
+                            <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 fill-white" viewBox="0 0 24 24">
+                              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                            </svg>
+                          </a>
+
+                          {/* LinkedIn */}
+                          <a
+                            href={authorLinkedinUrl || "https://www.linkedin.com"}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`${cleanAuth.name} on LinkedIn`}
+                            className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-[#0A66C2] hover:opacity-80 transition-opacity flex items-center justify-center text-white cursor-pointer"
+                          >
+                            <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 fill-white" viewBox="0 0 24 24">
+                              <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
+                            </svg>
+                          </a>
+                        </div>
+                      </div>
+
+                      {/* Bio text */}
+                      <p className="text-xs sm:text-[12.5px] text-slate-600 font-sans leading-relaxed mt-2 line-clamp-3">
+                        {displayBio}
+                      </p>
                     </div>
                   </div>
                 </div>
               );
             })()}
+
+            {/* ── 2. TAGS ROW ── */}
+            {(() => {
+              const tagsList = (() => {
+                let resolved = resolveArticleTags(activeNewsData);
+                if (!resolved || resolved.length === 0) {
+                  resolved = resolveArticleTags(newsData);
+                }
+                const cleanList = (resolved || [])
+                  .map((t: string) => (t || "").replace(/^#+/, "").trim())
+                  .filter(Boolean);
+
+                if (cleanList.length < 4) {
+                  const cat = (activeNewsData.category || "Politics").toLowerCase();
+                  let defaults = ["UK Politics", "Government Policy", "Economic Growth", "Trade", "International Relations", "Prime Minister", "UK Economy"];
+                  if (cat.includes("business") || cat.includes("economy") || cat.includes("market")) {
+                    defaults = ["Economy", "Markets", "Global Trade", "Inflation", "Banking", "Investment", "UK Economy"];
+                  } else if (cat.includes("tech")) {
+                    defaults = ["Technology", "Artificial Intelligence", "Innovation", "Digital Economy", "Cybersecurity", "Startups"];
+                  } else if (cat.includes("sport")) {
+                    defaults = ["Sports", "Premier League", "Football", "Champions League", "Athletics", "UK Sport"];
+                  }
+                  for (const d of defaults) {
+                    if (!cleanList.some(t => t.toLowerCase() === d.toLowerCase())) {
+                      cleanList.push(d);
+                    }
+                    if (cleanList.length >= 7) break;
+                  }
+                }
+                return cleanList;
+              })();
+
+              if (!tagsList || tagsList.length === 0) return null;
+
+              return (
+                <div className="mt-5 flex items-center gap-2 flex-wrap font-sans">
+                  <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500 font-sans mr-1 shrink-0">
+                    TAGS
+                  </span>
+                  {tagsList.map((tag) => (
+                    <Link
+                      key={tag}
+                      href={`/category/${formatCategorySlug(activeNewsData.category || "news")}?tag=${encodeURIComponent(tag)}`}
+                      className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200/90 transition-colors cursor-pointer"
+                    >
+                      {tag}
+                    </Link>
+                  ))}
+                </div>
+              );
+            })()}
+
+            {/* ── 3. SHARE THIS ARTICLE ROW ── */}
+            <div className="mt-4 flex items-center gap-2.5 flex-wrap font-sans">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-900 font-sans mr-1 shrink-0">
+                SHARE THIS ARTICLE
+              </span>
+
+              {/* Facebook */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== "undefined") {
+                    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`, '_blank', 'noopener,noreferrer');
+                  }
+                }}
+                aria-label="Share on Facebook"
+                className="w-7 h-7 rounded-full bg-[#1877F2] hover:opacity-90 transition-opacity flex items-center justify-center text-white cursor-pointer shadow-2xs"
+              >
+                <svg className="w-3.5 h-3.5 fill-white" viewBox="0 0 24 24">
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                </svg>
+              </button>
+
+              {/* X / Twitter */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== "undefined") {
+                    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(activeNewsData.title)}&url=${encodeURIComponent(window.location.href)}`, '_blank', 'noopener,noreferrer');
+                  }
+                }}
+                aria-label="Share on X"
+                className="w-7 h-7 rounded-full bg-black hover:opacity-90 transition-opacity flex items-center justify-center text-white cursor-pointer shadow-2xs"
+              >
+                <svg className="w-3 h-3 fill-white" viewBox="0 0 24 24">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                </svg>
+              </button>
+
+              {/* LinkedIn */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== "undefined") {
+                    window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(window.location.href)}`, '_blank', 'noopener,noreferrer');
+                  }
+                }}
+                aria-label="Share on LinkedIn"
+                className="w-7 h-7 rounded-full bg-[#0A66C2] hover:opacity-90 transition-opacity flex items-center justify-center text-white cursor-pointer shadow-2xs"
+              >
+                <svg className="w-3.5 h-3.5 fill-white" viewBox="0 0 24 24">
+                  <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
+                </svg>
+              </button>
+
+              {/* WhatsApp */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== "undefined") {
+                    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(activeNewsData.title + " " + window.location.href)}`, '_blank', 'noopener,noreferrer');
+                  }
+                }}
+                aria-label="Share on WhatsApp"
+                className="w-7 h-7 rounded-full bg-[#25D366] hover:opacity-90 transition-opacity flex items-center justify-center text-white cursor-pointer shadow-2xs"
+              >
+                <svg className="w-3.5 h-3.5 fill-white" viewBox="0 0 24 24">
+                  <path d="M12.031 2c-5.514 0-9.991 4.477-9.991 9.991 0 1.763.459 3.486 1.332 5.006L2 22l5.127-1.345a9.94 9.94 0 004.904 1.285h.004c5.513 0 9.99-4.477 9.99-9.991 0-5.514-4.477-9.991-9.994-9.991zm5.823 14.184c-.244.688-1.42 1.312-1.956 1.393-.518.077-1.189.11-3.418-.813-2.853-1.182-4.686-4.086-4.828-4.275-.141-.189-1.155-1.536-1.155-2.929 0-1.393.729-2.079.988-2.363.259-.284.566-.355.754-.355.188 0 .377.002.542.01.176.009.412-.067.644.49.244.59.833 2.033.906 2.182.073.149.122.324.024.519-.098.195-.147.316-.292.486-.145.17-.306.379-.437.509-.146.145-.298.303-.128.595.17.292.756 1.246 1.621 2.016 1.112.99 2.05 1.296 2.342 1.442.292.146.463.122.634-.073.17-.195.731-.852.926-1.144.195-.292.39-.244.658-.146.268.098 1.699.801 1.991.947.292.146.487.219.559.341.073.122.073.706-.171 1.394z"/>
+                </svg>
+              </button>
+
+              {/* Email */}
+              <a
+                href={`mailto:?subject=${encodeURIComponent(activeNewsData.title)}&body=${encodeURIComponent(typeof window !== "undefined" ? window.location.href : "")}`}
+                aria-label="Share via Email"
+                className="w-7 h-7 rounded-full bg-[#EA4335] hover:opacity-90 transition-opacity flex items-center justify-center text-white cursor-pointer shadow-2xs"
+              >
+                <svg className="w-3.5 h-3.5 fill-white" viewBox="0 0 24 24">
+                  <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                </svg>
+              </a>
+
+              {/* Copy Link */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  aria-label="Copy article link"
+                  className="w-7 h-7 rounded-full bg-white border border-slate-300 hover:bg-slate-50 transition-colors flex items-center justify-center text-slate-700 cursor-pointer shadow-2xs"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                  </svg>
+                </button>
+                {copiedLink && (
+                  <span className="absolute -top-7 left-1/2 -translate-x-1/2 bg-black text-white text-[10px] px-2 py-0.5 rounded shadow whitespace-nowrap z-10 font-sans">
+                    Copied!
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* ── 4. PREVIOUS ARTICLE / NEXT ARTICLE NAVIGATION ROW ── */}
+            {(prevArticle || nextArticle) && (
+              <div className="my-6 py-3.5 border-y border-zinc-200 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center font-sans">
+                {/* Previous Article */}
+                {prevArticle ? (
+                  <Link
+                    href={prevArticle.href}
+                    className="group flex items-center gap-3 text-left min-w-0"
+                  >
+                    <span className="text-zinc-400 group-hover:text-[#BF1E2D] transition-colors shrink-0 font-bold text-lg leading-none">
+                      ‹
+                    </span>
+                    <div className="w-14 h-10 sm:w-16 sm:h-11 shrink-0 overflow-hidden bg-slate-100 border border-slate-200 rounded-none">
+                      <img
+                        src={prevArticle.image}
+                        alt={prevArticle.title}
+                        onError={(e) => {
+                          e.currentTarget.src = "https://images.unsplash.com/photo-1518770660439-4636190af475?w=150&h=150&fit=crop";
+                        }}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 font-sans mb-0.5">
+                        PREVIOUS ARTICLE
+                      </p>
+                      <h4 className="text-xs sm:text-[13px] font-bold text-slate-900 group-hover:text-[#BF1E2D] transition-colors font-serif line-clamp-2 leading-snug">
+                        {prevArticle.title}
+                      </h4>
+                    </div>
+                  </Link>
+                ) : (
+                  <div className="hidden sm:block" />
+                )}
+
+                {/* Next Article */}
+                {nextArticle && (
+                  <Link
+                    href={nextArticle.href}
+                    className="group flex items-center justify-end gap-3 text-right min-w-0 sm:border-l sm:border-zinc-200 sm:pl-4"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 font-sans mb-0.5">
+                        NEXT ARTICLE
+                      </p>
+                      <h4 className="text-xs sm:text-[13px] font-bold text-slate-900 group-hover:text-[#BF1E2D] transition-colors font-serif line-clamp-2 leading-snug">
+                        {nextArticle.title}
+                      </h4>
+                    </div>
+                    <div className="w-14 h-10 sm:w-16 sm:h-11 shrink-0 overflow-hidden bg-slate-100 border border-slate-200 rounded-none">
+                      <img
+                        src={nextArticle.image}
+                        alt={nextArticle.title}
+                        onError={(e) => {
+                          e.currentTarget.src = "https://images.unsplash.com/photo-1518770660439-4636190af475?w=150&h=150&fit=crop";
+                        }}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    </div>
+                    <span className="text-zinc-400 group-hover:text-[#BF1E2D] transition-colors shrink-0 font-bold text-lg leading-none">
+                      ›
+                    </span>
+                  </Link>
+                )}
+              </div>
+            )}
+
+            {/* ── 5. NEWSLETTER SIGNUP CARD ── */}
+            <div className="bg-[#F8FAFC] border border-slate-200/90 p-5 sm:p-6 my-6 font-sans">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
+                <div className="md:col-span-6 lg:col-span-7">
+                  <h3 className="font-serif font-bold text-base sm:text-lg lg:text-[19px] text-slate-900 leading-snug">
+                    Get the latest {activeNewsData.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category.toLowerCase() : "political"} news and analysis delivered to your inbox
+                  </h3>
+                </div>
+                <div className="md:col-span-6 lg:col-span-5">
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (newsletterEmail.trim()) {
+                        setNewsletterSubscribed(true);
+                        setTimeout(() => {
+                          setNewsletterSubscribed(false);
+                          setNewsletterEmail("");
+                        }, 4000);
+                      }
+                    }}
+                    className="space-y-1.5"
+                  >
+                    <div className="flex items-center gap-0">
+                      <input
+                        type="email"
+                        value={newsletterEmail}
+                        onChange={(e) => setNewsletterEmail(e.target.value)}
+                        placeholder="Enter your email address"
+                        required
+                        className="bg-white border border-slate-300 px-3.5 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] flex-1 min-w-0 rounded-none h-9"
+                      />
+                      <button
+                        type="submit"
+                        className="bg-[#BF1E2D] hover:bg-[#901320] text-white font-bold text-xs px-4 py-2 uppercase tracking-wider transition-colors shrink-0 rounded-none h-9 cursor-pointer"
+                      >
+                        {newsletterSubscribed ? "Subscribed!" : "Subscribe"}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-slate-500 font-sans leading-tight">
+                      By subscribing, you agree to our{" "}
+                      <Link href="/terms" className="underline hover:text-slate-800">
+                        Privacy Policy
+                      </Link>{" "}
+                      and{" "}
+                      <Link href="/terms" className="underline hover:text-slate-800">
+                        Terms and Conditions
+                      </Link>
+                      .
+                    </p>
+                  </form>
+                </div>
+              </div>
+            </div>
+
+            {/* ── 6. RELATED CATEGORY NEWS (4-Column Card Grid) ── */}
+            {relatedNewsArticles.length > 0 && (
+              <div className="mt-8 mb-8 font-sans">
+                <div className="flex items-center justify-between pb-2 mb-4 border-b border-zinc-200">
+                  <div className="relative pb-2 -mb-[9px] border-b-2 border-[#BF1E2D]">
+                    <h3 className="text-sm sm:text-[15px] font-bold text-slate-900 uppercase tracking-wider font-sans">
+                      RELATED {activeNewsData.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category.toUpperCase() : "POLITICAL"} NEWS
+                    </h3>
+                  </div>
+                  <Link
+                    href={`/category/${formatCategorySlug(activeNewsData.category || "news")}`}
+                    className="text-xs font-bold text-[#BF1E2D] hover:underline flex items-center gap-1 font-sans"
+                  >
+                    <span>View All {activeNewsData.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "Politics"}</span>
+                    <span>→</span>
+                  </Link>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-4.5">
+                  {relatedNewsArticles.map((item, idx) => (
+                    <Link
+                      key={`related-main-grid-${idx}-${item.id || item.href}`}
+                      href={item.href}
+                      className="group flex flex-col cursor-pointer"
+                    >
+                      <div className="relative w-full aspect-[16/10] overflow-hidden bg-slate-100 rounded-none mb-2 border border-slate-100">
+                        <img
+                          src={item.image}
+                          alt={item.title}
+                          onError={(e) => {
+                            e.currentTarget.src = "https://images.unsplash.com/photo-1518770660439-4636190af475?w=300&h=200&fit=crop";
+                          }}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      </div>
+                      <span className="text-[10px] font-bold text-[#BF1E2D] uppercase tracking-wider font-sans mb-1">
+                        {item.category}
+                      </span>
+                      <h4 className="text-xs sm:text-[13px] font-bold text-slate-900 group-hover:text-[#BF1E2D] font-serif line-clamp-2 leading-snug transition-colors mb-1">
+                        {item.title}
+                      </h4>
+                      <p className="text-[10.5px] text-zinc-400 font-sans mt-auto">
+                        {item.date}
+                      </p>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Bottom Saved Stories Toggle Bar */}
             {(() => {
