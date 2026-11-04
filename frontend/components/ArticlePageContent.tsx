@@ -739,8 +739,67 @@ function ArticlePageContentInner({
     return resolveKeyPoints(activeNewsData);
   }, [activeNewsData]);
 
-  // Related News (4), Most Read (5), and Latest in Category (5) for the right sidebar
-  const { relatedNewsArticles, mostReadArticles, latestInCategoryArticles, targetCat: sidebarTargetCat } = useMemo(() => {
+  const targetCat = useMemo(() => {
+    return (
+      (activeNewsData?.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "") ||
+      (newsData?.category && newsData.category.toLowerCase() !== "article" ? newsData.category : "") ||
+      (category && category.toLowerCase() !== "article" ? category : "") ||
+      (parent?.name && parent.name.toLowerCase() !== "article" ? parent.name : "") ||
+      ""
+    ).trim();
+  }, [activeNewsData, newsData, category, parent]);
+
+  const sidebarTargetCat = targetCat;
+
+  const formatSidebarDate = (post: any): string => {
+    if (post.date && post.date !== "Just now" && post.date !== "Today") {
+      if (/^[A-Za-z]{3}\s+\d{1,2},\s+\d{4}$/.test(post.date.trim())) {
+        return post.date.trim();
+      }
+      const d = new Date(post.date);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      }
+    }
+    const rawDate = post.published_at || post.publishedAt || post.createdAt || post.updated_at;
+    if (rawDate) {
+      const d = new Date(rawDate);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      }
+    }
+    return post.date || "Recently";
+  };
+
+  const getPostTime = (p: any): number => {
+    const raw = p.published_at || p.publishedAt || p.createdAt || p.date || p.updated_at;
+    if (!raw) return 0;
+    const t = new Date(raw).getTime();
+    if (!isNaN(t) && t > 0) return t;
+    if (typeof p.id === "number") return p.id;
+    const num = parseInt(String(p.id).replace(/\D/g, ""), 10);
+    return isNaN(num) ? 0 : num;
+  };
+
+  const mapPost = (post: any) => {
+    const postSlug = (post.slug || post.title || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .trim()
+      .replace(/\s+/g, "-");
+    const cat = (post.category && post.category.toLowerCase() !== "article" ? post.category : post.category_name) || targetCat || "NEWS";
+    return {
+      id: String(post.id),
+      title: post.title,
+      category: cat.toUpperCase(),
+      date: formatSidebarDate(post),
+      image: post.imageUrl || post.image || (post as any).image_url || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=150&h=150&fit=crop",
+      href: `/article/${post.slug || postSlug}`
+    };
+  };
+
+  // Most Read (5) and Latest in Category (5) for the right sidebar
+  const { mostReadArticles, latestInCategoryArticles } = useMemo(() => {
     const currentId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
     const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
 
@@ -752,57 +811,12 @@ function ArticlePageContentInner({
       return Math.max(45, (seed * 17) % 350 + 55);
     };
 
-    const targetCat = (
-      (activeNewsData?.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "") ||
-      (newsData?.category && newsData.category.toLowerCase() !== "article" ? newsData.category : "") ||
-      (category && category.toLowerCase() !== "article" ? category : "") ||
-      (parent?.name && parent.name.toLowerCase() !== "article" ? parent.name : "") ||
-      ""
-    ).trim();
-
     const published = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
       if (!p || (p.status || "").toLowerCase() !== "published") return false;
       if (String(p.id) === currentId) return false;
       if ((p.title || "").trim().toLowerCase() === currentTitle) return false;
       return true;
     });
-
-    const formatSidebarDate = (post: any): string => {
-      if (post.date && post.date !== "Just now" && post.date !== "Today") {
-        if (/^[A-Za-z]{3}\s+\d{1,2},\s+\d{4}$/.test(post.date.trim())) {
-          return post.date.trim();
-        }
-        const d = new Date(post.date);
-        if (!isNaN(d.getTime())) {
-          return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-        }
-      }
-      const rawDate = post.published_at || post.publishedAt || post.createdAt || post.updated_at;
-      if (rawDate) {
-        const d = new Date(rawDate);
-        if (!isNaN(d.getTime())) {
-          return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-        }
-      }
-      return post.date || "Recently";
-    };
-
-    const mapPost = (post: any) => {
-      const postSlug = (post.slug || post.title || "")
-        .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, "")
-        .trim()
-        .replace(/\s+/g, "-");
-      const cat = (post.category && post.category.toLowerCase() !== "article" ? post.category : post.category_name) || targetCat || "NEWS";
-      return {
-        id: String(post.id),
-        title: post.title,
-        category: cat.toUpperCase(),
-        date: formatSidebarDate(post),
-        image: post.imageUrl || post.image || (post as any).image_url || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=150&h=150&fit=crop",
-        href: `/article/${post.slug || postSlug}`
-      };
-    };
 
     if (published.length === 0 && Array.isArray(sidebarPicks) && sidebarPicks.length > 0) {
       const picks = sidebarPicks.map((sp, idx) => ({
@@ -814,49 +828,25 @@ function ArticlePageContentInner({
         href: sp.href
       }));
       return {
-        relatedNewsArticles: picks.slice(0, 4),
         mostReadArticles: picks.slice(0, 5),
-        latestInCategoryArticles: picks.slice(0, 5),
-        targetCat
+        latestInCategoryArticles: picks.slice(0, 5)
       };
     }
-
-    let relatedMatches: any[] = [];
-    if (targetCat && targetCat.toLowerCase() !== "article") {
-      relatedMatches = published.filter(p => articleBelongsToCategory(p, targetCat));
-    }
-    if (relatedMatches.length < 4) {
-      const remainder = published.filter(p => !relatedMatches.some(m => String(m.id) === String(p.id)));
-      relatedMatches = [...relatedMatches, ...remainder];
-    }
-    const relatedNewsArticles = relatedMatches.slice(0, 4).map(mapPost);
 
     const sortedByViews = [...published].sort((a, b) => getViews(b, 0) - getViews(a, 0));
     const mostReadArticles = sortedByViews.slice(0, 5).map(mapPost);
 
-    // Track all article IDs and titles already shown above in the sidebar or active article
+    // Track all article IDs and titles already shown in the sidebar or active article
     const shownIds = new Set<string>();
     const shownTitles = new Set<string>();
 
     if (currentId) shownIds.add(currentId);
     if (currentTitle) shownTitles.add(currentTitle);
 
-    relatedNewsArticles.forEach((a) => {
-      if (a.id) shownIds.add(String(a.id));
-      if (a.title) shownTitles.add(a.title.trim().toLowerCase());
-    });
-
     mostReadArticles.forEach((a) => {
       if (a.id) shownIds.add(String(a.id));
       if (a.title) shownTitles.add(a.title.trim().toLowerCase());
     });
-
-    const getPostTime = (p: any): number => {
-      const raw = p.published_at || p.publishedAt || p.createdAt || p.date || p.updated_at;
-      if (!raw) return 0;
-      const t = new Date(raw).getTime();
-      return isNaN(t) ? 0 : t;
-    };
 
     const latestSorted = [...published].sort((a, b) => getPostTime(b) - getPostTime(a));
 
@@ -870,79 +860,64 @@ function ArticlePageContentInner({
       : [];
 
     if (catMatches.length < 5) {
-      const remainder = latestSorted.filter(
-        (p) =>
-          !shownIds.has(String(p.id)) &&
-          !shownTitles.has((p.title || "").trim().toLowerCase()) &&
-          !catMatches.some((m) => String(m.id) === String(p.id))
-      );
-      catMatches = [...catMatches, ...remainder];
+      try {
+        const catSlug = (targetCat || "politics").toLowerCase().replace(/[^a-z0-9]/g, "");
+        const catData = getCategoryData(catSlug);
+        const staticList = [
+          ...(catData?.newsArticles || []),
+          ...(catData?.secondaryArticles || []),
+          ...(catData?.featured ? [catData.featured] : [])
+        ];
+        for (const sa of staticList) {
+          if (catMatches.length >= 5) break;
+          const saTitle = (sa.title || "").trim();
+          const saClean = saTitle.toLowerCase();
+          if (
+            saTitle &&
+            !shownTitles.has(saClean) &&
+            !catMatches.some((m) => (m.title || "").trim().toLowerCase() === saClean)
+          ) {
+            const postSlug = saClean.replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-");
+            (catMatches as any[]).push({
+              id: `cat-latest-${saClean.slice(0, 20)}`,
+              title: saTitle,
+              category: (targetCat || catData?.categoryName || "NEWS").toUpperCase(),
+              date: sa.date || "Recently",
+              imageUrl: sa.image || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=150&h=150&fit=crop",
+              slug: postSlug,
+              status: "published"
+            });
+          }
+        }
+      } catch (e) {}
     }
 
     const latestInCategoryArticles = catMatches.slice(0, 5).map(mapPost);
 
-    return { relatedNewsArticles, mostReadArticles, latestInCategoryArticles, targetCat };
-  }, [liveArticles, activeNewsData, newsData, category, parent, sidebarPicks]);
+    return { mostReadArticles, latestInCategoryArticles };
+  }, [liveArticles, activeNewsData, newsData, targetCat, sidebarPicks]);
 
+  // Previous and Next article navigation (in category uploaded order, excluding above panels)
   const { prevArticle, nextArticle } = useMemo(() => {
     const currentId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
     const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
 
-    // 1. Collect all article IDs and titles shown on other panels in the article section
-    const shownOnOtherPanelsIds = new Set<string>();
-    const shownOnOtherPanelsTitles = new Set<string>();
+    // 1. Collect all article IDs and titles shown in sections above
+    const shownAboveNavIds = new Set<string>();
+    const shownAboveNavTitles = new Set<string>();
 
-    if (currentId) shownOnOtherPanelsIds.add(currentId);
-    if (currentTitle) shownOnOtherPanelsTitles.add(currentTitle);
-
-    relatedNewsArticles.forEach((a) => {
-      if (a.id) shownOnOtherPanelsIds.add(String(a.id));
-      if (a.title) shownOnOtherPanelsTitles.add(a.title.trim().toLowerCase());
-    });
+    if (currentId) shownAboveNavIds.add(currentId);
+    if (currentTitle) shownAboveNavTitles.add(currentTitle);
 
     mostReadArticles.forEach((a) => {
-      if (a.id) shownOnOtherPanelsIds.add(String(a.id));
-      if (a.title) shownOnOtherPanelsTitles.add(a.title.trim().toLowerCase());
+      if (a.id) shownAboveNavIds.add(String(a.id));
+      if (a.title) shownAboveNavTitles.add(a.title.trim().toLowerCase());
     });
 
     latestInCategoryArticles.forEach((a) => {
-      if (a.id) shownOnOtherPanelsIds.add(String(a.id));
-      if (a.title) shownOnOtherPanelsTitles.add(a.title.trim().toLowerCase());
+      if (a.id) shownAboveNavIds.add(String(a.id));
+      if (a.title) shownAboveNavTitles.add(a.title.trim().toLowerCase());
     });
-
-    const targetCat = (
-      (activeNewsData?.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "") ||
-      (newsData?.category && newsData.category.toLowerCase() !== "article" ? newsData.category : "") ||
-      (category && category.toLowerCase() !== "article" ? category : "") ||
-      (parent?.name && parent.name.toLowerCase() !== "article" ? parent.name : "") ||
-      sidebarTargetCat ||
-      ""
-    ).trim();
-
-    const getPostTime = (p: any): number => {
-      const raw = p.published_at || p.publishedAt || p.createdAt || p.date || p.updated_at;
-      if (!raw) return 0;
-      const t = new Date(raw).getTime();
-      if (!isNaN(t) && t > 0) return t;
-      if (typeof p.id === "number") return p.id;
-      const num = parseInt(String(p.id).replace(/\D/g, ""), 10);
-      return isNaN(num) ? 0 : num;
-    };
-
-    const formatNavArticle = (post: any) => {
-      if (!post) return null;
-      const postSlug = (post.slug || post.title || "")
-        .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, "")
-        .trim()
-        .replace(/\s+/g, "-");
-      return {
-        id: String(post.id),
-        title: post.title,
-        image: post.imageUrl || post.image || (post as any).image_url || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=150&h=150&fit=crop",
-        href: `/article/${post.slug || postSlug}`
-      };
-    };
 
     // Filter published articles
     const published = (Array.isArray(liveArticles) ? liveArticles : []).filter(
@@ -971,8 +946,8 @@ function ArticlePageContentInner({
       if (!p) return false;
       const pid = String(p.id);
       const ptitle = (p.title || "").trim().toLowerCase();
-      if (shownOnOtherPanelsIds.has(pid)) return false;
-      if (shownOnOtherPanelsTitles.has(ptitle)) return false;
+      if (shownAboveNavIds.has(pid)) return false;
+      if (shownAboveNavTitles.has(ptitle)) return false;
       return true;
     };
 
@@ -1022,7 +997,7 @@ function ArticlePageContentInner({
           const saClean = saTitle.toLowerCase();
           if (
             saTitle &&
-            !shownOnOtherPanelsTitles.has(saClean) &&
+            !shownAboveNavTitles.has(saClean) &&
             (!prevSelected || (prevSelected.title || "").trim().toLowerCase() !== saClean) &&
             (!nextSelected || (nextSelected.title || "").trim().toLowerCase() !== saClean)
           ) {
@@ -1044,11 +1019,118 @@ function ArticlePageContentInner({
       } catch (e) {}
     }
 
+    const formatNavArticle = (post: any) => {
+      if (!post) return null;
+      const postSlug = (post.slug || post.title || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, "")
+        .trim()
+        .replace(/\s+/g, "-");
+      return {
+        id: String(post.id),
+        title: post.title,
+        image: post.imageUrl || post.image || (post as any).image_url || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=150&h=150&fit=crop",
+        href: `/article/${post.slug || postSlug}`
+      };
+    };
+
     return {
       prevArticle: prevSelected ? formatNavArticle(prevSelected) : null,
       nextArticle: nextSelected ? formatNavArticle(nextSelected) : null
     };
-  }, [liveArticles, activeNewsData, newsData, sidebarPicks, relatedNewsArticles, mostReadArticles, latestInCategoryArticles, sidebarTargetCat]);
+  }, [liveArticles, activeNewsData, newsData, targetCat, mostReadArticles, latestInCategoryArticles]);
+
+  // Related Category News (4) strictly from active category, sorted by uploaded order, deduplicated against all above sections
+  const relatedNewsArticles = useMemo(() => {
+    const currentId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
+    const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
+
+    // 1. Collect all article IDs and titles shown on sections above
+    const shownAboveIds = new Set<string>();
+    const shownAboveTitles = new Set<string>();
+
+    if (currentId) shownAboveIds.add(currentId);
+    if (currentTitle) shownAboveTitles.add(currentTitle);
+
+    if (prevArticle?.id) shownAboveIds.add(String(prevArticle.id));
+    if (prevArticle?.title) shownAboveTitles.add(prevArticle.title.trim().toLowerCase());
+
+    if (nextArticle?.id) shownAboveIds.add(String(nextArticle.id));
+    if (nextArticle?.title) shownAboveTitles.add(nextArticle.title.trim().toLowerCase());
+
+    mostReadArticles.forEach((a) => {
+      if (a.id) shownAboveIds.add(String(a.id));
+      if (a.title) shownAboveTitles.add(a.title.trim().toLowerCase());
+    });
+
+    latestInCategoryArticles.forEach((a) => {
+      if (a.id) shownAboveIds.add(String(a.id));
+      if (a.title) shownAboveTitles.add(a.title.trim().toLowerCase());
+    });
+
+    const published = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
+      if (!p || (p.status || "").toLowerCase() !== "published") return false;
+      if (shownAboveIds.has(String(p.id))) return false;
+      if (shownAboveTitles.has((p.title || "").trim().toLowerCase())) return false;
+      return true;
+    });
+
+    // 2. Select only articles strictly belonging to target category
+    let categoryMatches = (targetCat && targetCat.toLowerCase() !== "article")
+      ? published.filter((p) => articleBelongsToCategory(p, targetCat))
+      : [];
+
+    // 3. Sort strictly according to uploaded order (newest to oldest)
+    categoryMatches.sort((a, b) => {
+      const timeA = getPostTime(a);
+      const timeB = getPostTime(b);
+      if (timeA !== timeB) return timeB - timeA;
+      const aId = Number(a.id) || 0;
+      const bId = Number(b.id) || 0;
+      return bId - aId;
+    });
+
+    const results: any[] = categoryMatches.slice(0, 4).map(mapPost);
+
+    // 4. Each category must have this: If fewer than 4 matches, supplement strictly from that category without duplicates
+    if (results.length < 4) {
+      try {
+        const catSlug = (targetCat || "politics").toLowerCase().replace(/[^a-z0-9]/g, "");
+        const catData = getCategoryData(catSlug);
+        const staticList = [
+          ...(catData?.newsArticles || []),
+          ...(catData?.secondaryArticles || []),
+          ...(catData?.featured ? [catData.featured] : [])
+        ];
+
+        for (const sa of staticList) {
+          if (results.length >= 4) break;
+          const saTitle = (sa.title || "").trim();
+          const saClean = saTitle.toLowerCase();
+          if (
+            saTitle &&
+            !shownAboveTitles.has(saClean) &&
+            !results.some((r) => (r.title || "").trim().toLowerCase() === saClean)
+          ) {
+            const postSlug = saClean.replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-");
+            const catName = targetCat || catData?.categoryName || "NEWS";
+            results.push({
+              id: `cat-related-${saClean.slice(0, 20)}`,
+              title: saTitle,
+              category: catName.toUpperCase(),
+              date: sa.date || "Recently",
+              image: sa.image || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=300&h=200&fit=crop",
+              href: `/article/${postSlug}`
+            });
+          }
+        }
+      } catch (e) {
+        console.error("Error supplementing related category articles:", e);
+      }
+    }
+
+    return results;
+  }, [liveArticles, activeNewsData, newsData, targetCat, mostReadArticles, latestInCategoryArticles, prevArticle, nextArticle]);
 
   const popularSidebarArticles = mostReadArticles;
 
@@ -2829,22 +2911,29 @@ function ArticlePageContentInner({
             </div>
 
             {/* ── 6. RELATED CATEGORY NEWS (4-Column Card Grid) ── */}
-            {relatedNewsArticles.length > 0 && (
-              <div className="mb-4 font-sans">
-                <div className="flex items-center justify-between pb-1.5 mb-3 border-b border-zinc-200">
-                  <div className="relative pb-2 -mb-[9px] border-b-2 border-[#BF1E2D]">
-                    <h3 className="text-sm sm:text-[15px] font-bold text-slate-900 uppercase tracking-wider font-sans">
-                      RELATED {activeNewsData.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category.toUpperCase() : "POLITICAL"} NEWS
-                    </h3>
+            {relatedNewsArticles.length > 0 && (() => {
+              const displayCategory = (
+                (targetCat && targetCat.toLowerCase() !== "article" ? targetCat : "") ||
+                (activeNewsData?.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "") ||
+                "Politics"
+              );
+              const headingCategory = displayCategory.toLowerCase() === "politics" ? "POLITICAL" : displayCategory.toUpperCase();
+              return (
+                <div className="mb-4 font-sans">
+                  <div className="flex items-center justify-between pb-1.5 mb-3 border-b border-zinc-200">
+                    <div className="relative pb-2 -mb-[9px] border-b-2 border-[#BF1E2D]">
+                      <h3 className="text-sm sm:text-[15px] font-bold text-slate-900 uppercase tracking-wider font-sans">
+                        RELATED {headingCategory} NEWS
+                      </h3>
+                    </div>
+                    <Link
+                      href={`/category/${formatCategorySlug(displayCategory)}`}
+                      className="text-xs font-bold text-[#BF1E2D] hover:underline flex items-center gap-1 font-sans"
+                    >
+                      <span>View All {displayCategory}</span>
+                      <span>→</span>
+                    </Link>
                   </div>
-                  <Link
-                    href={`/category/${formatCategorySlug(activeNewsData.category || "news")}`}
-                    className="text-xs font-bold text-[#BF1E2D] hover:underline flex items-center gap-1 font-sans"
-                  >
-                    <span>View All {activeNewsData.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "Politics"}</span>
-                    <span>→</span>
-                  </Link>
-                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-4.5">
                   {relatedNewsArticles.map((item, idx) => (
@@ -2876,7 +2965,8 @@ function ArticlePageContentInner({
                   ))}
                 </div>
               </div>
-            )}
+            );
+          })()}
 
             {/* Bottom Saved Stories Toggle Bar */}
             {(() => {
