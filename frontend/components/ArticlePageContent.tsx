@@ -2194,54 +2194,47 @@ function ArticlePageContentInner({
 
               const resolveSecondaryCategory = (): string => {
                 const main = mainCategoryName.toLowerCase();
-                if (subName && subName.trim() && subName.toLowerCase() !== main) {
+                const curTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
+                const curSlug = ((activeNewsData as any)?.slug || "").trim().toLowerCase();
+
+                const isSlugOrTitle = (val?: string) => {
+                  if (!val) return true;
+                  const v = val.trim().toLowerCase();
+                  if (v === main) return true;
+                  if (curSlug && (v === curSlug || curSlug.includes(v))) return true;
+                  if (curTitle && (v === curTitle || curTitle.includes(v) || v.includes(curTitle))) return true;
+                  if (v.length > 30) return true;
+                  return false;
+                };
+
+                if (subName && !isSlugOrTitle(subName)) {
                   return subName;
                 }
-                if (subcategory && subcategory.trim() && subcategory.toLowerCase() !== main) {
+                if (subcategory && !isSlugOrTitle(subcategory)) {
                   return subcategory.replace(/-/g, " ").replace(/\b\w/g, l => l.toUpperCase());
                 }
                 if (activeNewsData?.subcategories && activeNewsData.subcategories.length > 0) {
                   const sc = activeNewsData.subcategories[0];
-                  if (sc && sc.toLowerCase() !== main) return sc;
+                  if (sc && !isSlugOrTitle(sc)) return sc;
                 }
-                if (activeNewsData?.tags && activeNewsData.tags.length > 0) {
-                  const tg = activeNewsData.tags[0];
-                  if (tg && tg.toLowerCase() !== main) return tg;
-                }
-                return `${mainCategoryName.toUpperCase()} BRIEFING`;
+                return "";
               };
 
               const secondaryCategoryName = resolveSecondaryCategory().trim();
 
               return (
-                <div className="mb-4 font-sans">
-                  {/* Breadcrumb Navigation */}
-                  <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-slate-500 font-sans mb-3 flex-wrap">
-                    <Link href="/" className="hover:text-[#BF1E2D] transition-colors">Home</Link>
-                    <span className="text-slate-400">›</span>
-                    <Link href={mainCategoryHref} className="hover:text-[#BF1E2D] transition-colors">{mainCategoryName}</Link>
-                    {secondaryCategoryName && (
-                      <>
-                        <span className="text-slate-400">›</span>
-                        <span className="text-slate-700 font-medium">{secondaryCategoryName}</span>
-                      </>
-                    )}
-                  </nav>
-
-                  {/* Dual Category Badges */}
-                  <div className="flex items-center gap-2 mb-3.5">
-                    <Link
-                      href={mainCategoryHref}
-                      className="inline-flex items-center bg-[#BF1E2D] text-white text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-none hover:bg-[#a61724] transition-colors font-sans"
-                    >
-                      {mainCategoryName}
-                    </Link>
-                    {secondaryCategoryName && (
-                      <span className="inline-flex items-center border border-slate-300 bg-white text-slate-800 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-none font-sans">
-                        {secondaryCategoryName}
-                      </span>
-                    )}
-                  </div>
+                <div className="flex items-center gap-2 mb-3.5 font-sans">
+                  <Link
+                    href={mainCategoryHref}
+                    className="inline-flex items-center bg-[#BF1E2D] text-white text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-none hover:bg-[#a61724] transition-colors font-sans"
+                  >
+                    {mainCategoryName}
+                  </Link>
+                  {secondaryCategoryName && (
+                    <span className="inline-flex items-center border border-slate-300 bg-white text-slate-800 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-none font-sans">
+                      {secondaryCategoryName}
+                    </span>
+                  )}
                 </div>
               );
             })()}
