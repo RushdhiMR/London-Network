@@ -7,6 +7,8 @@ const SYNC_EVENT_NAME = "dj_articles_updated";
 
 export interface ArticleItem {
   id: string | number;
+  master_title?: string;
+  masterTitle?: string;
   title: string;
   subheading?: string;
   summary?: string;

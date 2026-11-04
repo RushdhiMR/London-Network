@@ -2207,6 +2207,11 @@ function ArticlePageContentInner({
                   return false;
                 };
 
+                const explicitMaster = ((activeNewsData as any)?.master_title || (activeNewsData as any)?.masterTitle || (newsData as any)?.master_title || (newsData as any)?.masterTitle || "").trim();
+                if (explicitMaster && !isSlugOrTitle(explicitMaster)) {
+                  return explicitMaster;
+                }
+
                 if (subName && !isSlugOrTitle(subName)) {
                   return subName;
                 }
