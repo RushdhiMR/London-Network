@@ -361,7 +361,6 @@ export default function AdminDashboardPage() {
   // Editorial Review Studio State (matching User Screenshot)
   const [reviewingSubmission, setReviewingSubmission] = useState<SubmittedDraft | null>(null);
   const [reviewTitle, setReviewTitle] = useState("");
-  const [reviewMasterTitle, setReviewMasterTitle] = useState("");
   const [reviewCategory, setReviewCategory] = useState("Business");
   const [reviewSubCategories, setReviewSubCategories] = useState<string[]>([]);
   const [reviewSummary, setReviewSummary] = useState("");
@@ -422,7 +421,6 @@ export default function AdminDashboardPage() {
   const handleOpenReviewStudio = (sub: SubmittedDraft) => {
     setReviewingSubmission(sub);
     setReviewTitle(sub.title);
-    setReviewMasterTitle((sub as any).master_title || (sub as any).masterTitle || "");
     const rawCat = sub.category || (sub as any).category_name || "Business";
     const matchedMainCat = ALL_MAIN_CATEGORIES.find(c => isSameOrMatchingCategory(c, rawCat) || c.toLowerCase() === rawCat.toLowerCase()) || rawCat;
     setReviewCategory(matchedMainCat);
@@ -543,8 +541,6 @@ export default function AdminDashboardPage() {
 
     const postToSave = {
       id: newArt.id,
-      master_title: reviewMasterTitle.trim() || (reviewingSubmission as any).master_title || (reviewingSubmission as any).masterTitle || undefined,
-      masterTitle: reviewMasterTitle.trim() || (reviewingSubmission as any).master_title || (reviewingSubmission as any).masterTitle || undefined,
       title: newArt.title,
       slug: newArt.slug,
       subheading: reviewSummary,
@@ -7869,20 +7865,6 @@ export default function AdminDashboardPage() {
                   <button className="ml-auto bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 font-extrabold text-[11px] px-3 py-1 rounded-lg cursor-pointer flex items-center gap-1">
                     📷 INSERT IMAGE
                   </button>
-                </div>
-
-                {/* MASTER TITLE */}
-                <div className="mb-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    MASTER TITLE
-                  </span>
-                  <input
-                    type="text"
-                    value={reviewMasterTitle}
-                    onChange={(e) => setReviewMasterTitle(e.target.value)}
-                    placeholder="Add Master Title..."
-                    className="w-full font-poppins text-xs sm:text-sm font-bold text-[#BF1E2D] uppercase tracking-wider placeholder:text-slate-300 focus:outline-none border-b border-transparent focus:border-slate-300 pb-1 bg-transparent"
-                  />
                 </div>
 
                 {/* ARTICLE TITLE */}

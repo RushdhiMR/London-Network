@@ -200,7 +200,6 @@ export default function CreatePostPage() {
 
   // Form State
   const [title, setTitle] = useState("");
-  const [masterTitle, setMasterTitle] = useState("");
   const [subheading, setSubheading] = useState("");
   const [content, setContent] = useState("");
   const [imageUrl, setImageUrl] = useState("");
@@ -443,7 +442,6 @@ export default function CreatePostPage() {
           setEditingPostId(String(postToEdit.id));
           setOriginalTitle(postToEdit.title || "");
           setTitle(postToEdit.title || "");
-          setMasterTitle(postToEdit.master_title || postToEdit.masterTitle || "");
           setSubheading(postToEdit.summary || postToEdit.subheading || "");
 
           let mainContent = postToEdit.content || "";
@@ -1667,8 +1665,6 @@ function isWorldOrWorldSub(cat: string): boolean {
 
     const postToSave = {
       id: editingPostId || `post-${Date.now()}`,
-      master_title: masterTitle.trim(),
-      masterTitle: masterTitle.trim(),
       title: title.trim(),
       slug: title.trim().toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-'),
       category: category,
@@ -1962,8 +1958,6 @@ function isWorldOrWorldSub(cat: string): boolean {
       const nowIso = new Date().toISOString();
       const approvedArticle = {
         id: editingPostId ? (isNaN(Number(editingPostId)) ? editingPostId : Number(editingPostId)) : Date.now(),
-        master_title: masterTitle.trim(),
-        masterTitle: masterTitle.trim(),
         title: liveTitle,
         slug: liveSlug,
         subheading: liveSummary,
@@ -2201,8 +2195,6 @@ function isWorldOrWorldSub(cat: string): boolean {
       const rejectedArticle = {
         ...(existingArticle || {}),
         id: editingPostId || existingArticle?.id || `art_${Date.now()}`,
-        master_title: masterTitle.trim() || existingArticle?.master_title || existingArticle?.masterTitle || "",
-        masterTitle: masterTitle.trim() || existingArticle?.master_title || existingArticle?.masterTitle || "",
         title: liveTitle,
         category: category || existingArticle?.category || "Business",
         subcategories: selectedSubcategories.length > 0 ? selectedSubcategories : (existingArticle?.subcategories || []),
@@ -2670,22 +2662,6 @@ function isWorldOrWorldSub(cat: string): boolean {
           {/* LEFT COLUMN: MAIN RICH TEXT ARTICLE CANVAS */}
           <div className="lg:col-span-8 bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-10 shadow-sm hover:shadow-md transition-all min-h-[750px] flex flex-col">
 
-            {/* WRITER SPECIAL SECTION: MASTER TITLE */}
-            <div className="mb-2">
-              <div className="flex items-center gap-2 mb-1 font-sans">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  MASTER TITLE
-                </span>
-              </div>
-              <input
-                type="text"
-                placeholder="Add Master Title..."
-                value={masterTitle}
-                onChange={(e) => setMasterTitle(e.target.value)}
-                className="w-full font-poppins text-xs sm:text-sm font-bold text-[#BF1E2D] uppercase tracking-wider placeholder:text-slate-300 focus:outline-none border-none py-1 bg-transparent"
-              />
-            </div>
-
             {/* TITLE INPUT - MULTI-LINE AUTO-EXPANDING TEXTAREA */}
             <textarea
               placeholder="Add Title..."
@@ -2703,9 +2679,9 @@ function isWorldOrWorldSub(cat: string): boolean {
               }}
             />
 
-            {/* SUBTITLE INPUT - MULTI-LINE AUTO-EXPANDING TEXTAREA */}
+            {/* SUBHEADING / DECK INPUT - MULTI-LINE AUTO-EXPANDING TEXTAREA */}
             <textarea
-              placeholder="Add Subtitle..."
+              placeholder="Add Subheading / Deck..."
               value={subheading}
               onChange={(e) => {
                 const newSub = e.target.value;
@@ -3216,20 +3192,6 @@ function isWorldOrWorldSub(cat: string): boolean {
                   <span className="text-[10px] text-slate-400 font-semibold block mb-3">
                     SELECTED: {selectedSubcategories.length} / 5
                   </span>
-                </div>
-
-                {/* MASTER TITLE */}
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    MASTER TITLE
-                  </label>
-                  <input
-                    type="text"
-                    value={masterTitle}
-                    onChange={(e) => setMasterTitle(e.target.value)}
-                    placeholder="e.g. Business, Politics, Analysis"
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-[#D31220] shadow-2xs hover:border-slate-300 transition-colors"
-                  />
                 </div>
 
                 {/* 3. TAGS INPUT */}
@@ -3766,16 +3728,11 @@ function isWorldOrWorldSub(cat: string): boolean {
               {/* LEFT COLUMN: MAIN ARTICLE */}
               <div className="lg:col-span-8 flex flex-col">
                 
-                {/* CATEGORY & MASTER TITLE BADGES */}
-                <div className="flex items-center gap-2 mb-3.5 font-sans">
-                  <span className="inline-flex items-center bg-[#BF1E2D] text-white text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-none font-sans">
+                {/* CATEGORY TAG */}
+                <div className="flex items-center gap-2 mb-3 font-standard-sans">
+                  <span className="inline-flex items-center text-[#BF1E2D] hover:text-[#a61724] text-[12px] font-black uppercase tracking-wider transition-colors">
                     {(category || "BUSINESS").toUpperCase()}
                   </span>
-                  {masterTitle.trim() && (
-                    <span className="inline-flex items-center border border-slate-300 bg-white text-slate-800 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-none font-sans">
-                      {masterTitle.trim().toUpperCase()}
-                    </span>
-                  )}
                 </div>
 
                 {/* HEADLINE TITLE */}
