@@ -218,7 +218,7 @@ export default function Footer({ className, hideTopBar = false }: FooterProps = 
               </li>
               <li>
                 <a
-                  href="https://rumble.com"
+                  href="https://rumble.com/user/Londonbigben"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2.5 text-zinc-400 hover:text-white hover:translate-x-1 transition-all group"
