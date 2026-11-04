@@ -2039,7 +2039,7 @@ function ArticlePageContentInner({
 
       {/* Show loading skeleton until live article data is resolved to prevent stale/old article flash */}
       {!isArticleResolved ? (
-        <div className="max-w-[1240px] mx-auto px-4 md:px-6 pt-6 pb-16 font-sans" aria-hidden="true">
+        <div className="max-w-[1400px] mx-auto px-4 md:px-6 pt-6 pb-16 font-sans" aria-hidden="true">
           <div className="animate-pulse">
             <div className="h-4 bg-gray-100 rounded w-48 mb-6" />
             <div className="h-8 bg-gray-100 rounded w-3/4 mb-3" />
@@ -2063,7 +2063,7 @@ function ArticlePageContentInner({
       )}
 
       {/* ARTICLE WRAPPER */}
-      <div id="article-read-container" className="max-w-[1240px] mx-auto px-4 md:px-6 pt-6 pb-16 font-sans">
+      <div id="article-read-container" className="max-w-[1400px] mx-auto px-4 md:px-6 pt-6 pb-16 font-sans">
         
         {/* Top Utility Bar */}
         {(() => {
