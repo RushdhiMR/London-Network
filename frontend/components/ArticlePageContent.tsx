@@ -3614,26 +3614,10 @@ function ArticlePageContentInner({
           <div className="lg:col-span-4 lg:pl-6 font-standard-sans border-l border-zinc-100 lg:border-zinc-200 pt-2 lg:pt-0 self-stretch">
             {/* SECTION 1: RELATED NEWS */}
             <div className="mb-8">
-              <div className="flex items-center justify-between pb-2 mb-4 border-b border-zinc-200 font-sans">
+              <div className="pb-2 mb-4 border-b border-zinc-200 font-sans">
                 <h3 className="text-[14px] font-bold text-slate-900 uppercase tracking-wider font-sans">
                   RELATED NEWS
                 </h3>
-                {(() => {
-                  const catSlug = formatCategorySlug(
-                    (activeNewsData?.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "") ||
-                    parent?.name ||
-                    "news"
-                  );
-                  return (
-                    <Link
-                      href={`/category/${catSlug}`}
-                      className="text-[#BF1E2D] hover:underline text-xs font-semibold flex items-center gap-0.5"
-                    >
-                      <span>View All</span>
-                      <span>→</span>
-                    </Link>
-                  );
-                })()}
               </div>
 
               <div className="space-y-3.5 font-sans">
@@ -3710,27 +3694,10 @@ function ArticlePageContentInner({
             {/* SECTION 3: LATEST IN CATEGORY */}
             {latestInCategoryArticles.length > 0 && (
               <div className="mb-8">
-                <div className="flex items-center justify-between pb-2 mb-4 border-b border-zinc-200 font-sans">
+                <div className="pb-2 mb-4 border-b border-zinc-200 font-sans">
                   <h3 className="text-[14px] font-bold text-slate-900 uppercase tracking-wider font-sans">
                     LATEST IN {((sidebarTargetCat && sidebarTargetCat.toLowerCase() !== "article" ? sidebarTargetCat : activeNewsData?.category || "NEWS")).toUpperCase()}
                   </h3>
-                  {(() => {
-                    const catSlug = formatCategorySlug(
-                      (sidebarTargetCat && sidebarTargetCat.toLowerCase() !== "article" ? sidebarTargetCat : "") ||
-                      (activeNewsData?.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "") ||
-                      parent?.name ||
-                      "news"
-                    );
-                    return (
-                      <Link
-                        href={`/category/${catSlug}`}
-                        className="text-[#BF1E2D] hover:underline text-xs font-semibold flex items-center gap-0.5"
-                      >
-                        <span>View All</span>
-                        <span>→</span>
-                      </Link>
-                    );
-                  })()}
                 </div>
 
                 <div className="space-y-3.5 font-sans">
