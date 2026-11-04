@@ -516,7 +516,7 @@ function ArticlePageContentInner({
     // 4. Fallback based on known staff names
     if (!avatar) {
       const lower = name.toLowerCase();
-      if (lower.includes("jennifer") || lower.includes("friesen")) avatar = "/author_woman.jpg";
+      if (lower.includes("jennifer") || lower.includes("friesen") || lower.includes("sarah") || lower.includes("mitchell")) avatar = "/author_woman.jpg";
       else if (lower.includes("april") || lower.includes("hicke")) avatar = "/author_glasses.jpg";
       else if (lower.includes("pramod") || lower.includes("jain")) avatar = "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=250&h=250&fit=crop";
       else if (lower.includes("chris") || lower.includes("hogg")) avatar = "/author_beard.jpg";
@@ -524,15 +524,26 @@ function ArticlePageContentInner({
     }
 
     // 5. Author Bio: Priority from author's saved profile settings, then fallback / article bio
+    const isGenericBio = (b?: string): boolean => {
+      if (!b) return true;
+      const s = b.trim().toLowerCase();
+      if (s.length < 15) return true;
+      if (s.includes("passionate writer dedicated to delivering accurate")) return true;
+      if (s.includes("keeps readers informed about the world around them")) return true;
+      if (s.includes("he / she") || s.includes("he/she")) return true;
+      if (s.includes("writer user") || s === "writer" || s === "journalist") return true;
+      if (s.includes("avid reader")) return true;
+      if (/^.* is a journalist for (london bigben|digital journal)\.?$/i.test(s)) return true;
+      return false;
+    };
+
     let bio = "";
-    if (writerProfile?.bio && !writerProfile.bio.toLowerCase().includes("avid reader") && writerProfile.bio.trim().length > 0) {
+    if (writerProfile?.bio && !isGenericBio(writerProfile.bio)) {
       bio = writerProfile.bio.trim();
-    } else if (fallbackBio && fallbackBio.trim().length > 0) {
-      bio = fallbackBio.trim();
-    } else if (newsData?.authorBio && newsData.authorBio.trim().length > 0) {
+    } else if (newsData?.authorBio && !isGenericBio(newsData.authorBio)) {
       bio = newsData.authorBio.trim();
-    } else {
-      bio = `${name} is a journalist for London BigBen.`;
+    } else if (fallbackBio && !isGenericBio(fallbackBio)) {
+      bio = fallbackBio.trim();
     }
 
     return { name, avatar, bio };
@@ -2560,9 +2571,24 @@ function ArticlePageContentInner({
             {(() => {
               const cleanAuth = resolveCleanAuthor(activeNewsData.authorName, activeNewsData.authorAvatar, activeNewsData.authorEmail, activeNewsData.authorBio);
               const authorSlug = cleanAuth.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-              const authorCategory = (activeNewsData.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "") || (newsData?.category && newsData.category.toLowerCase() !== "article" ? newsData.category : "") || "Political";
-              const authorRole = (activeNewsData as any).authorRole || `${authorCategory} Correspondent`;
-              const displayBio = cleanAuth.bio || `${cleanAuth.name} is a ${authorRole.toLowerCase()} covering UK government, Parliament, policy and international relations. She has reported on political developments across Europe for over a decade.`;
+              const authorCategory = (activeNewsData.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "") || (newsData?.category && newsData.category.toLowerCase() !== "article" ? newsData.category : "") || (targetCat && targetCat.toLowerCase() !== "article" ? targetCat : "") || "Political";
+              const authorRole = (activeNewsData as any).authorRole || (cleanAuth.name.toLowerCase().includes("sarah") ? "Political Correspondent" : `${authorCategory} Correspondent`);
+
+              let displayBio = cleanAuth.bio;
+              if (!displayBio || displayBio.trim().length === 0) {
+                const catLower = authorCategory.toLowerCase();
+                if (catLower.includes("politic") || cleanAuth.name.toLowerCase().includes("sarah")) {
+                  displayBio = `${cleanAuth.name} is a political correspondent covering UK government, Parliament, policy and international relations. She has reported on political developments across Europe for over a decade.`;
+                } else if (catLower.includes("market") || catLower.includes("econom") || catLower.includes("business")) {
+                  displayBio = `${cleanAuth.name} is a financial and markets correspondent covering global trade, economic policy, central banking and market movements across international financial hubs.`;
+                } else if (catLower.includes("tech")) {
+                  displayBio = `${cleanAuth.name} is a technology correspondent specializing in enterprise innovation, computational infrastructure, digital policy and emerging global tech ecosystems.`;
+                } else if (catLower.includes("sport")) {
+                  displayBio = `${cleanAuth.name} is a sports correspondent covering premier league football, major championships, club governance and international athletic competitions.`;
+                } else {
+                  displayBio = `${cleanAuth.name} is a ${authorRole.toLowerCase()} covering ${authorCategory.toLowerCase()} developments, breaking news and in-depth analysis for London BigBen Network.`;
+                }
+              }
 
               return (
                 <div className="mt-6 pt-5 border-t border-zinc-200 font-sans" suppressHydrationWarning>
@@ -2581,54 +2607,23 @@ function ArticlePageContentInner({
 
                     {/* Author Info */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-[13px] sm:text-[14px] text-slate-800 font-sans">
-                            <span>By </span>
-                            <Link
-                              href={`/author/${authorSlug}`}
-                              className="font-bold text-slate-900 hover:text-[#BF1E2D] hover:underline transition-colors"
-                            >
-                              {cleanAuth.name}
-                            </Link>
-                          </div>
-                          <p className="text-[11px] sm:text-xs text-slate-500 font-sans mt-0.5">
-                            {authorRole} | London BigBen Network
-                          </p>
-                        </div>
-
-                        {/* Top-Right Social Icons: X & LinkedIn */}
-                        <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
-                          {/* X / Twitter */}
-                          <a
-                            href={authorXUrl || "https://x.com"}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            aria-label={`${cleanAuth.name} on X`}
-                            className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-black hover:opacity-80 transition-opacity flex items-center justify-center text-white cursor-pointer"
+                      <div>
+                        <div className="text-[13px] sm:text-[14px] text-slate-800 font-sans">
+                          <span>By </span>
+                          <Link
+                            href={`/author/${authorSlug}`}
+                            className="font-bold text-slate-900 hover:text-[#BF1E2D] hover:underline transition-colors"
                           >
-                            <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 fill-white" viewBox="0 0 24 24">
-                              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                            </svg>
-                          </a>
-
-                          {/* LinkedIn */}
-                          <a
-                            href={authorLinkedinUrl || "https://www.linkedin.com"}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            aria-label={`${cleanAuth.name} on LinkedIn`}
-                            className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-[#0A66C2] hover:opacity-80 transition-opacity flex items-center justify-center text-white cursor-pointer"
-                          >
-                            <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 fill-white" viewBox="0 0 24 24">
-                              <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
-                            </svg>
-                          </a>
+                            {cleanAuth.name}
+                          </Link>
                         </div>
+                        <p className="text-[11px] sm:text-xs text-slate-500 font-sans mt-0.5">
+                          {authorRole} | London BigBen Network
+                        </p>
                       </div>
 
                       {/* Bio text */}
-                      <p className="text-xs sm:text-[12.5px] text-slate-600 font-sans leading-relaxed mt-2 line-clamp-3">
+                      <p className="text-xs sm:text-[12.5px] text-slate-600 font-sans leading-relaxed mt-2">
                         {displayBio}
                       </p>
                     </div>
@@ -2672,7 +2667,7 @@ function ArticlePageContentInner({
 
               return (
                 <div className="mt-3.5 flex items-center gap-2 flex-wrap font-sans">
-                  <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500 font-sans mr-1 shrink-0">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-800 font-sans mr-1 shrink-0">
                     TAGS
                   </span>
                   {tagsList.map((tag) => (
