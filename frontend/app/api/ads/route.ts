@@ -1,3 +1,4 @@
+import { requireRole } from "@/lib/rbac";
 import { NextResponse } from "next/server";
 import { getDbPool } from "@/lib/db";
 
@@ -28,6 +29,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const rbac = await requireRole(request, "admin");
+    if (!rbac.authorized) return rbac.response;
     const body = await request.json();
     const db = getDbPool();
 

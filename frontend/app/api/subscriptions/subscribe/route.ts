@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     const validPlans: SubscriptionPlanId[] = ['digital', 'bundle'];
     const selectedPlan: SubscriptionPlanId = validPlans.includes(plan) ? plan : 'digital';
 
-    const session = await getAuthSession();
+    const session = await getAuthSession(request);
     const cleanEmail = email.trim().toLowerCase();
 
     // Verify trial eligibility securely on backend

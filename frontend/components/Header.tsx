@@ -68,16 +68,26 @@ const megaMenuData: Record<string, {
 
 interface HeaderProps {
   showProgressBar?: boolean;
+  hideCategories?: boolean;
+  hideTrending?: boolean;
 }
 
-export default function Header({ showProgressBar = false }: HeaderProps = {}) {
+export default function Header({
+  showProgressBar = false,
+  hideCategories = false,
+  hideTrending = false
+}: HeaderProps = {}) {
   const pathname = usePathname();
+  const isTeamPage = pathname === "/team" || pathname === "/our-team";
+  const shouldHideCategories = hideCategories || isTeamPage;
+  const shouldHideTrending = hideTrending || isTeamPage;
   const router = useRouter();
   const loginHref = pathname && pathname !== "/login" && pathname !== "/register"
     ? `/login?redirect=${encodeURIComponent(pathname)}`
     : "/login";
 
   const [readingProgress, setReadingProgress] = useState(0);
+  const [isHeaderHidden, setIsHeaderHidden] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -631,6 +641,50 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
     setIsSearchFocused(false);
   }, [pathname]);
 
+  // Automatically hide fixed Header when scrolled down to the footer
+  useEffect(() => {
+    let ticking = false;
+
+    const checkFooterVisibility = () => {
+      const footer = document.querySelector("footer");
+      if (!footer) {
+        setIsHeaderHidden(false);
+        return;
+      }
+
+      const rect = footer.getBoundingClientRect();
+      const scrollY = window.scrollY;
+
+      // Hide header when scrolled down and footer enters the viewport
+      if (scrollY > 80 && rect.top < window.innerHeight && rect.bottom > 0) {
+        setIsHeaderHidden(true);
+        if (isMobileMenuOpen) setIsMobileMenuOpen(false);
+      } else {
+        setIsHeaderHidden(false);
+      }
+    };
+
+    checkFooterVisibility();
+
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          checkFooterVisibility();
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleScroll);
+    };
+  }, [pathname, isMobileMenuOpen]);
+
   // Scroll progress / Article reading completion tracking (only active on article pages)
   useEffect(() => {
     if (!showProgressBar) {
@@ -722,6 +776,7 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
     { name: "Politics", href: "/category/politics", hasSub: false },
     { name: "Business", href: "/category/business", hasSub: false },
     { name: "Technology", href: "/category/technology", hasSub: false },
+    { name: "UFO", href: "/category/ufo", hasSub: false },
     { name: "Economy", href: "/category/economy", hasSub: false },
     { name: "Markets", href: "/category/markets", hasSub: false },
     { name: "Lifestyle", href: "/category/lifestyle", hasSub: false },
@@ -796,18 +851,24 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
       )}
 
       {/* ================= ROW 1 (FIXED TOP): BRAND LOGO, SEARCH, & ACTION BUTTONS ================= */}
-      <div ref={row1Ref} className="fixed top-0 left-0 right-0 z-50 w-full bg-white border-b border-gray-200 shadow-xs">
+      <div
+        ref={row1Ref}
+        className={`fixed top-0 left-0 right-0 z-50 w-full bg-white border-b border-gray-200 shadow-xs transition-transform duration-300 ease-in-out ${
+          isHeaderHidden ? "-translate-y-full pointer-events-none" : "translate-y-0"
+        }`}
+      >
         <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-2.5 sm:py-4 flex items-center justify-between gap-2 sm:gap-6 relative z-50 w-full min-w-0">
 
           {/* LOGO & BRAND */}
           <Link href="/" className="flex items-center group shrink-0 py-0.5" aria-label="London BigBen">
             <Image
-              src="/header_logo.png"
+              src="/header_logo.svg"
               alt="London BigBen Network"
-              width={240}
-              height={42}
+              width={263}
+              height={45}
               className="h-7 sm:h-9 md:h-10 w-auto max-w-[165px] sm:max-w-none object-contain transition-transform group-hover:scale-[1.02]"
               priority
+              unoptimized
             />
           </Link>
 
@@ -960,7 +1021,7 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
             {/* Newsletter Signup Button */}
             <Link
               href="/newsletters"
-              className="hidden xl:inline-flex items-center gap-1.5 bg-gray-900 hover:bg-black text-white font-bold text-[12px] px-3.5 py-2 rounded-md transition-colors whitespace-nowrap shadow-xs"
+              className="hidden xl:inline-flex items-center gap-1.5 bg-gray-900 hover:bg-black text-white font-poppins font-semibold text-[12px] px-3.5 py-2 rounded-md transition-colors whitespace-nowrap shadow-xs"
             >
               <Mail size={14} />
               <span>Newsletter Signup</span>
@@ -969,7 +1030,7 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
             {/* Red Subscribe Button */}
             <Link
               href="/subscribe"
-              className="hidden md:flex bg-[#BF1E2D] hover:bg-red-700 text-white font-bold text-[10px] sm:text-[12px] px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md transition-colors whitespace-nowrap shadow-xs uppercase tracking-wider items-center justify-center shrink-0"
+              className="hidden md:flex bg-[#BF1E2D] hover:bg-red-700 text-white font-poppins font-semibold text-[12px] px-3.5 py-2 rounded-md transition-colors whitespace-nowrap shadow-xs items-center justify-center shrink-0"
             >
               Subscribe
             </Link>
@@ -1131,199 +1192,203 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
       <div style={{ height: row1Height ? `${row1Height}px` : undefined }} className="h-[58px] sm:h-[68px] md:h-[76px] w-full" aria-hidden="true" />
 
       {/* ================= ROW 2: CATEGORY NAVIGATION BAR ================= */}
-      <div className="w-full border-b border-gray-200 bg-white relative z-40 overflow-visible">
-        <div ref={row2ContainerRef} className="max-w-[1400px] mx-auto px-3 sm:px-6 flex items-center justify-between gap-4 w-full min-w-0 relative overflow-visible">
+      {!shouldHideCategories && (
+        <div className="w-full border-b border-gray-200 bg-white relative z-40 overflow-visible">
+          <div ref={row2ContainerRef} className="max-w-[1400px] mx-auto px-3 sm:px-6 flex items-center justify-between gap-4 w-full min-w-0 relative overflow-visible">
 
-          {/* Main Horizontal Category Nav Items */}
-          <nav
-            ref={categoryNavRef}
-            onScroll={updateWorldPos}
-            onMouseDown={handleCategoryMouseDown}
-            onMouseLeave={handleCategoryMouseLeave}
-            onMouseUp={handleCategoryMouseUp}
-            onMouseMove={handleCategoryMouseMove}
-            className="flex items-center justify-between md:justify-start gap-1 sm:gap-3 md:gap-4 lg:gap-2.5 xl:gap-5 2xl:gap-6 py-2.5 sm:py-3 text-[12px] sm:text-[12.5px] lg:text-[12px] xl:text-[13px] 2xl:text-[13.5px] font-bold overflow-x-hidden md:overflow-x-auto scrollbar-none flex-1 min-w-0 md:pr-4 md:touch-pan-x select-none md:cursor-grab md:active:cursor-grabbing"
-          >
-            {navCategories.map((cat, index) => {
-              const isWorld = cat.name === "World";
-              const isWorldActive = isWorld && activeMenu === "WORLD";
-              const isActive = isCurrentCategoryActive(cat);
+            {/* Main Horizontal Category Nav Items */}
+            <nav
+              ref={categoryNavRef}
+              onScroll={updateWorldPos}
+              onMouseDown={handleCategoryMouseDown}
+              onMouseLeave={handleCategoryMouseLeave}
+              onMouseUp={handleCategoryMouseUp}
+              onMouseMove={handleCategoryMouseMove}
+              className="flex items-center justify-between md:justify-start gap-1 sm:gap-3 md:gap-4 lg:gap-2.5 xl:gap-5 2xl:gap-6 py-2.5 sm:py-3 text-[12px] sm:text-[12.5px] lg:text-[12px] xl:text-[13px] 2xl:text-[13.5px] font-bold overflow-x-hidden md:overflow-x-auto scrollbar-none flex-1 min-w-0 md:pr-4 md:touch-pan-x select-none md:cursor-grab md:active:cursor-grabbing"
+            >
+              {navCategories.map((cat, index) => {
+                const isWorld = cat.name === "World";
+                const isWorldActive = isWorld && activeMenu === "WORLD";
+                const isActive = isCurrentCategoryActive(cat);
 
-              return (
-                <div
-                  key={cat.name}
-                  ref={isWorld ? worldBtnRef : undefined}
-                  className={`relative flex items-center group shrink-0 ${index >= 5 ? "hidden md:flex" : ""}`}
-                >
-                  <Link
-                    href={cat.href}
-                    onClick={(e) => {
-                      if (hasMovedNav.current) {
-                        e.preventDefault();
-                        return;
-                      }
-                      if (isWorld) {
-                        toggleWorldMenu(e);
-                        return;
-                      }
-                      setActiveMenu(null);
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className={`flex items-center gap-0.5 sm:gap-1 py-1 px-0.5 sm:px-1 lg:px-1.5 xl:px-2 transition-colors font-bold whitespace-nowrap border-t-2 border-transparent cursor-pointer ${isActive
-                      ? "text-gray-900 border-b-2 border-[#BF1E2D]"
-                      : "text-gray-800 hover:text-[#BF1E2D] border-b-2 border-transparent"
-                      }`}
+                return (
+                  <div
+                    key={cat.name}
+                    ref={isWorld ? worldBtnRef : undefined}
+                    className={`relative flex items-center group shrink-0 ${index >= 5 ? "hidden md:flex" : ""}`}
                   >
-                    <span>{cat.name}</span>
-                    {isWorld && (
-                      <ChevronDown
-                        size={12}
-                        strokeWidth={2.5}
-                        className={`text-gray-500 transition-transform duration-200 ${isWorldActive
-                          ? "rotate-180 text-[#BF1E2D]"
-                          : "group-hover:text-[#BF1E2D]"
-                          }`}
-                      />
-                    )}
+                    <Link
+                      href={cat.href}
+                      onClick={(e) => {
+                        if (hasMovedNav.current) {
+                          e.preventDefault();
+                          return;
+                        }
+                        if (isWorld) {
+                          toggleWorldMenu(e);
+                          return;
+                        }
+                        setActiveMenu(null);
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`flex items-center gap-0.5 sm:gap-1 py-1 px-0.5 sm:px-1 lg:px-1.5 xl:px-2 transition-colors font-bold whitespace-nowrap border-t-2 border-transparent cursor-pointer ${isActive
+                        ? "text-gray-900 border-b-2 border-[#BF1E2D]"
+                        : "text-gray-800 hover:text-[#BF1E2D] border-b-2 border-transparent"
+                        }`}
+                    >
+                      <span>{cat.name}</span>
+                      {isWorld && (
+                        <ChevronDown
+                          size={12}
+                          strokeWidth={2.5}
+                          className={`text-gray-500 transition-transform duration-200 ${isWorldActive
+                            ? "rotate-180 text-[#BF1E2D]"
+                            : "group-hover:text-[#BF1E2D]"
+                            }`}
+                        />
+                      )}
+                    </Link>
+                  </div>
+                );
+              })}
+            </nav>
+
+            {/* Far Right Language Selector */}
+            <div className="hidden lg:flex items-center pl-4 border-l border-gray-200 relative flex-shrink-0" ref={langDropdownRef}>
+              <button
+                onClick={() => setIsLangOpen(!isLangOpen)}
+                className="flex items-center gap-1.5 text-[12.5px] font-bold text-gray-700 hover:text-[#BF1E2D] cursor-pointer py-1 px-2 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                <Globe size={14} className="text-black shrink-0" strokeWidth={2} />
+                <span>{selectedLang}</span>
+                <ChevronDown size={12} strokeWidth={2.5} className="text-gray-400" />
+              </button>
+
+              {isLangOpen && (
+                <div className="absolute right-0 top-full mt-1 w-40 bg-white border border-gray-200 rounded-xl shadow-xl z-50 py-1.5 overflow-hidden">
+                  {languages.map((lang) => (
+                    <button
+                      key={lang.code}
+                      onClick={() => applyLanguage(lang.code, lang.label)}
+                      className={`w-full text-left px-3 py-1.5 text-xs font-semibold transition-colors ${selectedLang === lang.label
+                        ? "bg-red-50 text-[#BF1E2D]"
+                        : "text-gray-700 hover:bg-red-50 hover:text-[#BF1E2D]"
+                        }`}
+                    >
+                      {lang.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* World Dropdown Menu: rendered outside <nav> so mobile overflow-x-auto does NOT clip it */}
+            <div
+              ref={worldDropdownRef}
+              style={{
+                left: worldDropdownLeft !== null ? `${worldDropdownLeft}px` : undefined,
+              }}
+              className={`absolute top-full left-3 sm:left-6 pt-2 w-[230px] sm:w-[250px] z-[100] transition-all duration-200 ${activeMenu === "WORLD"
+                ? "opacity-100 visible pointer-events-auto translate-y-0"
+                : "opacity-0 invisible pointer-events-none -translate-y-1"
+                }`}
+            >
+              <div className="bg-white border border-gray-200/90 shadow-2xl rounded-2xl p-3.5 text-left font-sans ring-1 ring-black/5">
+                <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-150">
+                  <h4 className="text-[11px] font-extrabold uppercase text-[#BF1E2D] tracking-wider">
+                    World Categories
+                  </h4>
+                  <span className="text-[9.5px] text-gray-400 font-bold uppercase tracking-wider">Regions</span>
+                </div>
+
+                <div className="space-y-0.5">
+                  {worldRegionsList.map((region, i) => (
+                    <Link
+                      key={i}
+                      href={region.href}
+                      onClick={() => setActiveMenu(null)}
+                      className="flex items-center justify-between py-2 px-3 rounded-xl text-[12.5px] font-bold text-gray-800 hover:bg-red-50/80 hover:text-[#BF1E2D] group/item cursor-pointer transition-colors"
+                    >
+                      <span className="group-hover/item:text-[#BF1E2D]">{region.name}</span>
+                      <span className="text-gray-300 group-hover/item:text-[#BF1E2D] text-[11px] font-bold transition-colors">›</span>
+                    </Link>
+                  ))}
+                </div>
+
+                <div className="pt-2 mt-2 border-t border-gray-150 flex items-center justify-between">
+                  <Link
+                    href="/category/world"
+                    onClick={() => setActiveMenu(null)}
+                    className="text-[11px] font-extrabold text-[#BF1E2D] hover:underline flex items-center gap-1"
+                  >
+                    <span>View all World coverage →</span>
                   </Link>
                 </div>
-              );
-            })}
-          </nav>
-
-          {/* Far Right Language Selector */}
-          <div className="hidden lg:flex items-center pl-4 border-l border-gray-200 relative flex-shrink-0" ref={langDropdownRef}>
-            <button
-              onClick={() => setIsLangOpen(!isLangOpen)}
-              className="flex items-center gap-1.5 text-[12.5px] font-bold text-gray-700 hover:text-[#BF1E2D] cursor-pointer py-1 px-2 rounded-md hover:bg-gray-50 transition-colors"
-            >
-              <Globe size={14} className="text-black shrink-0" strokeWidth={2} />
-              <span>{selectedLang}</span>
-              <ChevronDown size={12} strokeWidth={2.5} className="text-gray-400" />
-            </button>
-
-            {isLangOpen && (
-              <div className="absolute right-0 top-full mt-1 w-40 bg-white border border-gray-200 rounded-xl shadow-xl z-50 py-1.5 overflow-hidden">
-                {languages.map((lang) => (
-                  <button
-                    key={lang.code}
-                    onClick={() => applyLanguage(lang.code, lang.label)}
-                    className={`w-full text-left px-3 py-1.5 text-xs font-semibold transition-colors ${selectedLang === lang.label
-                      ? "bg-red-50 text-[#BF1E2D]"
-                      : "text-gray-700 hover:bg-red-50 hover:text-[#BF1E2D]"
-                      }`}
-                  >
-                    {lang.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* World Dropdown Menu: rendered outside <nav> so mobile overflow-x-auto does NOT clip it */}
-          <div
-            ref={worldDropdownRef}
-            style={{
-              left: worldDropdownLeft !== null ? `${worldDropdownLeft}px` : undefined,
-            }}
-            className={`absolute top-full left-3 sm:left-6 pt-2 w-[230px] sm:w-[250px] z-[100] transition-all duration-200 ${activeMenu === "WORLD"
-              ? "opacity-100 visible pointer-events-auto translate-y-0"
-              : "opacity-0 invisible pointer-events-none -translate-y-1"
-              }`}
-          >
-            <div className="bg-white border border-gray-200/90 shadow-2xl rounded-2xl p-3.5 text-left font-sans ring-1 ring-black/5">
-              <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-150">
-                <h4 className="text-[11px] font-extrabold uppercase text-[#BF1E2D] tracking-wider">
-                  World Categories
-                </h4>
-                <span className="text-[9.5px] text-gray-400 font-bold uppercase tracking-wider">Regions</span>
-              </div>
-
-              <div className="space-y-0.5">
-                {worldRegionsList.map((region, i) => (
-                  <Link
-                    key={i}
-                    href={region.href}
-                    onClick={() => setActiveMenu(null)}
-                    className="flex items-center justify-between py-2 px-3 rounded-xl text-[12.5px] font-bold text-gray-800 hover:bg-red-50/80 hover:text-[#BF1E2D] group/item cursor-pointer transition-colors"
-                  >
-                    <span className="group-hover/item:text-[#BF1E2D]">{region.name}</span>
-                    <span className="text-gray-300 group-hover/item:text-[#BF1E2D] text-[11px] font-bold transition-colors">›</span>
-                  </Link>
-                ))}
-              </div>
-
-              <div className="pt-2 mt-2 border-t border-gray-150 flex items-center justify-between">
-                <Link
-                  href="/category/world"
-                  onClick={() => setActiveMenu(null)}
-                  className="text-[11px] font-extrabold text-[#BF1E2D] hover:underline flex items-center gap-1"
-                >
-                  <span>View all World coverage →</span>
-                </Link>
               </div>
             </div>
-          </div>
 
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ================= ROW 3: TRENDING TOPICS & WEATHER UTILITY BAR ================= */}
-      <div className="w-full bg-[#F8F9FA] border-b border-gray-200 py-1.5 text-xs font-medium text-gray-700">
-        <div className="max-w-[1400px] mx-auto px-3 sm:px-6 flex items-center justify-between gap-4 min-w-0">
+      {!shouldHideTrending && (
+        <div className="w-full bg-[#F8F9FA] border-b border-gray-200 py-1.5 text-xs font-medium text-gray-700">
+          <div className="max-w-[1400px] mx-auto px-3 sm:px-6 flex items-center justify-between gap-4 min-w-0">
 
-          {/* LEFT: TRENDING LABEL & TOPICS */}
-          <div className="flex items-center gap-2 sm:gap-2.5 overflow-x-auto scrollbar-none py-0.5 min-w-0 flex-1">
-            <span className="bg-[#BF1E2D]/10 text-[#BF1E2D] font-extrabold uppercase text-[10px] sm:text-[11px] px-2 py-0.5 rounded tracking-wider shrink-0">
-              TRENDING
-            </span>
+            {/* LEFT: TRENDING LABEL & TOPICS */}
+            <div className="flex items-center gap-2 sm:gap-2.5 overflow-x-auto scrollbar-none py-0.5 min-w-0 flex-1">
+              <span className="bg-[#BF1E2D]/10 text-[#BF1E2D] font-extrabold uppercase text-[10px] sm:text-[11px] px-2 py-0.5 rounded tracking-wider shrink-0">
+                TRENDING
+              </span>
 
-            <div className="flex items-center gap-2 sm:gap-2.5 text-[12px] whitespace-nowrap text-gray-700 shrink-0">
-              {trendingTopics.map((topic, index) => (
-                <div key={topic.name} className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-                  <Link href={topic.href} className="hover:text-[#BF1E2D] transition-colors font-medium">
-                    {topic.name}
-                  </Link>
-                  {index < trendingTopics.length - 1 && <span className="text-gray-300">•</span>}
+              <div className="flex items-center gap-2 sm:gap-2.5 text-[12px] whitespace-nowrap text-gray-700 shrink-0">
+                {trendingTopics.map((topic, index) => (
+                  <div key={topic.name} className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+                    <Link href={topic.href} className="hover:text-[#BF1E2D] transition-colors font-medium">
+                      {topic.name}
+                    </Link>
+                    {index < trendingTopics.length - 1 && <span className="text-gray-300">•</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* RIGHT: DATE, COUNTRY & WEATHER WIDGET — desktop */}
+            <div className="hidden lg:flex items-center gap-3 text-[11.5px] text-gray-500 font-medium shrink-0">
+              {currentDate && <span>{currentDate}</span>}
+              {currentDate && countryName && <span className="text-gray-300">•</span>}
+              {countryName && <span>{countryName}</span>}
+              {(countryName || currentDate) && weatherTemp !== null && <span className="text-gray-300">•</span>}
+
+              {/* Weather Pill */}
+              {weatherTemp !== null && (
+                <div className="flex items-center gap-1 text-gray-800 font-semibold cursor-pointer hover:text-[#BF1E2D] bg-white px-2 py-0.5 rounded border border-gray-200 shadow-2xs transition-colors">
+                  <span>{weatherTemp}°C</span>
                 </div>
-              ))}
+              )}
             </div>
+
           </div>
 
-          {/* RIGHT: DATE, COUNTRY & WEATHER WIDGET — desktop */}
-          <div className="hidden lg:flex items-center gap-3 text-[11.5px] text-gray-500 font-medium shrink-0">
-            {currentDate && <span>{currentDate}</span>}
-            {currentDate && countryName && <span className="text-gray-300">•</span>}
-            {countryName && <span>{countryName}</span>}
-            {(countryName || currentDate) && weatherTemp !== null && <span className="text-gray-300">•</span>}
-
-            {/* Weather Pill */}
-            {weatherTemp !== null && (
-              <div className="flex items-center gap-1 text-gray-800 font-semibold cursor-pointer hover:text-[#BF1E2D] bg-white px-2 py-0.5 rounded border border-gray-200 shadow-2xs transition-colors">
-                <span>{weatherTemp}°C</span>
+          {/* MOBILE/TABLET ONLY: Date, Country & Weather row */}
+          {(currentDate || countryName || weatherTemp !== null) && (
+            <div className="lg:hidden max-w-[1400px] mx-auto px-3 sm:px-6 pb-1 pt-0.5 flex items-center justify-between gap-2 text-[10.5px] text-gray-500 font-medium">
+              <div className="flex items-center gap-1.5 truncate min-w-0">
+                {currentDate && <span className="truncate">{currentDate}</span>}
+                {currentDate && countryName && <span className="text-gray-300 shrink-0">•</span>}
+                {countryName && <span className="truncate text-gray-500">{countryName}</span>}
               </div>
-            )}
-          </div>
 
+              {weatherTemp !== null && (
+                <div className="flex items-center gap-1 text-gray-800 font-semibold bg-white px-2 py-0.5 rounded border border-gray-200 shadow-2xs shrink-0">
+                  <span className="text-[11px]">{weatherTemp}°C</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
-
-        {/* MOBILE/TABLET ONLY: Date, Country & Weather row */}
-        {(currentDate || countryName || weatherTemp !== null) && (
-          <div className="lg:hidden max-w-[1400px] mx-auto px-3 sm:px-6 pb-1 pt-0.5 flex items-center justify-between gap-2 text-[10.5px] text-gray-500 font-medium">
-            <div className="flex items-center gap-1.5 truncate min-w-0">
-              {currentDate && <span className="truncate">{currentDate}</span>}
-              {currentDate && countryName && <span className="text-gray-300 shrink-0">•</span>}
-              {countryName && <span className="truncate text-gray-500">{countryName}</span>}
-            </div>
-
-            {weatherTemp !== null && (
-              <div className="flex items-center gap-1 text-gray-800 font-semibold bg-white px-2 py-0.5 rounded border border-gray-200 shadow-2xs shrink-0">
-                <span className="text-[11px]">{weatherTemp}°C</span>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      )}
 
       {/* MOBILE DRAWER */}
       {isMobileMenuOpen && (
@@ -1479,18 +1544,18 @@ export default function Header({ showProgressBar = false }: HeaderProps = {}) {
             <Link
               href="/subscribe"
               onClick={() => setIsMobileMenuOpen(false)}
-              className="bg-[#BF1E2D] hover:bg-red-700 text-white text-center font-extrabold text-xs py-2.5 rounded-md shadow-xs uppercase tracking-wider flex items-center justify-center gap-1"
+              className="bg-[#BF1E2D] hover:bg-red-700 text-white text-center font-poppins font-semibold text-xs py-2.5 rounded-md shadow-xs flex items-center justify-center gap-1"
             >
-              <span>Subscribe Now</span>
+              <span>Subscribe</span>
             </Link>
 
             <Link
               href="/newsletters"
               onClick={() => setIsMobileMenuOpen(false)}
-              className="bg-gray-900 hover:bg-black text-white text-center font-bold text-xs py-2.5 rounded-md shadow-xs flex items-center justify-center gap-1"
+              className="bg-gray-900 hover:bg-black text-white text-center font-poppins font-semibold text-xs py-2.5 rounded-md shadow-xs flex items-center justify-center gap-1"
             >
               <Mail size={14} />
-              <span>Newsletter</span>
+              <span>Newsletter Signup</span>
             </Link>
           </div>
 

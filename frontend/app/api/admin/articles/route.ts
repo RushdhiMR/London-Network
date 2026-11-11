@@ -3,8 +3,8 @@ import { requireRole } from '@/lib/rbac';
 import { readArticlesStore, upsertArticleStore } from '@/lib/serverArticlesStore';
 
 // GET all articles for admin management (Admin only)
-export async function GET() {
-  const rbac = await requireRole('admin');
+export async function GET(request: Request) {
+  const rbac = await requireRole(request, 'admin');
   if (!rbac.authorized) {
     return rbac.response;
   }
@@ -19,7 +19,7 @@ export async function GET() {
 
 // POST create new article (Admin only)
 export async function POST(request: Request) {
-  const rbac = await requireRole('admin');
+  const rbac = await requireRole(request, 'admin');
   if (!rbac.authorized) {
     return rbac.response;
   }

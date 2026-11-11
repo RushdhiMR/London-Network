@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import Header from "@/components/Header";
@@ -25,16 +25,29 @@ const tocItems: TocItem[] = [
 export default function CookiePolicyPage() {
   const [activeId, setActiveId] = useState<string>("introduction");
   const [mobileTocOpen, setMobileTocOpen] = useState(false);
+  const isClickScrolling = useRef(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const handleScroll = () => {
-      const scrollPosition = window.scrollY + 160;
+      if (isClickScrolling.current) return;
 
+      if (window.scrollY < 120) {
+        setActiveId(tocItems[0].id);
+        return;
+      }
+
+      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 60) {
+        setActiveId(tocItems[tocItems.length - 1].id);
+        return;
+      }
+
+      const threshold = 140;
       for (let i = tocItems.length - 1; i >= 0; i--) {
         const section = document.getElementById(tocItems[i].id);
         if (section) {
-          const top = section.offsetTop;
-          if (scrollPosition >= top) {
+          const rect = section.getBoundingClientRect();
+          if (rect.top <= threshold) {
             setActiveId(tocItems[i].id);
             break;
           }
@@ -44,17 +57,31 @@ export default function CookiePolicyPage() {
 
     window.addEventListener("scroll", handleScroll, { passive: true });
     handleScroll();
-    return () => window.removeEventListener("scroll", handleScroll);
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
   }, []);
 
   const scrollToSection = (id: string) => {
     const el = document.getElementById(id);
     if (el) {
-      const yOffset = -110;
-      const y = el.getBoundingClientRect().top + window.pageYOffset + yOffset;
-      window.scrollTo({ top: y, behavior: "smooth" });
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+      isClickScrolling.current = true;
       setActiveId(id);
       setMobileTocOpen(false);
+
+      const yOffset = -110;
+      const y = el.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: "auto" });
+
+      scrollTimeoutRef.current = setTimeout(() => {
+        isClickScrolling.current = false;
+      }, 150);
     }
   };
 
@@ -79,6 +106,7 @@ export default function CookiePolicyPage() {
         {/* MOBILE TABLE OF CONTENTS COLLAPSIBLE ACCORDION */}
         <div className="lg:hidden mb-8 border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
           <button
+            type="button"
             onClick={() => setMobileTocOpen(!mobileTocOpen)}
             className="w-full flex items-center justify-between px-4 py-3 bg-white text-left font-bold text-xs uppercase tracking-wider text-slate-900 border-b border-slate-200"
           >
@@ -89,9 +117,10 @@ export default function CookiePolicyPage() {
             <div className="p-3 bg-white space-y-1 max-h-72 overflow-y-auto">
               {tocItems.map((item) => (
                 <button
+                  type="button"
                   key={item.id}
                   onClick={() => scrollToSection(item.id)}
-                  className={`w-full text-left text-xs py-2 px-3 rounded transition-colors ${
+                  className={`w-full text-left text-xs py-2 px-3 rounded ${
                     activeId === item.id
                       ? "bg-red-50 text-[#BF1E2D] font-bold border-l-2 border-[#BF1E2D]"
                       : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
@@ -120,9 +149,10 @@ export default function CookiePolicyPage() {
                   const isActive = activeId === item.id;
                   return (
                     <button
+                      type="button"
                       key={item.id}
                       onClick={() => scrollToSection(item.id)}
-                      className={`w-full text-left text-[13px] py-1.5 px-3 rounded transition-all duration-150 block truncate ${
+                      className={`w-full text-left text-[13px] py-1.5 px-3 rounded block truncate ${
                         isActive
                           ? "bg-red-50/90 text-[#BF1E2D] font-bold border-l-2 border-[#BF1E2D] pl-2.5 shadow-2xs"
                           : "text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium"
@@ -317,11 +347,12 @@ export default function CookiePolicyPage() {
                 {/* LOGO IN CONTACT BOX */}
                 <div className="mt-6 pt-5 border-t border-slate-200/80 flex items-center justify-center">
                   <Image
-                    src="/header_logo.png"
+                    src="/header_logo.svg"
                     alt="London BigBen Network"
-                    width={180}
-                    height={36}
+                    width={263}
+                    height={45}
                     className="h-7 w-auto object-contain"
+                    unoptimized
                   />
                 </div>
               </div>

@@ -1,8 +1,11 @@
+import { requireRole } from "@/lib/rbac";
 import { NextResponse } from 'next/server';
 import { DB } from '@/lib/db';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const rbac = await requireRole(request, "admin");
+    if (!rbac.authorized) return rbac.response;
     const advertiseLeads = await DB.getAllAdvertiseLeads();
     return NextResponse.json({
       success: true,
@@ -69,6 +72,8 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
+    const rbac = await requireRole(request, "admin");
+    if (!rbac.authorized) return rbac.response;
     const body = await request.json();
     const { id, status } = body;
 
@@ -101,6 +106,8 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const rbac = await requireRole(request, "admin");
+    if (!rbac.authorized) return rbac.response;
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 

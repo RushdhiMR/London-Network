@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 import { requireRole } from '@/lib/rbac';
 import { DB } from '@/lib/db';
 
-export async function GET() {
-  const rbac = await requireRole('admin');
+export async function GET(request: Request) {
+  const rbac = await requireRole(request, 'admin');
   if (!rbac.authorized) {
     return rbac.response;
   }

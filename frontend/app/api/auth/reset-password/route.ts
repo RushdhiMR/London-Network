@@ -45,10 +45,14 @@ export async function POST(request: Request) {
       }
     }
 
-    // Secure fallback for demo if token matches
-    const newPasswordHash = await hashPassword(newPassword);
+    if (!user || !user.id) {
+      return NextResponse.json(
+        { error: 'Password reset token is invalid or has expired.' },
+        { status: 400 }
+      );
+    }
 
-    if (user && user.id) {
+    const newPasswordHash = await hashPassword(newPassword);
       // Update MySQL
       try {
         const db = getDbPool();
@@ -64,7 +68,6 @@ export async function POST(request: Request) {
         reset_token: null,
         reset_token_expires: null,
       });
-    }
 
     return NextResponse.json({
       success: true,

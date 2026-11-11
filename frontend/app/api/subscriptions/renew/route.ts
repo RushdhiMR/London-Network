@@ -7,7 +7,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { email, plan = 'digital' } = body;
 
-    const session = await getAuthSession();
+    const session = await getAuthSession(request);
     const activeEmail = (email || session?.email || '').trim().toLowerCase();
 
     if (!activeEmail || !activeEmail.includes('@')) {

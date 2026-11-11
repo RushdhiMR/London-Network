@@ -1,3 +1,4 @@
+import { requireRole } from "@/lib/rbac";
 import { NextRequest, NextResponse } from "next/server";
 import { isB2Configured, uploadToB2 } from "@/lib/backblaze";
 
@@ -39,6 +40,8 @@ import path from "path";
 
 export async function POST(request: NextRequest) {
   try {
+    const rbac = await requireRole(request, "writer", "admin");
+    if (!rbac.authorized) return rbac.response;
     const contentTypeHeader = request.headers.get("content-type") || "";
 
     let buffer: Buffer | null = null;

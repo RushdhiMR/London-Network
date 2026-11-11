@@ -105,6 +105,7 @@ export default function HeroSection() {
         const rawName = (post.authorName || (post as any).author_name || post.author || "Rushdhi MR").trim();
         const authorEmail = post.authorEmail || (post as any).author_email;
         const authorAvatar = post.authorAvatar || (post as any).author_avatar;
+        const authorSlug = (post as any).authorSlug || (post as any).author_slug || rawName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "rushdhi-mr";
         const resolvedAvatar = resolveUserAvatar({
           name: rawName,
           email: authorEmail,
@@ -121,6 +122,7 @@ export default function HeroSection() {
           author: rawName,
           authorAvatar: authorAvatar || resolvedAvatar,
           authorEmail: authorEmail,
+          authorSlug: authorSlug,
           date: post.date || "Just now",
           readTime: post.readDuration || "4 MIN READ",
           image: validImg,
@@ -285,6 +287,7 @@ export default function HeroSection() {
                 const authorName = activeArticle.author || "Rushdhi MR";
                 const authorEmail = (activeArticle as any).authorEmail || (activeArticle as any).author_email;
                 const authorAvatar = (activeArticle as any).authorAvatar;
+                const authorSlug = (activeArticle as any).authorSlug || (authorName ? authorName.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") : "rushdhi-mr") || "rushdhi-mr";
 
                 const liveAvatar = resolveUserAvatar({
                   name: authorName,
@@ -294,7 +297,12 @@ export default function HeroSection() {
 
                 return (
                   <div className="flex items-center gap-2 mb-2" suppressHydrationWarning>
-                    <div className="w-5.5 h-5.5 rounded-full overflow-hidden bg-[#1E293B] text-white flex items-center justify-center font-bold text-[9.5px] flex-shrink-0" suppressHydrationWarning>
+                    <Link
+                      href={`/author/${authorSlug}`}
+                      className="w-5.5 h-5.5 rounded-full overflow-hidden bg-[#1E293B] text-white flex items-center justify-center font-bold text-[9.5px] flex-shrink-0 hover:opacity-80 transition-opacity"
+                      title={`View ${authorName}'s journalist profile`}
+                      suppressHydrationWarning
+                    >
                       {liveAvatar && liveAvatar.length > 5 ? (
                         <img
                           src={liveAvatar}
@@ -308,10 +316,16 @@ export default function HeroSection() {
                       ) : (
                         <span>{(authorName || "RM").slice(0, 2).toUpperCase()}</span>
                       )}
-                    </div>
+                    </Link>
                     <div className="flex items-center gap-1 text-[10.5px] font-sans flex-wrap" suppressHydrationWarning>
                       <span className="font-bold text-gray-900">
-                        By {authorName}
+                        By{" "}
+                        <Link
+                          href={`/author/${authorSlug}`}
+                          className="hover:text-[#D31220] transition-colors"
+                        >
+                          {authorName}
+                        </Link>
                       </span>
                       <span className="text-gray-400 font-medium ml-1">
                         • {activeArticle.date}

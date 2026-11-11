@@ -1,3 +1,4 @@
+import { requireRole } from "@/lib/rbac";
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
@@ -56,6 +57,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const rbac = await requireRole(req, "admin");
+    if (!rbac.authorized) return rbac.response;
     const body = await req.json().catch(() => ({}));
     const videos = body.videos || body.reels;
 

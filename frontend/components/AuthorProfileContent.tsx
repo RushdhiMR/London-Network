@@ -2,14 +2,16 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { MapPin, Mail, Link2, Bell, ChevronRight, Award, BookOpen, ShieldCheck, Check } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { useLiveArticles, useLiveAdSlots, formatAdDimensions, isDuplicateAdImage } from "@/lib/articlesSync";
+import { useLiveArticles } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
 import { getUserProfile, getAuthorAvatarByNameOrEmail, getAuthorFullProfileByNameOrEmail, resolveUserAvatar } from "@/lib/userProfiles";
 import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
 
-interface ArticleItem {
+export interface ArticleItem {
   category: string;
   href: string;
   title: string;
@@ -20,7 +22,7 @@ interface ArticleItem {
   authorAvatar?: string;
 }
 
-interface SidebarItem {
+export interface SidebarItem {
   rank: number;
   href: string;
   title: string;
@@ -34,53 +36,214 @@ interface AuthorProfileContentProps {
     role: string;
     avatar: string;
     bio: string;
+    location?: string;
+    email?: string;
+    articlesCount?: number;
+    yearsOfExperience?: number;
+    articleViews?: string;
+    coverageAreas?: string[];
   };
   initialArticles: ArticleItem[];
-  mostReadSidebar: SidebarItem[];
+  mostReadSidebar?: SidebarItem[];
 }
+
+const MORE_WRITERS_DATA = [
+  {
+    name: "James Carter",
+    role: "Senior Political Analyst",
+    articlesCount: 278,
+    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop",
+    slug: "james-carter"
+  },
+  {
+    name: "Emily Watson",
+    role: "International Correspondent",
+    articlesCount: 312,
+    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop",
+    slug: "emily-watson"
+  },
+  {
+    name: "Daniel Brooks",
+    role: "Government and Policy Reporter",
+    articlesCount: 198,
+    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop",
+    slug: "daniel-brooks"
+  },
+  {
+    name: "Olivia Chen",
+    role: "Europe Correspondent",
+    articlesCount: 245,
+    avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&h=150&fit=crop",
+    slug: "olivia-chen"
+  },
+  {
+    name: "Rushdhi MR",
+    role: "Founder & Technology Lead",
+    articlesCount: 418,
+    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_bluesuit.jpg",
+    slug: "rushdhi-mr"
+  },
+  {
+    name: "Roomi",
+    role: "Staff Writer & Market Reporter",
+    articlesCount: 234,
+    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_glasses.jpg",
+    slug: "roomi"
+  },
+  {
+    name: "Ruzni",
+    role: "Editorial Director",
+    articlesCount: 312,
+    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_beard.jpg",
+    slug: "ruzni"
+  }
+];
 
 export default function AuthorProfileContent({
   slug,
   author,
   initialArticles,
-  mostReadSidebar,
 }: AuthorProfileContentProps) {
+  const router = useRouter();
   const [authorProfile, setAuthorProfile] = useState(author);
-  const [articlesList, setArticlesList] = useState<ArticleItem[]>([]);
-  const [mostReadItems, setMostReadItems] = useState<SidebarItem[]>(mostReadSidebar);
-  const [visibleCount, setVisibleCount] = useState(10);
+  const [articlesList, setArticlesList] = useState<ArticleItem[]>(initialArticles);
+  const [visibleCount, setVisibleCount] = useState(6);
+  const [activeTab, setActiveTab] = useState<"articles" | "about" | "coverage" | "awards">("articles");
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
+  const [followToast, setFollowToast] = useState<{ message: string; type: "success" | "info" } | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [profileVersion, setProfileVersion] = useState(0);
+  const [syncTick, setSyncTick] = useState(0);
   const { articles: liveArticles } = useLiveArticles();
-  const { adSlots } = useLiveAdSlots();
   const auth = useAuth();
 
   useEffect(() => {
-    const handleProfileUpdate = () => {
-      setProfileVersion((v) => v + 1);
+    const handleSync = () => {
+      setSyncTick((prev) => prev + 1);
     };
-    window.addEventListener("dj_profile_updated", handleProfileUpdate);
-    window.addEventListener("dj_auth_change", handleProfileUpdate);
-    window.addEventListener("dj_articles_updated", handleProfileUpdate);
+    window.addEventListener("dj_articles_updated", handleSync);
+    window.addEventListener("dj_profile_updated", handleSync);
+    window.addEventListener("dj_auth_change", handleSync);
     return () => {
-      window.removeEventListener("dj_profile_updated", handleProfileUpdate);
-      window.removeEventListener("dj_auth_change", handleProfileUpdate);
-      window.removeEventListener("dj_articles_updated", handleProfileUpdate);
+      window.removeEventListener("dj_articles_updated", handleSync);
+      window.removeEventListener("dj_profile_updated", handleSync);
+      window.removeEventListener("dj_auth_change", handleSync);
     };
   }, []);
 
+  // Check initial follow state and handle pending follow if user just signed in
   useEffect(() => {
-    setVisibleCount(10);
+    try {
+      const stored = localStorage.getItem(`followed_author_${slug}`) === "true";
+      setIsFollowing(stored);
+    } catch (e) {}
+
+    if (auth.authenticated && auth.user?.email) {
+      const checkFollowStatus = async () => {
+        try {
+          // Check for pending follow saved before redirecting to login
+          const pendingStr = localStorage.getItem("pending_follow_author");
+          if (pendingStr) {
+            try {
+              const pending = JSON.parse(pendingStr);
+              if (pending?.slug === slug) {
+                localStorage.removeItem("pending_follow_author");
+                await executeFollow(true);
+                return;
+              }
+            } catch (err) {}
+          }
+
+          const userEmail = auth.user?.email || "";
+          if (!userEmail) return;
+
+          const res = await fetch(`/api/author/follow?authorSlug=${encodeURIComponent(slug)}&email=${encodeURIComponent(userEmail)}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (typeof data.isFollowing === "boolean") {
+              setIsFollowing(data.isFollowing);
+              localStorage.setItem(`followed_author_${slug}`, String(data.isFollowing));
+            }
+          }
+        } catch (err) {}
+      };
+      checkFollowStatus();
+    }
+  }, [slug, auth.authenticated, auth.user?.email]);
+
+  const executeFollow = async (targetState: boolean) => {
+    setFollowLoading(true);
+    setIsFollowing(targetState);
+    try {
+      localStorage.setItem(`followed_author_${slug}`, String(targetState));
+    } catch (e) {}
+
+    try {
+      const res = await fetch("/api/author/follow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          authorSlug: slug,
+          authorName: authorProfile.name,
+          followerEmail: auth.user?.email,
+          action: targetState ? "follow" : "unfollow"
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setIsFollowing(data.isFollowing);
+        localStorage.setItem(`followed_author_${slug}`, String(data.isFollowing));
+        setFollowToast({
+          message: data.isFollowing
+            ? `✓ You are now following ${authorProfile.name}! You will be notified whenever they publish a new article.`
+            : `Unfollowed ${authorProfile.name}. Notifications turned off.`,
+          type: data.isFollowing ? "success" : "info"
+        });
+      }
+    } catch (err) {
+      console.warn("Follow author network notice:", err);
+    } finally {
+      setFollowLoading(false);
+      setTimeout(() => {
+        setFollowToast(null);
+      }, 5000);
+    }
+  };
+
+  const handleFollowClick = () => {
+    // If not signed in, prompt/redirect to login with return redirect
+    if (!auth.authenticated || !auth.user) {
+      try {
+        localStorage.setItem("pending_follow_author", JSON.stringify({ slug, name: authorProfile.name }));
+        localStorage.setItem("dj_toast", `Please sign in to follow ${authorProfile.name} and receive notifications for their articles.`);
+      } catch (e) {}
+      router.push(`/login?redirect=${encodeURIComponent(`/author/${slug}`)}`);
+      return;
+    }
+
+    // Toggle follow state for authenticated reader
+    executeFollow(!isFollowing);
+  };
+
+  useEffect(() => {
     try {
       const slugClean = slug.toLowerCase().replace(/-/g, " ").trim();
 
-      // 1. Establish baseline from author prop passed by server/route (or database lookup)
+      // 1. Establish baseline from author prop
       let finalName = author.name || "Author";
       let finalAvatar = author.avatar;
-      let finalRole = author.role || "JOURNALIST";
+      let finalRole = author.role || "POLITICAL CORRESPONDENT";
       let finalBio = author.bio;
+      let finalLocation = author.location || "London, United Kingdom";
+      let finalEmail = author.email || `${slug.replace(/-/g, ".")}@londonbigben.com`;
+      let finalCoverage = author.coverageAreas || [
+        "UK Politics", "Parliament", "Government Policy",
+        "International Relations", "EU-UK Relations", "Elections",
+        "Defence and Security", "Trade", "Brexit", "Diplomacy"
+      ];
 
-      // 2. Look up live profile data from user profiles database (by slug or email)
+      // 2. Look up live profile data from user profiles database
       const isRushdhiPage = slugClean.includes("rushdhi") || slug === "rushdhi" || slug === "rushdhi-mr";
       const savedProfile = isRushdhiPage
         ? (getUserProfile("rushdhiwriter@gmail.com") || getUserProfile("writer@digitaljournal.com") || getAuthorFullProfileByNameOrEmail("rushdhi"))
@@ -93,9 +256,9 @@ export default function AuthorProfileContent({
         if (savedProfile.avatar && savedProfile.avatar.length > 5 && !savedProfile.avatar.includes("cart") && !savedProfile.avatar.includes("admin_profile")) {
           finalAvatar = savedProfile.avatar;
         }
+        if (savedProfile.email) finalEmail = savedProfile.email;
       }
 
-      // Check author avatar resolution from auth session or writer stores
       const resolvedAvatar =
         (savedProfile?.avatar && !savedProfile.avatar.includes("cart") && !savedProfile.avatar.includes("admin_profile") ? savedProfile.avatar : null) ||
         (auth.user && auth.user.avatar && !auth.user.avatar.includes("cart") && (auth.user.name === finalName || isRushdhiPage) ? auth.user.avatar : null) ||
@@ -105,14 +268,7 @@ export default function AuthorProfileContent({
         finalAvatar = resolvedAvatar;
       }
 
-      setAuthorProfile({
-        name: finalName,
-        role: finalRole,
-        avatar: finalAvatar,
-        bio: finalBio,
-      });
-
-      // 3. Filter published articles by THIS SPECIFIC AUTHOR ONLY
+      // 3. Filter published articles by THIS SPECIFIC AUTHOR from live articles database
       let publishedByAuthor: any[] = [];
 
       if (Array.isArray(liveArticles) && liveArticles.length > 0) {
@@ -138,93 +294,106 @@ export default function AuthorProfileContent({
 
       if (publishedByAuthor.length > 0) {
         mappedArticles = publishedByAuthor.map((post) => {
-          const cat = (post.category || "BUSINESS").toLowerCase();
+          const cat = (post.category || "POLITICS").toLowerCase();
           const articleSlug = (post.title || "")
             .toLowerCase()
             .replace(/[^a-z0-9\s-]/g, "")
             .trim()
             .replace(/\s+/g, "-");
 
-          const itemWriterName = finalName;
-
-          const itemWriterAvatar = resolveUserAvatar({
-            name: finalName,
-            email: post.authorEmail,
-            avatar: finalAvatar || post.authorAvatar
-          });
+          const displayDate = post.date || (post.updated_at ? new Date(post.updated_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : (post.published_at ? new Date(post.published_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "October 2026"));
 
           return {
-            category: (post.category || "BUSINESS").toUpperCase(),
+            category: (post.category || "POLITICS").toUpperCase(),
             href: `/${cat}/${articleSlug}`,
             title: post.title,
             desc: post.summary || (post.content || "").replace(/<[^>]*>?/gm, "").slice(0, 160) + "...",
-            date: post.date ? post.date.toUpperCase() : "AUG 2026",
-            image: post.imageUrl || "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=600&h=350&fit=crop",
-            authorName: itemWriterName,
-            authorAvatar: itemWriterAvatar,
-          };
-        });
-      } else {
-        // Fallback initial articles with Target Author Name and Target Author Image
-        mappedArticles = initialArticles.map((art) => {
-          const itemAvatar = resolveUserAvatar({
-            name: finalName,
-            avatar: finalAvatar
-          });
-          return {
-            ...art,
+            date: displayDate,
+            image: post.imageUrl || post.image || "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=600&h=350&fit=crop",
             authorName: finalName,
-            authorAvatar: itemAvatar,
+            authorAvatar: finalAvatar,
           };
         });
+
+        // Merge with initial articles if live articles count is fewer than 6
+        if (mappedArticles.length < 6) {
+          const remainingInitial = initialArticles.slice(0, 6 - mappedArticles.length);
+          mappedArticles = [...mappedArticles, ...remainingInitial];
+        }
+      } else {
+        mappedArticles = initialArticles;
       }
 
       setArticlesList(mappedArticles);
 
-      // 4. Compute MOST READ stories for THIS AUTHOR (sorted by views descending, top views at top)
+      // Helper to extract reads/views count from any article object
       const getArticleReads = (a: any): number => {
         if (!a) return 0;
-        const v = a.reads_count ?? a.views ?? a.reads ?? (typeof a.views === "string" ? parseInt(a.views, 10) : 0) ?? 0;
+        const v = (a as any).reads_count ?? (a as any).views ?? (a as any).reads ?? (typeof (a as any).views === "string" ? parseInt((a as any).views, 10) : 0) ?? 0;
         const num = typeof v === "number" ? v : parseInt(String(v).replace(/[^0-9]/g, ""), 10);
         return isNaN(num) ? 0 : num;
       };
 
-      const candidateArticles = publishedByAuthor.length > 0 ? [...publishedByAuthor] : [...initialArticles];
-      
-      // Sort in strict descending order of view count: Highest views at top (Rank 1), lowest at bottom
-      candidateArticles.sort((a, b) => getArticleReads(b) - getArticleReads(a));
+      const formatViewsCount = (count: number): string => {
+        if (count >= 1000000) {
+          return (count / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
+        }
+        if (count >= 1000) {
+          return (count / 1000).toFixed(1).replace(/\.0$/, "") + "K";
+        }
+        return count.toLocaleString();
+      };
 
-      const computedMostRead: SidebarItem[] = candidateArticles.slice(0, 5).map((post, idx) => {
-        const cat = (post.category || (post as any).category_name || "news").toLowerCase();
-        const articleSlug = (post.slug || post.title || "")
-          .toLowerCase()
-          .replace(/[^a-z0-9\s-]/g, "")
-          .trim()
-          .replace(/\s+/g, "-");
-        const count = getArticleReads(post);
-        const viewText = `${count.toLocaleString()} ${count === 1 ? 'view' : 'views'}`;
-        const href = post.href || `/${cat}/${articleSlug}${post.id ? `?id=${post.id}` : ''}`;
+      // 4. Automatically compute Article Count & Total Article Views
+      let finalArticlesCount: number;
+      let finalViews: string;
 
-        return {
-          rank: idx + 1,
-          href,
-          title: post.title,
-          views: viewText
-        };
-      });
-
-      if (computedMostRead.length > 0) {
-        setMostReadItems(computedMostRead);
+      if (publishedByAuthor.length > 0) {
+        finalArticlesCount = publishedByAuthor.length;
+        const totalViews = publishedByAuthor.reduce((sum, art) => sum + getArticleReads(art), 0);
+        finalViews = formatViewsCount(totalViews);
+      } else if (slugClean.includes("sarah")) {
+        finalArticlesCount = mappedArticles.length > 0 ? mappedArticles.length : 526;
+        finalViews = "18.4M";
       } else {
-        setMostReadItems(mostReadSidebar);
+        finalArticlesCount = mappedArticles.length;
+        const totalViews = mappedArticles.reduce((sum, art) => sum + getArticleReads(art), 0);
+        finalViews = totalViews > 0 ? formatViewsCount(totalViews) : "0";
       }
+
+      // 5. Automatically load Years of Experience from author account or profile
+      let finalYears = 0;
+      if (savedProfile?.yearsOfExperience !== undefined && savedProfile?.yearsOfExperience !== null && savedProfile?.yearsOfExperience !== "") {
+        finalYears = Number(savedProfile.yearsOfExperience);
+      } else if (savedProfile?.years_of_experience !== undefined && savedProfile?.years_of_experience !== null && savedProfile?.years_of_experience !== "") {
+        finalYears = Number(savedProfile.years_of_experience);
+      } else if (auth.user && (auth.user.name === finalName || isRushdhiPage) && ((auth.user as any).yearsOfExperience || (auth.user as any).years_of_experience)) {
+        finalYears = Number((auth.user as any).yearsOfExperience || (auth.user as any).years_of_experience);
+      } else if (author.yearsOfExperience !== undefined && author.yearsOfExperience !== null) {
+        finalYears = Number(author.yearsOfExperience);
+      } else if (slugClean.includes("sarah")) {
+        finalYears = 12;
+      }
+
+      setAuthorProfile({
+        name: finalName,
+        role: finalRole,
+        avatar: finalAvatar,
+        bio: finalBio,
+        location: finalLocation,
+        email: finalEmail,
+        coverageAreas: finalCoverage,
+        articlesCount: finalArticlesCount,
+        yearsOfExperience: finalYears,
+        articleViews: finalViews
+      });
 
       setIsLoaded(true);
     } catch (e) {
       console.warn("Could not load dynamic author profile and published articles:", e);
       setIsLoaded(true);
     }
-  }, [slug, author, initialArticles, liveArticles]);
+  }, [slug, author, initialArticles, liveArticles, syncTick]);
 
   useEffect(() => {
     if (isLoaded) {
@@ -232,282 +401,522 @@ export default function AuthorProfileContent({
     }
   }, [isLoaded]);
 
-  useEffect(() => {
-    const handleProfileUpdate = (e: any) => {
-      try {
-        const detail = e.detail || (e.key === "dj_user_profile" && e.newValue ? JSON.parse(e.newValue) : null);
-        if (detail && detail.avatar && detail.avatar.length > 5 && !detail.avatar.includes("cart")) {
-          const slugClean = slug.toLowerCase().replace(/-/g, " ").trim();
-          const matchesRushdhi = (slugClean.includes("rushdhi") || slug.includes("rushdhi")) &&
-            ((detail.email && detail.email.toLowerCase().includes("rushdhi")) || (detail.name && detail.name.toLowerCase().includes("rushdhi")));
-          const matchesName = detail.name && detail.name.toLowerCase().trim() === authorProfile.name.toLowerCase().trim();
-
-          if (matchesRushdhi || matchesName) {
-            setAuthorProfile((prev) => ({
-              ...prev,
-              avatar: detail.avatar,
-              name: detail.name || prev.name,
-              bio: detail.bio || prev.bio
-            }));
-          }
-        }
-      } catch (err) { }
-    };
-
-    if (typeof window !== "undefined") {
-      window.addEventListener("dj_profile_updated", handleProfileUpdate);
-      // NOTE: Do NOT listen to the native "storage" event — it fires in OTHER
-      // browser tabs and causes cross-tab reloads.
-    }
-    return () => {
-      if (typeof window !== "undefined") {
-        window.removeEventListener("dj_profile_updated", handleProfileUpdate);
-      }
-    };
-  }, [slug, authorProfile.name]);
-
-  const PAGE_SIZE = 10;
   const visibleArticles = articlesList.slice(0, visibleCount);
   const hasMore = visibleCount < articlesList.length;
 
-  const handleLoadMore = () => {
-    setVisibleCount((prev) => prev + PAGE_SIZE);
-  };
+  const moreWriters = MORE_WRITERS_DATA.filter(
+    (w) => w.name.toLowerCase() !== authorProfile.name.toLowerCase() && w.slug !== slug
+  ).slice(0, 4);
 
   return (
-    <main className="min-h-screen bg-white font-standard-sans">
+    <main className="min-h-screen bg-white text-slate-900 font-sans">
       <Header />
 
-      <div className="max-w-[1400px] mx-auto px-4 md:px-8 py-10">
+      {/* BREADCRUMB NAVIGATION */}
+      <nav className="max-w-[1400px] mx-auto px-4 md:px-8 pt-5 pb-3 text-xs text-slate-500 font-sans flex items-center gap-2">
+        <Link href="/" className="hover:text-black transition-colors">Home</Link>
+        <span className="text-slate-300">&gt;</span>
+        <Link href="/team" className="hover:text-black transition-colors">Our Team</Link>
+        <span className="text-slate-300">&gt;</span>
+        <span className="text-slate-900 font-medium">{authorProfile.name}</span>
+      </nav>
 
-        {/* Author / Writer Bio Header Card */}
-        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 pb-8 mb-8 border-b border-zinc-200 py-2">
-          {/* Writer Profile Image */}
-          <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden bg-[#1E293B] text-white flex items-center justify-center font-bold text-2xl flex-shrink-0 border-2 border-[#BF1E2D] shadow-md">
-            {authorProfile.avatar && authorProfile.avatar.trim().length > 0 ? (
+      {/* AUTHOR BIO & STATS HERO SECTION */}
+      <section className="max-w-[1400px] mx-auto px-4 md:px-8 pt-2 pb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          
+          {/* Left Column (Headshot + Details & Socials) ~ 8 cols */}
+          <div className="lg:col-span-8 flex flex-col sm:flex-row gap-6 items-start">
+            
+            {/* Author Headshot Photo */}
+            <div className="w-full sm:w-[210px] md:w-[230px] h-[250px] sm:h-[260px] rounded-xl overflow-hidden bg-slate-100 border border-slate-200/90 flex-shrink-0 shadow-xs">
               <img
                 src={authorProfile.avatar}
                 alt={authorProfile.name}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover object-top"
                 onError={(e) => {
                   e.currentTarget.src = "/author_bluesuit.jpg";
                 }}
               />
-            ) : (
-              <span>{(authorProfile.name || "AU").slice(0, 2).toUpperCase()}</span>
-            )}
-          </div>
+            </div>
 
-          <div className="flex flex-col text-center sm:text-left flex-1">
-            {/* Writer Name */}
-            <h1 className="font-serif text-[32px] sm:text-[36px] font-extrabold text-slate-900 leading-tight mb-1">
-              {authorProfile.name}
-            </h1>
-            <span className="text-[11px] font-extrabold text-[#BF1E2D] uppercase tracking-widest mb-3">
-              {authorProfile.role}
-            </span>
-            <p className="text-[14px] text-slate-600 leading-relaxed max-w-3xl font-sans">
-              {authorProfile.bio}
-            </p>
-          </div>
-        </div>
+            {/* Author Details */}
+            <div className="flex-1 min-w-0">
+              <span className="text-[11px] font-bold text-[#D31220] uppercase tracking-wider block mb-1">
+                {authorProfile.role || "POLITICAL CORRESPONDENT"}
+              </span>
+              <h1 className="text-3xl sm:text-4xl font-serif font-bold text-slate-900 leading-tight mb-1">
+                {authorProfile.name}
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-600 font-sans font-medium mb-3">
+                {authorProfile.role ? authorProfile.role.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : "Political Correspondent"} | London BigBen Network
+              </p>
 
-        {/* Section Title: PUBLISHED STORIES BY WRITER */}
-        <div className="border-b-2 border-slate-900 pb-2 mb-8 flex items-center justify-between">
-          <h2 className="text-[14px] font-bold text-slate-900 uppercase tracking-wider">
-            PUBLISHED STORIES BY {authorProfile.name.toUpperCase()} ({articlesList.length})
-          </h2>
-        </div>
-
-        {/* 8 Cols / 4 Cols Content Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
-
-          {/* Left Column: Author Articles List */}
-          <div className="lg:col-span-8 space-y-8">
-            {visibleArticles.length > 0 ? (
-              visibleArticles.map((article, idx) => (
-                <div key={idx} className="flex flex-col sm:flex-row gap-5 pb-8 border-b border-zinc-100 last:border-none group cursor-pointer">
-                  {/* Thumbnail Image */}
-                  <Link href={article.href} className="relative w-full sm:w-[220px] h-[180px] sm:h-[140px] flex-shrink-0 overflow-hidden bg-gray-100 rounded-lg border border-zinc-200 block">
-                    <img
-                      src={article.image && article.image.trim().length > 0 ? article.image : "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=600&h=350&fit=crop"}
-                      alt={article.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      onError={(e) => {
-                        e.currentTarget.src = "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=600&h=350&fit=crop";
-                      }}
-                    />
-                  </Link>
-
-                  {/* Article Info */}
-                  <div className="flex flex-col flex-1">
-                    <span className="text-[10.5px] font-bold text-[#1D9BF0] uppercase tracking-wider mb-1">
-                      {article.category}
-                    </span>
-                    <Link href={article.href} className="font-serif text-[18px] md:text-[21px] font-bold leading-snug text-slate-900 group-hover:text-[#BF1E2D] transition-colors mb-2">
-                      {article.title}
-                    </Link>
-                    <p className="text-[13px] text-slate-600 leading-relaxed font-sans line-clamp-2 mb-3">
-                      {article.desc}
-                    </p>
-
-                    {/* Writer Name & Writer Image Byline */}
-                    {(() => {
-                      const cardAuthorName = article.authorName || authorProfile.name;
-                      const displayItemAvatar =
-                        authorProfile.avatar ||
-                        resolveUserAvatar({
-                          name: cardAuthorName,
-                          avatar: article.authorAvatar
-                        });
-
-                      return (
-                        <div className="flex items-center gap-2.5 mt-auto pt-1">
-                          {/* Writer Profile Image Thumbnail */}
-                          <div className="w-7 h-7 rounded-full overflow-hidden border border-zinc-300 flex-shrink-0 bg-slate-200 shadow-xs flex items-center justify-center text-[9px] font-bold text-slate-700">
-                            {displayItemAvatar && displayItemAvatar.trim().length > 0 ? (
-                              <img
-                                src={displayItemAvatar}
-                                alt={cardAuthorName}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  e.currentTarget.src = "/author_bluesuit.jpg";
-                                }}
-                              />
-                            ) : (
-                              <span>{(cardAuthorName || "AU").slice(0, 2).toUpperCase()}</span>
-                            )}
-                          </div>
-                          {/* Writer Name & Publication Date */}
-                          <div className="flex items-center gap-1.5 text-[11.5px] font-semibold text-slate-700 font-sans">
-                            <span>By</span>
-                            <span className="font-bold text-slate-900 hover:text-[#BF1E2D] transition-colors">
-                              {cardAuthorName}
-                            </span>
-                            <span className="text-slate-400 font-normal">•</span>
-                            <span className="text-slate-500 font-normal uppercase">{article.date}</span>
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                  </div>
+              {/* Location & Email */}
+              <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs text-slate-600 mb-3 font-sans">
+                <div className="flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <span>{authorProfile.location || "London, United Kingdom"}</span>
                 </div>
-              ))
-            ) : (
-              <div className="py-16 text-center border border-dashed border-zinc-200 rounded-2xl bg-zinc-50/50">
-                <p className="text-zinc-700 font-sans text-sm font-semibold mb-1">
-                  No published stories yet by {authorProfile.name}.
-                </p>
-                <p className="text-zinc-400 font-sans text-xs">
-                  Articles submitted for review will appear here once approved by Admin and published.
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <a href={`mailto:${authorProfile.email || "sarah.mitchell@londonbigben.com"}`} className="hover:text-[#D31220] transition-colors">
+                    {authorProfile.email || "sarah.mitchell@londonbigben.com"}
+                  </a>
+                </div>
               </div>
-            )}
 
-            {/* Load More Button */}
-            {hasMore && (
-              <div className="flex items-center justify-center pt-8">
-                <button
-                  onClick={handleLoadMore}
-                  className="px-8 py-3 bg-white hover:bg-[#BF1E2D] text-slate-800 hover:text-white border-2 border-zinc-300 hover:border-[#BF1E2D] font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-xs rounded"
+              {/* Bio */}
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-sans mb-4">
+                {authorProfile.bio}
+              </p>
+
+              {/* Social Icons */}
+              <div className="flex items-center gap-2">
+                {/* X (Twitter) */}
+                <a
+                  href="https://x.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center hover:opacity-85 transition-opacity cursor-pointer"
+                  title="X (Twitter)"
                 >
-                  Load More
-                </button>
+                  <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                  </svg>
+                </a>
+
+                {/* LinkedIn */}
+                <a
+                  href="https://linkedin.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-8 h-8 rounded-full bg-[#0A66C2] text-white flex items-center justify-center hover:opacity-85 transition-opacity cursor-pointer"
+                  title="LinkedIn"
+                >
+                  <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                    <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 8.76a1.46 1.46 0 1 0 0-2.92 1.46 1.46 0 0 0 0 2.92M7.86 18.5V10.13H5.07V18.5h2.79z"/>
+                  </svg>
+                </a>
+
+                {/* Personal Link / Website */}
+                <a
+                  href="#"
+                  className="w-8 h-8 rounded-full border border-slate-300 bg-white text-slate-700 flex items-center justify-center hover:bg-slate-50 transition-colors cursor-pointer"
+                  title="Personal Link"
+                >
+                  <Link2 className="w-3.5 h-3.5" />
+                </a>
               </div>
-            )}
+
+            </div>
           </div>
 
-          {/* Right Column: Sidebar (MOST READ + Ad Banner) */}
-          <div className="lg:col-span-4 lg:pl-2 space-y-8">
-
-            {/* MOST READ Card Widget */}
-            <div className="border border-zinc-200 rounded-xl p-6 bg-white shadow-xs">
-              <div className="flex items-center gap-2 pb-4 mb-4 border-b border-zinc-200">
-                <span className="text-[#1D9BF0]">📈</span>
-                <h3 className="text-[14px] font-bold text-slate-900 uppercase tracking-wider">
-                  MOST READ
-                </h3>
+          {/* Right Column (Stats Box + Areas of Coverage) ~ 4 cols */}
+          <div className="lg:col-span-4 flex flex-col gap-4">
+            
+            {/* Stats Box */}
+            <div className="bg-[#F8F9FA] border border-slate-200/90 rounded-2xl p-4 sm:p-5">
+              <div className="grid grid-cols-3 divide-x divide-slate-200 text-center">
+                <div className="px-1 sm:px-2">
+                  <span className="block text-2xl font-bold text-slate-900 font-sans">
+                    {authorProfile.articlesCount || 526}
+                  </span>
+                  <span className="text-[11px] text-slate-500 font-sans block mt-0.5">
+                    Articles
+                  </span>
+                </div>
+                <div className="px-1 sm:px-2">
+                  <span className="block text-2xl font-bold text-slate-900 font-sans">
+                    {authorProfile.yearsOfExperience || 12}
+                  </span>
+                  <span className="text-[11px] text-slate-500 font-sans block mt-0.5">
+                    Years of Experience
+                  </span>
+                </div>
+                <div className="px-1 sm:px-2">
+                  <span className="block text-2xl font-bold text-slate-900 font-sans">
+                    {authorProfile.articleViews || "18.4M"}
+                  </span>
+                  <span className="text-[11px] text-slate-500 font-sans block mt-0.5">
+                    Article Views
+                  </span>
+                </div>
               </div>
+            </div>
 
-              <div className="space-y-4">
-                {mostReadItems.map((item, idx) => (
-                  <div key={`mostread-${idx}-${item.rank || item.title}`} className="flex gap-3 items-start border-b border-zinc-100 pb-3 last:border-none group cursor-pointer">
-                    <span className="text-[20px] font-serif font-bold text-zinc-300 group-hover:text-[#BF1E2D] leading-none pt-0.5">
-                      {idx + 1}
-                    </span>
-                    <div className="flex flex-col">
-                      <Link href={item.href} className="font-serif text-[12.5px] font-bold text-slate-900 leading-snug hover:text-[#BF1E2D] transition-colors mb-1 block">
-                        {item.title}
-                      </Link>
-                      <span className="text-[10px] text-zinc-400 font-sans">{item.views}</span>
-                    </div>
-                  </div>
+            {/* Areas of Coverage */}
+            <div>
+              <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block mb-2 font-sans">
+                AREAS OF COVERAGE
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {(authorProfile.coverageAreas || [
+                  "UK Politics", "Parliament", "Government Policy",
+                  "International Relations", "EU-UK Relations", "Elections",
+                  "Defence and Security", "Trade", "Brexit", "Diplomacy"
+                ]).map((area, i) => (
+                  <span
+                    key={i}
+                    className="px-3 py-1 bg-slate-100 hover:bg-slate-200/80 text-slate-700 rounded-full text-xs font-medium border border-slate-200/70 transition-colors cursor-pointer"
+                  >
+                    {area}
+                  </span>
                 ))}
               </div>
             </div>
 
-            {/* Sponsored Editorial Ad Card (Slot 6) */}
-            {(() => {
-              const authorAdSlot = adSlots.find(s => s.id === "slot-6" || s.categoryGroup === "AUTHOR" || s.title.includes("Author Profile"));
-              if (!authorAdSlot || !authorAdSlot.isActive) return null;
-              const authorDimensions = formatAdDimensions(authorAdSlot.dimensions || "300X250");
-              const hasAuthorImage =
-                authorAdSlot.imageUrl &&
-                authorAdSlot.imageUrl.trim() !== "" &&
-                !isDuplicateAdImage(authorAdSlot.imageUrl, authorAdSlot.id, adSlots);
-              const isExternal = (authorAdSlot.actionType || "").toLowerCase().includes("external") || (authorAdSlot.targetUrl || "").startsWith("http");
+          </div>
 
-              if (hasAuthorImage) {
-                return (
-                  <a
-                    href={authorAdSlot.targetUrl || "#"}
-                    target={isExternal ? "_blank" : "_self"}
-                    rel={isExternal ? "noopener noreferrer" : undefined}
-                    className="relative w-full aspect-[4/3] bg-zinc-900 rounded-xl overflow-hidden shadow-md flex items-end p-6 cursor-pointer group block"
-                  >
-                    <img
-                      src={authorAdSlot.imageUrl}
-                      alt={authorAdSlot.title || "Sponsor Ad"}
-                      className="absolute inset-0 w-full h-full object-cover opacity-85 group-hover:scale-105 transition-transform duration-500"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent"></div>
+        </div>
+      </section>
 
-                    <div className="absolute top-3 left-3 bg-black/80 backdrop-blur-xs px-2 py-0.5 text-[9px] font-mono tracking-widest uppercase text-white border border-white/10 rounded-xs">
-                      Advertisement
-                    </div>
+      {/* HORIZONTAL NAVIGATION TABS */}
+      <div className="max-w-[1400px] mx-auto px-4 md:px-8 border-b border-slate-200 mb-8">
+        <div className="flex items-center gap-6 sm:gap-8 overflow-x-auto no-scrollbar">
+          {[
+            { id: "articles", label: "Latest Articles" },
+            { id: "about", label: "About" },
+            { id: "coverage", label: "Coverage Areas" },
+            { id: "awards", label: "Awards & Recognition" },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`pb-3 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap relative ${
+                activeTab === tab.id
+                  ? "text-[#D31220] border-b-2 border-[#D31220]"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-                    <div className="relative z-10 text-white font-serif">
-                      <p className="text-[20px] font-bold tracking-[2px] uppercase leading-tight mb-1">
-                        {authorAdSlot.title ? authorAdSlot.title.replace(/^Author Profile Pages —\s*/i, "").replace(/Ad Box/i, "").trim() || "SPONSORED" : "SPONSORED"}
-                      </p>
-                      <p className="text-[10px] uppercase tracking-[1px] text-zinc-300 font-sans">
-                        {authorAdSlot.description || "Official Partner Sponsor"}
-                      </p>
-                    </div>
-                  </a>
-                );
-              }
-
-              return (
-                <div className="relative w-full aspect-[4/3] bg-[#111827] border border-dashed border-gray-700 rounded-xl overflow-hidden shadow-md flex flex-col items-center justify-center p-6 text-center">
-                  <span className="text-[10px] font-mono tracking-widest uppercase text-[#D31220] font-bold mb-2">
-                    ADVERTISEMENT
-                  </span>
-                  <span className="text-white font-mono font-bold text-base tracking-widest">
-                    {authorDimensions}
-                  </span>
-                  <span className="text-[11px] font-mono text-gray-400 mt-2">
-                    Size: {authorDimensions} px
-                  </span>
+      {/* MAIN CONTENT AREA */}
+      <div className="max-w-[1400px] mx-auto px-4 md:px-8 pb-16">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-start">
+          
+          {/* LEFT COLUMN (~68% WIDTH) */}
+          <div className="lg:col-span-8">
+            
+            {activeTab === "articles" && (
+              <div>
+                {/* Header with Title and "View All Articles →" */}
+                <div className="flex items-center justify-between pb-3 mb-6 border-b border-slate-200">
+                  <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider font-sans">
+                    LATEST ARTICLES BY {authorProfile.name.toUpperCase()}
+                  </h2>
+                  {articlesList.length > visibleCount ? (
+                    <button
+                      onClick={() => setVisibleCount(articlesList.length)}
+                      className="text-xs font-semibold text-[#D31220] hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      View All Articles &rarr;
+                    </button>
+                  ) : (
+                    <span className="text-xs font-semibold text-[#D31220] flex items-center gap-1">
+                      View All Articles &rarr;
+                    </span>
+                  )}
                 </div>
-              );
-            })()}
+
+                {/* 3-Column Articles Grid */}
+                {visibleArticles.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 mb-8">
+                    {visibleArticles.map((article, idx) => (
+                      <div key={idx} className="group flex flex-col cursor-pointer">
+                        {/* Thumbnail Image */}
+                        <Link
+                          href={article.href}
+                          className="relative aspect-[16/10] w-full overflow-hidden rounded-lg bg-slate-100 border border-slate-200 mb-2.5 block"
+                        >
+                          <img
+                            src={article.image}
+                            alt={article.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            onError={(e) => {
+                              e.currentTarget.src = "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=600&h=350&fit=crop";
+                            }}
+                          />
+                        </Link>
+
+                        {/* Category Tag */}
+                        <span className="text-[10.5px] font-bold text-[#D31220] uppercase tracking-wider block mb-1">
+                          {article.category}
+                        </span>
+
+                        {/* Headline */}
+                        <Link
+                          href={article.href}
+                          className="font-serif font-bold text-[14px] sm:text-[14.5px] leading-snug text-slate-900 group-hover:text-[#D31220] transition-colors line-clamp-2 mb-1.5 block"
+                        >
+                          {article.title}
+                        </Link>
+
+                        {/* Publication Date */}
+                        <span className="text-[11.5px] text-slate-400 font-sans mt-auto">
+                          {article.date}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-16 text-center border border-dashed border-zinc-200 rounded-2xl bg-zinc-50/50">
+                    <p className="text-zinc-700 font-sans text-sm font-semibold mb-1">
+                      No published stories yet by {authorProfile.name}.
+                    </p>
+                  </div>
+                )}
+
+                {/* Load More Button */}
+                {hasMore && (
+                  <div className="flex items-center justify-center pt-2 pb-6">
+                    <button
+                      onClick={() => setVisibleCount((prev) => prev + 6)}
+                      className="px-8 py-2.5 bg-white hover:bg-[#BF1E2D] text-slate-800 hover:text-white border border-slate-300 hover:border-[#BF1E2D] font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-xs rounded-lg"
+                    >
+                      Load More Articles
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "about" && (
+              <div className="space-y-6">
+                <div className="pb-3 border-b border-slate-200">
+                  <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider font-sans">
+                    ABOUT {authorProfile.name.toUpperCase()}
+                  </h2>
+                </div>
+
+                <div className="prose prose-slate max-w-none text-sm text-slate-700 leading-relaxed space-y-4">
+                  <p>
+                    {authorProfile.bio}
+                  </p>
+                  <p>
+                    With over a decade of dedicated journalistic experience at leading national and international bureaus, {authorProfile.name} provides authoritative analysis on shifting regulatory frameworks, legislative deliberations, and global governance trends.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+                  <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
+                    <div className="flex items-center gap-2 mb-2 text-slate-900 font-bold text-sm">
+                      <BookOpen className="w-4 h-4 text-[#D31220]" />
+                      Journalistic Methodology
+                    </div>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      Rigorous fact-checking, primary source verification, on-the-ground reporting, and independent non-partisan coverage adhering strictly to London BigBen Network editorial standards.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
+                    <div className="flex items-center gap-2 mb-2 text-slate-900 font-bold text-sm">
+                      <ShieldCheck className="w-4 h-4 text-[#D31220]" />
+                      Editorial Independence
+                    </div>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      Committed to reporting free from corporate, political, or external commercial influence, ensuring readers receive verified, balanced, and high-impact investigative insights.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "coverage" && (
+              <div className="space-y-6">
+                <div className="pb-3 border-b border-slate-200">
+                  <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider font-sans">
+                    BEATS & COVERAGE AREAS
+                  </h2>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {(authorProfile.coverageAreas || [
+                    "UK Politics", "Parliament", "Government Policy",
+                    "International Relations", "EU-UK Relations", "Elections",
+                    "Defence and Security", "Trade", "Brexit", "Diplomacy"
+                  ]).map((area, idx) => (
+                    <div key={idx} className="p-4 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-colors">
+                      <span className="text-[10.5px] font-bold text-[#D31220] uppercase tracking-wider block mb-1">
+                        Beat {idx + 1}
+                      </span>
+                      <h4 className="text-sm font-bold text-slate-900 mb-1">
+                        {area}
+                      </h4>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        Dedicated investigative dispatches, daily briefings, and policy forecasts focused on {area.toLowerCase()}.
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {activeTab === "awards" && (
+              <div className="space-y-6">
+                <div className="pb-3 border-b border-slate-200">
+                  <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider font-sans">
+                    AWARDS & EDITORIAL RECOGNITION
+                  </h2>
+                </div>
+
+                <div className="space-y-3">
+                  {[
+                    {
+                      year: "2025",
+                      title: "London BigBen Network Editorial Excellence Award",
+                      organization: "Press Standards Board",
+                      desc: "Awarded for exceptional investigative reporting on cross-border regulatory compliance and economic reform."
+                    },
+                    {
+                      year: "2024",
+                      title: "British Press Awards — Nominee, Political Correspondent of the Year",
+                      organization: "Society of Editors",
+                      desc: "Recognized for incisive multi-source coverage of Westminster policy deliberations and diplomatic negotiations."
+                    },
+                    {
+                      year: "2022",
+                      title: "European Fellowship for Investigative Journalism",
+                      organization: "International Media Institute",
+                      desc: "Honored for groundbreaking reporting on international trade agreements and supply chain governance."
+                    }
+                  ].map((award, idx) => (
+                    <div key={idx} className="p-4 rounded-xl border border-slate-200 bg-white flex items-start gap-4">
+                      <div className="w-10 h-10 rounded-full bg-red-50 text-[#D31220] flex items-center justify-center shrink-0">
+                        <Award className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-[#D31220]">{award.year}</span>
+                          <span className="text-xs text-slate-400">•</span>
+                          <span className="text-xs text-slate-500 font-medium">{award.organization}</span>
+                        </div>
+                        <h4 className="text-sm font-bold text-slate-900 mt-0.5">
+                          {award.title}
+                        </h4>
+                        <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                          {award.desc}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          </div>
+
+          {/* RIGHT SIDEBAR (~32% WIDTH) */}
+          <div className="lg:col-span-4 space-y-6">
+            
+            {/* FOLLOW AUTHOR CARD */}
+            <div className="border border-slate-200 rounded-xl p-5 bg-[#FAFBFB] shadow-xs">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-1 font-sans">
+                FOLLOW {authorProfile.name.toUpperCase()}
+              </h3>
+              <p className="text-xs text-slate-500 mb-4 font-sans leading-relaxed">
+                {isFollowing
+                  ? `You are receiving instant notifications whenever ${authorProfile.name} publishes new articles.`
+                  : `Get notified each time ${authorProfile.name} publishes new articles.`}
+              </p>
+
+              {followToast && (
+                <div className={`mb-3 p-2.5 rounded-lg text-xs font-medium flex items-start gap-2 animate-in fade-in ${
+                  followToast.type === 'success' 
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' 
+                    : 'bg-slate-100 text-slate-700 border border-slate-200'
+                }`}>
+                  <Check className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
+                  <span>{followToast.message}</span>
+                </div>
+              )}
+
+              <button
+                onClick={handleFollowClick}
+                disabled={followLoading}
+                className={`w-full py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs disabled:opacity-75 ${
+                  isFollowing
+                    ? "bg-slate-800 text-white hover:bg-slate-900"
+                    : "bg-[#BF1E2D] hover:bg-[#a61a27] text-white"
+                }`}
+              >
+                {followLoading ? (
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : isFollowing ? (
+                  <>
+                    <Check className="w-4 h-4 text-emerald-400" />
+                    <span>Following</span>
+                  </>
+                ) : (
+                  <>
+                    <Bell className="w-4 h-4" />
+                    <span>Follow</span>
+                  </>
+                )}
+              </button>
+
+              {!auth.authenticated && (
+                <p className="text-[10px] text-slate-400 text-center mt-2.5 font-sans">
+                  Sign in required to receive author notifications
+                </p>
+              )}
+            </div>
+
+            {/* MORE WRITERS CARD */}
+            <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-xs">
+              <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-100">
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider font-sans">
+                  MORE WRITERS
+                </h3>
+                <Link
+                  href="/team"
+                  className="text-xs font-semibold text-[#D31220] hover:underline flex items-center gap-0.5"
+                >
+                  View All &rarr;
+                </Link>
+              </div>
+
+              <div className="divide-y divide-slate-100">
+                {moreWriters.map((w, idx) => (
+                  <Link
+                    key={idx}
+                    href={`/author/${w.slug}`}
+                    className="flex items-center justify-between py-3 group hover:bg-slate-50/80 -mx-2 px-2 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <img
+                        src={w.avatar}
+                        alt={w.name}
+                        className="w-10 h-10 rounded-full object-cover border border-slate-200 flex-shrink-0"
+                        onError={(e) => {
+                          e.currentTarget.src = "/author_bluesuit.jpg";
+                        }}
+                      />
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-900 group-hover:text-[#D31220] transition-colors truncate">
+                          {w.name}
+                        </p>
+                        <p className="text-[11px] text-slate-500 truncate">
+                          {w.role}
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-sans">
+                          {w.articlesCount} Articles
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-600 shrink-0 ml-2 transition-colors" />
+                  </Link>
+                ))}
+              </div>
+            </div>
 
           </div>
 
         </div>
-
       </div>
 
       <Footer />

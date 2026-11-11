@@ -26,6 +26,7 @@ export async function generateStaticParams() {
     { category: "politics" },
     { category: "business" },
     { category: "technology" },
+    { category: "ufo" },
     { category: "economy" },
     { category: "markets" },
     { category: "lifestyle" },

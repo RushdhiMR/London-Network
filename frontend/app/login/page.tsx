@@ -213,7 +213,7 @@ function LoginFormContent() {
           <div className="flex flex-col items-center mb-6 text-center">
             <Link href="/" className="inline-block hover:opacity-90 transition-opacity mb-3">
               <img
-                src="/header_logo.png"
+                src="/header_logo.svg"
                 alt="London BigBen Network"
                 className="h-8 sm:h-9 w-auto object-contain"
               />
@@ -400,11 +400,11 @@ function LoginFormContent() {
       </div>
 
       {/* RIGHT COLUMN: LONDON WALLPAPER (DESKTOP) */}
-      <div className="hidden lg:block lg:w-1/2 relative min-h-screen overflow-hidden">
+      <div className="hidden lg:block lg:w-1/2 relative min-h-screen overflow-hidden border-l-[3px] border-[#BF1E2D]">
         <img
-          src="/login_bg.jpg"
+          src="/login_bg.webp"
           alt="London City - Big Ben & Westminster"
-          className="absolute inset-0 w-full h-full object-cover object-center"
+          className="absolute inset-0 w-full h-full object-cover object-[51%_center]"
         />
       </div>
     </div>

@@ -7,7 +7,7 @@ const crypto = require('crypto');
 const { OAuth2Client } = require('google-auth-library');
 const { sendSignInNotificationEmail, sendWelcomeEmail, sendPasswordResetEmail } = require('../services/emailService');
 
-const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'dj_super_secret_jwt_key_2026_production';
+const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET;
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 function normalizeEmail(email) {
@@ -16,14 +16,14 @@ function normalizeEmail(email) {
 }
 
 const SYSTEM_ACCOUNTS = {
-  'admin@digitaljournal.com': { pass: ['admin', 'admin123', 'Admin@123', 'admin2026', 'secret'], name: 'System Administrator', role: 'admin' },
-  'admin': { pass: ['admin', 'admin123', 'Admin@123', 'admin2026', 'secret'], name: 'System Administrator', role: 'admin' },
-  'coadmin@digitaljournal.com': { pass: ['coadmin', 'coadmin123', 'coadmin2026'], name: 'Operations Co-Admin', role: 'admin' },
-  'coadmin': { pass: ['coadmin', 'coadmin123', 'coadmin2026'], name: 'Operations Co-Admin', role: 'admin' },
-  'writer@digitaljournal.com': { pass: ['writer', 'writer123', 'writer2026'], name: 'Jennifer Friesen', role: 'writer' },
-  'writer': { pass: ['writer', 'writer123', 'writer2026'], name: 'Jennifer Friesen', role: 'writer' },
-  'reader@digitaljournal.com': { pass: ['reader', 'reader123', 'reader2026'], name: 'Alex Reader', role: 'reader' },
-  'reader': { pass: ['reader', 'reader123', 'reader2026'], name: 'Alex Reader', role: 'reader' },
+  'admin@digitaljournal.com': { pass: (process.env.SYSTEM_ADMIN_PASS || '').split(',').filter(Boolean), name: 'System Administrator', role: 'admin' },
+  'admin': { pass: (process.env.SYSTEM_ADMIN_PASS || '').split(',').filter(Boolean), name: 'System Administrator', role: 'admin' },
+  'coadmin@digitaljournal.com': { pass: (process.env.SYSTEM_COADMIN_PASS || '').split(',').filter(Boolean), name: 'Operations Co-Admin', role: 'admin' },
+  'coadmin': { pass: (process.env.SYSTEM_COADMIN_PASS || '').split(',').filter(Boolean), name: 'Operations Co-Admin', role: 'admin' },
+  'writer@digitaljournal.com': { pass: (process.env.SYSTEM_WRITER_PASS || '').split(',').filter(Boolean), name: 'Jennifer Friesen', role: 'writer' },
+  'writer': { pass: (process.env.SYSTEM_WRITER_PASS || '').split(',').filter(Boolean), name: 'Jennifer Friesen', role: 'writer' },
+  'reader@digitaljournal.com': { pass: (process.env.SYSTEM_READER_PASS || '').split(',').filter(Boolean), name: 'Alex Reader', role: 'reader' },
+  'reader': { pass: (process.env.SYSTEM_READER_PASS || '').split(',').filter(Boolean), name: 'Alex Reader', role: 'reader' },
 };
 
 // POST /api/auth/login

@@ -129,16 +129,23 @@ export default function RootLayout({
                   if (typeof e.data !== 'string') return e;
                   try {
                     var msg = JSON.parse(e.data);
+                    if (!msg || typeof msg !== 'object') return e;
                     var modified = false;
-                    if (msg && msg.type === 'sync' && msg.hash) {
+
+                    // 1. Lock compilation hash across ALL message types
+                    var h = msg.hash || (msg.data && msg.data.hash);
+                    if (h) {
                       if (!initialCompilationHash) {
-                        initialCompilationHash = msg.hash;
-                      } else if (msg.hash !== initialCompilationHash) {
-                        msg.hash = initialCompilationHash;
+                        initialCompilationHash = h;
+                      } else if (h !== initialCompilationHash) {
+                        if (msg.hash) msg.hash = initialCompilationHash;
+                        if (msg.data && msg.data.hash) msg.data.hash = initialCompilationHash;
                         modified = true;
                       }
                     }
-                    if (msg && msg.type === 'turbopack-connected' && msg.data && msg.data.sessionId) {
+
+                    // 2. Lock Turbopack session id
+                    if ((msg.type === 'turbopack-connected' || msg.action === 'turbopack-connected') && msg.data && msg.data.sessionId) {
                       if (!initialTurbopackSession) {
                         initialTurbopackSession = msg.data.sessionId;
                       } else if (msg.data.sessionId !== initialTurbopackSession) {
@@ -146,6 +153,21 @@ export default function RootLayout({
                         modified = true;
                       }
                     }
+
+                    // 3. Prevent cross-tab reload or refresh for background / other open tabs
+                    var reloadTypes = [
+                      'reloadPage', 'reload-page', 'serverComponentChanges',
+                      'server-component-reload-page', 'serverOnlyChanges', 'middlewareChanges'
+                    ];
+                    var currentType = msg.type || msg.action;
+                    if (reloadTypes.indexOf(currentType) !== -1 || (msg.action && reloadTypes.indexOf(msg.action) !== -1)) {
+                      if (document.hidden || !document.hasFocus()) {
+                        msg.type = 'ping';
+                        msg.action = 'ping';
+                        modified = true;
+                      }
+                    }
+
                     if (modified) {
                       return new MessageEvent('message', {
                         data: JSON.stringify(msg),
@@ -161,7 +183,7 @@ export default function RootLayout({
 
                 function PatchedWebSocket(url, protocols) {
                   var ws = protocols !== undefined ? new OrigWebSocket(url, protocols) : new OrigWebSocket(url);
-                  var isHmr = typeof url === 'string' && url.indexOf('/_next/webpack-hmr') !== -1;
+                  var isHmr = typeof url === 'string' && url.indexOf('/_next/') !== -1;
                   if (!isHmr) return ws;
 
                   var originalAddEventListener = ws.addEventListener.bind(ws);

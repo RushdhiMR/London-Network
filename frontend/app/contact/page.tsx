@@ -111,12 +111,12 @@ export default function ContactUsPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#FDFDFD] text-slate-900 font-sans flex flex-col justify-between">
+    <main className="min-h-screen bg-[#FDFDFD] text-slate-900 font-poppins flex flex-col justify-between">
       <div>
         <Header />
 
         {/* HERO SECTION */}
-        <section className="relative text-white py-16 md:py-24 px-4 md:px-8 border-b border-zinc-900 overflow-hidden bg-slate-950">
+        <section className="relative text-white py-16 md:py-24 px-4 md:px-8 border-b border-zinc-900 overflow-hidden bg-slate-950 font-poppins">
           <img
             src="https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=1920&q=80&fit=crop"
             alt="London BigBen Network"
@@ -124,41 +124,41 @@ export default function ContactUsPage() {
           />
           <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/75 to-black/50" />
           <div className="relative z-10 max-w-[1400px] mx-auto">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1 bg-[#BF1E2D]/25 border border-[#BF1E2D]/50 text-[#ff4d5e] rounded-full text-xs font-mono font-bold tracking-wide uppercase mb-4 backdrop-blur-md shadow-xs">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 bg-[#BF1E2D]/25 border border-[#BF1E2D]/50 text-[#ff4d5e] rounded-full text-xs font-poppins font-semibold tracking-wide uppercase mb-4 backdrop-blur-md shadow-xs">
               <MessageSquare className="w-3.5 h-3.5" />
               Direct Communication Desk
             </div>
-            <h1 className="text-3xl md:text-5xl lg:text-6xl font-sans font-bold tracking-tight text-white max-w-4xl leading-tight drop-shadow-md">
+            <h1 className="text-3xl md:text-5xl lg:text-6xl font-poppins font-bold tracking-tight text-white max-w-4xl leading-tight drop-shadow-md">
               Contact London Bigben Network
             </h1>
-            <p className="mt-4 text-zinc-200 text-base md:text-lg max-w-2xl font-light leading-relaxed drop-shadow-sm">
+            <p className="mt-4 text-zinc-200 text-base md:text-lg max-w-2xl font-poppins font-normal leading-relaxed drop-shadow-sm">
               Reach our global editorial newsroom, commercial partnerships division, executive team, or support desk.
             </p>
           </div>
         </section>
 
         {/* MAIN CONTENT GRID */}
-        <section className="max-w-[1400px] mx-auto px-4 md:px-8 py-12 md:py-16">
+        <section className="max-w-[1400px] mx-auto px-4 md:px-8 py-12 md:py-16 font-poppins">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16">
             
             {/* LEFT COLUMN: CONTACT DETAILS & DEPARTMENTS */}
-            <div className="lg:col-span-5 space-y-8">
+            <div className="lg:col-span-5 space-y-8 font-poppins">
               <div>
-                <h2 className="text-2xl font-serif font-bold text-slate-900 tracking-tight">
+                <h2 className="text-2xl font-poppins font-bold text-slate-900 tracking-tight">
                   Get in touch with us
                 </h2>
-                <p className="text-slate-600 text-sm mt-2 leading-relaxed">
+                <p className="text-slate-600 text-sm mt-2 leading-relaxed font-poppins">
                   Whether you are pitching an investigative story, inquiring about media syndication, looking for leadership sponsorship, or requiring assistance with our digital platform, we are here to assist.
                 </p>
               </div>
 
               {/* DIRECT CHANNELS */}
-              <div className="space-y-4">
+              <div className="space-y-4 font-poppins">
                 <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-sm hover:border-slate-300 transition-colors">
                   <div>
-                    <h3 className="font-serif font-bold text-slate-900 text-base">Press &amp; Newsroom</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">News tips, media inquiries, press releases &amp; corrections</p>
-                    <a href="mailto:press@londonbigben.com" className="inline-block mt-2 font-mono text-xs font-bold text-[#BF1E2D] hover:underline">
+                    <h3 className="font-poppins font-bold text-slate-900 text-base">Press &amp; Newsroom</h3>
+                    <p className="text-xs text-slate-500 mt-0.5 font-poppins">News tips, media inquiries, press releases &amp; corrections</p>
+                    <a href="mailto:press@londonbigben.com" className="inline-block mt-2 font-poppins text-xs font-semibold text-[#BF1E2D] hover:underline">
                       press@londonbigben.com
                     </a>
                   </div>
@@ -166,9 +166,9 @@ export default function ContactUsPage() {
 
                 <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-sm hover:border-slate-300 transition-colors">
                   <div>
-                    <h3 className="font-serif font-bold text-slate-900 text-base">Advertising &amp; Partnerships</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">Commercial campaigns, brand sponsorships &amp; partnerships</p>
-                    <a href="mailto:press@londonbigben.com" className="inline-block mt-2 font-mono text-xs font-bold text-blue-600 hover:underline">
+                    <h3 className="font-poppins font-bold text-slate-900 text-base">Advertising &amp; Partnerships</h3>
+                    <p className="text-xs text-slate-500 mt-0.5 font-poppins">Commercial campaigns, brand sponsorships &amp; partnerships</p>
+                    <a href="mailto:press@londonbigben.com" className="inline-block mt-2 font-poppins text-xs font-semibold text-blue-600 hover:underline">
                       press@londonbigben.com
                     </a>
                   </div>
@@ -176,9 +176,9 @@ export default function ContactUsPage() {
 
                 <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-sm hover:border-slate-300 transition-colors">
                   <div>
-                    <h3 className="font-serif font-bold text-slate-900 text-base">Headquarters &amp; Press Bureau</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">1 Canada Square, Canary Wharf, London E14 5AA, United Kingdom</p>
-                    <p className="mt-2 font-mono text-xs text-slate-700 font-semibold">
+                    <h3 className="font-poppins font-bold text-slate-900 text-base">Headquarters &amp; Press Bureau</h3>
+                    <p className="text-xs text-slate-500 mt-0.5 font-poppins">1 Canada Square, Canary Wharf, London E14 5AA, United Kingdom</p>
+                    <p className="mt-2 font-poppins text-xs text-slate-700 font-semibold">
                       Tel: +44 20 7946 0912
                     </p>
                   </div>
@@ -186,53 +186,53 @@ export default function ContactUsPage() {
               </div>
 
               {/* OPERATING HOURS */}
-              <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/60">
-                <div className="text-xs font-mono font-bold text-slate-700 uppercase tracking-wider mb-2">
+              <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/60 font-poppins">
+                <div className="text-xs font-poppins font-bold text-slate-700 uppercase tracking-wider mb-2">
                   Editorial Desk Hours
                 </div>
-                <p className="text-xs text-slate-600 leading-relaxed">
+                <p className="text-xs text-slate-600 leading-relaxed font-poppins">
                   Our digital newsroom operates 24/7. Inquiry responses are typically dispatched within 2–6 hours during business cycles.
                 </p>
               </div>
             </div>
 
             {/* RIGHT COLUMN: INTERACTIVE CONTACT FORM */}
-            <div className="lg:col-span-7">
-              <div className="bg-white rounded-3xl border border-slate-200/90 shadow-lg shadow-slate-100 p-6 sm:p-8 md:p-10">
+            <div className="lg:col-span-7 font-poppins">
+              <div className="bg-white rounded-3xl border border-slate-200/90 shadow-lg shadow-slate-100 p-6 sm:p-8 md:p-10 font-poppins">
                 <div className="border-b border-slate-100 pb-6 mb-6">
-                  <h3 className="text-xl font-serif font-black text-slate-900 tracking-tight uppercase">
+                  <h3 className="text-xl font-poppins font-bold text-slate-900 tracking-tight uppercase">
                     Send a Message to the Editorial & Admin Desk
                   </h3>
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="text-xs text-slate-500 mt-1 font-poppins">
                     Fill out the form below. Your message will be logged immediately into the administrative terminal for review.
                   </p>
                 </div>
 
                 {successMessage && (
-                  <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-start gap-3">
+                  <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-start gap-3 font-poppins">
                     <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-bold">Message Sent Successfully</p>
-                      <p className="text-xs text-emerald-700 mt-0.5">{successMessage}</p>
+                      <p className="font-bold font-poppins">Message Sent Successfully</p>
+                      <p className="text-xs text-emerald-700 mt-0.5 font-poppins">{successMessage}</p>
                     </div>
                   </div>
                 )}
 
                 {errorMessage && (
-                  <div className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm flex items-start gap-3">
+                  <div className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm flex items-start gap-3 font-poppins">
                     <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-bold">Unable to Send</p>
-                      <p className="text-xs text-rose-700 mt-0.5">{errorMessage}</p>
+                      <p className="font-bold font-poppins">Unable to Send</p>
+                      <p className="text-xs text-rose-700 mt-0.5 font-poppins">{errorMessage}</p>
                     </div>
                   </div>
                 )}
 
-                <form onSubmit={handleSubmit} className="space-y-5">
+                <form onSubmit={handleSubmit} className="space-y-5 font-poppins">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     {/* FULL NAME */}
                     <div>
-                      <label className="block text-xs font-mono font-bold text-slate-700 uppercase tracking-wider mb-2">
+                      <label className="block text-xs font-poppins font-semibold text-slate-700 uppercase tracking-wider mb-2">
                         Full Name <span className="text-[#BF1E2D]">*</span>
                       </label>
                       <input
@@ -241,13 +241,13 @@ export default function ContactUsPage() {
                         placeholder="e.g. Eleanor Vance"
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:border-[#BF1E2D] focus:bg-white transition-all shadow-sm"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-poppins text-slate-900 focus:outline-none focus:border-[#BF1E2D] focus:bg-white transition-all shadow-sm"
                       />
                     </div>
 
                     {/* EMAIL ADDRESS */}
                     <div>
-                      <label className="block text-xs font-mono font-bold text-slate-700 uppercase tracking-wider mb-2">
+                      <label className="block text-xs font-poppins font-semibold text-slate-700 uppercase tracking-wider mb-2">
                         Email Address <span className="text-[#BF1E2D]">*</span>
                       </label>
                       <input
@@ -256,7 +256,7 @@ export default function ContactUsPage() {
                         placeholder="e.g. eleanor@company.com"
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:border-[#BF1E2D] focus:bg-white transition-all shadow-sm"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-poppins text-slate-900 focus:outline-none focus:border-[#BF1E2D] focus:bg-white transition-all shadow-sm"
                       />
                     </div>
                   </div>
@@ -264,7 +264,7 @@ export default function ContactUsPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     {/* COMPANY / ORGANIZATION */}
                     <div>
-                      <label className="block text-xs font-mono font-bold text-slate-700 uppercase tracking-wider mb-2">
+                      <label className="block text-xs font-poppins font-semibold text-slate-700 uppercase tracking-wider mb-2">
                         Company / Organization
                       </label>
                       <input
@@ -272,19 +272,19 @@ export default function ContactUsPage() {
                         placeholder="e.g. Apex Media Partners"
                         value={formData.company}
                         onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:border-[#BF1E2D] focus:bg-white transition-all shadow-sm"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-poppins text-slate-900 focus:outline-none focus:border-[#BF1E2D] focus:bg-white transition-all shadow-sm"
                       />
                     </div>
 
                     {/* INQUIRY TYPE */}
                     <div>
-                      <label className="block text-xs font-mono font-bold text-slate-700 uppercase tracking-wider mb-2">
+                      <label className="block text-xs font-poppins font-semibold text-slate-700 uppercase tracking-wider mb-2">
                         Inquiry Category <span className="text-[#BF1E2D]">*</span>
                       </label>
                       <select
                         value={formData.type}
                         onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:border-[#BF1E2D] focus:bg-white transition-all cursor-pointer shadow-sm"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-poppins font-semibold text-slate-800 focus:outline-none focus:border-[#BF1E2D] focus:bg-white transition-all cursor-pointer shadow-sm"
                       >
                         <option value="Editorial">Editorial & News Pitch</option>
                         <option value="Advertising">Advertising & Sponsorship</option>
@@ -298,7 +298,7 @@ export default function ContactUsPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     {/* PHONE NUMBER */}
                     <div>
-                      <label className="block text-xs font-mono font-bold text-slate-700 uppercase tracking-wider mb-2">
+                      <label className="block text-xs font-poppins font-semibold text-slate-700 uppercase tracking-wider mb-2">
                         Phone Number (Optional)
                       </label>
                       <input
@@ -306,13 +306,13 @@ export default function ContactUsPage() {
                         placeholder="+44 20 7946 0912"
                         value={formData.phone}
                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:border-[#BF1E2D] focus:bg-white transition-all shadow-sm"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-poppins text-slate-900 focus:outline-none focus:border-[#BF1E2D] focus:bg-white transition-all shadow-sm"
                       />
                     </div>
 
                     {/* WHATSAPP NUMBER */}
                     <div>
-                      <label className="block text-xs font-mono font-bold text-slate-700 uppercase tracking-wider mb-2">
+                      <label className="block text-xs font-poppins font-semibold text-slate-700 uppercase tracking-wider mb-2">
                         WhatsApp (Optional)
                       </label>
                       <input
@@ -320,14 +320,14 @@ export default function ContactUsPage() {
                         placeholder="+44 20 7946 0912"
                         value={formData.whatsapp}
                         onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:border-[#BF1E2D] focus:bg-white transition-all shadow-sm"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-poppins text-slate-900 focus:outline-none focus:border-[#BF1E2D] focus:bg-white transition-all shadow-sm"
                       />
                     </div>
                   </div>
 
                   {/* MESSAGE CONTENT */}
                   <div>
-                    <label className="block text-xs font-mono font-bold text-slate-700 uppercase tracking-wider mb-2">
+                    <label className="block text-xs font-poppins font-semibold text-slate-700 uppercase tracking-wider mb-2">
                       Message / Inquiries <span className="text-[#BF1E2D]">*</span>
                     </label>
                     <textarea
@@ -336,12 +336,12 @@ export default function ContactUsPage() {
                       placeholder="Please describe your inquiry, story details, or proposal here..."
                       value={formData.message}
                       onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:border-[#BF1E2D] focus:bg-white transition-all resize-y shadow-sm"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-poppins text-slate-900 focus:outline-none focus:border-[#BF1E2D] focus:bg-white transition-all resize-y shadow-sm"
                     />
                   </div>
 
                   {/* PRIVACY NOTE */}
-                  <p className="text-[11px] text-slate-400 leading-normal">
+                  <p className="text-[11px] text-slate-400 leading-normal font-poppins">
                     By submitting this form, you agree that London BigBen Network editorial staff may contact you regarding your inquiry in accordance with our editorial privacy policy.
                   </p>
 
@@ -349,7 +349,7 @@ export default function ContactUsPage() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full sm:w-auto px-8 py-3.5 bg-[#BF1E2D] hover:bg-[#a61a27] text-white font-serif font-black uppercase text-sm tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.99]"
+                    className="w-full sm:w-auto px-8 py-3.5 bg-[#BF1E2D] hover:bg-[#a61a27] text-white font-poppins font-bold uppercase text-sm tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.99]"
                   >
                     {loading ? (
                       <>

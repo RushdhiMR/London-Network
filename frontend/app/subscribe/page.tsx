@@ -352,12 +352,13 @@ export default function SubscribePage() {
           <div className="max-w-4xl mx-auto px-4">
             <Link href="/" className="inline-block transition-transform hover:opacity-95" aria-label="London BigBen">
               <Image
-                src="/header_logo.png"
+                src="/header_logo.svg"
                 alt="London BigBen Network"
-                width={260}
-                height={48}
+                width={263}
+                height={45}
                 className="h-9 sm:h-11 md:h-12 w-auto object-contain mx-auto"
                 priority
+                unoptimized
               />
             </Link>
           </div>

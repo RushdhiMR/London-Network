@@ -26,6 +26,7 @@ const STATIC_PREFIXES = [
   "/register",
   "/forgot-password",
   "/reset-password",
+  "/admin/login",
   "/about",
   "/contact",
   "/contact-us",

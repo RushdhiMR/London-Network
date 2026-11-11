@@ -1,10 +1,69 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useLiveArticles, ArticleItem, isTopPlacementArticle, articleMatchesMainCategory } from "@/lib/articlesSync";
+import { getCategoryData } from "@/lib/categoryData";
 
-export default function BottomCategoryGrid() {
+interface BottomCategoryGridProps {
+  currentCategory?: string;
+}
+
+const DEFAULT_CATEGORIES = [
+  { key: "research", title: "Research & Innovation", keywords: ["research"] },
+  { key: "sports", title: "Sports", keywords: ["sports", "sport"] },
+  { key: "economy", title: "Economy", keywords: ["economy", "economic"] },
+  { key: "health", title: "Health", keywords: ["health"] },
+  { key: "entertainment", title: "Entertainment", keywords: ["entertainment", "entertain", "entertinment"] }
+];
+
+const ALTERNATIVE_CATEGORIES = [
+  { key: "politics", title: "Politics", keywords: ["politics", "policy"] },
+  { key: "technology", title: "Technology", keywords: ["technology", "tech"] },
+  { key: "business", title: "Business", keywords: ["business"] },
+  { key: "interview", title: "Interview", keywords: ["interview"] }
+];
+
+const normalizeCat = (cat?: string): string => {
+  if (!cat) return "";
+  const c = cat.toLowerCase().trim().replace(/[^a-z0-9]/g, "");
+  if (c.includes("sport")) return "sports";
+  if (c.includes("econom")) return "economy";
+  if (c.includes("research") || c.includes("innovat")) return "research";
+  if (c.includes("health") || c.includes("medic")) return "health";
+  if (c.includes("entertain")) return "entertainment";
+  if (c.includes("politic")) return "politics";
+  if (c.includes("tech")) return "technology";
+  if (c.includes("interview")) return "interview";
+  if (c.includes("business")) return "business";
+  if (c.includes("market")) return "markets";
+  if (c.includes("ufo")) return "ufo";
+  return c;
+};
+
+export default function BottomCategoryGrid({ currentCategory }: BottomCategoryGridProps = {}) {
   const { articles: liveArticles = [] } = useLiveArticles();
+  const pathname = usePathname();
+
+  const inferredCategory = currentCategory || (pathname?.startsWith("/category/") ? pathname.replace("/category/", "").split("/")[0] : "");
+  const currentNorm = normalizeCat(inferredCategory);
+
+  // Active 5 category slots: if the current article's category is one of them, shift it automatically to another category
+  const activeCategories = (() => {
+    const slots = [...DEFAULT_CATEGORIES];
+    if (currentNorm) {
+      const matchIdx = slots.findIndex(s => s.key === currentNorm);
+      if (matchIdx !== -1) {
+        const replacement = ALTERNATIVE_CATEGORIES.find(
+          alt => alt.key !== currentNorm && !slots.some(s => s.key === alt.key)
+        );
+        if (replacement) {
+          slots[matchIdx] = replacement;
+        }
+      }
+    }
+    return slots;
+  })();
 
   // Helper to filter articles by category keywords (strictly main category for homepage sections)
   const getCategoryArticles = (keywords: string[]) => {
@@ -15,16 +74,11 @@ export default function BottomCategoryGrid() {
     });
   };
 
-  const researchLive = getCategoryArticles(["research"]);
-  const sportsLive = getCategoryArticles(["sports"]);
-  const economyLive = getCategoryArticles(["economy"]);
-  const healthLive = getCategoryArticles(["health"]);
-  const entertainmentLive = getCategoryArticles(["entertainment", "entertain", "entertinment"]);
-
   const buildColumnData = (
-    title: string,
-    liveList: ArticleItem[]
+    catConfig: { key: string; title: string; keywords: string[] }
   ) => {
+    const liveList = getCategoryArticles(catConfig.keywords);
+
     // Sort liveList in strict descending order (newest first)
     const sortedLive = [...liveList].sort((a, b) => {
       const timeA = new Date(a.published_at || a.date || 0).getTime() || (typeof a.id === 'number' ? a.id : Number(String(a.id).replace(/\D/g, '')) || 0);
@@ -32,10 +86,41 @@ export default function BottomCategoryGrid() {
       return timeB - timeA;
     });
 
-    if (sortedLive.length > 0) {
-      const first = sortedLive[0];
-      const rest = sortedLive.slice(1, 4);
-      const firstCat = (first.category || first.category_name || title).toLowerCase().replace(/[^a-z0-9]/g, "-");
+    const combined: any[] = [...sortedLive];
+
+    // Supplement from getCategoryData if fewer than 4 articles
+    if (combined.length < 4) {
+      try {
+        const catData = getCategoryData(catConfig.key);
+        const staticList = [
+          ...(catData?.featured ? [catData.featured] : []),
+          ...(catData?.secondaryArticles || []),
+          ...(catData?.newsArticles || [])
+        ];
+        for (const sa of staticList) {
+          if (combined.length >= 4) break;
+          const saTitle = (sa.title || "").trim();
+          if (saTitle && !combined.some(c => (c.title || "").trim().toLowerCase() === saTitle.toLowerCase())) {
+            const postSlug = saTitle.toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
+            combined.push({
+              id: `static-${catConfig.key}-${postSlug.slice(0, 15)}`,
+              title: saTitle,
+              description: (sa as any).description || "",
+              imageUrl: sa.image || "https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=400&h=250&fit=crop",
+              slug: postSlug,
+              status: "Published",
+              category: catConfig.title
+            });
+          }
+        }
+      } catch (e) {
+        console.error("Error supplementing bottom grid category:", e);
+      }
+    }
+
+    if (combined.length > 0) {
+      const first = combined[0];
+      const rest = combined.slice(1, 4);
       const firstSlug = first.slug || (first.title || "").toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
       
       const restList = rest.map(r => {
@@ -44,7 +129,7 @@ export default function BottomCategoryGrid() {
       });
 
       return {
-        title,
+        title: catConfig.title,
         featured: {
           title: first.title,
           description: first.description || first.summary || "",
@@ -59,13 +144,9 @@ export default function BottomCategoryGrid() {
     return null;
   };
 
-  const columns = [
-    buildColumnData("Research & Innovation", researchLive),
-    buildColumnData("Sports", sportsLive),
-    buildColumnData("Economy", economyLive),
-    buildColumnData("Health", healthLive),
-    buildColumnData("Entertainment", entertainmentLive)
-  ].filter(Boolean) as { title: string; featured: any; list: any[] }[];
+  const columns = activeCategories
+    .map(cfg => buildColumnData(cfg))
+    .filter(Boolean) as { title: string; featured: any; list: any[] }[];
 
   if (!columns || columns.length === 0) {
     return null;

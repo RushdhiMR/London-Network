@@ -9,7 +9,8 @@ import { DB } from '@/lib/db';
 export async function POST(request: Request) {
   // Allow if admin portal key header is present OR user has verified admin session
   const adminKey = request.headers.get('x-admin-key') || request.headers.get('x-admin-portal');
-  const hasAdminPortalKey = adminKey === 'dj_admin_portal_authenticated_2026';
+  const expectedKey = process.env.ADMIN_PORTAL_KEY;
+  const hasAdminPortalKey = expectedKey ? adminKey === expectedKey : false;
 
   if (!hasAdminPortalKey) {
     const rbac = await requireRole(request, 'admin');
@@ -80,6 +81,27 @@ export async function POST(request: Request) {
       } catch (subErr) {
         console.warn('[Distribution] Newsletter subscribers fetch notice:', subErr);
       }
+    }
+
+    // Always append author's direct followers (they receive notifications whether subscribed to newsletter or not)
+    try {
+      const authorName = (article.authorName || '').trim();
+      const authorSlug = (article as any).authorSlug || (article as any).author_slug || (authorName ? authorName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : '');
+      const followersByName = authorName ? await DB.getAuthorFollowers(authorName) : [];
+      const followersBySlug = authorSlug ? await DB.getAuthorFollowers(authorSlug) : [];
+      const combinedFollowers = Array.from(new Set([...followersByName, ...followersBySlug]));
+
+      combinedFollowers.forEach((em: string) => {
+        if (typeof em === 'string') {
+          const clean = em.trim().toLowerCase();
+          if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
+            targetSet.add(clean);
+          }
+        }
+      });
+      console.log(`[Distribution] Added ${combinedFollowers.length} direct follower(s) for author "${authorName}" to article notification.`);
+    } catch (followErr) {
+      console.warn('[Distribution] Author followers lookup notice:', followErr);
     }
 
     const targetList = Array.from(targetSet);

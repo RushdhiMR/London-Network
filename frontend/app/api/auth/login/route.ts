@@ -29,27 +29,10 @@ export async function POST(request: Request) {
     // 2. Query user directly from Database (Source of Truth)
     let user = await DB.getUserByEmail(normalized);
 
-    const defaultAdminHash = '$2b$10$4nwUmwVpHtDTbJKDU2fxtOU3x2IZpyIsAVLGdd2qahplphjWmbn2K'; // admin123
-
-    const isKnownDefaultAdmin =
-      normalized === 'geethliyanage979@gmail.com' ||
-      normalized === 'londonbigben.offical@gmail.com' ||
-      normalized === 'akramyoonos006@gmail.com' ||
-      Boolean(user?.is_default_admin);
-
-    const effectiveHash = user?.password_hash || (isKnownDefaultAdmin ? defaultAdminHash : null);
-
-    if (user && effectiveHash) {
-      const isValid = await comparePassword(cleanPassword, effectiveHash);
+    if (user && user.password_hash) {
+      const isValid = await comparePassword(cleanPassword, user.password_hash);
 
       if (isValid) {
-        // If user didn't have password_hash saved, save it now
-        if (!user.password_hash) {
-          try {
-            await DB.updateUser(user.id, { password_hash: defaultAdminHash });
-          } catch (e) {}
-        }
-
         const userPayload = {
           id: user.id,
           name: user.name,

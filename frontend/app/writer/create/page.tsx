@@ -9,6 +9,7 @@ import { generateAutoSEO, extractFocusKeyword, extractCardSummary } from "@/lib/
 import { getUserProfile, resolveUserAvatar, getAuthorAvatarByNameOrEmail } from "@/lib/userProfiles";
 import { saveArticleToServer, fetchArticlesFromServer } from "@/lib/articlesSync";
 import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
+import PageSkeletonLoader from "@/components/PageSkeletonLoader";
 import { convertToWebP, convertHtmlImagesToWebP, uploadImageToBackblaze } from "@/lib/imageUtils";
 import {
   ArrowLeft,
@@ -84,6 +85,7 @@ const ALL_MAIN_CATEGORIES = [
   "Politics",
   "Business",
   "Technology",
+  "UFO",
   "Economy",
   "Markets",
   "Lifestyle",
@@ -98,6 +100,7 @@ const ALL_SUB_CATEGORIES = [
   "Politics",
   "Business",
   "Technology",
+  "UFO",
   "Economy",
   "Markets",
   "Lifestyle",
@@ -1795,7 +1798,6 @@ function isWorldOrWorldSub(cat: string): boolean {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
-                  "x-admin-key": "dj_admin_portal_authenticated_2026",
                 },
                 credentials: "include",
                 body: JSON.stringify({
@@ -2015,7 +2017,6 @@ function isWorldOrWorldSub(cat: string): boolean {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                "x-admin-key": "dj_admin_portal_authenticated_2026",
               },
               credentials: "include",
               body: JSON.stringify({
@@ -2246,9 +2247,24 @@ function isWorldOrWorldSub(cat: string): boolean {
 
       // Direct call to PUT /api/articles to ensure MySQL DB is directly updated
       try {
+        let authHeader = "";
+        if (typeof window !== "undefined") {
+          try {
+            const rawSession = sessionStorage.getItem("dj_tab_session");
+            if (rawSession) {
+              const parsed = JSON.parse(rawSession);
+              const tok = typeof parsed === "string" ? parsed : parsed?.token;
+              if (tok) authHeader = `Bearer ${tok}`;
+            }
+          } catch {}
+        }
         await fetch("/api/articles", {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(authHeader ? { "Authorization": authHeader } : {})
+          },
+          credentials: "include",
           body: JSON.stringify(rejectedArticle)
         });
       } catch (e) {}
@@ -2305,6 +2321,10 @@ function isWorldOrWorldSub(cat: string): boolean {
       setIsSubmitting(false);
     }
   };
+
+  if (!mounted || auth.loading || !currentUser) {
+    return <PageSkeletonLoader />;
+  }
 
   const isUserAdmin = mounted && ((currentUser?.role || auth.user?.role || "").toLowerCase() === "admin" || (currentUser?.role || auth.user?.role || "").toLowerCase() === "co-admin");
 

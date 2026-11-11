@@ -4,12 +4,13 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import JSZip from "jszip";
-import { useAuth } from "@/lib/auth-context";
+import { useAuth, getTabSessionToken } from "@/lib/auth-context";
 import SEOAssistantPanel from "@/components/SEOAssistantPanel";
-import LogoLoader from "@/components/LogoLoader";
+import PageSkeletonLoader from "@/components/PageSkeletonLoader";
 import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
 import { extractFocusKeyword, analyzeSEOScore, generateAutoSEO, extractCardSummary } from "@/lib/seo";
 import { uploadImageToBackblaze } from "@/lib/imageUtils";
+import { DEFAULT_TEAM_MEMBERS, TeamMember, slugifyTeamName } from "@/lib/teamSync";
 import {
   LayoutDashboard,
   FileText,
@@ -74,7 +75,7 @@ import {
   Move
 } from "lucide-react";
 import { useLiveArticles, updateArticleStatusOnServer, deleteArticleOnServer, fetchArticlesFromServer, saveArticleToServer } from "@/lib/articlesSync";
-import { isEmailAlreadyRegistered, getUserProfile, saveUserProfile } from "@/lib/userProfiles";
+import { isEmailAlreadyRegistered, getUserProfile, saveUserProfile, resolveUserAvatar } from "@/lib/userProfiles";
 import { ReelVideo, ReelPlatform, getStoredReels, fetchServerReels, saveStoredReels, detectPlatformAndThumbnail } from "@/lib/reelsSync";
 
 interface Article {
@@ -231,6 +232,7 @@ const ALL_MAIN_CATEGORIES = [
   "Politics",
   "Business",
   "Technology",
+  "UFO",
   "Economy",
   "Markets",
   "Lifestyle",
@@ -245,6 +247,7 @@ const ALL_SUB_CATEGORIES = [
   "Politics",
   "Business",
   "Technology",
+  "UFO",
   "Economy",
   "Markets",
   "Lifestyle",
@@ -311,7 +314,7 @@ function extractCleanTagsList(source: any): string[] {
             .filter(Boolean);
           if (list.length > 0) return Array.from(new Set(list));
         }
-      } catch (e) {}
+      } catch (e) { }
       const list = raw
         .split(/[\s,]+/)
         .map((s: string) => s.replace(/^#+/, "").trim())
@@ -322,24 +325,46 @@ function extractCleanTagsList(source: any): string[] {
   return [];
 }
 
+const getAdminHeaders = (extra: Record<string, string> = {}) => {
+  const token = typeof window !== "undefined" ? getTabSessionToken() : null;
+  return {
+    ...extra,
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  };
+};
+
 export default function AdminDashboardPage() {
   const router = useRouter();
   const auth = useAuth();
-  const [adminUser, setAdminUser] = useState<{ name: string; email: string; role: string } | null>({
-    name: "Geeth Liyanage",
-    email: "geethliyanage979@gmail.com",
-    role: "Admin"
-  });
-  const [isLoading, setIsLoading] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
-  const [lockPasscode, setLockPasscode] = useState("");
-  const [lockError, setLockError] = useState("");
+  const [adminUser, setAdminUser] = useState<{ name: string; email: string; role: string } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const [activeTab, setActiveTab] = useState<
-    "overview" | "newsletter" | "subscriptions" | "articles" | "users" | "ads" | "contact_submissions" | "advertise_leads" | "backups" | "trending_words" | "reels"
+    "overview" | "newsletter" | "subscriptions" | "articles" | "users" | "ads" | "contact_submissions" | "advertise_leads" | "backups" | "trending_words" | "trending_topics" | "reels" | "team"
   >("overview");
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  // Our Team Management State
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => DEFAULT_TEAM_MEMBERS);
+  const [isTeamLoading, setIsTeamLoading] = useState(false);
+  const [teamSearchQuery, setTeamSearchQuery] = useState("");
+  const [unaddedUserSearch, setUnaddedUserSearch] = useState("");
+  const [teamDeptFilter, setTeamDeptFilter] = useState<string>("ALL");
+  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
+  const [editingTeamMember, setEditingTeamMember] = useState<TeamMember | null>(null);
+  const [teamFormName, setTeamFormName] = useState("");
+  const [teamFormRole, setTeamFormRole] = useState("");
+  const [teamFormDept, setTeamFormDept] = useState("Editorial Leadership");
+  const [teamFormCustomDept, setTeamFormCustomDept] = useState("");
+  const [teamFormEmail, setTeamFormEmail] = useState("");
+  const [teamFormSlug, setTeamFormSlug] = useState("");
+  const [teamFormImage, setTeamFormImage] = useState("");
+  const [teamFormBio, setTeamFormBio] = useState("");
+  const [isTeamUploading, setIsTeamUploading] = useState(false);
+  const [deleteTeamTarget, setDeleteTeamTarget] = useState<TeamMember | null>(null);
+  const [isTeamSubmitting, setIsTeamSubmitting] = useState(false);
 
   const [userSubTab, setUserSubTab] = useState<"ALL" | "ADMINS" | "WRITERS" | "READERS">("ALL");
   const [postSubTab, setPostSubTab] = useState<"published" | "drafts" | "pending" | "rejected" | "trash">("published");
@@ -492,7 +517,7 @@ export default function AdminDashboardPage() {
     const titleText = reviewTitle.trim() || reviewingSubmission?.title || "Article";
     const bodyText = (reviewContent || "").replace(/<[^>]*>?/gm, " ").trim();
     const cat = reviewCategory || "BUSINESS";
-    
+
     const extractedKw = extractFocusKeyword(titleText, cat);
     const autoSummary = extractCardSummary(bodyText);
     const autoSeoObj = generateAutoSEO({
@@ -583,16 +608,16 @@ export default function AdminDashboardPage() {
           const updatedCached = parsed.map((p: any) =>
             (String(p.id) === String(reviewingSubmission.id) || (p.title && newArt.title && p.title.trim().toLowerCase() === newArt.title.trim().toLowerCase()))
               ? {
-                  ...p,
-                  ...postToSave,
-                  status: "Published",
-                  placement: reviewPlacement,
-                  is_featured: newArt.is_featured,
-                  is_editors_pick: newArt.is_editors_pick,
-                  category: reviewCategory,
-                  subcategories: reviewSubCategories,
-                  tags: reviewTags
-                }
+                ...p,
+                ...postToSave,
+                status: "Published",
+                placement: reviewPlacement,
+                is_featured: newArt.is_featured,
+                is_editors_pick: newArt.is_editors_pick,
+                category: reviewCategory,
+                subcategories: reviewSubCategories,
+                tags: reviewTags
+              }
               : p
           );
           localStorage.setItem("dj_writer_submitted_articles", JSON.stringify(updatedCached));
@@ -601,7 +626,7 @@ export default function AdminDashboardPage() {
           }
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     setArticles(prev => [newArt, ...prev.filter(a => String(a.id) !== String(newArt.id))]);
     setWriterSubmissions(prev => prev.filter(s => String(s.id) !== String(reviewingSubmission.id) && s.title !== reviewingSubmission.title));
@@ -628,10 +653,9 @@ export default function AdminDashboardPage() {
       try {
         const distRes = await fetch("/api/admin/articles/send-distribution", {
           method: "POST",
-          headers: {
+          headers: getAdminHeaders({
             "Content-Type": "application/json",
-            "x-admin-key": "dj_admin_portal_authenticated_2026",
-          },
+          }),
           credentials: "include",
           body: JSON.stringify({
             recipients: recipientsToSend,
@@ -734,7 +758,9 @@ export default function AdminDashboardPage() {
     setSiteSubscriptionsLoading(true);
     try {
       const res = await fetch("/api/admin/subscriptions", {
-        headers: { "x-admin-portal": "dj_admin_portal_authenticated_2026" }
+        headers: getAdminHeaders(),
+        credentials: "include"
+
       });
       const data = await res.json();
       if (data.success && Array.isArray(data.subscriptions)) {
@@ -751,10 +777,10 @@ export default function AdminDashboardPage() {
     try {
       const res = await fetch("/api/admin/subscriptions", {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "x-admin-portal": "dj_admin_portal_authenticated_2026"
-        },
+        headers: getAdminHeaders({
+          "Content-Type": "application/json"
+        }),
+        credentials: "include",
         body: JSON.stringify({ id, status, paymentStatus, paymentAmount })
       });
       const data = await res.json();
@@ -774,7 +800,8 @@ export default function AdminDashboardPage() {
     try {
       const res = await fetch(`/api/admin/subscriptions?id=${encodeURIComponent(id)}`, {
         method: "DELETE",
-        headers: { "x-admin-portal": "dj_admin_portal_authenticated_2026" }
+        headers: getAdminHeaders(),
+        credentials: "include",
       });
       const data = await res.json();
       if (data.success) {
@@ -895,7 +922,7 @@ export default function AdminDashboardPage() {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) return parsed;
         }
-      } catch (e) {}
+      } catch (e) { }
     }
     return [
       {
@@ -938,12 +965,12 @@ export default function AdminDashboardPage() {
               try {
                 localStorage.setItem("dj_trending_words", JSON.stringify(sliced));
                 window.dispatchEvent(new Event("dj_trending_words_change"));
-              } catch (e) {}
+              } catch (e) { }
             }
             return sliced;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     }
     return DEFAULT_TRENDING_WORDS.slice(0, 6);
   });
@@ -969,7 +996,7 @@ export default function AdminDashboardPage() {
     try {
       localStorage.setItem("dj_trending_words", JSON.stringify(updated));
       window.dispatchEvent(new Event("dj_trending_words_change"));
-    } catch (e) {}
+    } catch (e) { }
     setNewTrendingWord("");
     setIsAddTrendingModalOpen(false);
     showNotification("✓ Trending word added successfully!");
@@ -987,7 +1014,7 @@ export default function AdminDashboardPage() {
     try {
       localStorage.setItem("dj_trending_words", JSON.stringify(updated));
       window.dispatchEvent(new Event("dj_trending_words_change"));
-    } catch (e) {}
+    } catch (e) { }
     showNotification("✓ Trending word status updated!");
   };
 
@@ -997,7 +1024,7 @@ export default function AdminDashboardPage() {
     try {
       localStorage.setItem("dj_trending_words", JSON.stringify(updated));
       window.dispatchEvent(new Event("dj_trending_words_change"));
-    } catch (e) {}
+    } catch (e) { }
     showNotification("✓ Trending word removed!");
   };
 
@@ -1023,31 +1050,76 @@ export default function AdminDashboardPage() {
             return slots;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     }
     return [...DEFAULT_ARTICLE_TRENDING_TOPICS];
   });
   const [trendingSubTab, setTrendingSubTab] = useState<"article_section" | "header_ticker">("article_section");
+  const [newTrendingTopicInput, setNewTrendingTopicInput] = useState("");
+  const [newTrendingTopicSlot, setNewTrendingTopicSlot] = useState<number>(0);
 
-  const handleSaveArticleTrendingTopics = (e?: React.FormEvent) => {
+  const handleAddNewTrendingTopic = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = newTrendingTopicInput.trim();
+    if (!trimmed) {
+      showNotification("Please enter a trending topic name.");
+      return;
+    }
+    const updated = [...articleTrendingTopics];
+    let targetIdx = -1;
+    if (newTrendingTopicSlot >= 1 && newTrendingTopicSlot <= 6) {
+      targetIdx = newTrendingTopicSlot - 1;
+    } else {
+      targetIdx = updated.findIndex((t) => !t || !t.trim());
+      if (targetIdx === -1) {
+        targetIdx = 5;
+      }
+    }
+    updated[targetIdx] = trimmed;
+    setArticleTrendingTopics(updated);
+    setNewTrendingTopicInput("");
+    try {
+      localStorage.setItem("article_trending_topics", JSON.stringify(updated));
+      window.dispatchEvent(new Event("article_trending_topics_change"));
+      fetch("/api/articles/trending", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topics: updated.filter((t) => t && t.trim()).slice(0, 6) }),
+      }).catch(() => null);
+    } catch (err) { }
+    showNotification(`✓ Added "${trimmed}" to Slot ${targetIdx + 1}!`);
+  };
+
+  const handleSaveArticleTrendingTopics = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     try {
+      const cleanTopics = articleTrendingTopics.map((t) => (t || "").trim()).filter(Boolean).slice(0, 6);
       localStorage.setItem("article_trending_topics", JSON.stringify(articleTrendingTopics));
       window.dispatchEvent(new Event("article_trending_topics_change"));
+      await fetch("/api/articles/trending", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topics: cleanTopics }),
+      }).catch(() => null);
       showNotification("✓ Article section trending topics (6 slots) saved successfully!");
     } catch (err) {
       console.error(err);
     }
   };
 
-  const handleResetArticleTrendingTopics = () => {
+  const handleResetArticleTrendingTopics = async () => {
     if (confirm("Reset article section trending topics to default 6 slots?")) {
       setArticleTrendingTopics([...DEFAULT_ARTICLE_TRENDING_TOPICS]);
       try {
         localStorage.setItem("article_trending_topics", JSON.stringify(DEFAULT_ARTICLE_TRENDING_TOPICS));
         window.dispatchEvent(new Event("article_trending_topics_change"));
+        await fetch("/api/articles/trending", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ topics: DEFAULT_ARTICLE_TRENDING_TOPICS }),
+        }).catch(() => null);
         showNotification("✓ Reset to default 6 trending topics!");
-      } catch (err) {}
+      } catch (err) { }
     }
   };
 
@@ -1204,7 +1276,7 @@ export default function AdminDashboardPage() {
         }
       };
       tempVideo.src = objUrl;
-    } catch {}
+    } catch { }
 
     // Auto-fill title if empty or default
     if (!reelTitle || reelTitle === "Short Video Title") {
@@ -1265,7 +1337,7 @@ export default function AdminDashboardPage() {
       try {
         const uploaded = await uploadImageToBackblaze(finalThumbnail, `reel-thumb-${Date.now()}.webp`, "reels");
         if (uploaded) finalThumbnail = uploaded;
-      } catch (err) {}
+      } catch (err) { }
     }
     if (!finalThumbnail) {
       finalThumbnail = "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600&h=800&fit=crop";
@@ -1378,7 +1450,8 @@ export default function AdminDashboardPage() {
 
       const res = await fetch("/api/admin/backups", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAdminHeaders({ "Content-Type": "application/json" }),
+        credentials: "include",
         body: JSON.stringify(snapshotPayload)
       });
 
@@ -1400,7 +1473,7 @@ export default function AdminDashboardPage() {
       setBackupFiles(updatedBackups);
       try {
         localStorage.setItem("dj_database_backups", JSON.stringify(updatedBackups));
-      } catch (e) {}
+      } catch (e) { }
 
       showNotification("✓ Database snapshot covering published posts, newsletter, users, contact submissions & leads uploaded to Backblaze B2!");
     } catch (err: any) {
@@ -1542,7 +1615,7 @@ export default function AdminDashboardPage() {
           setAdSlots(data.adSlots);
           try {
             localStorage.setItem("dj_site_ad_slots", JSON.stringify(data.adSlots));
-          } catch (e) {}
+          } catch (e) { }
         }
       })
       .catch(() => {
@@ -1554,7 +1627,7 @@ export default function AdminDashboardPage() {
               setAdSlots(parsed);
             }
           }
-        } catch (e) {}
+        } catch (e) { }
       });
   }, []);
 
@@ -1564,7 +1637,7 @@ export default function AdminDashboardPage() {
       try {
         localStorage.setItem("dj_site_ad_slots", JSON.stringify(newSlots));
         window.dispatchEvent(new Event("dj_ad_slots_updated"));
-      } catch (e) {}
+      } catch (e) { }
     }
     // Save to database API
     fetch("/api/ads", {
@@ -1781,7 +1854,7 @@ export default function AdminDashboardPage() {
               effectiveUser = userObj;
             }
           }
-        } catch (e) {}
+        } catch (e) { }
       }
 
       // 2. Check auth context if no tab-level admin
@@ -1798,20 +1871,29 @@ export default function AdminDashboardPage() {
         try {
           const storedAdmin = localStorage.getItem("dj_admin_user");
           if (storedAdmin && storedAdmin.trim()) {
-            effectiveUser = JSON.parse(storedAdmin);
+            const parsed = JSON.parse(storedAdmin);
+            const r = (parsed?.role || "").toLowerCase();
+            if (r === "admin" || r === "co-admin" || r === "editor") {
+              effectiveUser = parsed;
+            }
           }
-        } catch (e) {}
+        } catch (e) { }
       }
 
-      const fallbackAdmin = { name: "Geeth Liyanage", email: "geethliyanage979@gmail.com", role: "Admin" };
-      const resolvedAdmin = effectiveUser || fallbackAdmin;
+      if (!effectiveUser) {
+        setAdminUser(null);
+        setIsAuthenticated(false);
+        setIsLoading(false);
+        router.replace("/admin/login");
+        return;
+      }
 
-      setAdminUser(resolvedAdmin);
+      setAdminUser(effectiveUser);
       setIsAuthenticated(true);
       if (typeof window !== "undefined") {
         try {
-          localStorage.setItem("dj_admin_user", JSON.stringify(resolvedAdmin));
-        } catch (e) {}
+          localStorage.setItem("dj_admin_user", JSON.stringify(effectiveUser));
+        } catch (e) { }
       }
       await fetchDashboardData();
       setIsLoading(false);
@@ -1858,12 +1940,12 @@ export default function AdminDashboardPage() {
 
     try {
       // Fetch all dashboard data concurrently to eliminate network waterfall delays
-      const [usersSettled, artsSettled, subsSettled, contactSettled, leadsSettled, backupsSettled] = await Promise.allSettled([
+      const [usersSettled, artsSettled, trendingSettled, subsSettled, contactSettled, leadsSettled, backupsSettled] = await Promise.allSettled([
         fetch("/api/admin/users", {
-          headers: {
+          headers: getAdminHeaders({
             "Content-Type": "application/json",
-            "x-admin-portal": "dj_admin_portal_authenticated_2026",
-          },
+          }),
+          credentials: "include",
         }),
         fetch(`/api/articles?includeTrash=true&_t=${Date.now()}`, {
           cache: "no-store",
@@ -1872,539 +1954,795 @@ export default function AdminDashboardPage() {
             "Pragma": "no-cache"
           }
         }),
+        fetch("/api/articles/trending").catch(() => null),
         fetch("/api/newsletter/subscribe"),
         fetch("/api/contact"),
         fetch("/api/advertise"),
-        fetch("/api/admin/backups")
+        fetch("/api/admin/backups", {
+          headers: getAdminHeaders(),
+          credentials: "include"
+        })
       ]);
 
       const resUsers = usersSettled.status === "fulfilled" ? usersSettled.value : null;
       const resArts = artsSettled.status === "fulfilled" ? artsSettled.value : null;
+      const resTrending = trendingSettled.status === "fulfilled" ? trendingSettled.value : null;
       const resSubs = subsSettled.status === "fulfilled" ? subsSettled.value : null;
       const resContact = contactSettled.status === "fulfilled" ? contactSettled.value : null;
       const resLeads = leadsSettled.status === "fulfilled" ? leadsSettled.value : null;
       const resBk = backupsSettled.status === "fulfilled" ? backupsSettled.value : null;
 
-    // 1. Synchronize Real Database Users
-    try {
-      let dbUsersList: any[] = [];
-      if (resUsers && resUsers.ok) {
-        const data = await safeJson(resUsers);
-        if (data && data.success && Array.isArray(data.users)) {
-          dbUsersList = data.users;
+      // Sync Trending Topics from API
+      try {
+        if (resTrending && resTrending.ok) {
+          const tData = await safeJson(resTrending);
+          if (tData && tData.success && Array.isArray(tData.topics) && tData.topics.length > 0) {
+            const clean = tData.topics.filter((t: any) => typeof t === "string" && t.trim() !== "").slice(0, 6);
+            if (clean.length > 0) {
+              const slots: string[] = [];
+              for (let i = 0; i < 6; i++) {
+                slots.push(clean[i] || "");
+              }
+              setArticleTrendingTopics(slots);
+            }
+          }
         }
-      }
+      } catch (e) { }
 
-      // Collect all real users
-      const localUsersMap = new Map<string, WorkspaceUser>();
+      // 1. Synchronize Real Database Users
+      try {
+        let dbUsersList: any[] = [];
+        if (resUsers && resUsers.ok) {
+          const data = await safeJson(resUsers);
+          if (data && data.success && Array.isArray(data.users)) {
+            dbUsersList = data.users;
+          }
+        }
 
-      const allowedDefaultAdmins = [
-        "geethliyanage979@gmail.com",
-        "londonbigben.offical@gmail.com",
-        "akramyoonos006@gmail.com"
-      ];
+        // Collect all real users
+        const localUsersMap = new Map<string, WorkspaceUser>();
 
-      // A. Add from Database API
-      dbUsersList.forEach((u: any, idx: number) => {
-        if (!u || !u.email) return;
-        const cleanEmail = u.email.toLowerCase().trim();
-        if (cleanEmail === "admin@digitaljournal.com" || cleanEmail.startsWith("hacker_") || cleanEmail.startsWith("test_") || u.name === "Sneaky Hacker") return;
+        const allowedDefaultAdmins = [
+          "geethliyanage979@gmail.com",
+          "londonbigben.offical@gmail.com",
+          "akramyoonos006@gmail.com"
+        ];
 
-        localUsersMap.set(cleanEmail, {
-          id: u.id || `u-${idx}-${u.email}`,
-          name: u.name || u.email.split('@')[0],
-          email: u.email,
-          role: (u.role || "reader").toUpperCase() as "ADMIN" | "WRITER" | "READER",
-          isDefaultAdmin: Boolean(allowedDefaultAdmins.includes(cleanEmail) || u.is_default_admin === 1 || u.is_default_admin === true),
-          joinedDate: u.created_at ? new Date(u.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Aug 2026",
-          status: "Active"
+        // A. Add from Database API
+        dbUsersList.forEach((u: any, idx: number) => {
+          if (!u || !u.email) return;
+          const cleanEmail = u.email.toLowerCase().trim();
+          if (cleanEmail === "admin@digitaljournal.com" || cleanEmail.startsWith("hacker_") || cleanEmail.startsWith("test_") || u.name === "Sneaky Hacker") return;
+
+          localUsersMap.set(cleanEmail, {
+            id: u.id || `u-${idx}-${u.email}`,
+            name: u.name || u.email.split('@')[0],
+            email: u.email,
+            role: (u.role || "reader").toUpperCase() as "ADMIN" | "WRITER" | "READER",
+            isDefaultAdmin: Boolean(allowedDefaultAdmins.includes(cleanEmail) || u.is_default_admin === 1 || u.is_default_admin === true),
+            joinedDate: u.created_at ? new Date(u.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Aug 2026",
+            status: "Active"
+          });
         });
-      });
 
-      // B. Add from localStorage registered users
-      if (typeof window !== "undefined") {
-        try {
-          const regStr = localStorage.getItem("dj_registered_users");
-          if (regStr && regStr.trim()) {
-            const regList: any[] = JSON.parse(regStr);
-            regList.forEach((u: any, idx: number) => {
-              if (!u || !u.email) return;
-              const cleanEmail = u.email.toLowerCase().trim();
-              if (cleanEmail === "admin@digitaljournal.com" || cleanEmail.startsWith("hacker_") || cleanEmail.startsWith("test_") || u.name === "Sneaky Hacker") return;
-
-              const existing = localUsersMap.get(cleanEmail);
-              localUsersMap.set(cleanEmail, {
-                id: existing?.id || u.id || `reg-${idx}-${cleanEmail}`,
-                name: existing?.name || u.name || cleanEmail.split('@')[0],
-                email: existing?.email || u.email,
-                role: ((existing?.role as string) || u.role || "READER").toUpperCase() as "ADMIN" | "WRITER" | "READER",
-                isDefaultAdmin: Boolean(allowedDefaultAdmins.includes(cleanEmail) || u.is_default_admin === 1 || existing?.is_default_admin === 1 || existing?.isDefaultAdmin),
-                joinedDate: u.joinedDate || u.created_at || existing?.joinedDate || "Aug 2026",
-                status: "Active"
-              });
-            });
-          }
-        } catch (e) {}
-
-        // C. Add from central profiles DB
-        try {
-          const profDbStr = localStorage.getItem("dj_user_profiles_db");
-          if (profDbStr && profDbStr.trim()) {
-            const profDb: Record<string, any> = JSON.parse(profDbStr);
-            Object.values(profDb).forEach((u: any, idx: number) => {
-              if (!u || !u.email) return;
-              const cleanEmail = u.email.toLowerCase().trim();
-              if (cleanEmail === "admin@digitaljournal.com" || cleanEmail.startsWith("hacker_") || cleanEmail.startsWith("test_") || u.name === "Sneaky Hacker") return;
-
-              const existing = localUsersMap.get(cleanEmail);
-              localUsersMap.set(cleanEmail, {
-                id: existing?.id || u.id || `prof-${idx}-${cleanEmail}`,
-                name: existing?.name || u.name || cleanEmail.split('@')[0],
-                email: existing?.email || u.email,
-                role: ((existing?.role as string) || u.role || "READER").toUpperCase() as "ADMIN" | "WRITER" | "READER",
-                isDefaultAdmin: Boolean(allowedDefaultAdmins.includes(cleanEmail) || u.is_default_admin === 1 || existing?.is_default_admin === 1 || existing?.isDefaultAdmin),
-                joinedDate: u.joinedDate || existing?.joinedDate || "Aug 2026",
-                status: "Active"
-              });
-            });
-          }
-        } catch (e) {}
-
-        // D. Add active writer / reader sessions
-        ["dj_user", "dj_writer_user"].forEach((k) => {
+        // B. Add from localStorage registered users
+        if (typeof window !== "undefined") {
           try {
-            const str = localStorage.getItem(k);
-            if (str && str.trim()) {
-              const u = JSON.parse(str);
-              if (u && u.email) {
+            const regStr = localStorage.getItem("dj_registered_users");
+            if (regStr && regStr.trim()) {
+              const regList: any[] = JSON.parse(regStr);
+              regList.forEach((u: any, idx: number) => {
+                if (!u || !u.email) return;
                 const cleanEmail = u.email.toLowerCase().trim();
                 if (cleanEmail === "admin@digitaljournal.com" || cleanEmail.startsWith("hacker_") || cleanEmail.startsWith("test_") || u.name === "Sneaky Hacker") return;
+
                 const existing = localUsersMap.get(cleanEmail);
                 localUsersMap.set(cleanEmail, {
-                  id: existing?.id || u.id || Date.now(),
+                  id: existing?.id || u.id || `reg-${idx}-${cleanEmail}`,
                   name: existing?.name || u.name || cleanEmail.split('@')[0],
                   email: existing?.email || u.email,
-                  role: ((existing?.role as string) || u.role || (k === "dj_writer_user" ? "WRITER" : "READER")).toUpperCase() as "ADMIN" | "WRITER" | "READER",
-                  isDefaultAdmin: Boolean(allowedDefaultAdmins.includes(cleanEmail) || existing?.isDefaultAdmin || existing?.is_default_admin === 1),
-                  joinedDate: existing?.joinedDate || "Aug 2026",
+                  role: ((existing?.role as string) || u.role || "READER").toUpperCase() as "ADMIN" | "WRITER" | "READER",
+                  isDefaultAdmin: Boolean(allowedDefaultAdmins.includes(cleanEmail) || u.is_default_admin === 1 || existing?.is_default_admin === 1 || existing?.isDefaultAdmin),
+                  joinedDate: u.joinedDate || u.created_at || existing?.joinedDate || "Aug 2026",
                   status: "Active"
                 });
-              }
+              });
             }
-          } catch (e) {}
-        });
-      }
+          } catch (e) { }
 
-      const allMergedUsers = Array.from(localUsersMap.values());
-      if (allMergedUsers.length > 0) {
-        setWorkspaceUsers(allMergedUsers);
-        setStats((prev) => ({ ...prev, totalUsers: allMergedUsers.length }));
-      }
-    } catch (err) {
-      console.warn("Real user DB sync notice:", err);
-    }
-
-    // 2. Synchronize Live Articles from Backend (Strictly Published Articles Only)
-    let serverArticles: any[] = [];
-    try {
-      try {
-        if (resArts && resArts.ok) {
-          const dataArts = await safeJson(resArts);
-          if (dataArts && dataArts.success && Array.isArray(dataArts.articles) && dataArts.articles.length > 0) {
-            serverArticles = dataArts.articles;
-          }
-        }
-      } catch (e) {
-        console.warn("Direct fetch /api/articles notice:", e);
-      }
-      if (serverArticles.length === 0) {
-        serverArticles = await fetchArticlesFromServer();
-      }
-
-      if (Array.isArray(serverArticles) && serverArticles.length > 0) {
-        const mappedArticles: Article[] = serverArticles.map((a: any, idx: number) => ({
-          id: a.id || `art-${idx}-${a.slug || idx}`,
-          title: a.title,
-          slug: a.slug || a.title.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-'),
-          description: a.description || a.summary || "",
-          content: a.content || a.description || a.summary || "",
-          category_name: (a.category_name || a.category || "TECHNOLOGY").toUpperCase(),
-          author_name: a.author_name || a.author || a.authorName || "Staff Journalist",
-          readTime: a.readDuration || a.readTime || "5 min read",
-          imageUrl: a.image_url || a.imageUrl || "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=500&h=300&fit=crop",
-          views: Number(a.views ?? a.reads ?? a.reads_count ?? 0),
-          comments: a.comments || 18,
-          is_featured: !!a.is_featured,
-          is_editors_pick: !!a.is_editors_pick,
-          placement: a.placement || (a.is_featured ? "Home Page A+ Section" : a.is_editors_pick ? "Editor's Picks" : "Standard Post"),
-          subcategories: a.subcategories || a.subCategories || [],
-          tags: a.tags || [],
-          seo: a.seo || null,
-          published_at: a.published_at || a.date || new Date().toISOString(),
-          status: a.status || "Published"
-        }));
-
-        const uniqueArticles = mappedArticles.filter((a, i, self) => i === self.findIndex(t => String(t.id) === String(a.id) || t.title === a.title));
-        
-        // Filter out pending review or draft posts from Published Posts
-        const publishedOnly = uniqueArticles.filter(a => {
-          const st = (a.status || "published").toLowerCase();
-          return st === "published" || st === "approved";
-        });
-
-        setArticles(publishedOnly);
-        setStats(prev => ({ ...prev, totalArticles: publishedOnly.length }));
-
-        // 3. Synchronize All Writer Submissions (Pending review, Drafts, Rejected)
-        const cleanKey = (val: any) => String(val || "").trim().toLowerCase();
-        const cleanTitleKey = (val: any) =>
-          String(val || "")
-            .toLowerCase()
-            .replace(/[\u2018\u2019\u201A\u201B']/g, "'")
-            .replace(/[\u201C\u201D\u201E\u201F"]/g, '"')
-            .replace(/[\u2013\u2014]/g, "-")
-            .replace(/[^\w\s-]/g, "")
-            .replace(/\s+/g, " ")
-            .trim();
-
-        // A. Server non-published submissions
-        const serverSubmissions = serverArticles
-          .filter((a: any) => {
-            const st = (a.status || "").toLowerCase().trim();
-            return st !== "published" && st !== "approved" && st !== "trash";
-          })
-          .map((a: any) => {
-            const rawAuthorName = a.authorName || a.author_name || a.author || "Writer";
-            const resolvedAuthorEmail = a.authorEmail || a.author_email || (
-              rawAuthorName.toLowerCase().includes("muba") ? "rura@gmail.com" :
-              rawAuthorName.toLowerCase().includes("roomi") ? "roomiwriter@gmail.com" :
-              rawAuthorName.toLowerCase().includes("rushdhi") ? "rushdhiriyaj2005@gmail.com" :
-              "writer@digitaljournal.com"
-            );
-
-            return {
-              id: String(a.id),
-              title: a.title,
-              category: a.category || a.category_name || "Business",
-              summary: a.summary || a.description || a.title,
-              content: a.content || "",
-              imageUrl: a.imageUrl || a.image_url || a.image || "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=150&h=150&fit=crop",
-              date: a.date || a.published_at || "Today",
-              readTime: a.readDuration || a.readTime || "5 min read",
-              readDuration: a.readDuration || a.readTime || "5 min read",
-              authorName: rawAuthorName,
-              authorEmail: resolvedAuthorEmail,
-              authorAvatar: a.authorAvatar || a.author_avatar || "/author_bluesuit.jpg",
-              reads: Number(a.reads || a.views || 0),
-              status: a.status || "Pending review",
-              subcategories: a.subcategories || a.subCategories || [],
-              tags: a.tags || [],
-              placement: a.placement || "Standard Post",
-              seo: a.seo || null,
-              rejectionReason: a.rejectionReason
-            };
-          });
-
-        // B. Local writer submitted articles (top priority)
-        const subsStr = localStorage.getItem("dj_writer_submitted_articles");
-        let localSubsList: any[] = [];
-        if (subsStr) {
+          // C. Add from central profiles DB
           try {
-            const parsed = JSON.parse(subsStr);
-            if (Array.isArray(parsed)) {
-              localSubsList = parsed
-                .filter((p: any) => {
-                  const st = (p.status || "").toLowerCase().trim();
-                  return st !== "published" && st !== "approved" && st !== "trash";
-                })
-                .map((p: any) => {
-                  const rawAuthorName = p.authorName || p.author_name || p.author || "Writer";
-                  const resolvedAuthorEmail = p.authorEmail || p.author_email || (
-                    rawAuthorName.toLowerCase().includes("muba") ? "rura@gmail.com" :
-                    rawAuthorName.toLowerCase().includes("roomi") ? "roomiwriter@gmail.com" :
-                    rawAuthorName.toLowerCase().includes("rushdhi") ? "rushdhiriyaj2005@gmail.com" :
-                    "writer@digitaljournal.com"
-                  );
+            const profDbStr = localStorage.getItem("dj_user_profiles_db");
+            if (profDbStr && profDbStr.trim()) {
+              const profDb: Record<string, any> = JSON.parse(profDbStr);
+              Object.values(profDb).forEach((u: any, idx: number) => {
+                if (!u || !u.email) return;
+                const cleanEmail = u.email.toLowerCase().trim();
+                if (cleanEmail === "admin@digitaljournal.com" || cleanEmail.startsWith("hacker_") || cleanEmail.startsWith("test_") || u.name === "Sneaky Hacker") return;
 
-                  return {
-                    ...p,
-                    id: String(p.id),
-                    category: p.category || p.category_name || "Business",
-                    subcategories: p.subcategories || p.subCategories || [],
-                    tags: p.tags || [],
-                    placement: p.placement || "Standard Post",
-                    status: p.status || "Pending review",
-                    authorName: rawAuthorName,
-                    authorEmail: resolvedAuthorEmail
-                  };
+                const existing = localUsersMap.get(cleanEmail);
+                localUsersMap.set(cleanEmail, {
+                  id: existing?.id || u.id || `prof-${idx}-${cleanEmail}`,
+                  name: existing?.name || u.name || cleanEmail.split('@')[0],
+                  email: existing?.email || u.email,
+                  role: ((existing?.role as string) || u.role || "READER").toUpperCase() as "ADMIN" | "WRITER" | "READER",
+                  isDefaultAdmin: Boolean(allowedDefaultAdmins.includes(cleanEmail) || u.is_default_admin === 1 || existing?.is_default_admin === 1 || existing?.isDefaultAdmin),
+                  joinedDate: u.joinedDate || existing?.joinedDate || "Aug 2026",
+                  status: "Active"
                 });
+              });
             }
-          } catch (e) {}
+          } catch (e) { }
+
+          // D. Add active writer / reader sessions
+          ["dj_user", "dj_writer_user"].forEach((k) => {
+            try {
+              const str = localStorage.getItem(k);
+              if (str && str.trim()) {
+                const u = JSON.parse(str);
+                if (u && u.email) {
+                  const cleanEmail = u.email.toLowerCase().trim();
+                  if (cleanEmail === "admin@digitaljournal.com" || cleanEmail.startsWith("hacker_") || cleanEmail.startsWith("test_") || u.name === "Sneaky Hacker") return;
+                  const existing = localUsersMap.get(cleanEmail);
+                  localUsersMap.set(cleanEmail, {
+                    id: existing?.id || u.id || Date.now(),
+                    name: existing?.name || u.name || cleanEmail.split('@')[0],
+                    email: existing?.email || u.email,
+                    role: ((existing?.role as string) || u.role || (k === "dj_writer_user" ? "WRITER" : "READER")).toUpperCase() as "ADMIN" | "WRITER" | "READER",
+                    isDefaultAdmin: Boolean(allowedDefaultAdmins.includes(cleanEmail) || existing?.isDefaultAdmin || existing?.is_default_admin === 1),
+                    joinedDate: existing?.joinedDate || "Aug 2026",
+                    status: "Active"
+                  });
+                }
+              }
+            } catch (e) { }
+          });
         }
 
-        // C. Merge serverSubmissions and localSubsList
-        const subMap = new Map<string, any>();
-        serverSubmissions.forEach((item) => {
-          const idKey = cleanKey(item.id);
-          const titleKey = cleanTitleKey(item.title);
-          if (idKey) subMap.set(idKey, item);
-          if (titleKey) subMap.set(`t_${titleKey}`, item);
-        });
-
-        localSubsList.forEach((item) => {
-          const idKey = cleanKey(item.id);
-          const titleKey = cleanTitleKey(item.title);
-          const existing = (idKey && subMap.get(idKey)) || (titleKey && subMap.get(`t_${titleKey}`)) || {};
-          const targetStatus = item.status || existing.status || "Pending review";
-          const isTargetRejected = targetStatus.toLowerCase().includes("reject");
-          const merged = { 
-            ...existing, 
-            ...item,
-            status: targetStatus,
-            rejectionReason: isTargetRejected ? (item.rejectionReason || existing.rejectionReason || item.rejection_reason || existing.rejection_reason) : undefined,
-            rejectedAt: isTargetRejected ? (item.rejectedAt || existing.rejectedAt || item.rejected_at || existing.rejected_at) : undefined,
-          };
-          if (idKey) subMap.set(idKey, merged);
-          if (titleKey) subMap.set(`t_${titleKey}`, merged);
-        });
-
-        const rawSubsList: any[] = [];
-        const seenSubs = new Set<string>();
-
-        localSubsList.forEach((item) => {
-          const idKey = cleanKey(item.id);
-          const titleKey = cleanTitleKey(item.title);
-          const resolved = (idKey && subMap.get(idKey)) || (titleKey && subMap.get(`t_${titleKey}`)) || item;
-          const isSeen = (idKey && seenSubs.has(idKey)) || (titleKey && seenSubs.has(`t_${titleKey}`));
-          if (!isSeen) {
-            if (idKey) seenSubs.add(idKey);
-            if (titleKey) seenSubs.add(`t_${titleKey}`);
-            rawSubsList.push(resolved);
-          }
-        });
-
-        serverSubmissions.forEach((item) => {
-          const idKey = cleanKey(item.id);
-          const titleKey = cleanTitleKey(item.title);
-          const isSeen = (idKey && seenSubs.has(idKey)) || (titleKey && seenSubs.has(`t_${titleKey}`));
-          if (!isSeen) {
-            if (idKey) seenSubs.add(idKey);
-            if (titleKey) seenSubs.add(`t_${titleKey}`);
-            const resolved = (idKey && subMap.get(idKey)) || (titleKey && subMap.get(`t_${titleKey}`)) || item;
-            rawSubsList.push(resolved);
-          }
-        });
-
-        const unifiedMap = new Map<string, any>();
-        rawSubsList.forEach((sub) => {
-          const tk = cleanTitleKey(sub.title);
-          const ik = cleanKey(sub.id);
-          const existing = (tk && unifiedMap.get(`t_${tk}`)) || (ik && unifiedMap.get(ik));
-          if (!existing) {
-            if (tk) unifiedMap.set(`t_${tk}`, sub);
-            if (ik) unifiedMap.set(ik, sub);
-          } else {
-            const isRej = (existing.status || "").toLowerCase().includes("reject") || (sub.status || "").toLowerCase().includes("reject");
-            const merged = {
-              ...existing,
-              ...sub,
-              status: isRej ? "Rejected" : (sub.status || existing.status),
-              rejectionReason: sub.rejectionReason || existing.rejectionReason || sub.rejection_reason || existing.rejection_reason,
-              rejectedAt: sub.rejectedAt || existing.rejectedAt || sub.rejected_at || existing.rejected_at,
-            };
-            if (tk) unifiedMap.set(`t_${tk}`, merged);
-            if (ik) unifiedMap.set(ik, merged);
-          }
-        });
-
-        const mergedSubsList: any[] = [];
-        const seenFinal = new Set<string>();
-        rawSubsList.forEach((sub) => {
-          const tk = cleanTitleKey(sub.title);
-          const ik = cleanKey(sub.id);
-          const key = tk ? `t_${tk}` : ik;
-          if (key && !seenFinal.has(key)) {
-            seenFinal.add(key);
-            if (tk) seenFinal.add(`t_${tk}`);
-            if (ik) seenFinal.add(ik);
-            const resolved = (tk && unifiedMap.get(`t_${tk}`)) || (ik && unifiedMap.get(ik)) || sub;
-            mergedSubsList.push(resolved);
-          }
-        });
-
-        setWriterSubmissions(mergedSubsList);
+        const allMergedUsers = Array.from(localUsersMap.values());
+        if (allMergedUsers.length > 0) {
+          setWorkspaceUsers(allMergedUsers);
+          setStats((prev) => ({ ...prev, totalUsers: allMergedUsers.length }));
+        }
+      } catch (err) {
+        console.warn("Real user DB sync notice:", err);
       }
-    } catch (err) {
-      console.warn("Live articles sync notice:", err);
-    }
 
-    // 4. Newsletter Subscribers Sync from Database and Local Cache
-    try {
-      if (resSubs && resSubs.ok) {
-        const subsData = await safeJson(resSubs);
-        if (subsData && subsData.success && Array.isArray(subsData.subscribers)) {
-          const localStr = typeof window !== "undefined" ? localStorage.getItem("dj_newsletter_subscribers") : null;
-          let localSubs: any[] = [];
-          if (localStr) {
-            try { localSubs = JSON.parse(localStr); } catch (e) {}
+      // 2. Synchronize Live Articles from Backend (Strictly Published Articles Only)
+      let serverArticles: any[] = [];
+      try {
+        try {
+          if (resArts && resArts.ok) {
+            const dataArts = await safeJson(resArts);
+            if (dataArts && dataArts.success && Array.isArray(dataArts.articles) && dataArts.articles.length > 0) {
+              serverArticles = dataArts.articles;
+            }
           }
-          if (!Array.isArray(localSubs)) localSubs = [];
+        } catch (e) {
+          console.warn("Direct fetch /api/articles notice:", e);
+        }
+        if (serverArticles.length === 0) {
+          serverArticles = await fetchArticlesFromServer();
+        }
 
-          const fakeEmails = ["reader@digitaljournal.com", "sarah.j@example.com", "mchang@globalfirm.org", "rtaylor@apex.io", "athorne@mit.edu"];
-          localSubs = localSubs.filter((s: any) => s && s.email && !fakeEmails.includes(s.email.toLowerCase().trim()));
-
-          const mergedMap = new Map<string, any>();
-          subsData.subscribers.forEach((s: any) => {
-            if (s && s.email && !fakeEmails.includes(s.email.toLowerCase().trim())) mergedMap.set(s.email.toLowerCase().trim(), s);
-          });
-          localSubs.forEach((s: any) => {
-            if (s && s.email && !fakeEmails.includes(s.email.toLowerCase().trim())) mergedMap.set(s.email.toLowerCase().trim(), s);
-          });
-
-          const finalSubs = Array.from(mergedMap.values()).map((s, idx) => ({
-            id: s.id || 1000 + idx,
-            email: s.email,
-            topics: Array.isArray(s.topics) && s.topics.length > 0 ? s.topics : ["ALL NEWS"],
-            date: s.date || "Aug 2026",
-            status: s.status || "Active"
+        if (Array.isArray(serverArticles) && serverArticles.length > 0) {
+          const mappedArticles: Article[] = serverArticles.map((a: any, idx: number) => ({
+            id: a.id || `art-${idx}-${a.slug || idx}`,
+            title: a.title,
+            slug: a.slug || a.title.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-'),
+            description: a.description || a.summary || "",
+            content: a.content || a.description || a.summary || "",
+            category_name: (a.category_name || a.category || "TECHNOLOGY").toUpperCase(),
+            author_name: a.author_name || a.author || a.authorName || "Staff Journalist",
+            readTime: a.readDuration || a.readTime || "5 min read",
+            imageUrl: a.image_url || a.imageUrl || "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=500&h=300&fit=crop",
+            views: Number(a.views ?? a.reads ?? a.reads_count ?? 0),
+            comments: a.comments || 18,
+            is_featured: !!a.is_featured,
+            is_editors_pick: !!a.is_editors_pick,
+            placement: a.placement || (a.is_featured ? "Home Page A+ Section" : a.is_editors_pick ? "Editor's Picks" : "Standard Post"),
+            subcategories: a.subcategories || a.subCategories || [],
+            tags: a.tags || [],
+            seo: a.seo || null,
+            published_at: a.published_at || a.date || new Date().toISOString(),
+            status: a.status || "Published"
           }));
 
-          setNewsletterSubscribers(finalSubs);
-          setStats(prev => ({ ...prev, totalSubscribers: finalSubs.length }));
-        }
-      }
-    } catch (err) {
-      console.warn("Newsletter subscribers sync notice:", err);
-    }
+          const uniqueArticles = mappedArticles.filter((a, i, self) => i === self.findIndex(t => String(t.id) === String(a.id) || t.title === a.title));
 
-    // 5. Trashed Articles Sync from Server Database and Local Cache
-    try {
-      const serverTrashed = (serverArticles || []).filter((a: any) => (a.status || "").toLowerCase().trim() === "trash");
-      const trashedStr = typeof window !== "undefined" ? localStorage.getItem("dj_trashed_articles") : null;
-      const localTrash: any[] = (trashedStr && trashedStr.trim()) ? JSON.parse(trashedStr) : [];
-      const trashMap = new Map<string, any>();
-      serverTrashed.forEach((a: any) => trashMap.set(String(a.id), a));
-      localTrash.forEach((a: any) => {
-        if (!trashMap.has(String(a.id))) trashMap.set(String(a.id), a);
-      });
-      const combinedTrash = Array.from(trashMap.values());
-      setTrashedArticles(combinedTrash);
-      if (typeof window !== "undefined") {
-        localStorage.setItem("dj_trashed_articles", JSON.stringify(combinedTrash));
-      }
-    } catch (err) {}
-
-    // 6. Contact Us Submissions Sync from Database and Local Storage
-    try {
-      if (resContact && resContact.ok) {
-        const contactData = await safeJson(resContact);
-        if (contactData && contactData.success && Array.isArray(contactData.contactSubmissions)) {
-          const localStr = typeof window !== "undefined" ? localStorage.getItem("dj_contact_submissions") : null;
-          let localContacts: any[] = [];
-          if (localStr && localStr.trim()) {
-            try { localContacts = JSON.parse(localStr); } catch (e) {}
-          }
-          if (!Array.isArray(localContacts)) localContacts = [];
-
-          const contactMap = new Map<string, any>();
-          contactData.contactSubmissions.forEach((c: any) => {
-            if (c && c.id) contactMap.set(String(c.id), c);
-          });
-          localContacts.forEach((c: any) => {
-            if (c && c.id) contactMap.set(String(c.id), c);
+          // Filter out pending review or draft posts from Published Posts
+          const publishedOnly = uniqueArticles.filter(a => {
+            const st = (a.status || "published").toLowerCase();
+            return st === "published" || st === "approved";
           });
 
-          const finalContacts = Array.from(contactMap.values());
-          if (finalContacts.length > 0) {
-            setContactSubmissions(finalContacts);
-          }
-        }
-      }
-    } catch (err) {
-      console.warn("Contact submissions sync notice:", err);
-    }
+          setArticles(publishedOnly);
+          setStats(prev => ({ ...prev, totalArticles: publishedOnly.length }));
 
-    // 6b. Commercial Advertise Leads Sync from Database and Local Storage
-    try {
-      if (resLeads && resLeads.ok) {
-        const leadsData = await safeJson(resLeads);
-        if (leadsData && leadsData.success && Array.isArray(leadsData.leads)) {
-          const localStr = typeof window !== "undefined" ? localStorage.getItem("dj_advertise_leads") : null;
-          let localLeads: any[] = [];
-          if (localStr && localStr.trim()) {
-            try { localLeads = JSON.parse(localStr); } catch (e) {}
-          }
-          if (!Array.isArray(localLeads)) localLeads = [];
+          // 3. Synchronize All Writer Submissions (Pending review, Drafts, Rejected)
+          const cleanKey = (val: any) => String(val || "").trim().toLowerCase();
+          const cleanTitleKey = (val: any) =>
+            String(val || "")
+              .toLowerCase()
+              .replace(/[\u2018\u2019\u201A\u201B']/g, "'")
+              .replace(/[\u201C\u201D\u201E\u201F"]/g, '"')
+              .replace(/[\u2013\u2014]/g, "-")
+              .replace(/[^\w\s-]/g, "")
+              .replace(/\s+/g, " ")
+              .trim();
 
-          const leadMap = new Map<string, any>();
-          leadsData.leads.forEach((l: any) => {
-            if (l && l.id) leadMap.set(String(l.id), l);
-          });
-          localLeads.forEach((l: any) => {
-            if (l && l.id) leadMap.set(String(l.id), l);
-          });
+          // A. Server non-published submissions
+          const serverSubmissions = serverArticles
+            .filter((a: any) => {
+              const st = (a.status || "").toLowerCase().trim();
+              return st !== "published" && st !== "approved" && st !== "trash";
+            })
+            .map((a: any) => {
+              const rawAuthorName = a.authorName || a.author_name || a.author || "Writer";
+              const resolvedAuthorEmail = a.authorEmail || a.author_email || (
+                rawAuthorName.toLowerCase().includes("muba") ? "rura@gmail.com" :
+                  rawAuthorName.toLowerCase().includes("roomi") ? "roomiwriter@gmail.com" :
+                    rawAuthorName.toLowerCase().includes("rushdhi") ? "rushdhiriyaj2005@gmail.com" :
+                      "writer@digitaljournal.com"
+              );
 
-          const finalLeads = Array.from(leadMap.values());
-          if (finalLeads.length > 0) {
-            setAdvertiseLeads(finalLeads);
-          }
-        }
-      }
-    } catch (err) {
-      console.warn("Advertise leads sync notice:", err);
-    }
+              return {
+                id: String(a.id),
+                title: a.title,
+                category: a.category || a.category_name || "Business",
+                summary: a.summary || a.description || a.title,
+                content: a.content || "",
+                imageUrl: a.imageUrl || a.image_url || a.image || "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=150&h=150&fit=crop",
+                date: a.date || a.published_at || "Today",
+                readTime: a.readDuration || a.readTime || "5 min read",
+                readDuration: a.readDuration || a.readTime || "5 min read",
+                authorName: rawAuthorName,
+                authorEmail: resolvedAuthorEmail,
+                authorAvatar: a.authorAvatar || a.author_avatar || "/author_bluesuit.jpg",
+                reads: Number(a.reads || a.views || 0),
+                status: a.status || "Pending review",
+                subcategories: a.subcategories || a.subCategories || [],
+                tags: a.tags || [],
+                placement: a.placement || "Standard Post",
+                seo: a.seo || null,
+                rejectionReason: a.rejectionReason
+              };
+            });
 
-    // 7. Database Backups Sync from Backblaze B2 & Local Storage
-    try {
-      if (resBk && resBk.ok) {
-        const bkData = await safeJson(resBk);
-        if (bkData && bkData.success && Array.isArray(bkData.backups) && bkData.backups.length > 0) {
-          const localStr = typeof window !== "undefined" ? localStorage.getItem("dj_database_backups") : null;
-          let localBk: any[] = [];
-          if (localStr && localStr.trim()) {
-            try { localBk = JSON.parse(localStr); } catch (e) {}
-          }
-          if (!Array.isArray(localBk)) localBk = [];
-
-          const bkMap = new Map<string, any>();
-          bkData.backups.forEach((b: any) => {
-            if (b && b.filename) bkMap.set(b.filename, b);
-          });
-          localBk.forEach((b: any) => {
-            if (b && b.filename && !bkMap.has(b.filename)) bkMap.set(b.filename, b);
-          });
-
-          const mergedBackups = Array.from(bkMap.values());
-          if (mergedBackups.length > 0) {
-            setBackupFiles(mergedBackups);
+          // B. Local writer submitted articles (top priority)
+          const subsStr = localStorage.getItem("dj_writer_submitted_articles");
+          let localSubsList: any[] = [];
+          if (subsStr) {
             try {
-              localStorage.setItem("dj_database_backups", JSON.stringify(mergedBackups));
-            } catch (e) {}
+              const parsed = JSON.parse(subsStr);
+              if (Array.isArray(parsed)) {
+                localSubsList = parsed
+                  .filter((p: any) => {
+                    const st = (p.status || "").toLowerCase().trim();
+                    return st !== "published" && st !== "approved" && st !== "trash";
+                  })
+                  .map((p: any) => {
+                    const rawAuthorName = p.authorName || p.author_name || p.author || "Writer";
+                    const resolvedAuthorEmail = p.authorEmail || p.author_email || (
+                      rawAuthorName.toLowerCase().includes("muba") ? "rura@gmail.com" :
+                        rawAuthorName.toLowerCase().includes("roomi") ? "roomiwriter@gmail.com" :
+                          rawAuthorName.toLowerCase().includes("rushdhi") ? "rushdhiriyaj2005@gmail.com" :
+                            "writer@digitaljournal.com"
+                    );
+
+                    return {
+                      ...p,
+                      id: String(p.id),
+                      category: p.category || p.category_name || "Business",
+                      subcategories: p.subcategories || p.subCategories || [],
+                      tags: p.tags || [],
+                      placement: p.placement || "Standard Post",
+                      status: p.status || "Pending review",
+                      authorName: rawAuthorName,
+                      authorEmail: resolvedAuthorEmail
+                    };
+                  });
+              }
+            } catch (e) { }
+          }
+
+          // C. Merge serverSubmissions and localSubsList
+          const subMap = new Map<string, any>();
+          serverSubmissions.forEach((item) => {
+            const idKey = cleanKey(item.id);
+            const titleKey = cleanTitleKey(item.title);
+            if (idKey) subMap.set(idKey, item);
+            if (titleKey) subMap.set(`t_${titleKey}`, item);
+          });
+
+          localSubsList.forEach((item) => {
+            const idKey = cleanKey(item.id);
+            const titleKey = cleanTitleKey(item.title);
+            const existing = (idKey && subMap.get(idKey)) || (titleKey && subMap.get(`t_${titleKey}`)) || {};
+            const targetStatus = item.status || existing.status || "Pending review";
+            const isTargetRejected = targetStatus.toLowerCase().includes("reject");
+            const merged = {
+              ...existing,
+              ...item,
+              status: targetStatus,
+              rejectionReason: isTargetRejected ? (item.rejectionReason || existing.rejectionReason || item.rejection_reason || existing.rejection_reason) : undefined,
+              rejectedAt: isTargetRejected ? (item.rejectedAt || existing.rejectedAt || item.rejected_at || existing.rejected_at) : undefined,
+            };
+            if (idKey) subMap.set(idKey, merged);
+            if (titleKey) subMap.set(`t_${titleKey}`, merged);
+          });
+
+          const rawSubsList: any[] = [];
+          const seenSubs = new Set<string>();
+
+          localSubsList.forEach((item) => {
+            const idKey = cleanKey(item.id);
+            const titleKey = cleanTitleKey(item.title);
+            const resolved = (idKey && subMap.get(idKey)) || (titleKey && subMap.get(`t_${titleKey}`)) || item;
+            const isSeen = (idKey && seenSubs.has(idKey)) || (titleKey && seenSubs.has(`t_${titleKey}`));
+            if (!isSeen) {
+              if (idKey) seenSubs.add(idKey);
+              if (titleKey) seenSubs.add(`t_${titleKey}`);
+              rawSubsList.push(resolved);
+            }
+          });
+
+          serverSubmissions.forEach((item) => {
+            const idKey = cleanKey(item.id);
+            const titleKey = cleanTitleKey(item.title);
+            const isSeen = (idKey && seenSubs.has(idKey)) || (titleKey && seenSubs.has(`t_${titleKey}`));
+            if (!isSeen) {
+              if (idKey) seenSubs.add(idKey);
+              if (titleKey) seenSubs.add(`t_${titleKey}`);
+              const resolved = (idKey && subMap.get(idKey)) || (titleKey && subMap.get(`t_${titleKey}`)) || item;
+              rawSubsList.push(resolved);
+            }
+          });
+
+          const unifiedMap = new Map<string, any>();
+          rawSubsList.forEach((sub) => {
+            const tk = cleanTitleKey(sub.title);
+            const ik = cleanKey(sub.id);
+            const existing = (tk && unifiedMap.get(`t_${tk}`)) || (ik && unifiedMap.get(ik));
+            if (!existing) {
+              if (tk) unifiedMap.set(`t_${tk}`, sub);
+              if (ik) unifiedMap.set(ik, sub);
+            } else {
+              const isRej = (existing.status || "").toLowerCase().includes("reject") || (sub.status || "").toLowerCase().includes("reject");
+              const merged = {
+                ...existing,
+                ...sub,
+                status: isRej ? "Rejected" : (sub.status || existing.status),
+                rejectionReason: sub.rejectionReason || existing.rejectionReason || sub.rejection_reason || existing.rejection_reason,
+                rejectedAt: sub.rejectedAt || existing.rejectedAt || sub.rejected_at || existing.rejected_at,
+              };
+              if (tk) unifiedMap.set(`t_${tk}`, merged);
+              if (ik) unifiedMap.set(ik, merged);
+            }
+          });
+
+          const mergedSubsList: any[] = [];
+          const seenFinal = new Set<string>();
+          rawSubsList.forEach((sub) => {
+            const tk = cleanTitleKey(sub.title);
+            const ik = cleanKey(sub.id);
+            const key = tk ? `t_${tk}` : ik;
+            if (key && !seenFinal.has(key)) {
+              seenFinal.add(key);
+              if (tk) seenFinal.add(`t_${tk}`);
+              if (ik) seenFinal.add(ik);
+              const resolved = (tk && unifiedMap.get(`t_${tk}`)) || (ik && unifiedMap.get(ik)) || sub;
+              mergedSubsList.push(resolved);
+            }
+          });
+
+          setWriterSubmissions(mergedSubsList);
+        }
+      } catch (err) {
+        console.warn("Live articles sync notice:", err);
+      }
+
+      // 4. Newsletter Subscribers Sync from Database and Local Cache
+      try {
+        if (resSubs && resSubs.ok) {
+          const subsData = await safeJson(resSubs);
+          if (subsData && subsData.success && Array.isArray(subsData.subscribers)) {
+            const localStr = typeof window !== "undefined" ? localStorage.getItem("dj_newsletter_subscribers") : null;
+            let localSubs: any[] = [];
+            if (localStr) {
+              try { localSubs = JSON.parse(localStr); } catch (e) { }
+            }
+            if (!Array.isArray(localSubs)) localSubs = [];
+
+            const fakeEmails = ["reader@digitaljournal.com", "sarah.j@example.com", "mchang@globalfirm.org", "rtaylor@apex.io", "athorne@mit.edu"];
+            localSubs = localSubs.filter((s: any) => s && s.email && !fakeEmails.includes(s.email.toLowerCase().trim()));
+
+            const mergedMap = new Map<string, any>();
+            subsData.subscribers.forEach((s: any) => {
+              if (s && s.email && !fakeEmails.includes(s.email.toLowerCase().trim())) mergedMap.set(s.email.toLowerCase().trim(), s);
+            });
+            localSubs.forEach((s: any) => {
+              if (s && s.email && !fakeEmails.includes(s.email.toLowerCase().trim())) mergedMap.set(s.email.toLowerCase().trim(), s);
+            });
+
+            const finalSubs = Array.from(mergedMap.values()).map((s, idx) => ({
+              id: s.id || 1000 + idx,
+              email: s.email,
+              topics: Array.isArray(s.topics) && s.topics.length > 0 ? s.topics : ["ALL NEWS"],
+              date: s.date || "Aug 2026",
+              status: s.status || "Active"
+            }));
+
+            setNewsletterSubscribers(finalSubs);
+            setStats(prev => ({ ...prev, totalSubscribers: finalSubs.length }));
           }
         }
+      } catch (err) {
+        console.warn("Newsletter subscribers sync notice:", err);
       }
-    } catch (err) {
-      console.warn("Backblaze database backups sync notice:", err);
-    }
 
-    // 8. Site Subscriptions Sync from Database
-    try {
-      await fetchSiteSubscriptions();
-    } catch (err) {
-      console.warn("Site subscriptions sync notice:", err);
-    }
+      // 5. Trashed Articles Sync from Server Database and Local Cache
+      try {
+        const serverTrashed = (serverArticles || []).filter((a: any) => (a.status || "").toLowerCase().trim() === "trash");
+        const trashedStr = typeof window !== "undefined" ? localStorage.getItem("dj_trashed_articles") : null;
+        const localTrash: any[] = (trashedStr && trashedStr.trim()) ? JSON.parse(trashedStr) : [];
+        const trashMap = new Map<string, any>();
+        serverTrashed.forEach((a: any) => trashMap.set(String(a.id), a));
+        localTrash.forEach((a: any) => {
+          if (!trashMap.has(String(a.id))) trashMap.set(String(a.id), a);
+        });
+        const combinedTrash = Array.from(trashMap.values());
+        setTrashedArticles(combinedTrash);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("dj_trashed_articles", JSON.stringify(combinedTrash));
+        }
+      } catch (err) { }
 
-    // 9. Sync Reels from Server and Database
-    try {
-      const serverReels = await fetchServerReels();
-      if (Array.isArray(serverReels) && serverReels.length > 0) {
-        setReelsVideos(serverReels);
+      // 6. Contact Us Submissions Sync from Database and Local Storage
+      try {
+        if (resContact && resContact.ok) {
+          const contactData = await safeJson(resContact);
+          if (contactData && contactData.success && Array.isArray(contactData.contactSubmissions)) {
+            const localStr = typeof window !== "undefined" ? localStorage.getItem("dj_contact_submissions") : null;
+            let localContacts: any[] = [];
+            if (localStr && localStr.trim()) {
+              try { localContacts = JSON.parse(localStr); } catch (e) { }
+            }
+            if (!Array.isArray(localContacts)) localContacts = [];
+
+            const contactMap = new Map<string, any>();
+            contactData.contactSubmissions.forEach((c: any) => {
+              if (c && c.id) contactMap.set(String(c.id), c);
+            });
+            localContacts.forEach((c: any) => {
+              if (c && c.id) contactMap.set(String(c.id), c);
+            });
+
+            const finalContacts = Array.from(contactMap.values());
+            if (finalContacts.length > 0) {
+              setContactSubmissions(finalContacts);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Contact submissions sync notice:", err);
       }
-    } catch (err) {
-      console.warn("Reels sync notice:", err);
-    }
+
+      // 6b. Commercial Advertise Leads Sync from Database and Local Storage
+      try {
+        if (resLeads && resLeads.ok) {
+          const leadsData = await safeJson(resLeads);
+          if (leadsData && leadsData.success && Array.isArray(leadsData.leads)) {
+            const localStr = typeof window !== "undefined" ? localStorage.getItem("dj_advertise_leads") : null;
+            let localLeads: any[] = [];
+            if (localStr && localStr.trim()) {
+              try { localLeads = JSON.parse(localStr); } catch (e) { }
+            }
+            if (!Array.isArray(localLeads)) localLeads = [];
+
+            const leadMap = new Map<string, any>();
+            leadsData.leads.forEach((l: any) => {
+              if (l && l.id) leadMap.set(String(l.id), l);
+            });
+            localLeads.forEach((l: any) => {
+              if (l && l.id) leadMap.set(String(l.id), l);
+            });
+
+            const finalLeads = Array.from(leadMap.values());
+            if (finalLeads.length > 0) {
+              setAdvertiseLeads(finalLeads);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Advertise leads sync notice:", err);
+      }
+
+      // 7. Database Backups Sync from Backblaze B2 & Local Storage
+      try {
+        if (resBk && resBk.ok) {
+          const bkData = await safeJson(resBk);
+          if (bkData && bkData.success && Array.isArray(bkData.backups) && bkData.backups.length > 0) {
+            const localStr = typeof window !== "undefined" ? localStorage.getItem("dj_database_backups") : null;
+            let localBk: any[] = [];
+            if (localStr && localStr.trim()) {
+              try { localBk = JSON.parse(localStr); } catch (e) { }
+            }
+            if (!Array.isArray(localBk)) localBk = [];
+
+            const bkMap = new Map<string, any>();
+            bkData.backups.forEach((b: any) => {
+              if (b && b.filename) bkMap.set(b.filename, b);
+            });
+            localBk.forEach((b: any) => {
+              if (b && b.filename && !bkMap.has(b.filename)) bkMap.set(b.filename, b);
+            });
+
+            const mergedBackups = Array.from(bkMap.values());
+            if (mergedBackups.length > 0) {
+              setBackupFiles(mergedBackups);
+              try {
+                localStorage.setItem("dj_database_backups", JSON.stringify(mergedBackups));
+              } catch (e) { }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Backblaze database backups sync notice:", err);
+      }
+
+      // 8. Site Subscriptions Sync from Database
+      try {
+        await fetchSiteSubscriptions();
+      } catch (err) {
+        console.warn("Site subscriptions sync notice:", err);
+      }
+
+      // 9. Sync Reels from Server and Database
+      try {
+        const serverReels = await fetchServerReels();
+        if (Array.isArray(serverReels) && serverReels.length > 0) {
+          setReelsVideos(serverReels);
+        }
+      } catch (err) {
+        console.warn("Reels sync notice:", err);
+      }
+
+      // 10. Sync Team Members from Server
+      try {
+        const res = await fetch("/api/team", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.success && Array.isArray(data.team)) {
+            setTeamMembers(data.team);
+          }
+        }
+      } catch (err) {
+        console.warn("Team members sync notice:", err);
+      }
     } finally {
       dispatchPageDataReady();
+    }
+  };
+
+  const unaddedWorkspaceUsers = workspaceUsers.filter((u) => {
+    const uEmail = (u.email || "").toLowerCase().trim();
+    const uName = (u.name || "").toLowerCase().trim();
+    const emailMatch = Boolean(uEmail && teamMembers.some((tm) => (tm.email || "").toLowerCase().trim() === uEmail));
+    const nameMatch = Boolean(uName && teamMembers.some((tm) => (tm.name || "").toLowerCase().trim() === uName));
+    return !emailMatch && !nameMatch;
+  });
+
+  const handleSelectUnaddedUser = (user: WorkspaceUser) => {
+    setEditingTeamMember(null);
+    setTeamFormName(user.name);
+    setTeamFormEmail(user.email);
+    setTeamFormSlug(slugifyTeamName(user.name));
+
+    if (user.role === "ADMIN") {
+      setTeamFormRole("Editorial Director / Executive Board");
+      setTeamFormDept("Editorial Leadership");
+    } else if (user.role === "WRITER") {
+      setTeamFormRole("Staff Journalist & Correspondent");
+      setTeamFormDept("Reporting & Editorial Desks");
+    } else {
+      setTeamFormRole("Newsroom Contributor");
+      setTeamFormDept("Reporting & Editorial Desks");
+    }
+
+    const resolvedImg =
+      resolveUserAvatar({ name: user.name, email: user.email }) ||
+      getUserProfile(user.email)?.avatar ||
+      "/author_bluesuit.jpg";
+    setTeamFormImage(resolvedImg);
+    setTeamFormBio("");
+  };
+
+  const openAddTeamModal = () => {
+    setEditingTeamMember(null);
+    setUnaddedUserSearch("");
+    setTeamFormName("");
+    setTeamFormRole("");
+    setTeamFormDept("Editorial Leadership");
+    setTeamFormCustomDept("");
+    setTeamFormEmail("");
+    setTeamFormSlug("");
+    setTeamFormImage("/author_bluesuit.jpg");
+    setTeamFormBio("");
+    setIsTeamModalOpen(true);
+  };
+
+  const openEditTeamModal = (member: TeamMember) => {
+    setEditingTeamMember(member);
+    setTeamFormName(member.name);
+    setTeamFormRole(member.role);
+    if (member.department === "Editorial Leadership" || member.department === "Reporting & Editorial Desks") {
+      setTeamFormDept(member.department);
+      setTeamFormCustomDept("");
+    } else {
+      setTeamFormDept("Custom");
+      setTeamFormCustomDept(member.department);
+    }
+    setTeamFormEmail(member.email);
+    setTeamFormSlug(member.slug);
+    setTeamFormImage(member.image || member.fallbackImage || "/author_bluesuit.jpg");
+    setTeamFormBio(member.bio);
+    setIsTeamModalOpen(true);
+  };
+
+  const handleSaveTeamMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!teamFormName.trim()) {
+      setToastMessage("Please enter a member name");
+      return;
+    }
+
+    const dept = teamFormDept === "Custom"
+      ? (teamFormCustomDept.trim() || "Reporting & Editorial Desks")
+      : teamFormDept;
+
+    const slug = (teamFormSlug.trim() || slugifyTeamName(teamFormName)) || `member-${Date.now()}`;
+    const email = teamFormEmail.trim() || `${slug}@londonbigben.com`;
+    const image = teamFormImage.trim() || "/author_bluesuit.jpg";
+
+    const payloadMember: TeamMember = {
+      id: editingTeamMember?.id || `team-${Date.now()}`,
+      name: teamFormName.trim(),
+      role: teamFormRole.trim() || "Staff Writer",
+      department: dept,
+      bio: teamFormBio.trim(),
+      fallbackImage: image,
+      image,
+      slug,
+      email,
+      order: editingTeamMember?.order ?? (teamMembers.length + 1),
+    };
+
+    setIsTeamSubmitting(true);
+    try {
+      const res = await fetch("/api/team", {
+        method: "POST",
+        headers: getAdminHeaders({ "Content-Type": "application/json" }),
+        credentials: "include",
+        body: JSON.stringify({ member: payloadMember }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.success && Array.isArray(data.team)) {
+          setTeamMembers(data.team);
+        } else {
+          setTeamMembers((prev) => {
+            const exists = prev.findIndex((m) => m.id === payloadMember.id || m.slug === payloadMember.slug);
+            if (exists >= 0) {
+              const copy = [...prev];
+              copy[exists] = payloadMember;
+              return copy;
+            }
+            return [...prev, payloadMember];
+          });
+        }
+        setToastMessage(editingTeamMember ? "Team member updated successfully!" : "Team member added successfully!");
+        setIsTeamModalOpen(false);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setToastMessage(errData?.error || "Failed to save team member");
+      }
+    } catch (err: any) {
+      setToastMessage(err?.message || "Network error saving team member");
+    } finally {
+      setIsTeamSubmitting(false);
+    }
+  };
+
+  const handleDeleteTeamMember = async (member: TeamMember) => {
+    try {
+      const res = await fetch(`/api/team?id=${encodeURIComponent(member.id)}&slug=${encodeURIComponent(member.slug)}`, {
+        method: "DELETE",
+        headers: getAdminHeaders({ "Content-Type": "application/json" }),
+        credentials: "include",
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.success && Array.isArray(data.team)) {
+          setTeamMembers(data.team);
+        } else {
+          setTeamMembers((prev) => prev.filter((m) => m.id !== member.id && m.slug !== member.slug));
+        }
+        setToastMessage(`${member.name} removed from Our Team`);
+      } else {
+        setToastMessage("Failed to delete team member");
+      }
+    } catch (err: any) {
+      setToastMessage(err?.message || "Error deleting team member");
+    } finally {
+      setDeleteTeamTarget(null);
+    }
+  };
+
+  const handleMoveTeamMember = async (index: number, direction: "up" | "down") => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= teamMembers.length) return;
+
+    const copy = [...teamMembers];
+    const temp = copy[index];
+    copy[index] = copy[targetIndex];
+    copy[targetIndex] = temp;
+
+    const reordered = copy.map((m, idx) => ({ ...m, order: idx + 1 }));
+    setTeamMembers(reordered);
+
+    try {
+      await fetch("/api/team", {
+        method: "POST",
+        headers: getAdminHeaders({ "Content-Type": "application/json" }),
+        credentials: "include",
+        body: JSON.stringify({ team: reordered }),
+      });
+      setToastMessage("Team order updated");
+    } catch (e) {
+      console.warn("Failed to persist team order:", e);
+    }
+  };
+
+  const handleUploadTeamPhoto = async (file: File) => {
+    if (!file) return;
+    setIsTeamUploading(true);
+    try {
+      const uploadedUrl = await uploadImageToBackblaze(file, file.name, "team");
+      if (uploadedUrl) {
+        setTeamFormImage(uploadedUrl);
+        setToastMessage("Photo uploaded successfully!");
+      } else {
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          headers: getAdminHeaders(),
+          credentials: "include",
+          body: formData,
+        });
+        if (res.ok) {
+          const upData = await res.json();
+          if (upData?.url) {
+            setTeamFormImage(upData.url);
+            setToastMessage("Photo uploaded successfully!");
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn("Photo upload warning, using reader preview:", err);
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string") {
+          setTeamFormImage(reader.result);
+          setToastMessage("Photo preview loaded");
+        }
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setIsTeamUploading(false);
     }
   };
 
@@ -2431,29 +2769,7 @@ export default function AdminDashboardPage() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  const handleUnlockAdmin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLockError("");
-    const pass = lockPasscode.trim();
-    const validAdminPasswords = ["admin", "admin123", "Admin@123", "admin2026", "secret"];
-    const validCoAdminPasswords = ["coadmin", "coadmin123", "coadmin2026"];
 
-    if (validAdminPasswords.includes(pass)) {
-      const user = { name: "Geeth Liyanage", email: "geethliyanage979@gmail.com", role: "Admin" };
-      setAdminUser(user);
-      setIsAuthenticated(true);
-      fetchDashboardData();
-      showNotification("✓ Super Admin Security Clearance Granted!");
-    } else if (validCoAdminPasswords.includes(pass)) {
-      const user = { name: "Operations Co-Admin", email: "coadmin@digitaljournal.com", role: "Co-Admin" };
-      setAdminUser(user);
-      setIsAuthenticated(true);
-      fetchDashboardData();
-      showNotification("✓ Co-Admin Security Clearance Granted!");
-    } else {
-      setLockError("Invalid Admin Passcode. Try: admin123 or coadmin123");
-    }
-  };
 
   // Review & Approve / Reject Project
   const handleApproveSubmission = async (sub: SubmittedDraft) => {
@@ -2509,16 +2825,16 @@ export default function AdminDashboardPage() {
           const updatedCached = parsed.map((p: any) =>
             (String(p.id) === String(sub.id) || (p.title && newArt.title && p.title.trim().toLowerCase() === newArt.title.trim().toLowerCase()))
               ? {
-                  ...p,
-                  ...updatedPostToSave,
-                  status: "Published",
-                  placement: (sub as any).placement || "Standard Post",
-                  is_featured: newArt.is_featured,
-                  is_editors_pick: newArt.is_editors_pick,
-                  category: matchedMainCat,
-                  subcategories: (sub as any).subcategories || (sub as any).subCategories || [],
-                  tags: extractCleanTagsList(sub)
-                }
+                ...p,
+                ...updatedPostToSave,
+                status: "Published",
+                placement: (sub as any).placement || "Standard Post",
+                is_featured: newArt.is_featured,
+                is_editors_pick: newArt.is_editors_pick,
+                category: matchedMainCat,
+                subcategories: (sub as any).subcategories || (sub as any).subCategories || [],
+                tags: extractCleanTagsList(sub)
+              }
               : p
           );
           localStorage.setItem("dj_writer_submitted_articles", JSON.stringify(updatedCached));
@@ -2527,7 +2843,7 @@ export default function AdminDashboardPage() {
           }
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     setArticles(prev => [newArt, ...prev.filter(a => String(a.id) !== String(newArt.id))]);
     setWriterSubmissions(prev => prev.filter(s => String(s.id) !== String(sub.id) && s.title !== sub.title));
@@ -2583,7 +2899,7 @@ export default function AdminDashboardPage() {
             }
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     if (!targetAuthorEmail && targetAuthorName) {
@@ -2675,14 +2991,14 @@ export default function AdminDashboardPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(rejectedItem)
         });
-      } catch (e) {}
+      } catch (e) { }
 
       resetArticlesFetchCache();
 
       const subsStr = localStorage.getItem("dj_writer_submitted_articles");
       let subsList: any[] = [];
       if (subsStr) {
-        try { subsList = JSON.parse(subsStr); } catch (e) {}
+        try { subsList = JSON.parse(subsStr); } catch (e) { }
       }
 
       subsList = subsList.filter((p: any) =>
@@ -2724,7 +3040,7 @@ export default function AdminDashboardPage() {
         const found = list.find((p: any) => String(p.id) === String(sub.id) || (cleanT(p.title) && cleanT(sub.title) && cleanT(p.title) === cleanT(sub.title)));
         if (found) fullPost = { ...sub, ...found };
       }
-    } catch (e) {}
+    } catch (e) { }
 
     const rawCat = fullPost.category || (fullPost as any).category_name || sub.category || "Business";
     const matchedMainCat = ALL_MAIN_CATEGORIES.find(c => isSameOrMatchingCategory(c, rawCat) || c.toLowerCase() === rawCat.toLowerCase()) || rawCat;
@@ -2787,7 +3103,7 @@ export default function AdminDashboardPage() {
     };
     try {
       localStorage.setItem("dj_editing_post", JSON.stringify(postToEdit));
-    } catch (e) {}
+    } catch (e) { }
     router.push(`/writer/create?edit=${encodeURIComponent(String(sub.id))}&mode=review`);
   };
 
@@ -2805,7 +3121,7 @@ export default function AdminDashboardPage() {
         const found = list.find((p: any) => String(p.id) === String(art.id) || (p.title && art.title && p.title.trim().toLowerCase() === art.title.trim().toLowerCase()));
         if (found) fullPost = { ...art, ...found };
       }
-    } catch (e) {}
+    } catch (e) { }
 
     const rawCat = fullPost.category_name || fullPost.category || art.category_name || (art as any).category || "Business";
     const matchedMainCat = ALL_MAIN_CATEGORIES.find(c => isSameOrMatchingCategory(c, rawCat) || c.toLowerCase() === rawCat.toLowerCase()) || rawCat;
@@ -2843,7 +3159,7 @@ export default function AdminDashboardPage() {
     };
     try {
       localStorage.setItem("dj_editing_post", JSON.stringify(postToEdit));
-    } catch (e) {}
+    } catch (e) { }
 
     if (navigate) {
       router.push(`/writer/create?edit=${encodeURIComponent(String(art.id))}`);
@@ -2912,7 +3228,7 @@ export default function AdminDashboardPage() {
         const next = [trashedItem, ...prev.filter(t => String(t.id) !== String(id) && t.title !== title)];
         try {
           localStorage.setItem("dj_trashed_articles", JSON.stringify(next));
-        } catch (e) {}
+        } catch (e) { }
         return next;
       });
 
@@ -2959,7 +3275,7 @@ export default function AdminDashboardPage() {
         const next = [trashedItem, ...prev.filter(t => String(t.id) !== String(sub.id) && t.title !== sub.title)];
         try {
           localStorage.setItem("dj_trashed_articles", JSON.stringify(next));
-        } catch (e) {}
+        } catch (e) { }
         return next;
       });
 
@@ -2970,7 +3286,7 @@ export default function AdminDashboardPage() {
         const subsStr = localStorage.getItem("dj_writer_submitted_articles");
         if (subsStr && subsStr.trim()) {
           const parsed = JSON.parse(subsStr);
-          const updated = parsed.map((p: any) => 
+          const updated = parsed.map((p: any) =>
             (String(p.id) === String(sub.id) || (p.title || "").trim().toLowerCase() === sub.title.trim().toLowerCase())
               ? { ...p, status: "Trash", original_status: originalStatus }
               : p
@@ -2981,7 +3297,7 @@ export default function AdminDashboardPage() {
         if (typeof window !== "undefined") {
           window.dispatchEvent(new Event("dj_articles_updated"));
         }
-      } catch (e) {}
+      } catch (e) { }
 
       showNotification(`✓ ${originalStatus} article moved to Trash.`);
     }
@@ -2992,7 +3308,7 @@ export default function AdminDashboardPage() {
       const next = prev.filter(t => String(t.id) !== String(art.id) && t.title !== art.title);
       try {
         localStorage.setItem("dj_trashed_articles", JSON.stringify(next));
-      } catch (e) {}
+      } catch (e) { }
       return next;
     });
 
@@ -3047,7 +3363,7 @@ export default function AdminDashboardPage() {
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("dj_articles_updated"));
       }
-    } catch (e) {}
+    } catch (e) { }
 
     showNotification(`✓ Article "${art.title.slice(0, 30)}..." recovered from Trash to Drafts.`);
   };
@@ -3058,18 +3374,18 @@ export default function AdminDashboardPage() {
         const next = prev.filter(t => String(t.id) !== String(art.id) && t.title !== art.title);
         try {
           localStorage.setItem("dj_trashed_articles", JSON.stringify(next));
-        } catch (e) {}
+        } catch (e) { }
         return next;
       });
 
       try {
         const { deletePermanentlyOnServer } = await import("@/lib/articlesSync");
         await deletePermanentlyOnServer(art.id, art.title);
-        
+
         if (typeof window !== "undefined") {
           window.dispatchEvent(new Event("dj_articles_updated"));
         }
-      } catch (e) {}
+      } catch (e) { }
 
       showNotification(`Article permanently purged from Trash.`);
     }
@@ -3108,7 +3424,7 @@ export default function AdminDashboardPage() {
 
         // Helper to strip HTML tags from content if present
         const rawContent = (art as any).content || art.description || "";
-        const cleanContent = typeof rawContent === "string" 
+        const cleanContent = typeof rawContent === "string"
           ? rawContent.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim()
           : String(rawContent);
 
@@ -3165,7 +3481,7 @@ export default function AdminDashboardPage() {
         "================================================================================",
         "",
         "ARCHIVED ARTICLES LIST:",
-        ...articles.map((art, idx) => 
+        ...articles.map((art, idx) =>
           `${String(idx + 1).padStart(2, '0')}. [${art.category_name || 'General'}] ${art.title} (Author: ${art.author_name || 'Staff Journalist'} | Date: ${art.published_at || 'N/A'})`
         ),
         "",
@@ -3211,10 +3527,10 @@ export default function AdminDashboardPage() {
     try {
       const res = await fetch("/api/admin/users", {
         method: "POST",
-        headers: {
+        headers: getAdminHeaders({
           "Content-Type": "application/json",
-          "x-admin-portal": "dj_admin_portal_authenticated_2026",
-        },
+        }),
+        credentials: "include",
         body: JSON.stringify({
           name: newUserName.trim(),
           email: emailNorm,
@@ -3242,7 +3558,7 @@ export default function AdminDashboardPage() {
           const filtered = blacklist.filter(e => e.toLowerCase() !== emailNorm);
           localStorage.setItem("dj_deleted_users_blacklist", JSON.stringify(filtered));
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // Refresh real database users roster live from API
       await fetchDashboardData();
@@ -3309,10 +3625,10 @@ export default function AdminDashboardPage() {
     try {
       const res = await fetch("/api/admin/users", {
         method: "PUT",
-        headers: {
+        headers: getAdminHeaders({
           "Content-Type": "application/json",
-          "x-admin-portal": "dj_admin_portal_authenticated_2026",
-        },
+        }),
+        credentials: "include",
         body: JSON.stringify({
           id: editingUser.id,
           originalEmail: oldEmail,
@@ -3374,7 +3690,7 @@ export default function AdminDashboardPage() {
                 localStorage.setItem("dj_user_profiles_db", JSON.stringify(profDb));
               }
             }
-          } catch (e) {}
+          } catch (e) { }
 
           // 3. dj_user & dj_writer_user & dj_author_profile (active session storage)
           ["dj_user", "dj_writer_user", "dj_author_profile"].forEach((k) => {
@@ -3393,7 +3709,7 @@ export default function AdminDashboardPage() {
                   };
                   localStorage.setItem(k, JSON.stringify(updated));
                 }
-              } catch (e) {}
+              } catch (e) { }
             }
           });
 
@@ -3407,7 +3723,7 @@ export default function AdminDashboardPage() {
                 p.name = newName;
                 p.email = newEmail;
                 localStorage.setItem(`dj_profile_${newEmail}`, JSON.stringify(p));
-              } catch (e) {}
+              } catch (e) { }
             }
           }
         } catch (e) {
@@ -3480,10 +3796,10 @@ export default function AdminDashboardPage() {
     try {
       await fetch(`/api/admin/users?id=${encodeURIComponent(String(id))}&email=${encodeURIComponent(targetEmail)}`, {
         method: "DELETE",
-        headers: {
+        headers: getAdminHeaders({
           "Content-Type": "application/json",
-          "x-admin-portal": "dj_admin_portal_authenticated_2026",
-        },
+        }),
+        credentials: "include",
       });
     } catch (err) {
       console.error("Delete user API error:", err);
@@ -3501,7 +3817,7 @@ export default function AdminDashboardPage() {
           blacklist.push(emailLower);
           localStorage.setItem("dj_deleted_users_blacklist", JSON.stringify(blacklist));
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 2. Remove from registered users list
       try {
@@ -3511,7 +3827,7 @@ export default function AdminDashboardPage() {
           const filtered = regList.filter(u => (u.email || '').toLowerCase().trim() !== emailLower);
           localStorage.setItem("dj_registered_users", JSON.stringify(filtered));
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 3. Remove from user profiles DB
       try {
@@ -3521,7 +3837,7 @@ export default function AdminDashboardPage() {
           delete dbObj[emailLower];
           localStorage.setItem("dj_user_profiles_db", JSON.stringify(dbObj));
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 4. Remove from writers list
       try {
@@ -3531,7 +3847,7 @@ export default function AdminDashboardPage() {
           const filtered = wList.filter(w => (w.email || '').toLowerCase().trim() !== emailLower);
           localStorage.setItem("dj_writers_list", JSON.stringify(filtered));
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 5. Remove from device google accounts
       try {
@@ -3541,7 +3857,7 @@ export default function AdminDashboardPage() {
           const filtered = dList.filter(d => (d.email || '').toLowerCase().trim() !== emailLower);
           localStorage.setItem("dj_device_google_accounts", JSON.stringify(filtered));
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 6. Clear session if currently active user was deleted
       try {
@@ -3553,7 +3869,7 @@ export default function AdminDashboardPage() {
             sessionStorage.removeItem("dj_tab_session");
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     await fetchDashboardData();
@@ -3582,7 +3898,7 @@ export default function AdminDashboardPage() {
       await fetch(`/api/newsletter/subscribe?id=${encodeURIComponent(String(id))}&email=${encodeURIComponent(email)}`, {
         method: "DELETE"
       });
-    } catch (e) {}
+    } catch (e) { }
 
     if (typeof window !== "undefined") {
       try {
@@ -3592,7 +3908,7 @@ export default function AdminDashboardPage() {
           const filtered = parsed.filter((s: any) => s.id !== id && s.email?.toLowerCase() !== email.toLowerCase());
           localStorage.setItem("dj_newsletter_subscribers", JSON.stringify(filtered));
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     setNewsletterSubscribers(prev => prev.filter(s => s.id !== id && s.email.toLowerCase() !== email.toLowerCase()));
@@ -3609,7 +3925,7 @@ export default function AdminDashboardPage() {
         await fetch(`/api/newsletter/subscribe?id=${encodeURIComponent(String(subId))}&email=${encodeURIComponent(sub?.email || "")}`, {
           method: "DELETE"
         });
-      } catch (e) {}
+      } catch (e) { }
     }
 
     if (typeof window !== "undefined") {
@@ -3620,7 +3936,7 @@ export default function AdminDashboardPage() {
           const filtered = parsed.filter((s: any) => !toRemoveIds.includes(s.id));
           localStorage.setItem("dj_newsletter_subscribers", JSON.stringify(filtered));
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     setNewsletterSubscribers(prev => prev.filter(s => !toRemoveIds.includes(s.id)));
@@ -3645,7 +3961,7 @@ export default function AdminDashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: newSubscriberEmail.trim(), topics: finalTopics })
       });
-    } catch (e) {}
+    } catch (e) { }
 
     const newSub: SubscriberItem = {
       id: Date.now(),
@@ -3662,7 +3978,7 @@ export default function AdminDashboardPage() {
         if (!Array.isArray(subsList)) subsList = [];
         subsList.unshift(newSub);
         localStorage.setItem("dj_newsletter_subscribers", JSON.stringify(subsList));
-      } catch (e) {}
+      } catch (e) { }
     }
 
     setNewsletterSubscribers(prev => [newSub, ...prev.filter(s => s.email.toLowerCase() !== newSub.email.toLowerCase())]);
@@ -3777,9 +4093,9 @@ export default function AdminDashboardPage() {
       if (placementFilter === "home_page_a_plus_2") {
         return (
           (pl.includes("section 2") ||
-          pl.includes("a+ 2") ||
-          pl.includes("a+2") ||
-          pl.includes("spotlight banner")) &&
+            pl.includes("a+ 2") ||
+            pl.includes("a+2") ||
+            pl.includes("spotlight banner")) &&
           !pl.includes("3")
         );
       }
@@ -3860,7 +4176,7 @@ export default function AdminDashboardPage() {
   });
 
   if (isLoading) {
-    return <LogoLoader text="Verifying Security Session..." theme="dark" fullScreen={true} />;
+    return <PageSkeletonLoader />;
   }
 
 
@@ -3907,18 +4223,22 @@ export default function AdminDashboardPage() {
   const completedReleasesCount = articles.length;
   const newsletterSubsCount = newsletterSubscribers.length;
 
-  const adminName = adminUser?.name || "Geeth Liyanage";
+  const adminName = adminUser?.name || "Administrator";
   const userInitials = adminName
     .split(" ")
     .filter(Boolean)
     .map((n: string) => n[0])
     .join("")
     .slice(0, 2)
-    .toUpperCase() || "GL";
+    .toUpperCase() || "AD";
+
+  if (isLoading || !isAuthenticated || !adminUser) {
+    return <PageSkeletonLoader />;
+  }
 
   return (
     <div className="h-screen bg-[#EBF0F7] flex font-sans text-slate-800 overflow-hidden relative">
-      
+
       {/* MOBILE BACKDROP OVERLAY (< md) */}
       {isMobileSidebarOpen && (
         <div
@@ -3936,7 +4256,7 @@ export default function AdminDashboardPage() {
           ${isSidebarOpen ? "md:static md:w-68 lg:w-72 md:translate-x-0 md:h-screen md:flex-shrink-0 md:z-auto md:shadow-none" : "md:hidden"}
         `}
       >
-        
+
         {/* LOGO HEADER */}
         <div className="p-5 sm:p-6 border-b border-slate-800/80 flex-shrink-0">
           <div className="flex items-center justify-between">
@@ -3947,7 +4267,7 @@ export default function AdminDashboardPage() {
             >
               <div className="relative shrink-0">
                 <img
-                  src="/logo.png"
+                  src="/logo.svg"
                   alt="London BigBen Logo"
                   className="w-10 h-10 object-contain rounded-xl shadow-md border border-white/10 group-hover:scale-105 transition-transform"
                 />
@@ -3985,24 +4305,22 @@ export default function AdminDashboardPage() {
 
         {/* SIDEBAR NAVIGATION ITEMS - SCROLLABLE IF CONTENT OVERFLOWS */}
         <nav className="p-3 flex-1 space-y-1 overflow-y-auto">
-          
+
           {/* 1. Overview */}
           <button
             onClick={() => {
               setActiveTab("overview");
               setIsMobileSidebarOpen(false);
             }}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "overview"
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "overview"
                 ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
                 : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
-            }`}
+              }`}
           >
             <LayoutDashboard className="w-4 h-4 flex-shrink-0" />
             <span className="font-sans">Overview</span>
-            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
-              activeTab === "overview" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
-            }`}>
+            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${activeTab === "overview" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
+              }`}>
               {pendingSubmissions.length}
             </span>
           </button>
@@ -4013,17 +4331,15 @@ export default function AdminDashboardPage() {
               setActiveTab("newsletter");
               setIsMobileSidebarOpen(false);
             }}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "newsletter"
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "newsletter"
                 ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
                 : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
-            }`}
+              }`}
           >
             <Mail className="w-4 h-4 flex-shrink-0" />
             <span className="font-sans">Newsletter</span>
-            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
-              activeTab === "newsletter" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
-            }`}>
+            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${activeTab === "newsletter" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
+              }`}>
               {newsletterSubscribers.length}
             </span>
           </button>
@@ -4035,17 +4351,15 @@ export default function AdminDashboardPage() {
               fetchSiteSubscriptions();
               setIsMobileSidebarOpen(false);
             }}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "subscriptions"
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "subscriptions"
                 ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
                 : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
-            }`}
+              }`}
           >
             <CreditCard className="w-4 h-4 flex-shrink-0" />
             <span className="font-sans">Subscription</span>
-            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
-              activeTab === "subscriptions" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
-            }`}>
+            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${activeTab === "subscriptions" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
+              }`}>
               {siteSubscriptions.length}
             </span>
           </button>
@@ -4056,17 +4370,15 @@ export default function AdminDashboardPage() {
               setActiveTab("articles");
               setIsMobileSidebarOpen(false);
             }}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "articles"
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "articles"
                 ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
                 : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
-            }`}
+              }`}
           >
             <FileText className="w-4 h-4 flex-shrink-0" />
             <span className="font-sans">Published Posts</span>
-            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
-              activeTab === "articles" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
-            }`}>
+            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${activeTab === "articles" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
+              }`}>
               {articles.length}
             </span>
           </button>
@@ -4077,17 +4389,15 @@ export default function AdminDashboardPage() {
               setActiveTab("users");
               setIsMobileSidebarOpen(false);
             }}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "users"
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "users"
                 ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
                 : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
-            }`}
+              }`}
           >
             <Users className="w-4 h-4 flex-shrink-0" />
             <span className="font-sans">Users</span>
-            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
-              activeTab === "users" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
-            }`}>
+            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${activeTab === "users" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
+              }`}>
               {workspaceUsers.length}
             </span>
           </button>
@@ -4099,17 +4409,15 @@ export default function AdminDashboardPage() {
               setAdSubTab("ALL");
               setIsMobileSidebarOpen(false);
             }}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "ads"
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "ads"
                 ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
                 : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
-            }`}
+              }`}
           >
             <Megaphone className="w-4 h-4 flex-shrink-0" />
             <span className="font-sans">Manage Ads</span>
-            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
-              activeTab === "ads" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
-            }`}>
+            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${activeTab === "ads" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
+              }`}>
               {adSlots.length}
             </span>
           </button>
@@ -4120,17 +4428,15 @@ export default function AdminDashboardPage() {
               setActiveTab("contact_submissions");
               setIsMobileSidebarOpen(false);
             }}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "contact_submissions"
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "contact_submissions"
                 ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
                 : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
-            }`}
+              }`}
           >
             <MessageSquare className="w-4 h-4 flex-shrink-0" />
             <span className="font-sans">Contact Submissions</span>
-            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
-              activeTab === "contact_submissions" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
-            }`}>
+            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${activeTab === "contact_submissions" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
+              }`}>
               {contactSubmissions.length}
             </span>
           </button>
@@ -4141,17 +4447,15 @@ export default function AdminDashboardPage() {
               setActiveTab("advertise_leads");
               setIsMobileSidebarOpen(false);
             }}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "advertise_leads"
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "advertise_leads"
                 ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
                 : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
-            }`}
+              }`}
           >
             <Briefcase className="w-4 h-4 flex-shrink-0" />
             <span className="font-sans">Advertise Leads</span>
-            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
-              activeTab === "advertise_leads" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
-            }`}>
+            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${activeTab === "advertise_leads" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
+              }`}>
               {advertiseLeads.length}
             </span>
           </button>
@@ -4162,34 +4466,50 @@ export default function AdminDashboardPage() {
               setActiveTab("backups");
               setIsMobileSidebarOpen(false);
             }}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "backups"
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "backups"
                 ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
                 : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
-            }`}
+              }`}
           >
             <Database className="w-4 h-4 flex-shrink-0" />
             <span className="font-sans">Database Backups</span>
           </button>
 
-          {/* 9. Trending words */}
+          {/* 9. Trending Words */}
           <button
             onClick={() => {
               setActiveTab("trending_words");
               setIsMobileSidebarOpen(false);
             }}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "trending_words"
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "trending_words"
                 ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
                 : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
-            }`}
+              }`}
           >
             <TrendingUp className="w-4 h-4 flex-shrink-0" />
-            <span className="font-sans">Trending words</span>
-            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
-              activeTab === "trending_words" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
-            }`}>
+            <span className="font-sans">Trending Words</span>
+            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${activeTab === "trending_words" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
+              }`}>
               {trendingWords.length}
+            </span>
+          </button>
+
+          {/* 10. Trending Topics (Article Section - 6 Slots) */}
+          <button
+            onClick={() => {
+              setActiveTab("trending_topics");
+              setIsMobileSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "trending_topics"
+                ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
+                : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
+              }`}
+          >
+            <Sparkles className="w-4 h-4 flex-shrink-0" />
+            <span className="font-sans">Trending Topics (6 Slots)</span>
+            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${activeTab === "trending_topics" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
+              }`}>
+              {articleTrendingTopics.filter(t => t && t.trim()).length}
             </span>
           </button>
 
@@ -4199,18 +4519,35 @@ export default function AdminDashboardPage() {
               setActiveTab("reels");
               setIsMobileSidebarOpen(false);
             }}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "reels"
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "reels"
                 ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
                 : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
-            }`}
+              }`}
           >
             <Video className="w-4 h-4 flex-shrink-0" />
             <span className="font-sans">Reels</span>
-            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
-              activeTab === "reels" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
-            }`}>
+            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${activeTab === "reels" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
+              }`}>
               {reelsVideos.length}
+            </span>
+          </button>
+
+          {/* 11. Our Team */}
+          <button
+            onClick={() => {
+              setActiveTab("team");
+              setIsMobileSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "team"
+                ? "bg-gradient-to-r from-[#D31220] to-[#b91522] text-white shadow-md shadow-red-950/50"
+                : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
+              }`}
+          >
+            <UserCheck className="w-4 h-4 flex-shrink-0" />
+            <span className="font-sans">Our Team</span>
+            <span className={`ml-auto text-[10.5px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${activeTab === "team" ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400 border border-slate-700/60"
+              }`}>
+              {teamMembers.length}
             </span>
           </button>
         </nav>
@@ -4234,7 +4571,7 @@ export default function AdminDashboardPage() {
 
       {/* MAIN CONTENT WORKSPACE AREA - SCROLLS INDEPENDENTLY */}
       <main className="flex-1 h-screen p-3.5 sm:p-6 md:p-8 lg:p-10 overflow-y-auto min-w-0 w-full bg-[#EBF0F7]">
-        
+
         {/* MOBILE WORKSPACE TOP APP BAR (< md) */}
         <div className="md:hidden flex items-center justify-between px-4 py-3 bg-[#EBF0F7] border border-white/80 rounded-2xl shadow-[6px_6px_14px_#c8d2df,-6px_-6px_14px_#ffffff] mb-5">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -4310,6 +4647,7 @@ export default function AdminDashboardPage() {
             <p className="text-xs sm:text-sm font-medium text-slate-500 mt-1">
               Welcome back, <span className="text-slate-900 font-bold">{adminName}</span>! Here is your daily editorial overview.
             </p>
+
           </div>
 
           {/* User Profile Badge Chip */}
@@ -4327,7 +4665,7 @@ export default function AdminDashboardPage() {
         {/* STAT CARDS ROW (Pinned at top of overview workspace) */}
         {activeTab === "overview" && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
-            
+
             {/* Card 1: ACTIVE REVIEWS */}
             <div className="bg-[#EBF0F7] p-5 sm:p-6 rounded-3xl border border-white/80 shadow-[8px_8px_18px_#c8d2df,-8px_-8px_18px_#ffffff] hover:shadow-[10px_10px_22px_#becadb,-10px_-10px_22px_#ffffff] transition-all duration-300 group relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#D31220] to-red-400 opacity-90" />
@@ -4336,13 +4674,16 @@ export default function AdminDashboardPage() {
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-500 font-sans mb-1">
                     Active Reviews
                   </p>
+
                   <p className="text-3xl sm:text-4xl font-extrabold text-slate-900 font-sans tracking-tight group-hover:text-[#D31220] transition-colors">
                     {activeReviewsCount}
                   </p>
+
                   <p className="text-[11px] font-medium text-slate-400 mt-1.5 flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
                     Submissions pending approval
                   </p>
+
                 </div>
                 <div className="w-12 h-12 rounded-2xl bg-[#EBF0F7] text-[#D31220] shadow-[inset_3px_3px_6px_#c8d2df,inset_-3px_-3px_6px_#ffffff] border border-white/60 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                   <FileText className="w-6 h-6" />
@@ -4358,13 +4699,16 @@ export default function AdminDashboardPage() {
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-500 font-sans mb-1">
                     Completed Releases
                   </p>
+
                   <p className="text-3xl sm:text-4xl font-extrabold text-slate-900 font-sans tracking-tight group-hover:text-emerald-600 transition-colors">
                     {completedReleasesCount}
                   </p>
+
                   <p className="text-[11px] font-medium text-slate-400 mt-1.5 flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                     Live published stories
                   </p>
+
                 </div>
                 <div className="w-12 h-12 rounded-2xl bg-[#EBF0F7] text-emerald-600 shadow-[inset_3px_3px_6px_#c8d2df,inset_-3px_-3px_6px_#ffffff] border border-white/60 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                   <CheckCircle2 className="w-6 h-6" />
@@ -4380,13 +4724,16 @@ export default function AdminDashboardPage() {
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-500 font-sans mb-1">
                     Newsletter Subs
                   </p>
+
                   <p className="text-3xl sm:text-4xl font-extrabold text-slate-900 font-sans tracking-tight group-hover:text-blue-600 transition-colors">
                     {newsletterSubsCount}
                   </p>
+
                   <p className="text-[11px] font-medium text-slate-400 mt-1.5 flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                     Registered subscribers
                   </p>
+
                 </div>
                 <div className="w-12 h-12 rounded-2xl bg-[#EBF0F7] text-blue-600 shadow-[inset_3px_3px_6px_#c8d2df,inset_-3px_-3px_6px_#ffffff] border border-white/60 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                   <Mail className="w-6 h-6" />
@@ -4401,7 +4748,7 @@ export default function AdminDashboardPage() {
           <div className="space-y-8">
             {/* MAIN TABLE CONTAINER: Recent Projects (Pending Review) */}
             <div className="bg-[#EBF0F7] rounded-3xl border border-white/80 shadow-[10px_10px_24px_#c8d2df,-10px_-10px_24px_#ffffff] overflow-hidden">
-              
+
               {/* Table Header Bar */}
               <div className="p-4 sm:p-6 border-b border-[#c8d2df]/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#EBF0F7]">
                 <div className="flex items-center gap-3">
@@ -4413,6 +4760,7 @@ export default function AdminDashboardPage() {
                     <p className="text-xs text-slate-400 font-sans">
                       Editorial queue awaiting admin review and publishing
                     </p>
+
                   </div>
                 </div>
                 <span className="text-xs font-bold bg-[#EBF0F7] shadow-[inset_2px_2px_4px_#c8d2df,inset_-2px_-2px_4px_#ffffff] border border-white/60 text-slate-700 px-3.5 py-1.5 rounded-full font-sans self-start sm:self-auto">
@@ -4451,7 +4799,7 @@ export default function AdminDashboardPage() {
                     ) : (
                       pendingSubmissions.map((post, idx) => (
                         <tr key={`sub-${post.id}-${idx}`} className="hover:bg-white/40 transition-colors">
-                          
+
                           {/* ARTICLE DETAILS */}
                           <td className="py-4 px-6 max-w-md">
                             <div className="flex items-start gap-3.5">
@@ -4467,6 +4815,7 @@ export default function AdminDashboardPage() {
                                 <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 font-normal font-sans">
                                   {post.summary}
                                 </p>
+
                                 <span className="inline-block mt-1 text-[10px] font-sans font-medium text-slate-400">
                                   {post.readTime || "5 min read"}
                                 </span>
@@ -4520,7 +4869,7 @@ export default function AdminDashboardPage() {
         {/* TAB 2: NEWSLETTER */}
         {activeTab === "newsletter" && (
           <div className="space-y-6">
-            
+
             {/* Header Bar above Newsletter Table */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
@@ -4530,6 +4879,7 @@ export default function AdminDashboardPage() {
                 <p className="text-xs font-mono text-slate-400 mt-0.5">
                   Emails collected from the Newsletter signup page.
                 </p>
+
               </div>
 
               <div className="flex items-center gap-3">
@@ -4587,7 +4937,7 @@ export default function AdminDashboardPage() {
                     ) : (
                       newsletterSubscribers.map((sub, idx) => (
                         <tr key={`subscr-${sub.id}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
-                          
+
                           {/* CHECKBOX */}
                           <td className="py-4 px-4 w-10 text-center">
                             <input
@@ -4669,7 +5019,7 @@ export default function AdminDashboardPage() {
             const matchesStatus =
               siteSubStatusFilter === "ALL" ||
               (siteSubStatusFilter === "Active" ? (!isExpired && sub.status !== "Cancelled") :
-               siteSubStatusFilter === "Expired" ? isExpired : sub.status === siteSubStatusFilter);
+                siteSubStatusFilter === "Expired" ? isExpired : sub.status === siteSubStatusFilter);
 
             const matchesPlan =
               siteSubPlanFilter === "ALL" ||
@@ -4697,6 +5047,7 @@ export default function AdminDashboardPage() {
                   <p className="text-xs font-mono text-slate-500 mt-1">
                     Manage 1-year free trial accounts, countdown timers, renewal dates, and payment records.
                   </p>
+
                 </div>
 
                 <div className="flex items-center gap-2.5">
@@ -4863,6 +5214,7 @@ export default function AdminDashboardPage() {
                             <p className="text-[11px] text-slate-400 mt-1">
                               New subscribers activating a 1-year free trial on /subscribe will appear here in real-time.
                             </p>
+
                           </td>
                         </tr>
                       ) : (
@@ -4896,11 +5248,10 @@ export default function AdminDashboardPage() {
 
                               {/* Selected Plan */}
                               <td className="py-3.5 px-4 whitespace-nowrap">
-                                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold ${
-                                  sub.plan === "bundle"
+                                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold ${sub.plan === "bundle"
                                     ? "bg-purple-50 text-purple-700 border border-purple-200"
                                     : "bg-blue-50 text-blue-700 border border-blue-200"
-                                }`}>
+                                  }`}>
                                   {sub.planName || (sub.plan === "bundle" ? "London BigBen Digital Bundle" : "London BigBen Digital")}
                                 </span>
                               </td>
@@ -5015,7 +5366,7 @@ export default function AdminDashboardPage() {
         {/* TAB 3: POSTS WORKSPACE */}
         {activeTab === "articles" && (
           <div className="space-y-6">
-            
+
             {/* Posts Title & Filter Sub-Tabs matching User UI */}
             {/* Posts Title & Actions */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#c8d2df]/60 pb-4">
@@ -5026,6 +5377,19 @@ export default function AdminDashboardPage() {
               </div>
 
               <div className="flex items-center gap-3 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab("trending_words");
+                    setTrendingSubTab("article_section");
+                  }}
+                  className="flex items-center gap-2 bg-[#EBF0F7] shadow-[4px_4px_10px_#c8d2df,-4px_-4px_10px_#ffffff] active:shadow-[inset_2px_2px_5px_#c8d2df,inset_-2px_-2px_5px_#ffffff] border border-white/80 text-[#D31220] hover:text-red-700 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer uppercase tracking-wider font-mono"
+                  title="Configure 6 Trending Topics for Article Sidebar"
+                >
+                  <TrendingUp className="w-3.5 h-3.5 text-[#D31220]" />
+                  <span>TRENDING TOPICS ({articleTrendingTopics.filter(t => t && t.trim()).length}/6)</span>
+                </button>
+
                 <button
                   onClick={handleBackupArticlesZIP}
                   className="flex items-center gap-2 bg-[#EBF0F7] shadow-[4px_4px_10px_#c8d2df,-4px_-4px_10px_#ffffff] active:shadow-[inset_2px_2px_5px_#c8d2df,inset_-2px_-2px_5px_#ffffff] border border-white/80 text-orange-700 hover:text-orange-800 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer uppercase tracking-wider font-mono"
@@ -5047,6 +5411,41 @@ export default function AdminDashboardPage() {
             {/* SUB-TAB 1: PUBLISHED POSTS */}
             {postSubTab === "published" && (
               <div className="space-y-6">
+                {/* ARTICLE SECTION TRENDING TOPICS BANNER */}
+                <div className="bg-[#EBF0F7] rounded-3xl border border-white/80 p-4 shadow-[6px_6px_14px_#c8d2df,-6px_-6px_14px_#ffffff] flex flex-wrap items-center justify-between gap-3 font-sans">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-[#D31220]/10 border border-[#D31220]/20 flex items-center justify-center text-[#D31220] flex-shrink-0">
+                      <TrendingUp className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-900 tracking-tight">
+                          Article Section Trending Topics (6 Slots)
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-[#D31220] text-white">
+                          {articleTrendingTopics.filter(t => t && t.trim()).length}/6 Active
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 truncate max-w-xl font-medium mt-0.5">
+                        {articleTrendingTopics.filter(t => t && t.trim()).length > 0
+                          ? articleTrendingTopics.filter(t => t && t.trim()).map((t, i) => `${i + 1}. ${t}`).join("  •  ")
+                          : "No trending topics set"}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab("trending_words");
+                      setTrendingSubTab("article_section");
+                    }}
+                    className="px-4 py-2 bg-[#D31220] hover:bg-[#b91522] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer font-sans shadow-sm"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add / Manage Trending Topics</span>
+                  </button>
+                </div>
+
                 {/* FILTER & SEARCH TOOLBAR CARD */}
                 <div className="bg-[#EBF0F7] rounded-3xl border border-white/80 p-5 shadow-[8px_8px_18px_#c8d2df,-8px_-8px_18px_#ffffff] font-mono text-xs flex flex-wrap items-center justify-between gap-4">
                   <div className="flex flex-wrap items-center gap-4">
@@ -5158,6 +5557,7 @@ export default function AdminDashboardPage() {
                                     <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 font-normal">
                                       {art.description}
                                     </p>
+
 
                                     {/* Mobile Action Buttons (< sm) */}
                                     <div className="flex sm:hidden items-center gap-2 mt-2 pt-1.5 border-t border-[#c8d2df]/50">
@@ -5350,6 +5750,7 @@ export default function AdminDashboardPage() {
                                       <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 font-normal">
                                         {sub.summary}
                                       </p>
+
                                     </div>
                                   </div>
                                 </td>
@@ -5448,6 +5849,7 @@ export default function AdminDashboardPage() {
                                       <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 font-normal">
                                         {sub.summary}
                                       </p>
+
                                       <div className="flex items-center gap-2 mt-1">
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 text-[9px] font-extrabold rounded font-mono uppercase">
                                           REJECTED
@@ -5550,6 +5952,7 @@ export default function AdminDashboardPage() {
                                     <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5 font-normal">
                                       {art.description}
                                     </p>
+
                                   </div>
                                 </div>
                               </td>
@@ -5604,7 +6007,7 @@ export default function AdminDashboardPage() {
         {/* TAB 4: USERS (USERS DESK) */}
         {activeTab === "users" && (
           <div className="space-y-6">
-            
+
             {/* Header Bar above Users Desk Table */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
@@ -5632,44 +6035,40 @@ export default function AdminDashboardPage() {
             <div className="border-b border-slate-200 flex items-center gap-6 font-mono text-xs">
               <button
                 onClick={() => setUserSubTab("ALL")}
-                className={`pb-3 font-extrabold transition-all cursor-pointer border-b-2 uppercase tracking-wider ${
-                  userSubTab === "ALL"
+                className={`pb-3 font-extrabold transition-all cursor-pointer border-b-2 uppercase tracking-wider ${userSubTab === "ALL"
                     ? "border-[#D31220] text-[#D31220]"
                     : "border-transparent text-slate-400 hover:text-slate-700"
-                }`}
+                  }`}
               >
                 ALL USERS ({workspaceUsers.length})
               </button>
 
               <button
                 onClick={() => setUserSubTab("ADMINS")}
-                className={`pb-3 font-extrabold transition-all cursor-pointer border-b-2 uppercase tracking-wider ${
-                  userSubTab === "ADMINS"
+                className={`pb-3 font-extrabold transition-all cursor-pointer border-b-2 uppercase tracking-wider ${userSubTab === "ADMINS"
                     ? "border-[#D31220] text-[#D31220]"
                     : "border-transparent text-slate-400 hover:text-slate-700"
-                }`}
+                  }`}
               >
                 ADMINS ({countAdmins})
               </button>
 
               <button
                 onClick={() => setUserSubTab("WRITERS")}
-                className={`pb-3 font-extrabold transition-all cursor-pointer border-b-2 uppercase tracking-wider ${
-                  userSubTab === "WRITERS"
+                className={`pb-3 font-extrabold transition-all cursor-pointer border-b-2 uppercase tracking-wider ${userSubTab === "WRITERS"
                     ? "border-[#D31220] text-[#D31220]"
                     : "border-transparent text-slate-400 hover:text-slate-700"
-                }`}
+                  }`}
               >
                 WRITERS ({countWriters})
               </button>
 
               <button
                 onClick={() => setUserSubTab("READERS")}
-                className={`pb-3 font-extrabold transition-all cursor-pointer border-b-2 uppercase tracking-wider ${
-                  userSubTab === "READERS"
+                className={`pb-3 font-extrabold transition-all cursor-pointer border-b-2 uppercase tracking-wider ${userSubTab === "READERS"
                     ? "border-[#D31220] text-[#D31220]"
                     : "border-transparent text-slate-400 hover:text-slate-700"
-                }`}
+                  }`}
               >
                 READERS ({countReaders})
               </button>
@@ -5713,81 +6112,81 @@ export default function AdminDashboardPage() {
                         const canDelete = !isTargetDefaultAdmin && !isSelf && (isCurrentAdminDefault || user.role !== "ADMIN");
 
                         return (
-                        <tr key={`usr-${user.id}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
-                          
-                          {/* NAME + DEFAULT ADMIN BADGE */}
-                          <td className="py-4 px-6 font-extrabold text-slate-900 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <span>{user.name}</span>
-                              {user.isDefaultAdmin && (
-                                <span className="bg-amber-100/90 text-amber-800 border border-amber-300 text-[9px] font-mono font-extrabold uppercase px-2 py-0.5 rounded-md">
-                                  DEFAULT ADMIN
+                          <tr key={`usr-${user.id}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
+
+                            {/* NAME + DEFAULT ADMIN BADGE */}
+                            <td className="py-4 px-6 font-extrabold text-slate-900 whitespace-nowrap">
+                              <div className="flex items-center gap-2">
+                                <span>{user.name}</span>
+                                {user.isDefaultAdmin && (
+                                  <span className="bg-amber-100/90 text-amber-800 border border-amber-300 text-[9px] font-mono font-extrabold uppercase px-2 py-0.5 rounded-md">
+                                    DEFAULT ADMIN
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* EMAIL ADDRESS */}
+                            <td className="py-4 px-6 font-mono text-slate-600 whitespace-nowrap">
+                              {user.email}
+                            </td>
+
+                            {/* WORKSPACE ROLE */}
+                            <td className="py-4 px-6 whitespace-nowrap">
+                              {user.role === "WRITER" && (
+                                <span className="border border-blue-300 bg-blue-50 text-blue-700 text-[10px] font-extrabold px-3.5 py-1 rounded-full font-mono uppercase tracking-wider">
+                                  WRITER
                                 </span>
                               )}
-                            </div>
-                          </td>
-
-                          {/* EMAIL ADDRESS */}
-                          <td className="py-4 px-6 font-mono text-slate-600 whitespace-nowrap">
-                            {user.email}
-                          </td>
-
-                          {/* WORKSPACE ROLE */}
-                          <td className="py-4 px-6 whitespace-nowrap">
-                            {user.role === "WRITER" && (
-                              <span className="border border-blue-300 bg-blue-50 text-blue-700 text-[10px] font-extrabold px-3.5 py-1 rounded-full font-mono uppercase tracking-wider">
-                                WRITER
-                              </span>
-                            )}
-                            {user.role === "ADMIN" && (
-                              <span className="border border-rose-300 bg-rose-50 text-rose-700 text-[10px] font-extrabold px-3.5 py-1 rounded-full font-mono uppercase tracking-wider">
-                                ADMIN
-                              </span>
-                            )}
-                            {user.role === "READER" && (
-                              <span className="border border-emerald-300 bg-emerald-50 text-emerald-700 text-[10px] font-extrabold px-3.5 py-1 rounded-full font-mono uppercase tracking-wider">
-                                READER
-                              </span>
-                            )}
-                          </td>
-
-                          {/* ACTIONS */}
-                          <td className="py-4 px-6 whitespace-nowrap text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              
-                              {/* VIEW ICON */}
-                              <button
-                                onClick={() => setViewingUser(user)}
-                                title="View User Details"
-                                className="w-8 h-8 rounded-xl bg-blue-50/70 text-blue-600 hover:bg-blue-100 flex items-center justify-center transition-colors cursor-pointer border border-blue-200/60"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </button>
-
-                              {/* EDIT BUTTON (Admin can edit his own account, but not other admin accounts) */}
-                              {canEdit && (
-                                <button
-                                  onClick={() => handleOpenEditUserModal(user)}
-                                  className="border border-slate-200 hover:bg-slate-100 text-slate-700 text-[10.5px] font-extrabold px-3 py-1.5 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5 uppercase tracking-wider font-mono"
-                                >
-                                  <Pencil className="w-3 h-3 text-slate-500" />
-                                  EDIT
-                                </button>
+                              {user.role === "ADMIN" && (
+                                <span className="border border-rose-300 bg-rose-50 text-rose-700 text-[10px] font-extrabold px-3.5 py-1 rounded-full font-mono uppercase tracking-wider">
+                                  ADMIN
+                                </span>
                               )}
-
-                              {/* DELETE BUTTON */}
-                              {canDelete && (
-                                <button
-                                  onClick={() => handleDeleteUser(user.id, user.name, user.isDefaultAdmin)}
-                                  className="border border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 text-[10.5px] font-extrabold px-3 py-1.5 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5 uppercase tracking-wider font-mono"
-                                >
-                                  <Trash2 className="w-3 h-3 text-rose-500" />
-                                  DELETE
-                                </button>
+                              {user.role === "READER" && (
+                                <span className="border border-emerald-300 bg-emerald-50 text-emerald-700 text-[10px] font-extrabold px-3.5 py-1 rounded-full font-mono uppercase tracking-wider">
+                                  READER
+                                </span>
                               )}
-                            </div>
-                          </td>
-                        </tr>
+                            </td>
+
+                            {/* ACTIONS */}
+                            <td className="py-4 px-6 whitespace-nowrap text-right">
+                              <div className="flex items-center justify-end gap-2">
+
+                                {/* VIEW ICON */}
+                                <button
+                                  onClick={() => setViewingUser(user)}
+                                  title="View User Details"
+                                  className="w-8 h-8 rounded-xl bg-blue-50/70 text-blue-600 hover:bg-blue-100 flex items-center justify-center transition-colors cursor-pointer border border-blue-200/60"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
+
+                                {/* EDIT BUTTON (Admin can edit his own account, but not other admin accounts) */}
+                                {canEdit && (
+                                  <button
+                                    onClick={() => handleOpenEditUserModal(user)}
+                                    className="border border-slate-200 hover:bg-slate-100 text-slate-700 text-[10.5px] font-extrabold px-3 py-1.5 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5 uppercase tracking-wider font-mono"
+                                  >
+                                    <Pencil className="w-3 h-3 text-slate-500" />
+                                    EDIT
+                                  </button>
+                                )}
+
+                                {/* DELETE BUTTON */}
+                                {canDelete && (
+                                  <button
+                                    onClick={() => handleDeleteUser(user.id, user.name, user.isDefaultAdmin)}
+                                    className="border border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 text-[10.5px] font-extrabold px-3 py-1.5 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5 uppercase tracking-wider font-mono"
+                                  >
+                                    <Trash2 className="w-3 h-3 text-rose-500" />
+                                    DELETE
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
                         );
                       })
                     )}
@@ -5801,7 +6200,7 @@ export default function AdminDashboardPage() {
         {/* TAB 5: MANAGE ADS */}
         {activeTab === "ads" && (
           <div className="space-y-6">
-            
+
             {/* Main Section Header */}
             <div>
               <h2 className="text-xl font-extrabold font-sans text-slate-900 tracking-tight">
@@ -5810,50 +6209,47 @@ export default function AdminDashboardPage() {
               <p className="text-xs font-mono text-slate-400 mt-0.5">
                 Configure customized advertisement graphics or promote internal articles in predefined slots.
               </p>
+
             </div>
 
             {/* SUB-TABS NAVIGATION BAR */}
             <div className="border-b border-slate-200 flex items-center gap-6 font-mono text-xs flex-wrap">
               <button
                 onClick={() => setAdSubTab("ALL")}
-                className={`pb-3 font-extrabold transition-all cursor-pointer border-b-2 uppercase tracking-wider ${
-                  adSubTab === "ALL"
+                className={`pb-3 font-extrabold transition-all cursor-pointer border-b-2 uppercase tracking-wider ${adSubTab === "ALL"
                     ? "border-[#D31220] text-[#D31220]"
                     : "border-transparent text-slate-400 hover:text-slate-700"
-                }`}
+                  }`}
               >
                 SHOW ALL AD SECTIONS ({adSlots.length})
               </button>
 
               <button
                 onClick={() => setAdSubTab("HOMEPAGE")}
-                className={`pb-3 font-extrabold transition-all cursor-pointer border-b-2 uppercase tracking-wider ${
-                  adSubTab === "HOMEPAGE"
+                className={`pb-3 font-extrabold transition-all cursor-pointer border-b-2 uppercase tracking-wider ${adSubTab === "HOMEPAGE"
                     ? "border-[#D31220] text-[#D31220]"
                     : "border-transparent text-slate-400 hover:text-slate-700"
-                }`}
+                  }`}
               >
                 HOMEPAGE ADS ({adSlots.filter(s => s.categoryGroup === "HOMEPAGE").length})
               </button>
 
               <button
                 onClick={() => setAdSubTab("CATEGORY")}
-                className={`pb-3 font-extrabold transition-all cursor-pointer border-b-2 uppercase tracking-wider ${
-                  adSubTab === "CATEGORY"
+                className={`pb-3 font-extrabold transition-all cursor-pointer border-b-2 uppercase tracking-wider ${adSubTab === "CATEGORY"
                     ? "border-[#D31220] text-[#D31220]"
                     : "border-transparent text-slate-400 hover:text-slate-700"
-                }`}
+                  }`}
               >
                 CATEGORY & ARTICLE ADS ({adSlots.filter(s => s.categoryGroup === "CATEGORY").length})
               </button>
 
               <button
                 onClick={() => setAdSubTab("AUTHOR")}
-                className={`pb-3 font-extrabold transition-all cursor-pointer border-b-2 uppercase tracking-wider ${
-                  adSubTab === "AUTHOR"
+                className={`pb-3 font-extrabold transition-all cursor-pointer border-b-2 uppercase tracking-wider ${adSubTab === "AUTHOR"
                     ? "border-[#D31220] text-[#D31220]"
                     : "border-transparent text-slate-400 hover:text-slate-700"
-                }`}
+                  }`}
               >
                 AUTHOR PAGE ADS ({adSlots.filter(s => s.categoryGroup === "AUTHOR").length})
               </button>
@@ -5863,7 +6259,7 @@ export default function AdminDashboardPage() {
             <div className="space-y-6">
               {filteredAdSlots.map((slot, idx) => (
                 <div key={`ad-slot-${slot.id}-${idx}`} className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-sm space-y-6">
-                  
+
                   {/* Card Header: Slot Dimensions & Active Switch */}
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center gap-2.5 flex-wrap">
@@ -5882,14 +6278,12 @@ export default function AdminDashboardPage() {
                       <button
                         type="button"
                         onClick={() => toggleAdActive(slot.id)}
-                        className={`w-11 h-6 rounded-full transition-colors cursor-pointer p-0.5 relative ${
-                          slot.isActive ? "bg-[#D31220]" : "bg-slate-300"
-                        }`}
+                        className={`w-11 h-6 rounded-full transition-colors cursor-pointer p-0.5 relative ${slot.isActive ? "bg-[#D31220]" : "bg-slate-300"
+                          }`}
                       >
                         <div
-                          className={`w-5 h-5 rounded-full bg-white shadow-md transform transition-transform ${
-                            slot.isActive ? "translate-x-5" : "translate-x-0"
-                          }`}
+                          className={`w-5 h-5 rounded-full bg-white shadow-md transform transition-transform ${slot.isActive ? "translate-x-5" : "translate-x-0"
+                            }`}
                         />
                       </button>
                     </div>
@@ -5903,11 +6297,12 @@ export default function AdminDashboardPage() {
                     <p className="text-xs text-slate-500 mt-1">
                       {slot.description}
                     </p>
+
                   </div>
 
                   {/* Main Grid: Image Preview & Target Fields */}
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-                    
+
                     {/* Left Column: Image Preview + Upload */}
                     <div className="md:col-span-5 space-y-3">
                       {slot.imageUrl ? (
@@ -5996,7 +6391,7 @@ export default function AdminDashboardPage() {
                     {/* Right Column: Target Action Type & Target Link URL */}
                     <div className="md:col-span-7 space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        
+
                         {/* TARGET ACTION TYPE */}
                         <div>
                           <label className="block text-[9px] font-extrabold font-mono text-slate-400 uppercase tracking-wider mb-1.5">
@@ -6071,7 +6466,7 @@ export default function AdminDashboardPage() {
         {/* TAB 6: CONTACT US SUBMISSIONS */}
         {activeTab === "contact_submissions" && (
           <div className="space-y-6">
-            
+
             {/* Header & Search Toolbar */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
@@ -6081,6 +6476,7 @@ export default function AdminDashboardPage() {
                 <p className="text-xs font-mono text-slate-400 mt-0.5">
                   View and manage messages submitted by readers and partners on the Contact Us page.
                 </p>
+
               </div>
 
               <div className="flex items-center gap-3">
@@ -6137,7 +6533,7 @@ export default function AdminDashboardPage() {
                     ) : (
                       filteredContactSubmissions.map((c, idx) => (
                         <tr key={`contact-sub-${c.id}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
-                          
+
                           {/* DATE */}
                           <td className="py-3.5 px-4 whitespace-nowrap font-mono text-slate-500 text-[11px]">
                             {c.date}
@@ -6220,7 +6616,7 @@ export default function AdminDashboardPage() {
         {/* TAB 7: ADVERTISE LEADS */}
         {activeTab === "advertise_leads" && (
           <div className="space-y-6">
-            
+
             {/* Header & Search Toolbar */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
@@ -6230,6 +6626,7 @@ export default function AdminDashboardPage() {
                 <p className="text-xs font-mono text-slate-400 mt-0.5">
                   View and manage leads submitted by businesses and partners on the Advertise page.
                 </p>
+
               </div>
 
               <div className="flex items-center gap-3">
@@ -6286,7 +6683,7 @@ export default function AdminDashboardPage() {
                     ) : (
                       filteredAdvertiseLeads.map((l, idx) => (
                         <tr key={`lead-${l.id}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
-                          
+
                           {/* DATE */}
                           <td className="py-3.5 px-4 whitespace-nowrap font-mono text-slate-500 text-[11px]">
                             {l.date}
@@ -6369,7 +6766,7 @@ export default function AdminDashboardPage() {
         {/* TAB 8: DATABASE BACKUPS */}
         {activeTab === "backups" && (
           <div className="space-y-6">
-            
+
             {/* Header & Right Action Buttons */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
@@ -6379,6 +6776,7 @@ export default function AdminDashboardPage() {
                 <p className="text-xs font-mono text-slate-400 mt-0.5">
                   Automated and manual database snapshots stored on Backblaze B2.
                 </p>
+
               </div>
 
               <div className="flex items-center gap-3">
@@ -6416,6 +6814,7 @@ export default function AdminDashboardPage() {
               Backups are automatically taken every 24 hours. The snapshots include all published articles, media links, admin & writer accounts, subscriber list, ad placements, and contact leads.
             </p>
 
+
             {/* DATABASE BACKUPS TABLE */}
             <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
@@ -6438,7 +6837,7 @@ export default function AdminDashboardPage() {
                     ) : (
                       backupFiles.map((bk, idx) => (
                         <tr key={`backup-${bk.id}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
-                          
+
                           {/* BACKUP FILE */}
                           <td className="py-4 px-6 font-mono text-slate-900 font-extrabold text-xs whitespace-nowrap">
                             {bk.filename}
@@ -6496,201 +6895,10 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-        {/* TAB 9: TRENDING WORDS & TOPICS */}
+        {/* TAB 9: TRENDING WORDS */}
         {activeTab === "trending_words" && (
           <div className="space-y-6">
 
-            {/* Sub-Tab Navigation: Article Section (6 Slots) vs Header Ticker Words */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTrendingSubTab("article_section")}
-                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
-                    trendingSubTab === "article_section"
-                      ? "bg-[#D31220] text-white shadow-sm"
-                      : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-                  }`}
-                >
-                  <TrendingUp className="w-4 h-4" />
-                  <span>Article Trending Topics (6 Slots)</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${
-                    trendingSubTab === "article_section" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"
-                  }`}>
-                    6
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setTrendingSubTab("header_ticker")}
-                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
-                    trendingSubTab === "header_ticker"
-                      ? "bg-[#D31220] text-white shadow-sm"
-                      : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-                  }`}
-                >
-                  <Sparkles className="w-4 h-4" />
-                  <span>Header Ticker Words</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${
-                    trendingSubTab === "header_ticker" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"
-                  }`}>
-                    {trendingWords.length}
-                  </span>
-                </button>
-              </div>
-
-              {trendingSubTab === "article_section" && (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleResetArticleTrendingTopics}
-                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer font-sans"
-                  >
-                    Reset Defaults
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSaveArticleTrendingTopics()}
-                    className="px-4 py-2 bg-[#D31220] hover:bg-[#b91522] text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer font-sans shadow-sm"
-                  >
-                    <Check className="w-4 h-4" />
-                    <span>SAVE 6 SLOTS</span>
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* SUB-VIEW 1: ARTICLE SECTION TRENDING TOPICS (6 SLOTS) */}
-            {trendingSubTab === "article_section" && (
-              <div className="space-y-6">
-                <div>
-                  <h2 className="text-xl font-extrabold font-sans text-slate-900 tracking-tight flex items-center gap-2.5">
-                    <TrendingUp className="w-5 h-5 text-[#D31220]" />
-                    <span>Article Section Trending Topics (6 Slots)</span>
-                  </h2>
-                  <p className="text-xs font-mono text-slate-400 mt-0.5">
-                    Configure the 6 numbered trending topics displayed in the right sidebar under &ldquo;Latest in [Category]&rdquo; across all article pages.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                  {/* Left Column: 6 Slots Configuration */}
-                  <div className="lg:col-span-7 space-y-3.5">
-                    {[0, 1, 2, 3, 4, 5].map((slotIdx) => (
-                      <div
-                        key={`admin-slot-${slotIdx}`}
-                        className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center gap-3.5"
-                      >
-                        <div className="flex items-center gap-2.5 sm:w-28 flex-shrink-0">
-                          <span className="w-7 h-7 rounded-lg bg-[#D31220] text-white font-bold text-xs flex items-center justify-center font-mono">
-                            {slotIdx + 1}
-                          </span>
-                          <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-500">
-                            Slot {slotIdx + 1}
-                          </span>
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <input
-                            type="text"
-                            value={articleTrendingTopics[slotIdx] || ""}
-                            onChange={(e) => {
-                              const updated = [...articleTrendingTopics];
-                              updated[slotIdx] = e.target.value;
-                              setArticleTrendingTopics(updated);
-                            }}
-                            placeholder={`e.g. ${DEFAULT_ARTICLE_TRENDING_TOPICS[slotIdx] || "Topic name"}`}
-                            className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:border-[#D31220] focus:bg-white transition-all font-sans"
-                          />
-                        </div>
-
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = [...articleTrendingTopics];
-                              updated[slotIdx] = DEFAULT_ARTICLE_TRENDING_TOPICS[slotIdx] || "";
-                              setArticleTrendingTopics(updated);
-                            }}
-                            title="Reset to default"
-                            className="px-2.5 py-1.5 text-[10.5px] font-mono text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
-                          >
-                            Reset
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = [...articleTrendingTopics];
-                              updated[slotIdx] = "";
-                              setArticleTrendingTopics(updated);
-                            }}
-                            title="Clear slot"
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-
-                    <div className="pt-2 flex items-center justify-between">
-                      <p className="text-[11px] font-mono text-slate-400">
-                        Changes immediately reflect across all article sidebars upon saving.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => handleSaveArticleTrendingTopics()}
-                        className="px-5 py-2.5 bg-[#D31220] hover:bg-[#b91522] text-white rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer font-sans shadow-sm"
-                      >
-                        <Check className="w-4 h-4" />
-                        <span>SAVE ALL 6 SLOTS</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Right Column: Live Article Sidebar Preview */}
-                  <div className="lg:col-span-5 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-                    <div className="flex items-center justify-between pb-2 mb-3 border-b border-slate-100">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                        <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-500">
-                          Article Sidebar Live Preview
-                        </span>
-                      </div>
-                      <span className="text-[10px] font-mono text-slate-400">6 Slots</span>
-                    </div>
-
-                    <div className="p-4 bg-slate-50/70 border border-slate-200/80 rounded-xl">
-                      <div className="flex items-center gap-2 pb-2 mb-3.5 border-b border-zinc-200 font-sans">
-                        <span className="w-1.5 h-4 bg-[#BF1E2D] inline-block"></span>
-                        <h3 className="text-[13px] font-bold text-slate-900 uppercase tracking-wider font-sans">
-                          TRENDING TOPICS
-                        </h3>
-                      </div>
-
-                      <ol className="space-y-2.5 font-sans list-none p-0 m-0">
-                        {articleTrendingTopics.map((topic, idx) => (
-                          <li key={`preview-topic-${idx}`} className="flex items-center gap-3">
-                            <span className="w-4 text-left font-sans font-bold text-xs text-[#BF1E2D] flex-shrink-0">
-                              {idx + 1}
-                            </span>
-                            <span className="text-xs font-medium text-slate-800 leading-snug font-sans truncate">
-                              {topic || <span className="text-slate-400 italic font-mono">Empty Slot</span>}
-                            </span>
-                          </li>
-                        ))}
-                      </ol>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* SUB-VIEW 2: HEADER TICKER WORDS */}
-            {trendingSubTab === "header_ticker" && (
-              <div className="space-y-6">
-            
             {/* Header & Search Toolbar */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
@@ -6701,6 +6909,7 @@ export default function AdminDashboardPage() {
                 <p className="text-xs font-mono text-slate-400 mt-0.5">
                   Manage real-time keywords and trending topics featured in the website header ticker and search suggestions.
                 </p>
+
               </div>
 
               <div className="flex items-center gap-3">
@@ -6745,6 +6954,7 @@ export default function AdminDashboardPage() {
                   <p className="text-xl font-extrabold text-emerald-600 mt-1 font-sans">
                     {trendingWords.filter(w => w.status === "Active").length}
                   </p>
+
                 </div>
                 <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
                   <Sparkles className="w-5 h-5" />
@@ -6807,11 +7017,10 @@ export default function AdminDashboardPage() {
                           <td className="py-3.5 px-4">
                             <button
                               onClick={() => handleToggleTrendingStatus(tw.id)}
-                              className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase font-mono cursor-pointer transition-all ${
-                                tw.status === "Active"
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase font-mono cursor-pointer transition-all ${tw.status === "Active"
                                   ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
                                   : "bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200"
-                              }`}
+                                }`}
                             >
                               {tw.status}
                             </button>
@@ -6832,16 +7041,218 @@ export default function AdminDashboardPage() {
                 </table>
               </div>
             </div>
-              </div>
-            )}
 
+          </div>
+        )}
+
+        {/* TAB 10: ARTICLE SECTION TRENDING TOPICS (6 SLOTS) */}
+        {activeTab === "trending_topics" && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+              <div>
+                <h2 className="text-xl font-extrabold font-sans text-slate-900 tracking-tight flex items-center gap-2.5">
+                  <TrendingUp className="w-5 h-5 text-[#D31220]" />
+                  <span>Article Section Trending Topics (6 Slots)</span>
+                </h2>
+                <p className="text-xs font-mono text-slate-400 mt-0.5">
+                  Configure the 6 numbered trending topics displayed in the right sidebar under &ldquo;Latest in [Category]&rdquo; across all article pages.
+                </p>
+
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleResetArticleTrendingTopics}
+                  className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer font-sans"
+                >
+                  Reset Defaults
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveArticleTrendingTopics()}
+                  className="px-4 py-2 bg-[#D31220] hover:bg-[#b91522] text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer font-sans shadow-sm"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>SAVE 6 SLOTS</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Left Column: 6 Slots Configuration */}
+              <div className="lg:col-span-7 space-y-3.5">
+                {/* Add Trending Topic Card */}
+                <form
+                  onSubmit={handleAddNewTrendingTopic}
+                  className="bg-white p-4 sm:p-5 rounded-2xl border-2 border-dashed border-[#D31220]/30 hover:border-[#D31220]/60 bg-red-50/20 transition-all shadow-xs space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-lg bg-[#D31220] text-white flex items-center justify-center">
+                        <Plus className="w-3.5 h-3.5" />
+                      </span>
+                      <span className="text-xs font-bold text-slate-900 font-sans uppercase tracking-wider">
+                        Add Trending Topic
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-mono text-slate-500 font-medium">
+                      {articleTrendingTopics.filter(t => t && t.trim()).length} / 6 Slots Filled
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                    <div className="flex-1">
+                      <input
+                        type="text"
+                        value={newTrendingTopicInput}
+                        onChange={(e) => setNewTrendingTopicInput(e.target.value)}
+                        placeholder="Type topic name (e.g. UK Economy, Prime Minister)..."
+                        className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-[#D31220] transition-all font-sans"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={newTrendingTopicSlot}
+                        onChange={(e) => setNewTrendingTopicSlot(Number(e.target.value))}
+                        className="px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono font-medium text-slate-700 focus:outline-none focus:border-[#D31220] cursor-pointer"
+                      >
+                        <option value={0}>Auto (Next Available Slot)</option>
+                        <option value={1}>Slot 1</option>
+                        <option value={2}>Slot 2</option>
+                        <option value={3}>Slot 3</option>
+                        <option value={4}>Slot 4</option>
+                        <option value={5}>Slot 5</option>
+                        <option value={6}>Slot 6</option>
+                      </select>
+
+                      <button
+                        type="submit"
+                        className="px-4 py-2.5 bg-[#D31220] hover:bg-[#b91522] text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer font-sans shadow-sm flex-shrink-0"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Add Topic</span>
+                      </button>
+                    </div>
+                  </div>
+                </form>
+
+                {[0, 1, 2, 3, 4, 5].map((slotIdx) => (
+                  <div
+                    key={`admin-slot-${slotIdx}`}
+                    className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center gap-3.5"
+                  >
+                    <div className="flex items-center gap-2.5 sm:w-28 flex-shrink-0">
+                      <span className="w-7 h-7 rounded-lg bg-[#D31220] text-white font-bold text-xs flex items-center justify-center font-mono">
+                        {slotIdx + 1}
+                      </span>
+                      <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-500">
+                        Slot {slotIdx + 1}
+                      </span>
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <input
+                        type="text"
+                        value={articleTrendingTopics[slotIdx] || ""}
+                        onChange={(e) => {
+                          const updated = [...articleTrendingTopics];
+                          updated[slotIdx] = e.target.value;
+                          setArticleTrendingTopics(updated);
+                        }}
+                        placeholder={`e.g. ${DEFAULT_ARTICLE_TRENDING_TOPICS[slotIdx] || "Topic name"}`}
+                        className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:border-[#D31220] focus:bg-white transition-all font-sans"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = [...articleTrendingTopics];
+                          updated[slotIdx] = DEFAULT_ARTICLE_TRENDING_TOPICS[slotIdx] || "";
+                          setArticleTrendingTopics(updated);
+                        }}
+                        title="Reset to default"
+                        className="px-2.5 py-1.5 text-[10.5px] font-mono text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+                      >
+                        Reset
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = [...articleTrendingTopics];
+                          updated[slotIdx] = "";
+                          setArticleTrendingTopics(updated);
+                        }}
+                        title="Clear slot"
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="pt-2 flex items-center justify-between">
+                  <p className="text-[11px] font-mono text-slate-400">
+                    Changes immediately reflect across all article sidebars upon saving.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSaveArticleTrendingTopics()}
+                    className="px-5 py-2.5 bg-[#D31220] hover:bg-[#b91522] text-white rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer font-sans shadow-sm"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>SAVE ALL 6 SLOTS</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Column: Live Article Sidebar Preview */}
+              <div className="lg:col-span-5 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+                <div className="flex items-center justify-between pb-2 mb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-500">
+                      Article Sidebar Live Preview
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-400">6 Slots</span>
+                </div>
+
+                <div className="p-4 bg-slate-50/70 border border-slate-200/80 rounded-xl">
+                  <div className="flex items-center gap-2 pb-2 mb-3.5 border-b border-zinc-200 font-sans">
+                    <span className="w-1.5 h-4 bg-[#BF1E2D] inline-block"></span>
+                    <h3 className="text-[13px] font-bold text-slate-900 uppercase tracking-wider font-sans">
+                      TRENDING TOPICS
+                    </h3>
+                  </div>
+
+                  <ol className="space-y-2.5 font-sans list-none p-0 m-0">
+                    {articleTrendingTopics.map((topic, idx) => (
+                      <li key={`preview-topic-${idx}`} className="flex items-center gap-3">
+                        <span className="w-4 text-left font-sans font-bold text-xs text-[#BF1E2D] flex-shrink-0">
+                          {idx + 1}
+                        </span>
+                        <span className="text-xs font-medium text-slate-800 leading-snug font-sans truncate">
+                          {topic || <span className="text-slate-400 italic font-mono">Empty Slot</span>}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
         {/* TAB 10: SHORTS & REELS MANAGER (10 DEDICATED SLOTS) */}
         {activeTab === "reels" && (
           <div className="space-y-8 font-sans">
-            
+
             {/* Header: Shorts & Reels Manager */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
@@ -6856,6 +7267,7 @@ export default function AdminDashboardPage() {
                 <p className="text-xs text-slate-500 mt-1 font-sans">
                   Curate short-form video stories from YouTube Shorts and Rumble.
                 </p>
+
               </div>
 
               <div>
@@ -6883,6 +7295,7 @@ export default function AdminDashboardPage() {
                     <p className="text-xs text-slate-400 mt-0.5">
                       Paste any YouTube or Rumble link — platform and thumbnails are detected automatically.
                     </p>
+
                   </div>
                 </div>
 
@@ -6929,6 +7342,7 @@ export default function AdminDashboardPage() {
                       <p className="text-[11px] text-slate-400 font-sans">
                         Supports YouTube Shorts, Rumble, and Backblaze direct videos.
                       </p>
+
                       <label className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold cursor-pointer transition-colors shrink-0">
                         <Upload className="w-3.5 h-3.5 text-slate-600" />
                         <span>{isUploadingReelVideo ? "Uploading to Backblaze..." : "Upload Reel Video (Backblaze)"}</span>
@@ -6945,6 +7359,7 @@ export default function AdminDashboardPage() {
                       <p className="text-[10.5px] font-mono text-emerald-600 truncate">
                         ✓ {reelVideoFileName}
                       </p>
+
                     )}
                   </div>
 
@@ -6980,10 +7395,10 @@ export default function AdminDashboardPage() {
 
                 {/* Row 3: INPUTS (LEFT) & LIVE FEED PREVIEW (RIGHT) */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-1">
-                  
+
                   {/* Left Column: Thumbnails, Duration, Slot, Status & Yellow Alert */}
                   <div className="lg:col-span-8 space-y-4">
-                    
+
                     {/* Cover Image URL */}
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-mono font-extrabold uppercase tracking-wider text-slate-700 block">
@@ -7105,10 +7520,12 @@ export default function AdminDashboardPage() {
                           <p className="font-extrabold text-[11px] leading-tight text-white line-clamp-2 drop-shadow-md">
                             {reelTitle.trim() || "Short Video Title"}
                           </p>
+
                           <p className="text-[10px] text-white/85 font-mono flex items-center gap-1">
                             <Play className="w-2.5 h-2.5 fill-white/80" />
                             <span>{reelDuration || "0:00"}</span>
                           </p>
+
                         </div>
                       </div>
                     </div>
@@ -7138,6 +7555,7 @@ export default function AdminDashboardPage() {
                   <p className="text-xs text-slate-400 mt-0.5">
                     Strictly 1 video per slot (Slot #1 to #5). Slot #1 is the Main Featured Video, Slots #2, #3, and #4 are the 3 bottom videos, and Slot #5 is under the sidebar ad.
                   </p>
+
                 </div>
 
                 <div>
@@ -7198,11 +7616,10 @@ export default function AdminDashboardPage() {
                               {/* Badges row: Status & Slot */}
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span
-                                  className={`text-[9px] font-extrabold uppercase font-mono px-1.5 py-0.5 rounded ${
-                                    slotVideo.status === "Active"
+                                  className={`text-[9px] font-extrabold uppercase font-mono px-1.5 py-0.5 rounded ${slotVideo.status === "Active"
                                       ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                                       : "bg-slate-100 text-slate-500 border border-slate-200"
-                                  }`}
+                                    }`}
                                 >
                                   {slotVideo.status || "ACTIVE"}
                                 </span>
@@ -7279,6 +7696,7 @@ export default function AdminDashboardPage() {
                       <p className="text-xs text-slate-400 mb-3 font-sans">
                         No video assigned to this slot
                       </p>
+
                       <button
                         type="button"
                         className="text-xs font-extrabold text-orange-600 group-hover:text-orange-700 inline-flex items-center gap-1.5"
@@ -7295,7 +7713,570 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
+        {/* TAB 12: OUR TEAM MANAGEMENT */}
+        {activeTab === "team" && (
+          <div className="space-y-6 font-sans">
+            {/* Header: Title, Counts, and Action Buttons */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/90 shadow-xs">
+              <div>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl sm:text-2xl font-extrabold font-sans text-slate-900 tracking-tight">
+                    Our Team Management
+                  </h2>
+                  <span className="bg-red-50 text-[#D31220] border border-red-200 font-mono text-xs px-2.5 py-0.5 rounded-full font-bold">
+                    {teamMembers.length} Members
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1 font-sans">
+                  Manage newsroom leaders, editors, foreign correspondents, and journalists displayed on the public <Link href="/team" target="_blank" className="text-[#D31220] hover:underline font-bold">/team</Link> page.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <Link
+                  href="/team"
+                  target="_blank"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>View Live Page</span>
+                </Link>
+                <button
+                  type="button"
+                  onClick={openAddTeamModal}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-[#D31220] to-[#b91522] hover:opacity-95 shadow-md shadow-red-950/20 cursor-pointer transition-all hover:scale-[1.02]"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Team Member</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Filter Bar: Search & Department Tabs */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+              {/* Department Pills */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {["ALL", "Editorial Leadership", "Reporting & Editorial Desks", ...Array.from(new Set(teamMembers.filter(m => m.department !== "Editorial Leadership" && m.department !== "Reporting & Editorial Desks").map(m => m.department)))].map((dept) => {
+                  const count = dept === "ALL" ? teamMembers.length : teamMembers.filter(m => m.department === dept).length;
+                  const isSelected = teamDeptFilter === dept;
+                  return (
+                    <button
+                      key={dept}
+                      type="button"
+                      onClick={() => setTeamDeptFilter(dept)}
+                      className={`text-xs font-bold px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${isSelected
+                          ? "bg-slate-900 text-white shadow-xs"
+                          : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+                        }`}
+                    >
+                      <span>{dept}</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${isSelected ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"
+                        }`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Search Box */}
+              <div className="relative w-full md:w-64">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search members..."
+                  value={teamSearchQuery}
+                  onChange={(e) => setTeamSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-[#D31220]"
+                />
+                {teamSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setTeamSearchQuery("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Members Grid */}
+            {(() => {
+              const filtered = teamMembers.filter((m) => {
+                if (teamDeptFilter !== "ALL" && m.department !== teamDeptFilter) return false;
+                if (!teamSearchQuery.trim()) return true;
+                const q = teamSearchQuery.toLowerCase();
+                return (
+                  m.name.toLowerCase().includes(q) ||
+                  m.role.toLowerCase().includes(q) ||
+                  m.email.toLowerCase().includes(q) ||
+                  m.department.toLowerCase().includes(q) ||
+                  m.bio.toLowerCase().includes(q)
+                );
+              });
+
+              if (filtered.length === 0) {
+                return (
+                  <div className="bg-white rounded-2xl border border-dashed border-slate-200 p-12 text-center space-y-3">
+                    <UserCheck className="w-10 h-10 text-slate-300 mx-auto" />
+                    <h3 className="font-bold text-sm text-slate-700">No team members match your criteria</h3>
+                    <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                      Try adjusting your filter or search query, or click below to add a new team member.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={openAddTeamModal}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#D31220] hover:bg-[#b91522] cursor-pointer mt-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Add Team Member</span>
+                    </button>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+                  {filtered.map((member, idx) => (
+                    <div
+                      key={member.id || member.slug}
+                      className="bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:shadow-md transition-all flex flex-col overflow-hidden group"
+                    >
+                      {/* Image Thumbnail with Overlay Badges */}
+                      <div className="aspect-[4/3] w-full bg-slate-100 relative overflow-hidden">
+                        <img
+                          src={member.image || member.fallbackImage}
+                          alt={member.name}
+                          className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300"
+                        />
+                        <div className="absolute top-2 left-2">
+                          <span className="bg-slate-900/85 backdrop-blur-xs text-white text-[9.5px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded shadow">
+                            {member.department === "Editorial Leadership" ? "Leadership" : "Editorial Desk"}
+                          </span>
+                        </div>
+                        {/* Order controls */}
+                        <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/80 backdrop-blur-xs rounded-lg p-0.5">
+                          <button
+                            type="button"
+                            onClick={() => handleMoveTeamMember(idx, "up")}
+                            disabled={idx === 0}
+                            className="p-1 text-slate-300 hover:text-white disabled:opacity-30 cursor-pointer"
+                            title="Move Up"
+                          >
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleMoveTeamMember(idx, "down")}
+                            disabled={idx === filtered.length - 1}
+                            className="p-1 text-slate-300 hover:text-white disabled:opacity-30 cursor-pointer"
+                            title="Move Down"
+                          >
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Content Card Body */}
+                      <div className="p-4 flex flex-col flex-1 justify-between gap-3">
+                        <div>
+                          <span className="text-[9.5px] font-mono font-bold uppercase tracking-widest text-[#D31220] block mb-0.5 truncate">
+                            {member.role}
+                          </span>
+                          <h4 className="font-serif font-bold text-base text-slate-900 group-hover:text-[#D31220] transition-colors leading-snug">
+                            {member.name}
+                          </h4>
+                          <a
+                            href={`mailto:${member.email}`}
+                            className="text-[11px] text-slate-500 hover:text-[#D31220] flex items-center gap-1.5 mt-1 font-mono truncate"
+                            title={member.email}
+                          >
+                            <Mail className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{member.email}</span>
+                          </a>
+                          <p className="text-xs text-slate-600 leading-relaxed mt-2 line-clamp-3">
+                            {member.bio}
+                          </p>
+                        </div>
+
+                        {/* Action buttons footer */}
+                        <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2 mt-auto">
+                          <Link
+                            href={`/author/${member.slug}`}
+                            target="_blank"
+                            className="text-[11px] font-bold text-slate-500 hover:text-slate-900 flex items-center gap-1"
+                          >
+                            <span>Author Page</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </Link>
+
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => openEditTeamModal(member)}
+                              className="inline-flex items-center gap-1 text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <Pencil className="w-3 h-3 text-slate-500" />
+                              <span>Edit</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteTeamTarget(member)}
+                              className="inline-flex items-center gap-1 text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3 h-3 text-rose-500" />
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
       </main>
+
+      {/* TEAM MEMBER ADD/EDIT MODAL */}
+      {isTeamModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 sm:p-7 shadow-2xl space-y-5 border border-slate-200 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="font-extrabold text-lg font-sans text-slate-900">
+                  {editingTeamMember ? "Edit Team Member" : "Add New Team Member"}
+                </h3>
+                <p className="text-xs text-slate-500 font-sans mt-0.5">
+                  Update profile information displayed on the public /team page.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsTeamModalOpen(false);
+                  setEditingTeamMember(null);
+                }}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveTeamMember} className="space-y-4">
+              {/* SEARCH & FIND REGISTERED MEMBER OPTION */}
+              {!editingTeamMember && unaddedWorkspaceUsers.length > 0 && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <Search className="w-3.5 h-3.5 text-[#D31220]" />
+                      <span>Search &amp; Find Member ({unaddedWorkspaceUsers.length} available)</span>
+                    </label>
+                    {unaddedUserSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setUnaddedUserSearch("")}
+                        className="text-[10px] text-slate-500 hover:text-slate-700 font-mono underline cursor-pointer"
+                      >
+                        Clear Search
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder="Type name, email or role to find and auto-fill..."
+                      value={unaddedUserSearch}
+                      onChange={(e) => setUnaddedUserSearch(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium focus:outline-none focus:border-[#D31220] transition-colors"
+                    />
+                  </div>
+
+                  {/* Matching Results List */}
+                  {unaddedUserSearch.trim() && (
+                    <div className="max-h-48 overflow-y-auto space-y-1 pt-1 border-t border-slate-200 mt-2">
+                      {(() => {
+                        const query = unaddedUserSearch.toLowerCase().trim();
+                        const matches = unaddedWorkspaceUsers.filter(
+                          (u) =>
+                            (u.name && u.name.toLowerCase().includes(query)) ||
+                            (u.email && u.email.toLowerCase().includes(query)) ||
+                            (u.role && u.role.toLowerCase().includes(query))
+                        );
+
+                        if (matches.length === 0) {
+                          return (
+                            <p className="text-xs text-slate-400 py-2 text-center font-sans">
+                              No unadded members found matching &ldquo;{unaddedUserSearch}&rdquo;
+                            </p>
+                          );
+                        }
+
+                        return matches.map((u) => {
+                          const avatar =
+                            resolveUserAvatar({ name: u.name, email: u.email }) ||
+                            getUserProfile(u.email)?.avatar ||
+                            "/author_bluesuit.jpg";
+                          return (
+                            <button
+                              key={u.id}
+                              type="button"
+                              onClick={() => {
+                                handleSelectUnaddedUser(u);
+                                setUnaddedUserSearch("");
+                              }}
+                              className="w-full flex items-center justify-between p-2 rounded-lg bg-white hover:bg-red-50/70 border border-slate-200 hover:border-[#D31220] text-left transition-colors group cursor-pointer"
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={avatar} alt={u.name} className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
+                                <div className="min-w-0">
+                                  <p className="text-xs font-bold text-slate-900 group-hover:text-[#D31220] truncate">
+                                    {u.name}
+                                  </p>
+                                  <p className="text-[10px] text-slate-500 font-mono truncate">{u.email}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                                <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-bold">
+                                  {u.role}
+                                </span>
+                                <span className="text-xs font-bold text-[#D31220] group-hover:underline">
+                                  Select &rarr;
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        });
+                      })()}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Full Name */}
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Full Name <span className="text-[#D31220]">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Eleanor Vance"
+                    value={teamFormName}
+                    onChange={(e) => {
+                      setTeamFormName(e.target.value);
+                      if (!editingTeamMember && (!teamFormSlug || teamFormSlug === slugifyTeamName(teamFormName))) {
+                        setTeamFormSlug(slugifyTeamName(e.target.value));
+                      }
+                    }}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-medium focus:outline-none focus:border-[#D31220] transition-colors"
+                  />
+                </div>
+
+                {/* Role / Job Title */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Role / Job Title <span className="text-[#D31220]">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Senior Tech Correspondent"
+                    value={teamFormRole}
+                    onChange={(e) => setTeamFormRole(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-medium focus:outline-none focus:border-[#D31220] transition-colors"
+                  />
+                </div>
+
+                {/* Department */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Department <span className="text-[#D31220]">*</span>
+                  </label>
+                  <select
+                    value={teamFormDept}
+                    onChange={(e) => setTeamFormDept(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-medium focus:outline-none focus:border-[#D31220] transition-colors bg-white cursor-pointer"
+                  >
+                    <option value="Editorial Leadership">Editorial Leadership</option>
+                    <option value="Reporting & Editorial Desks">Reporting & Editorial Desks</option>
+                    <option value="Custom">Custom Department...</option>
+                  </select>
+                </div>
+
+                {/* Custom Department Name */}
+                {teamFormDept === "Custom" && (
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Custom Department Name <span className="text-[#D31220]">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Investigative Unit or Photojournalism Desk"
+                      value={teamFormCustomDept}
+                      onChange={(e) => setTeamFormCustomDept(e.target.value)}
+                      className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-medium focus:outline-none focus:border-[#D31220] transition-colors"
+                    />
+                  </div>
+                )}
+
+                {/* Email Address */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="e.g. name@londonbigben.co.uk"
+                    value={teamFormEmail}
+                    onChange={(e) => setTeamFormEmail(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-medium focus:outline-none focus:border-[#D31220] transition-colors"
+                  />
+                </div>
+
+                {/* Profile Slug / URL Key */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Slug / URL Identifier
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. eleanor-vance"
+                    value={teamFormSlug}
+                    onChange={(e) => setTeamFormSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-mono font-medium focus:outline-none focus:border-[#D31220] transition-colors"
+                  />
+                </div>
+
+                {/* Photo Upload & URL */}
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Profile Photo
+                  </label>
+                  <div className="flex flex-col sm:flex-row items-center gap-3">
+                    <div className="w-14 h-14 rounded-full bg-slate-100 border border-slate-200 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                      {teamFormImage ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={teamFormImage}
+                          alt="Preview"
+                          className="w-full h-full object-cover object-center"
+                        />
+                      ) : (
+                        <Users className="w-6 h-6 text-slate-300" />
+                      )}
+                    </div>
+                    <div className="flex-1 w-full space-y-2">
+                      <input
+                        type="url"
+                        placeholder="https://... or upload photo from device"
+                        value={teamFormImage}
+                        onChange={(e) => setTeamFormImage(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-mono focus:outline-none focus:border-[#D31220]"
+                      />
+                      <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold cursor-pointer transition-colors">
+                        <Upload className="w-3.5 h-3.5 text-slate-500" />
+                        <span>{isTeamUploading ? "Uploading to Cloud..." : "Upload Photo"}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          disabled={isTeamUploading}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleUploadTeamPhoto(file);
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Biography / Editorial Focus */}
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Short Bio / Editorial Focus
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="Brief description of responsibilities, beats covered, or investigative focus..."
+                    value={teamFormBio}
+                    onChange={(e) => setTeamFormBio(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-medium focus:outline-none focus:border-[#D31220] transition-colors resize-none"
+                  />
+                </div>
+              </div>
+
+              {/* Modal Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsTeamModalOpen(false);
+                    setEditingTeamMember(null);
+                  }}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isTeamSubmitting || isTeamUploading}
+                  className="px-5 py-2.5 bg-[#D31220] hover:bg-[#b00f1a] text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {isTeamSubmitting ? "Saving..." : editingTeamMember ? "Save Changes" : "Add Member"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* TEAM MEMBER DELETE CONFIRMATION MODAL */}
+      {deleteTeamTarget && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4 border border-slate-200">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-rose-100 text-[#D31220] flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-base font-sans text-slate-900">Remove Team Member?</h3>
+                <p className="text-xs text-slate-500 font-sans mt-0.5">This action cannot be undone.</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 font-sans leading-relaxed">
+              Are you sure you want to remove <strong className="text-slate-900 font-bold">{deleteTeamTarget.name}</strong> ({deleteTeamTarget.role}) from the team? They will no longer appear on the live website.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setDeleteTeamTarget(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isTeamSubmitting}
+                onClick={() => deleteTeamTarget && handleDeleteTeamMember(deleteTeamTarget)}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50"
+              >
+                {isTeamSubmitting ? "Removing..." : "Remove Member"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ADD USER OVERLAY MODAL */}
       {isAddUserModalOpen && (
@@ -7372,6 +8353,7 @@ export default function AdminDashboardPage() {
                   <p className="text-[10px] text-slate-400 mt-1 font-mono">
                     * Admin role creation is restricted to the Default Administrator.
                   </p>
+
                 )}
               </div>
 
@@ -7459,6 +8441,7 @@ export default function AdminDashboardPage() {
                   <p className="text-[10px] text-slate-400 mt-1 font-mono">
                     * Admin role promotion is restricted to the Default Administrator.
                   </p>
+
                 )}
               </div>
 
@@ -7693,6 +8676,7 @@ export default function AdminDashboardPage() {
               <p className="text-xs text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-200 leading-relaxed font-sans font-semibold">
                 {viewingContactModal.message}
               </p>
+
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
@@ -7735,6 +8719,7 @@ export default function AdminDashboardPage() {
               <p className="text-xs text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-200 leading-relaxed font-sans font-semibold">
                 {viewingLeadModal.requirements}
               </p>
+
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
@@ -7845,7 +8830,7 @@ export default function AdminDashboardPage() {
             {/* LEFT MAIN EDITOR AREA (lg:col-span-8) */}
             <div className="lg:col-span-8 flex flex-col space-y-6">
               <div className="bg-white rounded-2xl border border-slate-200 p-6 md:p-8 shadow-xs space-y-6">
-                
+
                 {/* FORMATTING TOOLBAR */}
                 <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 flex items-center gap-2 text-slate-600 flex-wrap text-xs font-mono">
                   <button className="p-1.5 hover:bg-slate-200 rounded-md cursor-pointer text-slate-700" title="Undo">↺</button>
@@ -7861,7 +8846,7 @@ export default function AdminDashboardPage() {
                   <span className="h-4 w-px bg-slate-300 my-auto mx-1"></span>
                   <button className="p-1.5 hover:bg-slate-200 rounded-md cursor-pointer text-slate-700" title="Quote">“ ”</button>
                   <button className="p-1.5 hover:bg-slate-200 rounded-md cursor-pointer text-slate-700" title="Code">&lt;&gt;</button>
-                  
+
                   <button className="ml-auto bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 font-extrabold text-[11px] px-3 py-1 rounded-lg cursor-pointer flex items-center gap-1">
                     📷 INSERT IMAGE
                   </button>
@@ -7922,7 +8907,7 @@ export default function AdminDashboardPage() {
             {/* RIGHT SIDEBAR (ARTICLE SETTINGS - lg:col-span-4) */}
             <div className="lg:col-span-4">
               <div className="sticky top-20 bg-white rounded-2xl border border-slate-200 p-5 md:p-6 shadow-xs space-y-6 font-sans">
-                
+
                 {/* HEADER */}
                 <div className="flex items-center gap-2 text-slate-800 font-serif text-sm font-extrabold uppercase tracking-widest border-b border-slate-100 pb-3">
                   <Settings className="w-4 h-4 text-slate-500" />
@@ -7933,22 +8918,20 @@ export default function AdminDashboardPage() {
                 <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl font-mono text-xs font-bold">
                   <button
                     onClick={() => setReviewSidebarTab("details")}
-                    className={`py-2 text-center rounded-lg cursor-pointer transition-all uppercase ${
-                      reviewSidebarTab === "details"
+                    className={`py-2 text-center rounded-lg cursor-pointer transition-all uppercase ${reviewSidebarTab === "details"
                         ? "bg-white text-slate-900 shadow-xs"
                         : "text-slate-500 hover:text-slate-900"
-                    }`}
+                      }`}
                   >
                     DETAILS
                   </button>
 
                   <button
                     onClick={() => setReviewSidebarTab("seo")}
-                    className={`py-2 text-center rounded-lg cursor-pointer transition-all uppercase ${
-                      reviewSidebarTab === "seo"
+                    className={`py-2 text-center rounded-lg cursor-pointer transition-all uppercase ${reviewSidebarTab === "seo"
                         ? "bg-white text-slate-900 shadow-xs"
                         : "text-slate-500 hover:text-slate-900"
-                    }`}
+                      }`}
                   >
                     SEO
                   </button>
@@ -7956,7 +8939,7 @@ export default function AdminDashboardPage() {
 
                 {reviewSidebarTab === "details" && (
                   <div className="space-y-5 text-xs font-sans">
-                    
+
                     {/* SELECT CATEGORY (MAIN) WITH FLYOUT SUBCATEGORIES SIDEBAR */}
                     <div className="space-y-1.5 relative">
                       <label className="block font-mono text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
@@ -7973,7 +8956,7 @@ export default function AdminDashboardPage() {
 
                       {/* Custom Dropdown Menu with Cascading Sidebar for World */}
                       {isAdminCatDropdownOpen && (
-                        <div 
+                        <div
                           onMouseLeave={() => setAdminHoveredCat(null)}
                           className="absolute top-full left-0 mt-1.5 w-full bg-white border border-slate-200 rounded-xl shadow-2xl z-50 py-1.5 animate-in fade-in slide-in-from-top-1 duration-150"
                         >
@@ -7991,11 +8974,10 @@ export default function AdminDashboardPage() {
                                   <button
                                     type="button"
                                     onClick={() => handleAdminCategoryChange(cat)}
-                                    className={`w-full text-left px-3.5 py-2 text-xs font-medium flex items-center justify-between transition-colors cursor-pointer ${
-                                      isSelected
+                                    className={`w-full text-left px-3.5 py-2 text-xs font-medium flex items-center justify-between transition-colors cursor-pointer ${isSelected
                                         ? "bg-blue-50 text-blue-700 font-bold"
                                         : "text-slate-700 hover:bg-slate-50 hover:text-slate-900"
-                                    }`}
+                                      }`}
                                   >
                                     <span>{cat}</span>
                                     {isWorld && (
@@ -8005,7 +8987,7 @@ export default function AdminDashboardPage() {
 
                                   {/* Flyout Subcategories Sidebar on Hover for World */}
                                   {isWorld && adminHoveredCat === "World" && (
-                                    <div 
+                                    <div
                                       onMouseEnter={() => setAdminHoveredCat("World")}
                                       className="absolute right-full top-0 mr-1.5 w-48 bg-white border border-slate-200 rounded-xl shadow-2xl z-[100] p-2 text-left animate-in fade-in slide-in-from-right-1 duration-150 before:content-[''] before:absolute before:-right-3 before:top-0 before:bottom-0 before:w-4"
                                     >
@@ -8026,11 +9008,10 @@ export default function AdminDashboardPage() {
                                                 e.stopPropagation();
                                                 handleAdminCategoryChange(sub);
                                               }}
-                                              className={`w-full text-left px-2.5 py-1.5 text-xs rounded-lg flex items-center justify-between transition-colors cursor-pointer ${
-                                                isSubSelected
+                                              className={`w-full text-left px-2.5 py-1.5 text-xs rounded-lg flex items-center justify-between transition-colors cursor-pointer ${isSubSelected
                                                   ? "bg-blue-50 text-blue-700 font-bold"
                                                   : "text-slate-700 hover:bg-slate-100"
-                                              }`}
+                                                }`}
                                             >
                                               <span>{sub}</span>
                                               {isSubSelected && <Check size={11} strokeWidth={3} className="text-blue-600" />}
@@ -8206,6 +9187,7 @@ export default function AdminDashboardPage() {
                       <p className="text-[10px] text-slate-500 leading-normal font-sans">
                         Select where this story will be curated on the homepage layout. Any list slots will automatically push the newest article to rank #1 and shift older items down.
                       </p>
+
                     </div>
 
                     {/* TARGETED EMAIL DISTRIBUTION */}
@@ -8219,6 +9201,7 @@ export default function AdminDashboardPage() {
                       <p className="text-[10px] text-slate-500 leading-normal font-sans">
                         Add specific VIP, partner, or client emails to receive this story upon publication.
                       </p>
+
                       <button
                         type="button"
                         onClick={() => setIsMailBoxModalOpen(true)}
@@ -8397,6 +9380,7 @@ export default function AdminDashboardPage() {
                 <p className="text-xs text-amber-600">
                   💡 Press <strong>Enter</strong> or <strong>comma (,)</strong> to add. You can also paste multiple comma-separated emails.
                 </p>
+
               </div>
 
               {/* Configured Recipients List */}
@@ -8506,11 +9490,11 @@ export default function AdminDashboardPage() {
                           localStorage.setItem("dj_writer_submitted_articles", JSON.stringify(updatedList));
                         }
                       }
-                    } catch (e) {}
+                    } catch (e) { }
 
                     // Save to server store
                     import("@/lib/articlesSync").then(({ saveArticleToServer }) => {
-                      saveArticleToServer(updatedSub as any).catch(() => {});
+                      saveArticleToServer(updatedSub as any).catch(() => { });
                     });
                   }
 
@@ -8548,6 +9532,7 @@ export default function AdminDashboardPage() {
               <p className="font-poppins text-lg text-slate-600 leading-relaxed italic">
                 {reviewSummary}
               </p>
+
               <div className="flex items-center gap-3 text-xs font-mono text-slate-500 border-y border-slate-100 py-3">
                 <span>BY {reviewingSubmission.authorName || "Rushdhi MR"}</span>
                 <span>•</span>
@@ -8618,9 +9603,11 @@ export default function AdminDashboardPage() {
                   <p className="text-xs font-extrabold text-slate-900 line-clamp-2">
                     {rejectionTargetSubmission.title}
                   </p>
+
                   <p className="text-[11px] text-slate-500 font-medium mt-0.5">
                     Author: {rejectionTargetSubmission.authorName || "Writer"} • Category: {rejectionTargetSubmission.category || "General"}
                   </p>
+
                 </div>
               )}
 
@@ -8731,7 +9718,7 @@ export default function AdminDashboardPage() {
         return (
           <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
             <div className="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-3xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
-              
+
               {/* Modal Header */}
               <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
                 <div className="flex items-center gap-2.5">
@@ -8748,6 +9735,7 @@ export default function AdminDashboardPage() {
                     <p className="text-[11px] font-mono text-slate-400 truncate max-w-md">
                       {slot?.title || "Ad Banner"}
                     </p>
+
                   </div>
                 </div>
 
@@ -8763,7 +9751,7 @@ export default function AdminDashboardPage() {
 
               {/* Modal Body: Framing Workspace */}
               <div className="p-5 overflow-y-auto space-y-4">
-                
+
                 {/* Visual Viewport with Masked Frame */}
                 <div className="relative bg-slate-950 rounded-xl p-4 sm:p-6 border border-slate-800 flex flex-col items-center justify-center overflow-hidden">
                   <div className="text-[11px] font-mono text-slate-400 mb-3 flex items-center gap-1.5">
@@ -8784,7 +9772,7 @@ export default function AdminDashboardPage() {
                       onPointerMove={handleCropPointerMove}
                       onPointerUp={(e) => {
                         setIsDraggingCrop(false);
-                        try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+                        try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { }
                       }}
                       onWheel={(e) => {
                         e.preventDefault();
@@ -8828,7 +9816,7 @@ export default function AdminDashboardPage() {
 
                 {/* Cropping Controls Toolbar */}
                 <div className="bg-slate-800/80 rounded-xl p-4 border border-slate-700/60 space-y-3">
-                  
+
                   {/* Zoom Slider Row */}
                   <div className="flex items-center gap-3">
                     <button

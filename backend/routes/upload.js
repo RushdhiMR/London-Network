@@ -1,3 +1,22 @@
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET;
+
+function requireAdmin(req, res, next) {
+  try {
+    const token = req.cookies?.dj_session || req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized. Session missing.' });
+    }
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (!decoded || (decoded.role !== 'admin' && decoded.role !== 'ADMIN')) {
+      return res.status(403).json({ error: 'Forbidden. Admin privileges required.' });
+    }
+    req.user = decoded;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Unauthorized. Invalid or expired token.' });
+  }
+}
 const express = require('express');
 const router = express.Router();
 const { isB2Configured, uploadToB2 } = require('../services/backblazeService');
@@ -77,7 +96,7 @@ router.post('/', async (req, res) => {
 });
 
 // POST /api/upload/backup - dedicated endpoint for database backup archives
-router.post('/backup', async (req, res) => {
+router.post('/backup', requireAdmin, async (req, res) => {
   try {
     const { sqlContent, fileName = `backup-${Date.now()}.sql` } = req.body;
 

@@ -586,7 +586,23 @@ function ArticlePageContentInner({
   const [newsletterSubscribed, setNewsletterSubscribed] = useState(false);
 
   useEffect(() => {
-    const handleSync = () => {
+    fetch("/api/articles/trending")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.success && Array.isArray(data.topics) && data.topics.length > 0) {
+          const clean = data.topics.filter((t: any) => typeof t === "string" && t.trim() !== "").slice(0, 6);
+          if (clean.length > 0) {
+            setArticleTrendingTopics(clean);
+            try {
+              localStorage.setItem("article_trending_topics", JSON.stringify(clean));
+            } catch (e) {}
+          }
+        }
+      })
+      .catch(() => {});
+
+    const handleSync = (e?: any) => {
+      if (e && e.key && e.key !== "article_trending_topics") return;
       try {
         const saved = localStorage.getItem("article_trending_topics");
         if (saved && saved.trim()) {
@@ -622,127 +638,7 @@ function ArticlePageContentInner({
     }
   }, [pathname, subcategory, newsData]);
 
-  // "More News" articles: Linked with Latest News
-  const moreNewsArticles = useMemo(() => {
-    const getArticleTimestamp = (item: any): number => {
-      if (!item) return 0;
-      if (item.published_at || item.publishedAt) {
-        const t = new Date(item.published_at || item.publishedAt).getTime();
-        if (!isNaN(t) && t > 0) return t;
-      }
-      if (item.createdAt || item.created_at) {
-        const t = new Date(item.createdAt || item.created_at).getTime();
-        if (!isNaN(t) && t > 0) return t;
-      }
-      if (item.date && item.date !== "Just now" && item.date !== "Today" && item.date !== "Just published") {
-        const t = new Date(item.date).getTime();
-        if (!isNaN(t) && t > 0) return t;
-      }
-      if (item.updated_at || item.updatedAt) {
-        const t = new Date(item.updated_at || item.updatedAt).getTime();
-        if (!isNaN(t) && t > 0) return t;
-      }
-      return 0;
-    };
-
-    const currentId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
-    const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
-
-    const published = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
-      if (!p || (p.status || "").toLowerCase() !== "published") return false;
-      if (String(p.id) === currentId) return false;
-      if ((p.title || "").trim().toLowerCase() === currentTitle) return false;
-      return true;
-    });
-
-    // Always sort strictly by most recent published timestamp first across overall categories
-    const sorted = [...published].sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
-
-    return sorted.slice(0, 4).map((post, index) => {
-      const cat = (post.category || post.category_name || "NEWS").toUpperCase();
-      const catSlug = cat.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      const postSlug = (post.slug || post.title || "")
-        .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, "")
-        .trim()
-        .replace(/\s+/g, "-");
-
-      const displayDate = post.date || (post.updated_at ? new Date(post.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : (post.published_at ? new Date(post.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Just published"));
-
-      return {
-        number: `0${index + 1}`.slice(-2),
-        category: cat,
-        title: post.title,
-        time: displayDate,
-        image: post.imageUrl || post.image || (post as any).image_url || "https://images.unsplash.com/photo-1563206767-5b18f218e8de?w=600&h=400&fit=crop",
-        href: `/article/${post.slug || postSlug}`
-      };
-    });
-  }, [liveArticles, activeNewsData, newsData]);
-
-  const trendingArticles = moreNewsArticles;
-
-  // "Up next" articles: Recent articles from the clicked article's category only
-  const upNextArticles = useMemo(() => {
-    const getTimestamp = (item: any): number => {
-      if (!item) return 0;
-      const d = item.updated_at || item.published_at || item.createdAt || item.date;
-      if (!d) return 0;
-      const parsed = new Date(d).getTime();
-      return isNaN(parsed) ? 0 : parsed;
-    };
-
-    const currentId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
-    const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
-
-    const targetCat = (
-      (activeNewsData?.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "") ||
-      (newsData?.category && newsData.category.toLowerCase() !== "article" ? newsData.category : "") ||
-      (category && category.toLowerCase() !== "article" ? category : "") ||
-      (parent?.name && parent.name.toLowerCase() !== "article" ? parent.name : "") ||
-      ""
-    ).trim();
-
-    const published = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
-      if (!p || (p.status || "").toLowerCase() !== "published") return false;
-      if (String(p.id) === currentId) return false;
-      if ((p.title || "").trim().toLowerCase() === currentTitle) return false;
-      return true;
-    });
-
-    let matchingPosts: any[] = [];
-    if (targetCat) {
-      const mainMatches = published.filter((p) => articleMatchesMainCategory(p, targetCat));
-      const subMatches = published.filter((p) => !articleMatchesMainCategory(p, targetCat) && articleBelongsToCategory(p, targetCat));
-      mainMatches.sort((a, b) => getTimestamp(b) - getTimestamp(a));
-      subMatches.sort((a, b) => getTimestamp(b) - getTimestamp(a));
-      matchingPosts = [...mainMatches, ...subMatches];
-    } else {
-      published.sort((a, b) => getTimestamp(b) - getTimestamp(a));
-      matchingPosts = published;
-    }
-
-    return matchingPosts.slice(0, 6).map((post) => {
-      const cat = (post.category || post.category_name || "world").toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
-      const postSlug = (post.slug || post.title || "")
-        .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, "")
-        .trim()
-        .replace(/\s+/g, "-");
-
-      const content = post.content || post.rawContent || post.summary || "";
-      const words = content.replace(/<[^>]+>/g, " ").trim().split(/\s+/).filter(Boolean).length;
-      const minutes = Math.max(3, Math.min(10, Math.ceil(words / 180)));
-
-      return {
-        id: String(post.id),
-        title: post.title,
-        readTime: `${minutes} MIN READ`,
-        image: post.imageUrl || post.image || (post as any).image_url || "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=600&h=400&fit=crop",
-        href: `/article/${post.slug || postSlug}`
-      };
-    });
-  }, [liveArticles, activeNewsData, newsData, category, parent]);
+  // Note: relatedNewsArticles, moreNewsArticles, and upNextArticles are unified in categoryNewsStream below
 
 
 
@@ -839,13 +735,13 @@ function ArticlePageContentInner({
         href: sp.href
       }));
       return {
-        mostReadArticles: picks.slice(0, 5),
+        mostReadArticles: picks.slice(0, 8),
         latestInCategoryArticles: picks.slice(0, 5)
       };
     }
 
     const sortedByViews = [...published].sort((a, b) => getViews(b, 0) - getViews(a, 0));
-    const mostReadArticles = sortedByViews.slice(0, 5).map(mapPost);
+    const mostReadArticles = sortedByViews.slice(0, 8).map(mapPost);
 
     // Track all article IDs and titles already shown in the sidebar or active article
     const shownIds = new Set<string>();
@@ -908,36 +804,26 @@ function ArticlePageContentInner({
     return { mostReadArticles, latestInCategoryArticles };
   }, [liveArticles, activeNewsData, newsData, targetCat, sidebarPicks]);
 
-  // Previous and Next article navigation (in category uploaded order, excluding above panels)
+  // Previous and Next article navigation (strictly in the same category in article order)
   const { prevArticle, nextArticle } = useMemo(() => {
-    const currentId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
-    const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
+    // 1. Identify the exact category of the current article
+    const currentCat = (
+      (activeNewsData?.category && activeNewsData.category.toLowerCase() !== "article" && activeNewsData.category.toLowerCase() !== "news" ? activeNewsData.category : "") ||
+      (newsData?.category && newsData.category.toLowerCase() !== "article" && newsData.category.toLowerCase() !== "news" ? newsData.category : "") ||
+      (targetCat && targetCat.toLowerCase() !== "article" && targetCat.toLowerCase() !== "news" ? targetCat : "") ||
+      (parent?.name && parent.name.toLowerCase() !== "article" && parent.name.toLowerCase() !== "news" ? parent.name : "") ||
+      activeNewsData?.category ||
+      newsData?.category ||
+      "Politics"
+    );
 
-    // 1. Collect all article IDs and titles shown in sections above
-    const shownAboveNavIds = new Set<string>();
-    const shownAboveNavTitles = new Set<string>();
-
-    if (currentId) shownAboveNavIds.add(currentId);
-    if (currentTitle) shownAboveNavTitles.add(currentTitle);
-
-    mostReadArticles.forEach((a) => {
-      if (a.id) shownAboveNavIds.add(String(a.id));
-      if (a.title) shownAboveNavTitles.add(a.title.trim().toLowerCase());
-    });
-
-    latestInCategoryArticles.forEach((a) => {
-      if (a.id) shownAboveNavIds.add(String(a.id));
-      if (a.title) shownAboveNavTitles.add(a.title.trim().toLowerCase());
-    });
-
-    // Filter published articles
+    // Filter published live articles strictly belonging to this category
     const published = (Array.isArray(liveArticles) ? liveArticles : []).filter(
       (p) => p && (p.status || "").toLowerCase() === "published"
     );
 
-    // 2. Select only articles added in that category, sorted in their natural added order (newest to oldest)
-    const categoryArticles = published
-      .filter((p) => !targetCat || targetCat.toLowerCase() === "article" || targetCat.toLowerCase() === "news" || articleBelongsToCategory(p, targetCat))
+    const matchingLive = published
+      .filter((p) => articleBelongsToCategory(p, currentCat))
       .sort((a, b) => {
         const timeA = getPostTime(a);
         const timeB = getPostTime(b);
@@ -947,87 +833,98 @@ function ArticlePageContentInner({
         return bId - aId;
       });
 
-    // Current article index in the category order
-    const currentIdx = categoryArticles.findIndex(
-      (p) => String(p.id) === currentId || (p.title || "").trim().toLowerCase() === currentTitle
-    );
+    // Build the ordered article list for this category
+    const seenTitles = new Set<string>();
+    const categoryArticles: any[] = [];
 
-    // 3. Exclude any article that is ALREADY on other panels in the article section
-    const isAvailable = (p: any): boolean => {
-      if (!p) return false;
-      const pid = String(p.id);
-      const ptitle = (p.title || "").trim().toLowerCase();
-      if (shownAboveNavIds.has(pid)) return false;
-      if (shownAboveNavTitles.has(ptitle)) return false;
-      return true;
-    };
+    matchingLive.forEach((p) => {
+      const t = (p.title || "").trim().toLowerCase();
+      if (t && !seenTitles.has(t)) {
+        seenTitles.add(t);
+        categoryArticles.push(p);
+      }
+    });
 
-    // Pick according to the category order
-    const beforeAvailable = currentIdx !== -1
-      ? categoryArticles.slice(0, currentIdx).filter(isAvailable)
-      : [];
+    // Supplement with static articles from this category if needed
+    try {
+      const catSlug = currentCat.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const catData = getCategoryData(catSlug);
+      const staticList = [
+        ...(catData?.newsArticles || []),
+        ...(catData?.secondaryArticles || []),
+        ...(catData?.featured ? [catData.featured] : [])
+      ];
 
-    const afterAvailable = currentIdx !== -1
-      ? categoryArticles.slice(currentIdx + 1).filter(isAvailable)
-      : [];
+      for (const sa of staticList) {
+        const saTitle = (sa.title || "").trim();
+        const saClean = saTitle.toLowerCase();
+        if (saTitle && !seenTitles.has(saClean)) {
+          seenTitles.add(saClean);
+          const postSlug = saClean.replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-");
+          categoryArticles.push({
+            id: `cat-static-${saClean.slice(0, 20)}`,
+            title: saTitle,
+            category: currentCat,
+            date: sa.date || "Recently",
+            imageUrl: sa.image || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=150&h=150&fit=crop",
+            slug: postSlug,
+            status: "published"
+          });
+        }
+      }
+    } catch (e) {}
 
-    const allAvailable = categoryArticles.filter(isAvailable);
+    // Find the currently opened article in this category list
+    const currentId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
+    const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
+    const currentSlug = (pathname || "").split("/").filter(Boolean).pop()?.toLowerCase();
 
+    let currentIdx = categoryArticles.findIndex((p) => {
+      if (currentId && String(p.id) === currentId) return true;
+      if (currentTitle && (p.title || "").trim().toLowerCase() === currentTitle) return true;
+      if (currentSlug && p.slug && p.slug.toLowerCase() === currentSlug) return true;
+      return false;
+    });
+
+    if (currentIdx === -1) {
+      const activePost = {
+        id: currentId || "current-active",
+        title: activeNewsData.title || newsData?.title || "",
+        category: currentCat,
+        date: activeNewsData.date || newsData?.date || "",
+        imageUrl: activeNewsData.image || newsData?.image || "",
+        slug: currentSlug || "",
+        status: "published",
+        created_at: (activeNewsData as any).created_at,
+        published_at: (activeNewsData as any).published_at
+      };
+      const activeTime = getPostTime(activePost);
+      let insertAt = categoryArticles.findIndex((p) => getPostTime(p) < activeTime);
+      if (insertAt === -1) insertAt = 0;
+      categoryArticles.splice(insertAt, 0, activePost);
+      currentIdx = insertAt;
+    }
+
+    // In article order:
+    // If reading Article 1 -> Article 2 as Previous, Article 3 as Next
+    // If reading Article 2 -> Article 1 as Previous, Article 3 as Next
     let prevSelected: any = null;
     let nextSelected: any = null;
 
-    if (beforeAvailable.length > 0 && afterAvailable.length > 0) {
-      prevSelected = beforeAvailable[beforeAvailable.length - 1];
-      nextSelected = afterAvailable[0];
-    } else if (afterAvailable.length >= 2) {
-      prevSelected = afterAvailable[0];
-      nextSelected = afterAvailable[1];
-    } else if (beforeAvailable.length >= 2) {
-      prevSelected = beforeAvailable[beforeAvailable.length - 1];
-      nextSelected = beforeAvailable[beforeAvailable.length - 2];
-    } else if (allAvailable.length >= 2) {
-      prevSelected = allAvailable[0];
-      nextSelected = allAvailable[1];
-    } else if (allAvailable.length === 1) {
-      prevSelected = allAvailable[0];
-    }
-
-    // Fallback: If category has fewer than 2 available articles, pull from category static articles without duplicates
-    if (!prevSelected || !nextSelected) {
-      try {
-        const catSlug = (targetCat || "politics").toLowerCase().replace(/[^a-z0-9]/g, "");
-        const catData = getCategoryData(catSlug);
-        const staticList = [
-          ...(catData?.newsArticles || []),
-          ...(catData?.secondaryArticles || []),
-          ...(catData?.featured ? [catData.featured] : [])
-        ];
-
-        for (const sa of staticList) {
-          const saTitle = (sa.title || "").trim();
-          const saClean = saTitle.toLowerCase();
-          if (
-            saTitle &&
-            !shownAboveNavTitles.has(saClean) &&
-            (!prevSelected || (prevSelected.title || "").trim().toLowerCase() !== saClean) &&
-            (!nextSelected || (nextSelected.title || "").trim().toLowerCase() !== saClean)
-          ) {
-            const formatted = {
-              id: `cat-fallback-${saClean.slice(0, 20)}`,
-              title: saTitle,
-              image: sa.image || "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=300&h=200&fit=crop",
-              href: `/article/${saClean.replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-")}`
-            };
-
-            if (!prevSelected) {
-              prevSelected = formatted;
-            } else if (!nextSelected) {
-              nextSelected = formatted;
-              break;
-            }
-          }
-        }
-      } catch (e) {}
+    if (categoryArticles.length >= 2) {
+      if (currentIdx === 0) {
+        // When reading Article 1: show Article 2 as Previous, Article 3 as Next
+        prevSelected = categoryArticles[1];
+        nextSelected = categoryArticles[2] || categoryArticles[1];
+      } else if (currentIdx === categoryArticles.length - 1) {
+        // When reading the last article: show the preceding articles
+        prevSelected = categoryArticles[currentIdx - 1];
+        nextSelected = categoryArticles[currentIdx - 2] || categoryArticles[0];
+      } else {
+        // General case (e.g. reading Article 2): show Article 1 as Previous, Article 3 as Next
+        prevSelected = categoryArticles[currentIdx - 1];
+        nextSelected = categoryArticles[currentIdx + 1];
+      }
     }
 
     const formatNavArticle = (post: any) => {
@@ -1049,50 +946,23 @@ function ArticlePageContentInner({
       prevArticle: prevSelected ? formatNavArticle(prevSelected) : null,
       nextArticle: nextSelected ? formatNavArticle(nextSelected) : null
     };
-  }, [liveArticles, activeNewsData, newsData, targetCat, mostReadArticles, latestInCategoryArticles]);
+  }, [liveArticles, activeNewsData, newsData, targetCat, parent, pathname]);
 
-  // Related Category News (4) strictly from active category, sorted by uploaded order, deduplicated against all above sections
-  const relatedNewsArticles = useMemo(() => {
+  // Overall Recent News (4) - latest published news across ALL categories, sorted newest to oldest
+  const recentNewsArticles = useMemo(() => {
     const currentId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
     const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
 
-    // 1. Collect all article IDs and titles shown on sections above
-    const shownAboveIds = new Set<string>();
-    const shownAboveTitles = new Set<string>();
-
-    if (currentId) shownAboveIds.add(currentId);
-    if (currentTitle) shownAboveTitles.add(currentTitle);
-
-    if (prevArticle?.id) shownAboveIds.add(String(prevArticle.id));
-    if (prevArticle?.title) shownAboveTitles.add(prevArticle.title.trim().toLowerCase());
-
-    if (nextArticle?.id) shownAboveIds.add(String(nextArticle.id));
-    if (nextArticle?.title) shownAboveTitles.add(nextArticle.title.trim().toLowerCase());
-
-    mostReadArticles.forEach((a) => {
-      if (a.id) shownAboveIds.add(String(a.id));
-      if (a.title) shownAboveTitles.add(a.title.trim().toLowerCase());
-    });
-
-    latestInCategoryArticles.forEach((a) => {
-      if (a.id) shownAboveIds.add(String(a.id));
-      if (a.title) shownAboveTitles.add(a.title.trim().toLowerCase());
-    });
-
+    // 1. Collect published articles excluding the current active article
     const published = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
       if (!p || (p.status || "").toLowerCase() !== "published") return false;
-      if (shownAboveIds.has(String(p.id))) return false;
-      if (shownAboveTitles.has((p.title || "").trim().toLowerCase())) return false;
+      if (currentId && String(p.id) === currentId) return false;
+      if (currentTitle && (p.title || "").trim().toLowerCase() === currentTitle) return false;
       return true;
     });
 
-    // 2. Select only articles strictly belonging to target category
-    let categoryMatches = (targetCat && targetCat.toLowerCase() !== "article")
-      ? published.filter((p) => articleBelongsToCategory(p, targetCat))
-      : [];
-
-    // 3. Sort strictly according to uploaded order (newest to oldest)
-    categoryMatches.sort((a, b) => {
+    // 2. Sort strictly according to published/uploaded order (newest to oldest)
+    published.sort((a, b) => {
       const timeA = getPostTime(a);
       const timeB = getPostTime(b);
       if (timeA !== timeB) return timeB - timeA;
@@ -1101,47 +971,247 @@ function ArticlePageContentInner({
       return bId - aId;
     });
 
-    const results: any[] = categoryMatches.slice(0, 4).map(mapPost);
+    // 3. Fallback to sidebarPicks if published is empty
+    if (published.length === 0 && Array.isArray(sidebarPicks) && sidebarPicks.length > 0) {
+      return sidebarPicks.slice(0, 4).map((sp, idx) => ({
+        id: String(idx),
+        title: sp.title,
+        category: "NEWS",
+        date: sp.date,
+        image: sp.image,
+        href: sp.href
+      }));
+    }
 
-    // 4. Each category must have this: If fewer than 4 matches, supplement strictly from that category without duplicates
-    if (results.length < 4) {
+    return published.slice(0, 4).map(mapPost);
+  }, [liveArticles, activeNewsData, newsData, sidebarPicks]);
+
+  // Current active category name strictly resolved
+  const currentCategoryName = useMemo(() => {
+    return (
+      (activeNewsData?.category && activeNewsData.category.toLowerCase() !== "article" && activeNewsData.category.toLowerCase() !== "news" ? activeNewsData.category : "") ||
+      (newsData?.category && newsData.category.toLowerCase() !== "article" && newsData.category.toLowerCase() !== "news" ? newsData.category : "") ||
+      (targetCat && targetCat.toLowerCase() !== "article" && targetCat.toLowerCase() !== "news" ? targetCat : "") ||
+      (parent?.name && parent.name.toLowerCase() !== "article" && parent.name.toLowerCase() !== "news" ? parent.name : "") ||
+      "Politics"
+    ).trim();
+  }, [activeNewsData, newsData, targetCat, parent]);
+
+  // Master unified Category News Stream: strictly from the active category in publish order (newest to oldest)
+  const categoryNewsStream = useMemo(() => {
+    const currentId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
+    const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
+    const currentCat = currentCategoryName;
+
+    // Filter published live articles excluding the currently active article
+    const published = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
+      if (!p || (p.status || "").toLowerCase() !== "published") return false;
+      if (currentId && String(p.id) === currentId) return false;
+      if (currentTitle && (p.title || "").trim().toLowerCase() === currentTitle) return false;
+      return true;
+    });
+
+    // 1. Live articles matching main category
+    const mainMatches = published.filter((p) => articleMatchesMainCategory(p, currentCat));
+
+    // Sort strictly newest to oldest by publish timestamp
+    const sortByTime = (a: any, b: any) => {
+      const timeA = getPostTime(a);
+      const timeB = getPostTime(b);
+      if (timeA !== timeB) return timeB - timeA;
+      const aId = Number(a.id) || 0;
+      const bId = Number(b.id) || 0;
+      return bId - aId;
+    };
+    mainMatches.sort(sortByTime);
+
+    // 2. Static category data articles authentic to this exact category
+    const catSlug = currentCat.toLowerCase().replace(/[^a-z0-9]/g, "");
+    let staticList: any[] = [];
+    try {
+      const catData = getCategoryData(catSlug);
+      staticList = [
+        ...(catData?.newsArticles || []),
+        ...(catData?.secondaryArticles || []),
+        ...(catData?.featured ? [catData.featured] : [])
+      ];
+    } catch (e) {
+      console.error("Error loading category data:", e);
+    }
+
+    const staticPosts = staticList.map((sa, idx) => {
+      const saTitle = (sa.title || "").trim();
+      const saClean = saTitle.toLowerCase();
+      const postSlug = saClean.replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-");
+      return {
+        id: `cat-static-${catSlug}-${idx}-${saClean.slice(0, 15)}`,
+        title: saTitle,
+        category: currentCat,
+        date: sa.date || "Recently",
+        image: sa.image || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=600&h=400&fit=crop",
+        slug: postSlug,
+        href: `/article/${postSlug}`,
+        content: sa.description || ""
+      };
+    });
+
+    // 3. Relevant subcategory matches (as supplement)
+    const subMatches = published.filter((p) => !articleMatchesMainCategory(p, currentCat) && articleBelongsToCategory(p, currentCat));
+    subMatches.sort(sortByTime);
+
+    // Assemble deduplicated ordered stream strictly in order of publish
+    const seenTitles = new Set<string>();
+    if (currentTitle) seenTitles.add(currentTitle);
+    const stream: any[] = [];
+
+    for (const post of [...mainMatches, ...staticPosts, ...subMatches]) {
+      const t = (post.title || "").trim().toLowerCase();
+      if (!t || seenTitles.has(t)) continue;
+      seenTitles.add(t);
+      stream.push(post);
+    }
+
+    return stream;
+  }, [liveArticles, activeNewsData, newsData, currentCategoryName]);
+
+  // Section 1: RELATED [CATEGORY] NEWS (4 articles in order of publish)
+  const relatedNewsArticles = useMemo(() => {
+    const currentCat = currentCategoryName;
+    const slice = categoryNewsStream.slice(0, 4);
+    return slice.map((post) => {
+      const postSlug = (post.slug || post.title || "").toLowerCase().replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-");
+      return {
+        id: String(post.id),
+        title: post.title,
+        category: currentCat.toUpperCase(),
+        date: formatSidebarDate(post),
+        image: post.imageUrl || post.image || (post as any).image_url || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=300&h=200&fit=crop",
+        href: post.href || `/article/${post.slug || postSlug}`
+      };
+    });
+  }, [categoryNewsStream, currentCategoryName]);
+
+  // Section 2: MORE NEWS (4 articles, continuing in order of publish)
+  const moreNewsArticles = useMemo(() => {
+    const currentCat = currentCategoryName;
+    if (categoryNewsStream.length === 0) return [];
+    const chosen: any[] = [];
+    for (let i = 0; i < 4; i++) {
+      const idx = 4 + i;
+      const post = categoryNewsStream[idx] || categoryNewsStream[i % categoryNewsStream.length];
+      if (post) chosen.push(post);
+    }
+    return chosen.map((post, index) => {
+      const postSlug = (post.slug || post.title || "").toLowerCase().replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-");
+      return {
+        number: `0${index + 1}`.slice(-2),
+        category: currentCat.toUpperCase(),
+        title: post.title,
+        time: formatSidebarDate(post),
+        image: post.imageUrl || post.image || (post as any).image_url || "https://images.unsplash.com/photo-1563206767-5b18f218e8de?w=600&h=400&fit=crop",
+        href: post.href || `/article/${post.slug || postSlug}`
+      };
+    });
+  }, [categoryNewsStream, currentCategoryName]);
+
+  const trendingArticles = moreNewsArticles;
+
+  // Section 3: UP NEXT (6 articles, continuing in order of publish)
+  const upNextArticles = useMemo(() => {
+    if (categoryNewsStream.length === 0) return [];
+    const chosen: any[] = [];
+    for (let i = 0; i < 6; i++) {
+      const idx = 8 + i;
+      const post = categoryNewsStream[idx] || categoryNewsStream[idx % categoryNewsStream.length];
+      if (post) chosen.push(post);
+    }
+    return chosen.map((post) => {
+      const postSlug = (post.slug || post.title || "").toLowerCase().replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-");
+      const content = post.content || post.rawContent || post.summary || "";
+      const words = content.replace(/<[^>]+>/g, " ").trim().split(/\s+/).filter(Boolean).length;
+      const minutes = Math.max(3, Math.min(10, Math.ceil(words / 180)));
+      return {
+        id: String(post.id),
+        title: post.title,
+        readTime: `${minutes} MIN READ`,
+        image: post.imageUrl || post.image || (post as any).image_url || "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=600&h=400&fit=crop",
+        href: post.href || `/article/${post.slug || postSlug}`
+      };
+    });
+  }, [categoryNewsStream]);
+
+  // Most read articles strictly in the current category only (up to 8)
+  const categoryMostReadArticles = useMemo(() => {
+    const currentId = String((activeNewsData as any)?.id || (newsData as any)?.id || "");
+    const currentTitle = (activeNewsData?.title || newsData?.title || "").trim().toLowerCase();
+    const currentCat = currentCategoryName;
+
+    const getViews = (a: any, index: number): number => {
+      if (a?.views && typeof a.views === "number" && a.views > 0) return a.views;
+      if (a?.reads_count && typeof a.reads_count === "number" && a.reads_count > 0) return a.reads_count;
+      if (a?.viewsCount && typeof a.viewsCount === "number" && a.viewsCount > 0) return a.viewsCount;
+      const seed = typeof a?.id === "number" ? a.id : (parseInt(String(a?.id || "").replace(/\D/g, ""), 10) || (index + 1) * 37);
+      return Math.max(45, (seed * 17) % 350 + 55);
+    };
+
+    const published = (Array.isArray(liveArticles) ? liveArticles : []).filter((p) => {
+      if (!p || (p.status || "").toLowerCase() !== "published") return false;
+      if (currentId && String(p.id) === currentId) return false;
+      if (currentTitle && (p.title || "").trim().toLowerCase() === currentTitle) return false;
+      return true;
+    });
+
+    const mainMatches = published.filter((p) => articleMatchesMainCategory(p, currentCat));
+    mainMatches.sort((a, b) => getViews(b, 0) - getViews(a, 0));
+
+    const seenTitles = new Set<string>();
+    if (currentTitle) seenTitles.add(currentTitle);
+    const results: any[] = [];
+
+    for (const post of mainMatches) {
+      const t = (post.title || "").trim().toLowerCase();
+      if (!t || seenTitles.has(t)) continue;
+      seenTitles.add(t);
+      const postSlug = (post.slug || post.title || "").toLowerCase().replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-");
+      results.push({
+        id: String(post.id),
+        title: post.title,
+        href: post.href || `/article/${post.slug || postSlug}`
+      });
+      if (results.length >= 8) break;
+    }
+
+    // Supplement strictly from authentic category data if fewer than 8
+    if (results.length < 8) {
       try {
-        const catSlug = (targetCat || "politics").toLowerCase().replace(/[^a-z0-9]/g, "");
+        const catSlug = currentCat.toLowerCase().replace(/[^a-z0-9]/g, "");
         const catData = getCategoryData(catSlug);
         const staticList = [
           ...(catData?.newsArticles || []),
           ...(catData?.secondaryArticles || []),
           ...(catData?.featured ? [catData.featured] : [])
         ];
-
         for (const sa of staticList) {
-          if (results.length >= 4) break;
+          if (results.length >= 8) break;
           const saTitle = (sa.title || "").trim();
           const saClean = saTitle.toLowerCase();
-          if (
-            saTitle &&
-            !shownAboveTitles.has(saClean) &&
-            !results.some((r) => (r.title || "").trim().toLowerCase() === saClean)
-          ) {
+          if (saTitle && !seenTitles.has(saClean)) {
+            seenTitles.add(saClean);
             const postSlug = saClean.replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-");
-            const catName = targetCat || catData?.categoryName || "NEWS";
             results.push({
-              id: `cat-related-${saClean.slice(0, 20)}`,
+              id: `mostread-cat-static-${catSlug}-${saClean.slice(0, 15)}`,
               title: saTitle,
-              category: catName.toUpperCase(),
-              date: sa.date || "Recently",
-              image: sa.image || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=300&h=200&fit=crop",
               href: `/article/${postSlug}`
             });
           }
         }
       } catch (e) {
-        console.error("Error supplementing related category articles:", e);
+        console.error("Error supplementing category most read articles:", e);
       }
     }
 
     return results;
-  }, [liveArticles, activeNewsData, newsData, targetCat, mostReadArticles, latestInCategoryArticles, prevArticle, nextArticle]);
+  }, [liveArticles, activeNewsData, newsData, currentCategoryName]);
 
   const popularSidebarArticles = mostReadArticles;
 
@@ -2401,11 +2471,11 @@ function ArticlePageContentInner({
             {/* News Body Content */}
             {activeNewsData.rawContent ? (
               <div className="prose prose-slate max-w-none text-zinc-900 leading-[1.8] font-poppins article-body-poppins text-[16px] md:text-[17px] flow-root [&_figure]:my-5 [&_figure]:max-w-full [&_figcaption]:text-xs [&_figcaption]:text-slate-500 [&_figcaption]:mt-1.5 [&_a]:text-[#BF1E2D] [&_a]:font-semibold [&_a]:underline hover:[&_a]:text-[#901320] [&_b]:font-bold [&_strong]:font-bold [&_blockquote]:border-l-4 [&_blockquote]:border-[#BF1E2D] [&_blockquote]:pl-4 [&_blockquote]:py-2.5 [&_blockquote]:my-4 [&_blockquote]:italic [&_blockquote]:text-slate-700 [&_blockquote]:bg-slate-50/80 [&_blockquote]:rounded-none [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6">
-                {/* KEY POINTS Callout Box - Positioned on the right side next to lead text below the image */}
+                {/* KEY POINTS Callout Box - Positioned on the left side (green marked place) with paragraph on the right (red marked place) */}
                 {keyPointsList.length > 0 && (
                   <aside
                     aria-label="Key Points"
-                    className="not-prose w-full my-4 md:my-1 md:float-right md:w-[290px] lg:w-[310px] xl:w-[325px] md:ml-6 md:mb-5 lg:-mr-12 bg-transparent border-0 shadow-none pt-1 pb-3 pl-1 pr-4 sm:pr-6 font-poppins clear-right"
+                    className="not-prose w-full my-4 md:my-1 md:float-left md:w-[290px] lg:w-[310px] xl:w-[325px] md:mr-6 md:mb-5 bg-transparent border-0 shadow-none pt-1 pb-3 pl-1 pr-4 sm:pr-6 font-poppins clear-left"
                   >
                     <h3 className="text-xs font-bold text-[#BF1E2D] uppercase tracking-wider font-poppins mb-3.5">
                       KEY POINTS
@@ -2419,7 +2489,7 @@ function ArticlePageContentInner({
                           >
                             {i + 1}
                           </span>
-                          <span className="text-slate-800 font-medium text-[13px] sm:text-[13.5px] leading-snug font-poppins">
+                          <span className="text-slate-800 font-normal text-[13px] sm:text-[13.5px] leading-snug font-poppins">
                             {pt}
                           </span>
                         </li>
@@ -2477,6 +2547,12 @@ function ArticlePageContentInner({
 
                   rawHtml = processContentLinks(rawHtml);
 
+                  // Strip any nested flow-root classes so article body paragraphs naturally wrap under the floated KEY POINTS box instead of leaving empty space
+                  rawHtml = rawHtml.replace(/\bflow-root\b/g, '');
+
+                  // Strip any trailing empty divider divs, borders, or empty paragraphs at the end of article content
+                  rawHtml = rawHtml.replace(/(?:<(?:div|p)\b[^>]*>\s*(?:&nbsp;|<br\s*\/?>)*\s*<\/(?:div|p)>\s*|<hr\b[^>]*>\s*|<div\b[^>]*\bborder-t\b[^>]*>\s*<\/div>\s*)+$/gi, '').trim();
+
                   // Normalize any body figure captions into uniform "Caption | Image: Credit"
                   rawHtml = rawHtml.replace(/<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/gi, (_fullMatch, innerContent) => {
                     const spanMatches = Array.from(innerContent.matchAll(/<span[^>]*>([\s\S]*?)<\/span>/gi)).map((m: any) => m[1]);
@@ -2513,7 +2589,7 @@ function ArticlePageContentInner({
                 {keyPointsList.length > 0 && (
                   <aside
                     aria-label="Key Points"
-                    className="not-prose w-full my-4 md:my-1 md:float-right md:w-[290px] lg:w-[310px] xl:w-[325px] md:ml-6 md:mb-5 lg:-mr-12 bg-transparent border-0 shadow-none pt-1 pb-3 pl-1 pr-4 sm:pr-6 font-poppins clear-right"
+                    className="not-prose w-full my-4 md:my-1 md:float-left md:w-[290px] lg:w-[310px] xl:w-[325px] md:mr-6 md:mb-5 bg-transparent border-0 shadow-none pt-1 pb-3 pl-1 pr-4 sm:pr-6 font-poppins clear-left"
                   >
                     <h3 className="text-xs font-bold text-[#BF1E2D] uppercase tracking-wider font-poppins mb-3.5">
                       KEY POINTS
@@ -2527,7 +2603,7 @@ function ArticlePageContentInner({
                           >
                             {i + 1}
                           </span>
-                          <span className="text-slate-800 font-medium text-[13px] sm:text-[13.5px] leading-snug font-poppins">
+                          <span className="text-slate-800 font-normal text-[13px] sm:text-[13.5px] leading-snug font-poppins">
                             {pt}
                           </span>
                         </li>
@@ -2560,7 +2636,61 @@ function ArticlePageContentInner({
               </div>
             )}
 
-            {/* ── 1. AUTHOR BIO CARD (Matching reference image design) ── */}
+            {/* ── 1. TAGS ROW ── */}
+            {(() => {
+              const tagsList = (() => {
+                let resolved = resolveArticleTags(activeNewsData);
+                if (!resolved || resolved.length === 0) {
+                  resolved = resolveArticleTags(newsData);
+                }
+                const cleanList = (resolved || [])
+                  .map((t: string) => (t || "").replace(/^#+/, "").trim())
+                  .filter(Boolean);
+
+                if (cleanList.length < 4) {
+                  const cat = (activeNewsData.category || "Politics").toLowerCase();
+                  let defaults = ["UK Politics", "Government Policy", "Economic Growth", "Trade", "International Relations", "Prime Minister", "UK Economy"];
+                  if (cat.includes("business") || cat.includes("economy") || cat.includes("market")) {
+                    defaults = ["Economy", "Markets", "Global Trade", "Inflation", "Banking", "Investment", "UK Economy"];
+                  } else if (cat.includes("tech")) {
+                    defaults = ["Technology", "Artificial Intelligence", "Innovation", "Digital Economy", "Cybersecurity", "Startups"];
+                  } else if (cat.includes("sport")) {
+                    defaults = ["Sports", "Premier League", "Football", "Champions League", "Athletics", "UK Sport"];
+                  }
+                  for (const d of defaults) {
+                    if (!cleanList.some(t => t.toLowerCase() === d.toLowerCase())) {
+                      cleanList.push(d);
+                    }
+                    if (cleanList.length >= 7) break;
+                  }
+                }
+                return cleanList;
+              })();
+
+              if (!tagsList || tagsList.length === 0) return null;
+
+              return (
+                <div className="mt-2.5 sm:mt-3 flex items-center gap-2 flex-wrap font-sans">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-800 font-sans mr-1 shrink-0">
+                    TAGS
+                  </span>
+                  {tagsList.map((tag) => {
+                    const cleanTag = tag.replace(/^#+/, "").trim();
+                    return (
+                      <Link
+                        key={tag}
+                        href={`/category/${formatCategorySlug(activeNewsData.category || "news")}?tag=${encodeURIComponent(cleanTag)}`}
+                        className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200/90 transition-colors cursor-pointer"
+                      >
+                        #{cleanTag}
+                      </Link>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
+            {/* ── 2. AUTHOR BIO CARD (Matching reference image design) ── */}
             {(() => {
               const cleanAuth = resolveCleanAuthor(activeNewsData.authorName, activeNewsData.authorAvatar, activeNewsData.authorEmail, activeNewsData.authorBio);
               const authorSlug = cleanAuth.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -2625,61 +2755,10 @@ function ArticlePageContentInner({
               );
             })()}
 
-            {/* ── 2. TAGS ROW ── */}
-            {(() => {
-              const tagsList = (() => {
-                let resolved = resolveArticleTags(activeNewsData);
-                if (!resolved || resolved.length === 0) {
-                  resolved = resolveArticleTags(newsData);
-                }
-                const cleanList = (resolved || [])
-                  .map((t: string) => (t || "").replace(/^#+/, "").trim())
-                  .filter(Boolean);
-
-                if (cleanList.length < 4) {
-                  const cat = (activeNewsData.category || "Politics").toLowerCase();
-                  let defaults = ["UK Politics", "Government Policy", "Economic Growth", "Trade", "International Relations", "Prime Minister", "UK Economy"];
-                  if (cat.includes("business") || cat.includes("economy") || cat.includes("market")) {
-                    defaults = ["Economy", "Markets", "Global Trade", "Inflation", "Banking", "Investment", "UK Economy"];
-                  } else if (cat.includes("tech")) {
-                    defaults = ["Technology", "Artificial Intelligence", "Innovation", "Digital Economy", "Cybersecurity", "Startups"];
-                  } else if (cat.includes("sport")) {
-                    defaults = ["Sports", "Premier League", "Football", "Champions League", "Athletics", "UK Sport"];
-                  }
-                  for (const d of defaults) {
-                    if (!cleanList.some(t => t.toLowerCase() === d.toLowerCase())) {
-                      cleanList.push(d);
-                    }
-                    if (cleanList.length >= 7) break;
-                  }
-                }
-                return cleanList;
-              })();
-
-              if (!tagsList || tagsList.length === 0) return null;
-
-              return (
-                <div className="mt-3.5 flex items-center gap-2 flex-wrap font-sans">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-800 font-sans mr-1 shrink-0">
-                    TAGS
-                  </span>
-                  {tagsList.map((tag) => (
-                    <Link
-                      key={tag}
-                      href={`/category/${formatCategorySlug(activeNewsData.category || "news")}?tag=${encodeURIComponent(tag)}`}
-                      className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200/90 transition-colors cursor-pointer"
-                    >
-                      {tag}
-                    </Link>
-                  ))}
-                </div>
-              );
-            })()}
-
-            {/* ── 3. SHARE THIS ARTICLE ROW ── */}
-            <div className="mt-3 flex items-center gap-2.5 flex-wrap font-sans">
+            {/* ── 3. SHARE THE JOURNALIST ROW ── */}
+            <div className="mt-3.5 flex items-center gap-2.5 flex-wrap font-sans">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-900 font-sans mr-1 shrink-0">
-                SHARE THIS ARTICLE
+                SHARE THE JOURNALIST
               </span>
 
               {/* Facebook */}
@@ -2779,7 +2858,7 @@ function ArticlePageContentInner({
 
             {/* ── 4. PREVIOUS ARTICLE / NEXT ARTICLE NAVIGATION ROW ── */}
             {(prevArticle || nextArticle) && (
-              <div className="mt-4 mb-3.5 py-2.5 border-y border-zinc-200 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center font-sans">
+              <div className="mt-6 sm:mt-7 mb-6 sm:mb-7 py-3 sm:py-3.5 border-y border-zinc-200 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center font-sans">
                 {/* Previous Article */}
                 {prevArticle ? (
                   <Link
@@ -2901,8 +2980,10 @@ function ArticlePageContentInner({
             {/* ── 6. RELATED CATEGORY NEWS (4-Column Card Grid) ── */}
             {relatedNewsArticles.length > 0 && (() => {
               const displayCategory = (
-                (targetCat && targetCat.toLowerCase() !== "article" ? targetCat : "") ||
-                (activeNewsData?.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "") ||
+                (activeNewsData?.category && activeNewsData.category.toLowerCase() !== "article" && activeNewsData.category.toLowerCase() !== "news" ? activeNewsData.category : "") ||
+                (newsData?.category && newsData.category.toLowerCase() !== "article" && newsData.category.toLowerCase() !== "news" ? newsData.category : "") ||
+                (targetCat && targetCat.toLowerCase() !== "article" && targetCat.toLowerCase() !== "news" ? targetCat : "") ||
+                (parent?.name && parent.name.toLowerCase() !== "article" && parent.name.toLowerCase() !== "news" ? parent.name : "") ||
                 "Politics"
               );
               const headingCategory = displayCategory.toLowerCase() === "politics" ? "POLITICAL" : displayCategory.toUpperCase();
@@ -3605,18 +3686,18 @@ function ArticlePageContentInner({
 
           {/* Right Column: Sidebar Feed */}
           <div className="lg:col-span-4 lg:pl-6 font-standard-sans border-l border-zinc-100 lg:border-zinc-200 pt-2 lg:pt-0 self-stretch">
-            {/* SECTION 1: RELATED NEWS */}
+            {/* SECTION 1: RECENT NEWS */}
             <div className="mb-8">
               <div className="pb-2 mb-4 border-b border-zinc-200 font-sans">
                 <h3 className="text-[14px] font-bold text-slate-900 uppercase tracking-wider font-sans">
-                  RELATED NEWS
+                  RECENT NEWS
                 </h3>
               </div>
 
               <div className="space-y-3.5 font-sans">
-                {relatedNewsArticles.map((item, idx) => (
+                {recentNewsArticles.map((item, idx) => (
                   <Link
-                    key={`related-sidebar-${idx}-${item.id || item.href}`}
+                    key={`recent-sidebar-${idx}-${item.id || item.href}`}
                     href={item.href}
                     className="flex gap-3 items-start cursor-pointer group pb-3.5 border-b border-zinc-100 last:border-none"
                   >
@@ -3654,7 +3735,7 @@ function ArticlePageContentInner({
               </div>
 
               <div className="space-y-3 font-sans">
-                {mostReadArticles.map((item, idx) => (
+                {mostReadArticles.slice(0, 5).map((item, idx) => (
                   <Link
                     key={`most-read-sidebar-${idx}-${item.id || item.href}`}
                     href={item.href}
@@ -3902,11 +3983,11 @@ function ArticlePageContentInner({
         )}
 
         {/* ── UP NEXT & MOST READ SECTION ── */}
-        {(upNextArticles.length > 0 || mostReadArticles.length > 0) && (
+        {(upNextArticles.length > 0 || categoryMostReadArticles.length > 0) && (
           <div className="mt-6 pt-5 border-t border-zinc-200 font-sans w-full">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
               
-              {/* Left Column: Up next (Recent articles across multiple categories) */}
+              {/* Left Column: Up next (Recent articles from this category) */}
               <div className="lg:col-span-8">
                 <h2 className="text-xl sm:text-2xl font-bold font-sans text-zinc-950 tracking-tight mb-3.5">
                   Up next
@@ -3940,14 +4021,14 @@ function ArticlePageContentInner({
                 </div>
               </div>
 
-              {/* Right Column: Most read (Numbered 1-8 List) */}
+              {/* Right Column: Most read in [Category] (Numbered 1-8 List) */}
               <div className="lg:col-span-4 lg:pl-2">
                 <h2 className="text-xl sm:text-2xl font-bold font-sans text-zinc-950 tracking-tight mb-3.5">
-                  Most read
+                  Most read in {currentCategoryName}
                 </h2>
 
                 <div className="flex flex-col divide-y divide-zinc-200 border-b border-zinc-200">
-                  {mostReadArticles.map((item, idx) => (
+                  {categoryMostReadArticles.map((item, idx) => (
                     <Link
                       key={`most-read-item-${item.id}`}
                       href={item.href}
@@ -4012,7 +4093,7 @@ function ArticlePageContentInner({
 
       {/* 5-Column Category Grid Section */}
       <div className="border-t border-zinc-200 mt-6">
-        <BottomCategoryGrid />
+        <BottomCategoryGrid currentCategory={currentCategoryName} />
       </div>
 
       <Footer />

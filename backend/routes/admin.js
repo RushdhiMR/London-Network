@@ -3,7 +3,7 @@ const router = express.Router();
 const db = require('../config/db');
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'dj_super_secret_jwt_key_2026_production';
+const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET;
 
 // RBAC middleware helper for Express
 function requireAdmin(req, res, next) {

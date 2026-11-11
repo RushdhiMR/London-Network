@@ -94,6 +94,8 @@ export async function POST(request: Request) {
 
     // If body contains full array sync
     if (Array.isArray(body.articles)) {
+      const rbac = await requireRole(request, 'admin');
+      if (!rbac.authorized) return rbac.response;
       const { writeArticlesStore } = await import('@/lib/serverArticlesStore');
       await writeArticlesStore(body.articles);
       revalidatePublicPages();
@@ -109,6 +111,9 @@ export async function POST(request: Request) {
         }
       });
     }
+
+    const rbac = await requireRole(request, 'writer', 'admin');
+    if (!rbac.authorized) return rbac.response;
 
     const { generateAutoSEO } = await import('@/lib/seo');
 
@@ -150,6 +155,38 @@ export async function POST(request: Request) {
     const updatedList = await upsertArticleStore(articleRecord);
     revalidatePublicPages(articleRecord);
 
+    // Notify author followers automatically whenever an article is published live
+    if (articleRecord.status === 'Published') {
+      (async () => {
+        try {
+          const authorName = (articleRecord.authorName || (articleRecord as any).author || '').trim();
+          const authorSlug = (articleRecord as any).authorSlug || (articleRecord as any).author_slug || (authorName ? authorName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : '');
+          const { DB } = await import('@/lib/db');
+          const followersByName = authorName ? await DB.getAuthorFollowers(authorName) : [];
+          const followersBySlug = authorSlug ? await DB.getAuthorFollowers(authorSlug) : [];
+          const allFollowers = Array.from(new Set([...followersByName, ...followersBySlug]));
+
+          if (allFollowers.length > 0) {
+            const { sendArticleDistributionEmail } = await import('@/lib/email');
+            for (const recipient of allFollowers) {
+              await sendArticleDistributionEmail(recipient, {
+                title: articleRecord.title,
+                summary: articleRecord.summary || articleRecord.description || '',
+                category: articleRecord.category || 'News',
+                authorName: authorName || 'London BigBen Journalist',
+                slug: articleRecord.slug || '',
+                imageUrl: articleRecord.imageUrl || (articleRecord as any).image,
+                readTime: articleRecord.readTime || (articleRecord as any).readDuration
+              });
+            }
+            console.log(`[Follower Notification] Sent article notification to ${allFollowers.length} follower(s) of ${authorName}.`);
+          }
+        } catch (notifyErr) {
+          console.warn('[api/articles] Follower notification notice:', notifyErr);
+        }
+      })();
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Article saved successfully to server store',
@@ -172,6 +209,8 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
+    const rbac = await requireRole(request, 'writer', 'admin');
+    if (!rbac.authorized) return rbac.response;
     let body: any = {};
     try {
       const text = await request.text();
@@ -248,6 +287,8 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const rbac = await requireRole(request, 'writer', 'admin');
+    if (!rbac.authorized) return rbac.response;
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     const title = searchParams.get('title');

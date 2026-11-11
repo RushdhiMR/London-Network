@@ -61,7 +61,7 @@ export default function ForgotPasswordPage() {
           <div className="flex flex-col items-center mb-8 text-center">
             <Link href="/" className="flex items-center gap-2.5 hover:opacity-90 transition-opacity mb-2 group">
               <img
-                src="/logo.png"
+                src="/logo.svg"
                 alt="London BigBen Logo"
                 className="w-9 h-9 object-contain"
               />

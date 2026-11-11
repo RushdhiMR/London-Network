@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs';
 import mysql from 'mysql2/promise';
 import fs from 'fs';
 import path from 'path';
@@ -13,6 +14,8 @@ export interface UserRow {
   avatar?: string | null;
   bio?: string | null;
   linkedin?: string | null;
+  yearsOfExperience?: number | string | null;
+  years_of_experience?: number | string | null;
   email_verified: boolean | number;
   is_default_admin?: boolean | number;
   reset_token?: string | null;
@@ -205,7 +208,7 @@ let inMemoryJsonDbCache: any = null;
 let inMemoryJsonDbCacheTime = 0;
 const JSON_CACHE_TTL_MS = 10000; // 10 seconds in-memory cache
 
-function readJsonDb(): { users: UserRow[]; articles: any[]; deleted_emails: string[]; deleted_user_profiles: Record<string, DeletedUserProfile>; subscribers: SubscriberRow[]; contact_submissions: ContactSubmissionRow[]; advertise_leads: AdvertiseLeadRow[]; site_subscriptions: SiteSubscriptionRow[] } {
+function readJsonDb(): { users: UserRow[]; articles: any[]; deleted_emails: string[]; deleted_user_profiles: Record<string, DeletedUserProfile>; subscribers: SubscriberRow[]; contact_submissions: ContactSubmissionRow[]; advertise_leads: AdvertiseLeadRow[]; site_subscriptions: SiteSubscriptionRow[]; author_followers?: Record<string, string[]> } {
   if (inMemoryJsonDbCache && (Date.now() - inMemoryJsonDbCacheTime < JSON_CACHE_TTL_MS)) {
     return inMemoryJsonDbCache;
   }
@@ -232,7 +235,8 @@ function readJsonDb(): { users: UserRow[]; articles: any[]; deleted_emails: stri
             advertise_leads: Array.isArray(parsed.advertise_leads) && parsed.advertise_leads.length > 0
               ? parsed.advertise_leads
               : DEFAULT_ADVERTISE_LEADS,
-            site_subscriptions: Array.isArray(parsed.site_subscriptions) ? parsed.site_subscriptions : []
+            site_subscriptions: Array.isArray(parsed.site_subscriptions) ? parsed.site_subscriptions : [],
+            author_followers: (parsed.author_followers && typeof parsed.author_followers === 'object') ? parsed.author_followers : {}
           };
           inMemoryJsonDbCache = result;
           inMemoryJsonDbCacheTime = Date.now();
@@ -243,10 +247,10 @@ function readJsonDb(): { users: UserRow[]; articles: any[]; deleted_emails: stri
   } catch (err) {
     console.warn('[DB] JSON fallback read warning:', err);
   }
-  return { users: [], articles: [], deleted_emails: [], deleted_user_profiles: {}, subscribers: [], contact_submissions: DEFAULT_CONTACT_SUBMISSIONS, advertise_leads: DEFAULT_ADVERTISE_LEADS, site_subscriptions: [] };
+  return { users: [], articles: [], deleted_emails: [], deleted_user_profiles: {}, subscribers: [], contact_submissions: DEFAULT_CONTACT_SUBMISSIONS, advertise_leads: DEFAULT_ADVERTISE_LEADS, site_subscriptions: [], author_followers: {} };
 }
 
-function writeJsonDb(data: { users: UserRow[]; articles: any[]; deleted_emails?: string[]; deleted_user_profiles?: Record<string, DeletedUserProfile>; subscribers?: SubscriberRow[]; contact_submissions?: ContactSubmissionRow[]; advertise_leads?: AdvertiseLeadRow[]; site_subscriptions?: SiteSubscriptionRow[] }) {
+function writeJsonDb(data: { users: UserRow[]; articles: any[]; deleted_emails?: string[]; deleted_user_profiles?: Record<string, DeletedUserProfile>; subscribers?: SubscriberRow[]; contact_submissions?: ContactSubmissionRow[]; advertise_leads?: AdvertiseLeadRow[]; site_subscriptions?: SiteSubscriptionRow[]; author_followers?: Record<string, string[]> }) {
   inMemoryJsonDbCache = data;
   inMemoryJsonDbCacheTime = Date.now();
   try {
@@ -518,6 +522,8 @@ export const DB = {
     google_id?: string | null;
     email_verified?: boolean | number;
     avatar?: string | null;
+    yearsOfExperience?: number | string | null;
+    years_of_experience?: number | string | null;
   }): Promise<UserRow> {
     const norm = (userData.email || '').trim().toLowerCase();
     const role = userData.role || 'reader';
@@ -531,6 +537,12 @@ export const DB = {
     // Merge saved profile data: restore avatar, bio, linkedin if the new account has none
     const restoredAvatar = userData.avatar || savedProfile?.avatar || null;
     const restoredRole = (userData.role && userData.role !== 'reader') ? userData.role : ((savedProfile?.role as any) || role);
+    const restoredExp = userData.yearsOfExperience !== undefined ? userData.yearsOfExperience : (userData.years_of_experience !== undefined ? userData.years_of_experience : ((savedProfile as any)?.yearsOfExperience ?? (savedProfile as any)?.years_of_experience ?? null));
+
+    let finalPasswordHash = userData.password_hash || null;
+    if (finalPasswordHash && !finalPasswordHash.startsWith('$2')) {
+      finalPasswordHash = bcrypt.hashSync(finalPasswordHash, 10);
+    }
 
     let newId = Date.now();
 
@@ -543,7 +555,7 @@ export const DB = {
         [
           userData.name.trim(),
           norm,
-          userData.password_hash || null,
+          finalPasswordHash,
           restoredRole,
           provider,
           userData.google_id || null,
@@ -562,12 +574,14 @@ export const DB = {
       id: newId,
       name: userData.name.trim(),
       email: norm,
-      password_hash: userData.password_hash || null,
+      password_hash: finalPasswordHash,
       role: restoredRole as any,
       provider,
       google_id: userData.google_id || null,
       email_verified: verified,
       avatar: restoredAvatar,
+      yearsOfExperience: restoredExp,
+      years_of_experience: restoredExp,
       // Restore additional profile fields if saved
       ...(savedProfile?.bio ? { bio: savedProfile.bio } : {}),
       ...(savedProfile?.linkedin ? { linkedin: savedProfile.linkedin } : {}),
@@ -704,8 +718,13 @@ export const DB = {
           values.push(updates.email.trim().toLowerCase());
         }
         if (updates.password_hash !== undefined) {
+          let finalHash = updates.password_hash;
+          if (finalHash && !finalHash.startsWith('$2')) {
+            finalHash = bcrypt.hashSync(finalHash, 10);
+          }
           fields.push('password_hash = ?');
-          values.push(updates.password_hash);
+          values.push(finalHash);
+          updates.password_hash = finalHash;
         }
         if (updates.role !== undefined) {
           fields.push('role = ?');
@@ -1001,6 +1020,8 @@ export const DB = {
     bio?: string;
     role?: string;
     linkedin?: string;
+    yearsOfExperience?: number | string | null;
+    years_of_experience?: number | string | null;
   }): Promise<any> {
     const cleanEmail = (data.email || '').trim().toLowerCase();
     if (!cleanEmail) return null;
@@ -1010,6 +1031,7 @@ export const DB = {
 
     const existingIdx = jsonDb.users.findIndex(u => (u.email || '').toLowerCase().trim() === cleanEmail);
     let updatedUser: any;
+    const exp = data.yearsOfExperience !== undefined ? data.yearsOfExperience : data.years_of_experience;
 
     if (existingIdx >= 0) {
       jsonDb.users[existingIdx] = {
@@ -1019,6 +1041,7 @@ export const DB = {
         ...(data.bio ? { bio: data.bio } : {}),
         ...(data.role ? { role: data.role as any } : {}),
         ...(data.linkedin ? { linkedin: data.linkedin } : {}),
+        ...(exp !== undefined ? { yearsOfExperience: exp, years_of_experience: exp } : {}),
         updated_at: new Date().toISOString()
       };
       updatedUser = jsonDb.users[existingIdx];
@@ -1032,6 +1055,7 @@ export const DB = {
         role: data.role || 'writer',
         provider: 'local',
         email_verified: 1,
+        ...(exp !== undefined ? { yearsOfExperience: exp, years_of_experience: exp } : {}),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -1063,6 +1087,76 @@ export const DB = {
     } catch (e) {}
 
     return updatedUser;
+  },
+
+  async followAuthor(followerEmail: string, authorKey: string): Promise<{ success: boolean; isFollowing: boolean; count: number }> {
+    const cleanFollower = (followerEmail || '').trim().toLowerCase();
+    const cleanAuthor = (authorKey || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '-');
+    if (!cleanFollower || !cleanAuthor) return { success: false, isFollowing: false, count: 0 };
+
+    const jsonDb = readJsonDb();
+    if (!jsonDb.author_followers || typeof jsonDb.author_followers !== 'object') {
+      jsonDb.author_followers = {};
+    }
+    if (!Array.isArray(jsonDb.author_followers[cleanAuthor])) {
+      jsonDb.author_followers[cleanAuthor] = [];
+    }
+
+    const followers = jsonDb.author_followers[cleanAuthor];
+    const exists = followers.some(e => e.toLowerCase() === cleanFollower);
+
+    let isFollowing = false;
+    if (exists) {
+      jsonDb.author_followers[cleanAuthor] = followers.filter(e => e.toLowerCase() !== cleanFollower);
+      isFollowing = false;
+    } else {
+      jsonDb.author_followers[cleanAuthor].push(cleanFollower);
+      isFollowing = true;
+    }
+
+    writeJsonDb(jsonDb);
+    return {
+      success: true,
+      isFollowing,
+      count: jsonDb.author_followers[cleanAuthor].length
+    };
+  },
+
+  async isFollowingAuthor(followerEmail: string, authorKey: string): Promise<boolean> {
+    const cleanFollower = (followerEmail || '').trim().toLowerCase();
+    const cleanAuthor = (authorKey || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '-');
+    if (!cleanFollower || !cleanAuthor) return false;
+
+    const jsonDb = readJsonDb();
+    if (!jsonDb.author_followers) return false;
+    const followers = jsonDb.author_followers[cleanAuthor];
+    return Array.isArray(followers) && followers.some(e => e.toLowerCase() === cleanFollower);
+  },
+
+  async getAuthorFollowers(authorKey: string): Promise<string[]> {
+    const cleanAuthor = (authorKey || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '-');
+    if (!cleanAuthor) return [];
+
+    const jsonDb = readJsonDb();
+    if (!jsonDb.author_followers) return [];
+
+    const followersSet = new Set<string>();
+    Object.keys(jsonDb.author_followers).forEach(k => {
+      const normK = k.toLowerCase().replace(/[^a-z0-9]/g, '-');
+      if (normK === cleanAuthor || normK.includes(cleanAuthor) || cleanAuthor.includes(normK)) {
+        const list = jsonDb.author_followers ? jsonDb.author_followers[k] : [];
+        if (Array.isArray(list)) {
+          list.forEach(em => followersSet.add(em.toLowerCase().trim()));
+        }
+      }
+    });
+
+    return Array.from(followersSet);
+  },
+
+  async getAuthorFollowerCount(authorKey: string): Promise<number> {
+    const list = await this.getAuthorFollowers(authorKey);
+    return list.length;
   },
 
   async getAllContactSubmissions(): Promise<ContactSubmissionRow[]> {

@@ -37,6 +37,91 @@ export interface CategoryData {
 export function getCategoryData(slug: string): CategoryData {
   const norm = slug.toLowerCase().replace(/[^a-z0-9]/g, "");
 
+  if (norm.includes("ufo")) {
+    return {
+      categoryName: "UFO",
+      categoryColor: "bg-indigo-50",
+      infoBoxText: `London BigBen's UFO & Aerospace Inquiries division delivers investigative coverage of unidentified anomalous phenomena (UAP), government sensor disclosures, scientific radar telemetry, and aerospace security developments worldwide.`,
+      featured: {
+        category: "UFO • AEROSPACE & DEFENSE",
+        title: "Pentagon's AARO Releases Comprehensive Analysis on Unidentified Anomalous Phenomena",
+        description: "The All-domain Anomaly Resolution Office presents updated findings on military airspace encounters, sensor calibration protocols, and cross-agency data repositories.",
+        image: "https://images.unsplash.com/photo-1516339901601-2e1b62dc0c45?w=1200&h=800&fit=crop",
+        author: "Muba_kity",
+        date: "November 8, 2026"
+      },
+      secondaryArticles: [
+        {
+          title: "NASA Independent Study Team Recommends Modern Satellite Array for Anomalous Tracking",
+          image: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=150&h=150&fit=crop",
+          date: "November 7, 2026"
+        },
+        {
+          title: "Global Aviation Authorities Call for Standardized Commercial Pilot Reporting Protocols",
+          image: "https://images.unsplash.com/photo-1506157786151-b8491531f063?w=150&h=150&fit=crop",
+          date: "November 6, 2026"
+        },
+        {
+          title: "Congressional Hearing Spotlights Sensor Transparency and Multi-Spectrum Radar Logs",
+          image: "https://images.unsplash.com/photo-1507499739999-097706ad8914?w=150&h=150&fit=crop",
+          date: "November 5, 2026"
+        },
+        {
+          title: "Atmospheric Physicists Evaluate Optical Distortions and Hypersonic Trajectory Signatures",
+          image: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=150&h=150&fit=crop",
+          date: "November 4, 2026"
+        }
+      ],
+      guidesTitle: "UFO & UAP INVESTIGATIVE DOSSIERS",
+      guidesDescription: "Essential scientific analyses, radar telemetry archives, and government declassification records.",
+      guides: [
+        {
+          title: "Understanding military radar cross-sections and anomalous sensor artifacts",
+          description: "A technical review of electro-optical sensors, multi-spectrum radar returns, and signal calibration standards...",
+          author: "By Marcus Vance • November 4, 2026"
+        },
+        {
+          title: "Declassification timelines: The history of aerospace reporting protocols",
+          description: "How international defense ministries have transitioned from secrecy to institutional scientific inquiry...",
+          author: "By Sarah Miller • November 3, 2026"
+        },
+        {
+          title: "The role of civilian satellites in detecting unexpected high-altitude phenomena",
+          description: "Leveraging Earth-observation orbital assets and machine learning to analyze trans-medium movements...",
+          author: "By David Chen • November 2, 2026"
+        }
+      ],
+      newsTitle: "More UFO & Aerospace News",
+      newsDescription: "Recent telemetry releases, legislative inquiries, and scientific developments in aerospace observation.",
+      newsArticles: [
+        {
+          title: "Civilian Radar Networks Collaborate on Open-Source Atmospheric Tracking Architecture",
+          image: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=300&h=200&fit=crop",
+          description: "Amateur and university observational arrays synchronize live data streams across the Northern Hemisphere.",
+          date: "November 3, 2026"
+        },
+        {
+          title: "European Defense Agencies Review Unidentified Trans-Medium Maritime Incursions",
+          image: "https://images.unsplash.com/photo-1507499739999-097706ad8914?w=300&h=200&fit=crop",
+          description: "Naval task forces compile hydrophone acoustic recordings following coastal training exercises.",
+          date: "November 2, 2026"
+        },
+        {
+          title: "Space Physics Journal Publishes Peer-Reviewed Study on Ionospheric Optical Fluctuations",
+          image: "https://images.unsplash.com/photo-1516339901601-2e1b62dc0c45?w=300&h=200&fit=crop",
+          description: "Researchers correlate geomagnetic storm triggers with unexplained luminous phenomena in the upper mesosphere.",
+          date: "November 1, 2026"
+        },
+        {
+          title: "International Aviation Consortium Proposes Unified Transponder Signal Reporting",
+          image: "https://images.unsplash.com/photo-1506157786151-b8491531f063?w=300&h=200&fit=crop",
+          description: "Commercial airline pilots receive new digital tools to log unexpected visual and instrument contacts securely.",
+          date: "October 31, 2026"
+        }
+      ]
+    };
+  }
+
   if (norm.includes("interview")) {
     return {
       categoryName: "Interviews",

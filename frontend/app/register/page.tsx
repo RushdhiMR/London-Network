@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { triggerGoogleOAuth } from "@/lib/googleAuth";
 import { useAuth, dispatchTabLogin } from "@/lib/auth-context";
+import { saveUserProfile } from "@/lib/userProfiles";
 import { UserPlus } from "lucide-react";
 
 export default function RegisterPage() {
@@ -17,6 +18,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [yearsOfExperience, setYearsOfExperience] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
@@ -153,6 +155,7 @@ export default function RegisterPage() {
           name: fullName,
           email,
           password,
+          yearsOfExperience: yearsOfExperience ? parseInt(yearsOfExperience, 10) : undefined,
         }),
       });
 
@@ -164,6 +167,14 @@ export default function RegisterPage() {
       }
 
       const registeredUser = data.user;
+
+      if (yearsOfExperience) {
+        saveUserProfile({
+          name: registeredUser.name,
+          email: registeredUser.email,
+          yearsOfExperience: parseInt(yearsOfExperience, 10),
+        });
+      }
       dispatchTabLogin({
         id: registeredUser.id,
         name: registeredUser.name,
@@ -191,7 +202,7 @@ export default function RegisterPage() {
       {/* LEFT COLUMN: LONDON WALLPAPER (DESKTOP) */}
       <div className="hidden lg:block lg:w-1/2 relative h-full overflow-hidden border-r-[3px] border-[#BF1E2D]">
         <img
-          src="/register_bg.jpg"
+          src="/register_bg.webp"
           alt="London City - Big Ben & Westminster"
           className="absolute inset-0 w-full h-full object-cover object-left"
         />
@@ -205,7 +216,7 @@ export default function RegisterPage() {
           <div className="flex flex-col items-center mb-4 text-center">
             <Link href="/" className="inline-block hover:opacity-90 transition-opacity mb-2">
               <img
-                src="/header_logo.png"
+                src="/header_logo.svg"
                 alt="London BigBen Network"
                 className="h-7 sm:h-8 w-auto object-contain"
               />
@@ -327,6 +338,23 @@ export default function RegisterPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/30 focus:bg-white"
                 required
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                YEARS OF EXPERIENCE <span className="text-slate-400 font-normal lowercase">(for authors / journalists)</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="75"
+                name="dj_register_experience"
+                autoComplete="off"
+                placeholder="e.g. 12"
+                value={yearsOfExperience}
+                onChange={(e) => setYearsOfExperience(e.target.value)}
+                className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/30 focus:bg-white"
               />
             </div>
 

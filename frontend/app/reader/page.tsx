@@ -22,6 +22,7 @@ import {
 import { getUserProfile, saveUserProfile, resolveUserAvatar, isUploadedAvatar, safeSaveBookmarksToStorage, safeGetBookmarksFromStorage } from "@/lib/userProfiles";
 import { uploadImageToBackblaze } from "@/lib/imageUtils";
 import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
+import PageSkeletonLoader from "@/components/PageSkeletonLoader";
 import { useLiveArticles } from "@/lib/articlesSync";
 import { getAllSearchableArticles } from "@/lib/searchArticles";
 
@@ -211,8 +212,8 @@ export default function ReaderDashboardPage() {
           ? art.href
           : `/article/${matchAny?.slug || artId || match?.id || ""}`;
 
-      const rawImage = art.image || matchAny?.imageUrl || matchAny?.image || "/header_logo.png";
-      const image = typeof rawImage === "string" && rawImage.length > 5000 && rawImage.startsWith("data:") ? "/header_logo.png" : rawImage;
+      const rawImage = art.image || matchAny?.imageUrl || matchAny?.image || "/header_logo.svg";
+      const image = typeof rawImage === "string" && rawImage.length > 5000 && rawImage.startsWith("data:") ? "/header_logo.svg" : rawImage;
 
       let date = art.date || match?.date || matchAny?.published_at;
       if (!date || date.includes("T")) {
@@ -234,7 +235,7 @@ export default function ReaderDashboardPage() {
         title: (artTitle && artTitle !== "Untitled Article") ? artTitle : (match?.title || "Untitled Article"),
         category: cat,
         href: href || "/",
-        image: image || "/header_logo.png",
+        image: image || "/header_logo.svg",
         date,
       };
     });
@@ -319,6 +320,10 @@ export default function ReaderDashboardPage() {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 4000);
   };
+
+  if (auth.loading || !currentUser) {
+    return <PageSkeletonLoader />;
+  }
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-sans text-slate-800 selection:bg-red-500 selection:text-white">
@@ -508,7 +513,7 @@ export default function ReaderDashboardPage() {
                         className="relative w-full sm:w-[150px] h-[100px] flex-shrink-0 overflow-hidden bg-slate-100 rounded-lg border border-slate-200 block"
                       >
                         <img
-                          src={art?.image || "/header_logo.png"}
+                          src={art?.image || "/header_logo.svg"}
                           alt={art?.title || "Saved article"}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />

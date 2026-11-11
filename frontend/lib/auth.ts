@@ -3,7 +3,11 @@ import jwt from 'jsonwebtoken';
 import { cookies } from 'next/headers';
 import { DB, UserRow } from './db';
 
-const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'dj_super_secret_jwt_key_2026_production';
+const _JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET;
+if (!_JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is not set. Add it to .env.local');
+}
+const JWT_SECRET: string = _JWT_SECRET;
 export const AUTH_COOKIE_NAME = 'dj_session';
 
 export interface JWTPayload {
@@ -39,11 +43,11 @@ export async function comparePassword(password: string, hash: string): Promise<b
   try {
     const matched = await bcrypt.compare(password, hash);
     if (matched) return true;
-  } catch (e) {}
+  } catch (e) { }
   try {
     const matchedSync = bcrypt.compareSync(password, hash);
     if (matchedSync) return true;
-  } catch (e) {}
+  } catch (e) { }
   return false;
 }
 

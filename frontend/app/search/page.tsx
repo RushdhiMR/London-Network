@@ -9,6 +9,7 @@ import Footer from "@/components/Footer";
 import { getAllSearchableArticles, searchArticlesByQuery, SearchableArticle } from "@/lib/searchArticles";
 import { useLiveArticles } from "@/lib/articlesSync";
 import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
+import PageSkeletonLoader from "@/components/PageSkeletonLoader";
 import { resolveUserAvatar, getAuthorAvatarByNameOrEmail, getAuthorFullProfileByNameOrEmail, getUserProfile } from "@/lib/userProfiles";
 
 const POPULAR_SEARCH_TAGS = [
@@ -786,13 +787,7 @@ export default function SearchPage() {
   return (
     <main className="min-h-screen bg-white">
       <Header />
-      <Suspense
-        fallback={
-          <div className="max-w-[1400px] mx-auto px-4 md:px-8 py-20 text-center font-sans min-h-[60vh]">
-            <p className="text-[15px] text-zinc-500">Loading search results...</p>
-          </div>
-        }
-      >
+      <Suspense fallback={<PageSkeletonLoader />}>
         <SearchResultsContent />
       </Suspense>
       <Footer />

@@ -107,7 +107,7 @@ export default function AdminLoginPage() {
 
             <Link href="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
               <img
-                src="/logo.png"
+                src="/logo.svg"
                 alt="London BigBen Logo"
                 className="w-8 h-8 object-contain"
               />

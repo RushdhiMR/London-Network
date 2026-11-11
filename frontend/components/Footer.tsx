@@ -19,6 +19,7 @@ export default function Footer({ className, hideTopBar = false }: FooterProps = 
     { name: "Politics", href: "/news/politics" },
     { name: "Business", href: "/business" },
     { name: "Technology", href: "/technology" },
+    { name: "UFO", href: "/category/ufo" },
     { name: "Economy", href: "/news/economy" },
     { name: "Markets", href: "/news/markets" },
     { name: "Lifestyle", href: "/news/lifestyle" },
@@ -76,11 +77,12 @@ export default function Footer({ className, hideTopBar = false }: FooterProps = 
               aria-label="London BigBen Network Home"
             >
               <Image
-                src="/footer_logo.png"
+                src="/footer_logo.svg"
                 alt="London BigBen Network"
-                width={260}
-                height={48}
+                width={263}
+                height={45}
                 className="h-10 w-auto object-contain"
+                unoptimized
               />
             </Link>
             <p className="mt-3 text-[13px] text-zinc-400 leading-relaxed font-sans">
@@ -91,11 +93,11 @@ export default function Footer({ className, hideTopBar = false }: FooterProps = 
 
         {/* 5-COLUMN NAVIGATION GRID */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 sm:gap-8 lg:gap-10 py-12 border-b border-zinc-800 text-left">
-          
+
           {/* COLUMN 1: NEWS & COVERAGE */}
           <div>
             <h3 className="flex items-center gap-2 text-[12px] font-mono font-bold tracking-widest text-white mb-4 uppercase">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#BF1E2D]" />
+              <span className="w-1.5 h-1.5 bg-[#BF1E2D]" />
               NEWS &amp; COVERAGE
             </h3>
             <ul className="space-y-2.5 text-[13px]">
@@ -115,7 +117,7 @@ export default function Footer({ className, hideTopBar = false }: FooterProps = 
           {/* COLUMN 2: REGIONAL DESKS */}
           <div>
             <h3 className="flex items-center gap-2 text-[12px] font-mono font-bold tracking-widest text-white mb-4 uppercase">
-              <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
+              <span className="w-1.5 h-1.5 bg-zinc-600" />
               REGIONS
             </h3>
             <ul className="space-y-2.5 text-[13px]">
@@ -135,7 +137,7 @@ export default function Footer({ className, hideTopBar = false }: FooterProps = 
           {/* COLUMN 3: COMPANY */}
           <div>
             <h3 className="flex items-center gap-2 text-[12px] font-mono font-bold tracking-widest text-white mb-4 uppercase">
-              <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
+              <span className="w-1.5 h-1.5 bg-zinc-600" />
               COMPANY
             </h3>
             <ul className="space-y-2.5 text-[13px]">
@@ -155,7 +157,7 @@ export default function Footer({ className, hideTopBar = false }: FooterProps = 
           {/* COLUMN 4: EDITIONS (LEFT OF FOLLOW & CONNECT) */}
           <div>
             <h3 className="flex items-center gap-2 text-[12px] font-mono font-bold tracking-widest text-white mb-4 uppercase">
-              <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
+              <span className="w-1.5 h-1.5 bg-zinc-600" />
               EDITIONS
             </h3>
             <ul className="space-y-2.5 text-[13px]">
@@ -164,11 +166,10 @@ export default function Footer({ className, hideTopBar = false }: FooterProps = 
                   <button
                     type="button"
                     onClick={() => setActiveEdition(item)}
-                    className={`transition-all hover:translate-x-1 inline-block text-left cursor-pointer ${
-                      activeEdition === item
+                    className={`transition-all hover:translate-x-1 inline-block text-left cursor-pointer ${activeEdition === item
                         ? "text-white font-bold"
                         : "text-zinc-400 hover:text-white"
-                    }`}
+                      }`}
                   >
                     {item}
                   </button>

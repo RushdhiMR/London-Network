@@ -47,7 +47,111 @@ export default function BusinessGrid() {
   // Sort chronological descending: Newest article first
   businessLive.sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
 
-  const displayList = businessLive;
+  const formatArticleDate = (item: any): string => {
+    if (item.date && item.date !== "Just now" && item.date !== "Today" && item.date !== "Just published") {
+      return item.date;
+    }
+    const rawDate = item.published_at || item.publishedAt || item.createdAt || item.created_at;
+    if (rawDate) {
+      try {
+        const d = new Date(rawDate);
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+        }
+      } catch (e) {}
+    }
+    return item.date || item.time || "Oct 8, 2026";
+  };
+
+  const DEFAULT_BUSINESS_ARTICLES = [
+    {
+      id: 25,
+      title: "The End of an Era: Sony's Move Away from Physical Media Signals a New Digital Future",
+      description: "Sony's transition highlights how cloud delivery and subscription libraries are transforming physical entertainment distributions.",
+      image: "https://images.unsplash.com/photo-1547683905-f686c993aae5?w=1000&h=650&fit=crop",
+      date: "Oct 8, 2026",
+      href: "/article/25"
+    },
+    {
+      id: 77,
+      title: "Court Hears Text Messages Between Singer D4vd and Teen at Center of Murder Case",
+      description: "Court hearings reveal critical digital communications and forensic timelines in the ongoing trial.",
+      image: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=500&h=330&fit=crop",
+      date: "Oct 8, 2026",
+      href: "/article/77"
+    },
+    {
+      id: 78,
+      title: "Erin Piacenti, 32, Identified as Victim of Deadly Times Square Stabbing",
+      description: "Authorities confirm identity and issue public security advisories following the Times Square investigation.",
+      image: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=500&h=330&fit=crop",
+      date: "Oct 8, 2026",
+      href: "/article/78"
+    },
+    {
+      id: 26,
+      title: "Nepal’s Flash Flood Leaves Hundreds Missing From Around the World",
+      description: "Severe weather events trigger critical emergency rescue missions and international humanitarian coordination.",
+      image: "https://images.unsplash.com/photo-1547683905-f686c993aae5?w=500&h=330&fit=crop",
+      date: "Oct 8, 2026",
+      href: "/article/26"
+    },
+    {
+      id: 29,
+      title: "China Evacuates Nearly Two Million Residents as Typhoon Bavi Strikes",
+      description: "Coastline preparations and mass emergency relocations activate ahead of severe storm landfalls across eastern provinces.",
+      image: "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?w=500&h=330&fit=crop",
+      date: "Oct 8, 2026",
+      href: "/article/29"
+    },
+    {
+      id: 103,
+      title: "RuPaul’s Drag Race UK Leaves BBC as WOW Presents Plus Takes Over",
+      description: "Major entertainment franchise completes exclusive streaming platform transition, reshaping international broadcast rights.",
+      image: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&h=330&fit=crop",
+      date: "Oct 8, 2026",
+      href: "/article/103"
+    },
+    {
+      id: "biz-def-7",
+      title: "Canada's Conexiom bets that the future of AI lies in automation, not experimentation",
+      description: "Enterprise software providers pivot toward workflow automation and continuous systems integration across corporate supply chains.",
+      image: "https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=500&h=330&fit=crop",
+      date: "Oct 8, 2026",
+      href: "/article/canadas-conexiom-bets-that-the-future-of-ai-lies-in-automation"
+    },
+    {
+      id: "biz-def-8",
+      title: "Lightworks, Scotiabank, Sun Life and TELUS launch AI Consortium",
+      description: "Financial institutions and telecom operators establish a joint artificial intelligence governance initiative to accelerate secure enterprise adoption.",
+      image: "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=500&h=330&fit=crop",
+      date: "Oct 8, 2026",
+      href: "/article/lightworks-scotiabank-sun-life-and-telus-launch-ai-consortium"
+    },
+    {
+      id: "biz-def-9",
+      title: "Tunnel tech to survey the state of leaving framework",
+      description: "Modern infrastructure diagnostics utilize high-frequency acoustic mapping to inspect sub-surface foundations and structural frameworks.",
+      image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=500&h=330&fit=crop",
+      date: "Oct 8, 2026",
+      href: "/article/tunnel-tech-to-survey-the-state-of-leaving-framework"
+    }
+  ];
+
+  const combinedBusiness: any[] = [...businessLive];
+  for (const def of DEFAULT_BUSINESS_ARTICLES) {
+    if (combinedBusiness.length >= 9) break;
+    const isDuplicate = combinedBusiness.some(
+      (item) =>
+        String(item.id) === String(def.id) ||
+        (item.title && def.title && item.title.trim().toLowerCase() === def.title.trim().toLowerCase())
+    );
+    if (!isDuplicate) {
+      combinedBusiness.push(def);
+    }
+  }
+
+  const displayList = combinedBusiness;
 
   if (displayList.length === 0) {
     return null;
@@ -57,17 +161,17 @@ export default function BusinessGrid() {
     title: displayList[0].title,
     description: displayList[0].description || displayList[0].summary || "",
     image: displayList[0].imageUrl || displayList[0].image || "/ai_hero.png",
-    time: displayList[0].date || "Just published",
-    href: `/article/${displayList[0].slug || String(displayList[0].id)}`
+    time: formatArticleDate(displayList[0]),
+    href: displayList[0].href || `/article/${displayList[0].slug || String(displayList[0].id)}`
   };
 
-  const bottomCards = displayList.slice(1, 5).map((a, idx) => ({
+  const bottomCards = displayList.slice(1, 9).map((a, idx) => ({
     id: a.id || `biz-user-${idx}`,
     title: a.title,
     description: a.description || a.summary || "",
-    time: a.date || "Just published",
-    image: a.imageUrl || a.image || "/ai_hero.png",
-    href: `/article/${a.slug || String(a.id)}`
+    time: formatArticleDate(a),
+    image: a.imageUrl || a.image || "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=500&h=330&fit=crop",
+    href: a.href || `/article/${a.slug || String(a.id)}`
   }));
 
   const businessAdSlot = adSlots.find(s => s.id === "slot-3" || s.title.includes("Business Section Top-Right") || s.title.includes("Business Section"));

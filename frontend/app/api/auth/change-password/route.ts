@@ -4,7 +4,7 @@ import { DB, getDbPool } from '@/lib/db';
 
 export async function POST(request: Request) {
   try {
-    const session = await getAuthSession();
+    const session = await getAuthSession(request);
     if (!session || !session.email) {
       return NextResponse.json(
         { error: 'Unauthorized: Please log in to change your password' },

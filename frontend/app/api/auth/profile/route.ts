@@ -1,3 +1,4 @@
+import { requireAuth } from "@/lib/rbac";
 import { NextResponse } from 'next/server';
 import { DB } from '@/lib/db';
 import { readArticlesStore, writeArticlesStore } from '@/lib/serverArticlesStore';
@@ -39,12 +40,28 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const authRes = await requireAuth(request);
+    if (!authRes.authorized || !authRes.user) {
+      return authRes.response || NextResponse.json({ error: 'Unauthorized. Please sign in to update your profile.' }, { status: 401 });
+    }
+
     const body = await request.json();
-    const { email, name, avatar, bio, role, linkedin } = body;
+    const { email, name, avatar, bio, role: requestedRole, linkedin, yearsOfExperience, years_of_experience } = body;
 
     if (!email) {
       return NextResponse.json({ success: false, error: 'Email is required' }, { status: 400 });
     }
+
+    const currentUser = authRes.user;
+    const targetEmail = email.toLowerCase().trim();
+    const isSelf = currentUser.email.toLowerCase().trim() === targetEmail;
+    const isAdmin = (currentUser.role || '').toLowerCase() === 'admin';
+
+    if (!isSelf && !isAdmin) {
+      return NextResponse.json({ error: 'Forbidden: You can only update your own profile.' }, { status: 403 });
+    }
+
+    const targetRole = isAdmin && requestedRole ? requestedRole : currentUser.role;
 
     let finalAvatar = avatar;
 
@@ -86,8 +103,9 @@ export async function POST(request: Request) {
       name,
       avatar: finalAvatar,
       bio,
-      role,
-      linkedin
+      role: targetRole,
+      linkedin,
+      yearsOfExperience: yearsOfExperience !== undefined ? yearsOfExperience : years_of_experience
     });
 
     // Also update server articles store so all published articles by this writer reflect the new name & avatar in real-time

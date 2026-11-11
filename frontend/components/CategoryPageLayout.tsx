@@ -91,6 +91,8 @@ export default function CategoryPageLayout({
     if (name.includes("entertain")) return "entertainment";
     if (name.includes("health")) return "health";
     if (name.includes("research") || name.includes("insight")) return "research";
+    if (name.includes("interview")) return "interview";
+    if (name.includes("ufo") || name.includes("uap")) return "ufo";
     if (name.includes("middle east")) return "middle-east";
     if (name.includes("united states")) return "united-states";
     if (name.includes("china")) return "china";
@@ -134,8 +136,6 @@ export default function CategoryPageLayout({
     if (!art) return false;
     const st = (art.status || "").toLowerCase().trim();
     if (st !== "published" && st !== "approved") return false;
-    // Exclude articles placed in homepage sections — they should only appear there
-    if (isTopPlacementArticle(art)) return false;
     // Match using the clean URL slug first (most reliable for subcategory matching),
     // then fall back to the full categoryName-derived target.
     if (slugTarget && articleMatchesCategory(art, slugTarget)) return true;
@@ -176,10 +176,25 @@ export default function CategoryPageLayout({
     description: a.summary || a.description || (a.content ? a.content.replace(/<[^>]+>/g, "").slice(0, 140) + "..." : "")
   }));
 
-  // If live articles exist, show ONLY live articles — never mix in fake mock articles
-  const sideBoxArticles = matchingLive.length > 1
-    ? liveSecondaryFormatted
-    : (!loading && matchingLive.length === 0 ? secondaryArticles.slice(0, 4) : []);
+  // Sidebox articles: show live secondary articles first, and fill remaining slots with static secondary articles if fewer than 4
+  const sideBoxArticles = (() => {
+    if (matchingLive.length > 1) {
+      if (liveSecondaryFormatted.length >= 4) {
+        return liveSecondaryFormatted.slice(0, 4);
+      }
+      const remaining = 4 - liveSecondaryFormatted.length;
+      const seen = new Set(liveSecondaryFormatted.map((s) => s.title.toLowerCase().trim()));
+      const filler = (secondaryArticles || [])
+        .filter((s) => s.title && !seen.has(s.title.toLowerCase().trim()))
+        .slice(0, remaining);
+      return [...liveSecondaryFormatted, ...filler];
+    }
+    if (matchingLive.length === 1) {
+      const heroTitle = (matchingLive[0].title || "").toLowerCase().trim();
+      return (secondaryArticles || []).filter((s) => (s.title || "").toLowerCase().trim() !== heroTitle).slice(0, 4);
+    }
+    return !loading ? secondaryArticles.slice(0, 4) : [];
+  })();
 
   const activeSecondaryArticles = sideBoxArticles;
 
@@ -191,10 +206,19 @@ export default function CategoryPageLayout({
     description: a.summary || a.description || (a.content ? a.content.replace(/<[^>]+>/g, "").slice(0, 140) + "..." : "")
   }));
 
-  // When live articles exist, show ONLY real database articles in the news feed
-  const combinedNewsArticles = matchingLive.length > 5
-    ? liveFormattedArticles
-    : (!loading && matchingLive.length === 0 ? newsArticles : []);
+  // When live articles exist, show them in the news feed, supplemented with static newsArticles so the feed is never empty
+  const combinedNewsArticles = (() => {
+    if (matchingLive.length > 5) {
+      return liveFormattedArticles;
+    }
+    const shownTitles = new Set<string>();
+    if (activeFeatured?.title) shownTitles.add(activeFeatured.title.toLowerCase().trim());
+    sideBoxArticles.forEach((s) => {
+      if (s.title) shownTitles.add(s.title.toLowerCase().trim());
+    });
+    const remainingStatic = (newsArticles || []).filter((n) => n.title && !shownTitles.has(n.title.toLowerCase().trim()));
+    return [...liveFormattedArticles, ...remainingStatic];
+  })();
 
   const finalNewsTitle = (() => {
     const raw = (newsTitle || '').trim();

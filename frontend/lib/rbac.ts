@@ -16,24 +16,16 @@ export async function requireAuth(req?: Request): Promise<RBACResult> {
   // Check admin portal verification header first if present
   if (req) {
     const adminKey = req.headers.get('x-admin-key') || req.headers.get('x-admin-portal');
-    if (adminKey === 'dj_admin_portal_authenticated_2026') {
-      const session = await getAuthSession();
-      return {
-        authorized: true,
-        user: session
-          ? { ...session, role: 'admin' }
-          : {
-              id: 17,
-              name: 'Geeth Liyanage',
-              email: 'geethliyanage979@gmail.com',
-              role: 'admin',
-              provider: 'google',
-            },
-      };
+    const expectedKey = process.env.ADMIN_PORTAL_KEY;
+    if (expectedKey && adminKey === expectedKey) {
+      const session = await getAuthSession(req);
+      if (session) {
+        return { authorized: true, user: { ...session, role: 'admin' } };
+      }
     }
   }
 
-  const session = await getAuthSession();
+  const session = await getAuthSession(req);
   if (session) {
     return { authorized: true, user: session };
   }
@@ -66,20 +58,12 @@ export async function requireRole(roleOrReq: any, ...roles: UserRole[]): Promise
   // Check admin portal verification header if present
   if (req) {
     const adminKey = req.headers.get('x-admin-key') || req.headers.get('x-admin-portal');
-    if (adminKey === 'dj_admin_portal_authenticated_2026') {
-      const session = await getAuthSession();
-      return {
-        authorized: true,
-        user: session
-          ? { ...session, role: 'admin' }
-          : {
-              id: 17,
-              name: 'Geeth Liyanage',
-              email: 'geethliyanage979@gmail.com',
-              role: 'admin',
-              provider: 'google',
-            },
-      };
+    const expectedKey = process.env.ADMIN_PORTAL_KEY;
+    if (expectedKey && adminKey === expectedKey) {
+      const session = await getAuthSession(req);
+      if (session) {
+        return { authorized: true, user: { ...session, role: 'admin' } };
+      }
     }
   }
 
@@ -88,8 +72,9 @@ export async function requireRole(roleOrReq: any, ...roles: UserRole[]): Promise
     return authRes;
   }
 
-  const userRole = authRes.user.role;
-  if (!allowedRoles.includes(userRole)) {
+  const userRole = (authRes.user.role || '').toLowerCase();
+  const normalizedAllowed = allowedRoles.map((r) => String(r).toLowerCase());
+  if (!normalizedAllowed.includes(userRole)) {
     return {
       authorized: false,
       user: authRes.user,

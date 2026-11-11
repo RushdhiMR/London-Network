@@ -13,6 +13,7 @@ import InterviewSection from '@/components/InterviewSection';
 import MostReadSection from '@/components/MostReadSection';
 import MarketsSection from '@/components/MarketsSection';
 import LifeStyleSection from '@/components/LifeStyleSection';
+import UFOSection from '@/components/UFOSection';
 import BottomCategoryGrid from '@/components/BottomCategoryGrid';
 import Footer from '@/components/Footer';
 import AdBanner from '@/components/AdBanner';
@@ -67,6 +68,9 @@ export default function Home() {
 
       {/* 13. Ad Slot 3 */}
       <AdBanner label="ADVERTISEMENT - SLOT 3" />
+
+      {/* UFO Category Section (1 row, 4 slots) */}
+      <UFOSection />
 
       {/* 14. Section 10: Bottom Category 4-Column Grid */}
       <BottomCategoryGrid />

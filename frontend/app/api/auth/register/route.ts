@@ -6,7 +6,7 @@ import { sendWelcomeEmail } from '@/lib/email';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, email, password } = body;
+    const { name, email, password, yearsOfExperience, years_of_experience } = body;
 
     // 1. Validation
     if (!name || !name.trim()) {
@@ -48,6 +48,8 @@ export async function POST(request: Request) {
     const passwordHash = await hashPassword(password);
 
     try {
+      const expVal = yearsOfExperience !== undefined && yearsOfExperience !== '' ? Number(yearsOfExperience) : (years_of_experience !== undefined && years_of_experience !== '' ? Number(years_of_experience) : undefined);
+
       const newUser = await DB.createUser({
         name: userName,
         email: normalized,
@@ -55,6 +57,8 @@ export async function POST(request: Request) {
         role: userRole,
         provider: 'local',
         email_verified: false,
+        yearsOfExperience: expVal,
+        years_of_experience: expVal,
       });
 
       const userPayload = {
@@ -63,6 +67,7 @@ export async function POST(request: Request) {
         email: newUser.email,
         role: newUser.role,
         provider: newUser.provider,
+        yearsOfExperience: (newUser as any).yearsOfExperience,
       };
 
       // Set HTTP-Only session cookie and return token for tab session isolation

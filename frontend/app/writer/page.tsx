@@ -128,6 +128,7 @@ export default function WriterDashboardPage() {
   const [profileBio, setProfileBio] = useState("");
   const [profileLinkedin, setProfileLinkedin] = useState("");
   const [profileAvatar, setProfileAvatar] = useState("");
+  const [profileExperience, setProfileExperience] = useState<number | string>("");
   const [profileMsg, setProfileMsg] = useState("");
   const [profileError, setProfileError] = useState("");
   const [currentPasswordInput, setCurrentPasswordInput] = useState("");
@@ -141,6 +142,7 @@ export default function WriterDashboardPage() {
       setProfileBio((currentUser as any).bio || "Writer User");
       setProfileLinkedin((currentUser as any).linkedin || "https://www.linkedin.com/in/your-profile");
       setProfileAvatar(currentUser.avatar && isUploadedAvatar(currentUser.avatar) ? currentUser.avatar : "");
+      setProfileExperience((currentUser as any).yearsOfExperience ?? (currentUser as any).years_of_experience ?? "");
     }
   }, [currentUser, isProfileSettingsOpen]);
 
@@ -194,7 +196,9 @@ export default function WriterDashboardPage() {
       role: currentUser?.role || "Writer",
       bio: profileBio.trim(),
       linkedin: profileLinkedin.trim(),
-      avatar: finalAvatar
+      avatar: finalAvatar,
+      yearsOfExperience: profileExperience !== "" ? Number(profileExperience) : undefined,
+      years_of_experience: profileExperience !== "" ? Number(profileExperience) : undefined
     };
 
     setCurrentUser(updatedUser);
@@ -818,7 +822,7 @@ export default function WriterDashboardPage() {
     return matchesTab && matchesSearch;
   });
 
-  if (isLoading) {
+  if (isLoading || auth.loading) {
     return <PageSkeletonLoader />;
   }
 
@@ -886,7 +890,7 @@ export default function WriterDashboardPage() {
             <div className="flex items-center gap-2">
               <Link href="/" className="flex items-center gap-1.5">
                 <img
-                  src="/logo.png"
+                  src="/logo.svg"
                   alt="London BigBen"
                   className="h-4 md:h-5 object-contain"
                   onError={(e) => {
@@ -1817,6 +1821,25 @@ export default function WriterDashboardPage() {
                 </div>
                 <p className="text-[11px] text-gray-400 font-normal mt-1.5 leading-normal">
                   Shown on your article bylines so readers can connect with you.
+                </p>
+              </div>
+
+              {/* Field 4: YEARS OF EXPERIENCE */}
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                  YEARS OF EXPERIENCE
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="75"
+                  placeholder="e.g. 12"
+                  value={profileExperience}
+                  onChange={(e) => setProfileExperience(e.target.value)}
+                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all"
+                />
+                <p className="text-[11px] text-gray-400 font-normal mt-1.5 leading-normal">
+                  Displayed on your public author profile card.
                 </p>
               </div>
 

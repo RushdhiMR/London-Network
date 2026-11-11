@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isB2Configured, uploadToB2, listB2Backups, deleteB2Object } from "@/lib/backblaze";
 import { DB } from "@/lib/db";
+import { requireRole } from "@/lib/rbac";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const rbac = await requireRole(request, 'admin');
+  if (!rbac.authorized) {
+    return rbac.response;
+  }
+
   try {
     if (!isB2Configured()) {
       return NextResponse.json({
@@ -28,6 +34,11 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const rbac = await requireRole(request, 'admin');
+  if (!rbac.authorized) {
+    return rbac.response;
+  }
+
   try {
     const body = await request.json().catch(() => ({}));
 
@@ -110,6 +121,11 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const rbac = await requireRole(request, 'admin');
+  if (!rbac.authorized) {
+    return rbac.response;
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const filename = searchParams.get("filename") || searchParams.get("key");

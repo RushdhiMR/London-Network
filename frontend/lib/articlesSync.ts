@@ -2,6 +2,27 @@
 
 import { useState, useEffect, useCallback } from "react";
 
+
+
+function getClientAuthHeaders(extra: Record<string, string> = {}) {
+  let token: string | null = null;
+  if (typeof window !== "undefined") {
+    try {
+      const raw = sessionStorage.getItem("dj_tab_session");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        token = typeof parsed === "string" ? parsed : parsed?.token || null;
+      }
+    } catch {}
+  }
+  return {
+    ...extra,
+    ...(token ? { "Authorization": `Bearer ${token}` } : {})
+  };
+}
+
+
+
 const STORAGE_KEY = "dj_writer_submitted_articles";
 const SYNC_EVENT_NAME = "dj_articles_updated";
 
@@ -20,6 +41,8 @@ export interface ArticleItem {
   date?: string;
   reads?: number;
   tags?: string[];
+  subcategories?: string[];
+  subCategories?: string[];
   readDuration?: string;
   authorEmail?: string;
   authorName?: string;
@@ -328,7 +351,7 @@ export function isTopPlacementArticle(post: any): boolean {
 
 export function getArticleSubcategories(post: any): string[] {
   if (!post) return [];
-  const subs = post.subcategories || post.subCategories || post.sub_categories || [];
+  const subs = post.subcategories ?? post.subCategories ?? post.sub_categories ?? post.subcategory ?? post.subcategory_name ?? [];
   if (Array.isArray(subs)) {
     return subs.map((s: any) => String(s || "").trim()).filter(Boolean);
   }
@@ -357,6 +380,8 @@ export function normalizeCategoryKey(name: string): string {
   if (cleaned.includes("research") || cleaned.includes("innovat") || cleaned.includes("insight")) return "research";
   if (cleaned.includes("lifestyle") || cleaned.includes("life")) return "lifestyle";
   if (cleaned.includes("entertain") || cleaned.includes("art")) return "entertainment";
+  if (cleaned.includes("interview")) return "interview";
+  if (cleaned.includes("ufo") || cleaned.includes("uap")) return "ufo";
   if (cleaned.includes("china")) return "china";
   if (cleaned.includes("unitedstates") || cleaned === "us" || cleaned === "usa" || cleaned.includes("america")) return "unitedstates";
   if (cleaned.includes("europe")) return "europe";
