@@ -1,6 +1,8 @@
 import AuthorProfileContent from '@/components/AuthorProfileContent';
 import { resolveUserAvatar } from '@/lib/userProfiles';
 
+export const dynamic = 'force-dynamic';
+
 interface AuthorPageProps {
   params: Promise<{
     slug: string;

@@ -4,7 +4,11 @@ import path from 'path';
 import { getB2Client, isB2Configured } from '@/lib/backblaze';
 import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 
-const DB_JSON_PATH = path.join(process.cwd(), 'data', 'digital_journal_db.json');
+const candidateArticlesPaths = [
+  path.join(process.cwd(), 'data', 'digital_journal_db.json'),
+  path.join(process.cwd(), 'frontend', 'data', 'digital_journal_db.json'),
+];
+const DB_JSON_PATH = candidateArticlesPaths.find(p => fs.existsSync(p)) || candidateArticlesPaths[0];
 const TMP_JSON_PATH = path.join('/tmp', 'digital_journal_db.json');
 const B2_STATE_KEY = 'database/articles_overrides.json';
 

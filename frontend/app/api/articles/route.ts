@@ -157,19 +157,19 @@ export async function POST(request: Request) {
 
     // Notify author followers automatically whenever an article is published live
     if (articleRecord.status === 'Published') {
-      (async () => {
-        try {
-          const authorName = (articleRecord.authorName || (articleRecord as any).author || '').trim();
-          const authorSlug = (articleRecord as any).authorSlug || (articleRecord as any).author_slug || (authorName ? authorName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : '');
-          const { DB } = await import('@/lib/db');
-          const followersByName = authorName ? await DB.getAuthorFollowers(authorName) : [];
-          const followersBySlug = authorSlug ? await DB.getAuthorFollowers(authorSlug) : [];
-          const allFollowers = Array.from(new Set([...followersByName, ...followersBySlug]));
+      try {
+        const authorName = (articleRecord.authorName || (articleRecord as any).author || '').trim();
+        const authorSlug = (articleRecord as any).authorSlug || (articleRecord as any).author_slug || (authorName ? authorName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : '');
+        const { DB } = await import('@/lib/db');
+        const followersByName = authorName ? await DB.getAuthorFollowers(authorName) : [];
+        const followersBySlug = authorSlug ? await DB.getAuthorFollowers(authorSlug) : [];
+        const allFollowers = Array.from(new Set([...followersByName, ...followersBySlug]));
 
-          if (allFollowers.length > 0) {
-            const { sendArticleDistributionEmail } = await import('@/lib/email');
-            for (const recipient of allFollowers) {
-              await sendArticleDistributionEmail(recipient, {
+        if (allFollowers.length > 0) {
+          const { sendArticleDistributionEmail } = await import('@/lib/email');
+          await Promise.allSettled(
+            allFollowers.map((recipient) =>
+              sendArticleDistributionEmail(recipient, {
                 title: articleRecord.title,
                 summary: articleRecord.summary || articleRecord.description || '',
                 category: articleRecord.category || 'News',
@@ -177,14 +177,14 @@ export async function POST(request: Request) {
                 slug: articleRecord.slug || '',
                 imageUrl: articleRecord.imageUrl || (articleRecord as any).image,
                 readTime: articleRecord.readTime || (articleRecord as any).readDuration
-              });
-            }
-            console.log(`[Follower Notification] Sent article notification to ${allFollowers.length} follower(s) of ${authorName}.`);
-          }
-        } catch (notifyErr) {
-          console.warn('[api/articles] Follower notification notice:', notifyErr);
+              })
+            )
+          );
+          console.log(`[Follower Notification] Sent article notification to ${allFollowers.length} follower(s) of ${authorName}.`);
         }
-      })();
+      } catch (notifyErr) {
+        console.warn('[api/articles] Follower notification notice:', notifyErr);
+      }
     }
 
     return NextResponse.json({

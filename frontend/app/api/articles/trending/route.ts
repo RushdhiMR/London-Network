@@ -3,7 +3,12 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 
-const DB_JSON_PATH = path.join(process.cwd(), "data", "digital_journal_db.json");
+const candidatePaths = [
+  path.join("/tmp", "digital_journal_db.json"),
+  path.join(process.cwd(), "data", "digital_journal_db.json"),
+  path.join(process.cwd(), "frontend", "data", "digital_journal_db.json"),
+];
+const DB_JSON_PATH = candidatePaths.find(p => fs.existsSync(p)) || candidatePaths[1];
 
 const DEFAULT_ARTICLE_TRENDING_TOPICS: string[] = [
   "UK Economy",

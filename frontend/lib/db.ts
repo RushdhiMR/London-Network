@@ -2,6 +2,8 @@ import bcrypt from 'bcryptjs';
 import mysql from 'mysql2/promise';
 import fs from 'fs';
 import path from 'path';
+import { getB2Client, isB2Configured } from '@/lib/backblaze';
+import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 
 export interface UserRow {
   id: number;
@@ -26,7 +28,21 @@ export interface UserRow {
 
 let pool: mysql.Pool | null = null;
 
-const DB_JSON_PATH = path.join(process.cwd(), 'data', 'digital_journal_db.json');
+const candidateDbPaths = [
+  path.join(process.cwd(), 'data', 'digital_journal_db.json'),
+  path.join(process.cwd(), 'frontend', 'data', 'digital_journal_db.json'),
+];
+
+export function getDbJsonPath(): string {
+  const tmpPath = path.join('/tmp', 'digital_journal_db.json');
+  if (fs.existsSync(tmpPath)) return tmpPath;
+  for (const p of candidateDbPaths) {
+    if (fs.existsSync(p)) return p;
+  }
+  return candidateDbPaths[0];
+}
+
+const DB_JSON_PATH = getDbJsonPath();
 
 export interface SubscriberRow {
   id: number | string;
@@ -208,67 +224,166 @@ let inMemoryJsonDbCache: any = null;
 let inMemoryJsonDbCacheTime = 0;
 const JSON_CACHE_TTL_MS = 10000; // 10 seconds in-memory cache
 
-function readJsonDb(): { users: UserRow[]; articles: any[]; deleted_emails: string[]; deleted_user_profiles: Record<string, DeletedUserProfile>; subscribers: SubscriberRow[]; contact_submissions: ContactSubmissionRow[]; advertise_leads: AdvertiseLeadRow[]; site_subscriptions: SiteSubscriptionRow[]; author_followers?: Record<string, string[]> } {
+const B2_FOLLOWERS_KEY = 'database/author_followers.json';
+let b2FollowersCache: Record<string, string[]> | null = null;
+let b2FollowersCacheTime = 0;
+
+async function getAuthorFollowersFromB2(): Promise<Record<string, string[]> | null> {
+  if (!isB2Configured()) return null;
+  try {
+    const now = Date.now();
+    if (b2FollowersCache && (now - b2FollowersCacheTime < 3000)) {
+      return b2FollowersCache;
+    }
+    const client = getB2Client();
+    const bucket = (process.env.B2_BUCKET_NAME || '').trim();
+    if (!client || !bucket) return null;
+
+    const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: B2_FOLLOWERS_KEY }));
+    const bodyStr = await res.Body?.transformToString();
+    if (bodyStr && bodyStr.trim()) {
+      const parsed = JSON.parse(bodyStr);
+      if (parsed && typeof parsed === 'object') {
+        b2FollowersCache = parsed;
+        b2FollowersCacheTime = Date.now();
+        return parsed;
+      }
+    }
+  } catch (err: any) {
+    if (err?.name !== 'NoSuchKey' && err?.Code !== 'NoSuchKey') {
+      console.warn('[DB] B2 followers read warning:', err?.message || err);
+    }
+  }
+  return null;
+}
+
+async function saveAuthorFollowersToB2(followersMap: Record<string, string[]>): Promise<boolean> {
+  if (!isB2Configured()) return false;
+  try {
+    const client = getB2Client();
+    const bucket = (process.env.B2_BUCKET_NAME || '').trim();
+    if (!client || !bucket) return false;
+
+    await client.send(new PutObjectCommand({
+      Bucket: bucket,
+      Key: B2_FOLLOWERS_KEY,
+      Body: Buffer.from(JSON.stringify(followersMap, null, 2), 'utf-8'),
+      ContentType: 'application/json',
+    }));
+    b2FollowersCache = followersMap;
+    b2FollowersCacheTime = Date.now();
+    return true;
+  } catch (err: any) {
+    console.warn('[DB] B2 followers save warning:', err?.message || err);
+    return false;
+  }
+}
+
+function readJsonDb(): { users: UserRow[]; articles: any[]; deleted_emails: string[]; deleted_user_profiles: Record<string, DeletedUserProfile>; subscribers: SubscriberRow[]; contact_submissions: ContactSubmissionRow[]; advertise_leads: AdvertiseLeadRow[]; site_subscriptions: SiteSubscriptionRow[]; author_followers?: Record<string, string[]>; team_members?: any[] } {
   if (inMemoryJsonDbCache && (Date.now() - inMemoryJsonDbCacheTime < JSON_CACHE_TTL_MS)) {
     return inMemoryJsonDbCache;
   }
+
+  // 1. Check /tmp first (holds latest runtime updates on Vercel)
+  const tmpPath = path.join('/tmp', 'digital_journal_db.json');
   try {
-    if (fs.existsSync(DB_JSON_PATH)) {
-      const raw = fs.readFileSync(DB_JSON_PATH, 'utf-8');
+    if (fs.existsSync(tmpPath)) {
+      const raw = fs.readFileSync(tmpPath, 'utf-8');
       if (raw && raw.trim()) {
-        let parsed: any = null;
-        try {
-          parsed = JSON.parse(raw);
-        } catch (parseErr) {
-          parsed = null;
-        }
+        const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === 'object') {
-          const result = {
-            users: Array.isArray(parsed.users) ? parsed.users : [],
-            articles: Array.isArray(parsed.articles) ? parsed.articles : [],
-            deleted_emails: Array.isArray(parsed.deleted_emails) ? parsed.deleted_emails : [],
-            deleted_user_profiles: (parsed.deleted_user_profiles && typeof parsed.deleted_user_profiles === 'object' && !Array.isArray(parsed.deleted_user_profiles)) ? parsed.deleted_user_profiles : {},
-            subscribers: Array.isArray(parsed.subscribers) ? parsed.subscribers : [],
-            contact_submissions: Array.isArray(parsed.contact_submissions) && parsed.contact_submissions.length > 0 
-              ? parsed.contact_submissions 
-              : DEFAULT_CONTACT_SUBMISSIONS,
-            advertise_leads: Array.isArray(parsed.advertise_leads) && parsed.advertise_leads.length > 0
-              ? parsed.advertise_leads
-              : DEFAULT_ADVERTISE_LEADS,
-            site_subscriptions: Array.isArray(parsed.site_subscriptions) ? parsed.site_subscriptions : [],
-            author_followers: (parsed.author_followers && typeof parsed.author_followers === 'object') ? parsed.author_followers : {}
-          };
-          inMemoryJsonDbCache = result;
+          inMemoryJsonDbCache = parsed;
           inMemoryJsonDbCacheTime = Date.now();
-          return result;
+          return parsed;
         }
       }
     }
-  } catch (err) {
-    console.warn('[DB] JSON fallback read warning:', err);
+  } catch (e) {}
+
+  // 2. Check candidate paths (finds frontend/data/digital_journal_db.json on Vercel)
+  for (const candidate of candidateDbPaths) {
+    try {
+      if (fs.existsSync(candidate)) {
+        const raw = fs.readFileSync(candidate, 'utf-8');
+        if (raw && raw.trim()) {
+          let parsed: any = null;
+          try {
+            parsed = JSON.parse(raw);
+          } catch (parseErr) {
+            parsed = null;
+          }
+          if (parsed && typeof parsed === 'object') {
+            const result = {
+              ...parsed,
+              users: Array.isArray(parsed.users) ? parsed.users : [],
+              articles: Array.isArray(parsed.articles) ? parsed.articles : [],
+              deleted_emails: Array.isArray(parsed.deleted_emails) ? parsed.deleted_emails : [],
+              deleted_user_profiles: (parsed.deleted_user_profiles && typeof parsed.deleted_user_profiles === 'object' && !Array.isArray(parsed.deleted_user_profiles)) ? parsed.deleted_user_profiles : {},
+              subscribers: Array.isArray(parsed.subscribers) ? parsed.subscribers : [],
+              contact_submissions: Array.isArray(parsed.contact_submissions) && parsed.contact_submissions.length > 0 
+                ? parsed.contact_submissions 
+                : DEFAULT_CONTACT_SUBMISSIONS,
+              advertise_leads: Array.isArray(parsed.advertise_leads) && parsed.advertise_leads.length > 0
+                ? parsed.advertise_leads
+                : DEFAULT_ADVERTISE_LEADS,
+              site_subscriptions: Array.isArray(parsed.site_subscriptions) ? parsed.site_subscriptions : [],
+              author_followers: (parsed.author_followers && typeof parsed.author_followers === 'object') ? parsed.author_followers : {},
+              team_members: Array.isArray(parsed.team_members) ? parsed.team_members : []
+            };
+            inMemoryJsonDbCache = result;
+            inMemoryJsonDbCacheTime = Date.now();
+            return result;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[DB] JSON fallback read warning:', err);
+    }
   }
-  return { users: [], articles: [], deleted_emails: [], deleted_user_profiles: {}, subscribers: [], contact_submissions: DEFAULT_CONTACT_SUBMISSIONS, advertise_leads: DEFAULT_ADVERTISE_LEADS, site_subscriptions: [], author_followers: {} };
+
+  return { users: [], articles: [], deleted_emails: [], deleted_user_profiles: {}, subscribers: [], contact_submissions: DEFAULT_CONTACT_SUBMISSIONS, advertise_leads: DEFAULT_ADVERTISE_LEADS, site_subscriptions: [], author_followers: {}, team_members: [] };
 }
 
-function writeJsonDb(data: { users: UserRow[]; articles: any[]; deleted_emails?: string[]; deleted_user_profiles?: Record<string, DeletedUserProfile>; subscribers?: SubscriberRow[]; contact_submissions?: ContactSubmissionRow[]; advertise_leads?: AdvertiseLeadRow[]; site_subscriptions?: SiteSubscriptionRow[]; author_followers?: Record<string, string[]> }) {
+function writeJsonDb(data: { users: UserRow[]; articles: any[]; deleted_emails?: string[]; deleted_user_profiles?: Record<string, DeletedUserProfile>; subscribers?: SubscriberRow[]; contact_submissions?: ContactSubmissionRow[]; advertise_leads?: AdvertiseLeadRow[]; site_subscriptions?: SiteSubscriptionRow[]; author_followers?: Record<string, string[]>; team_members?: any[]; [key: string]: any }) {
   inMemoryJsonDbCache = data;
   inMemoryJsonDbCacheTime = Date.now();
+
+  const existingCandidate = candidateDbPaths.find(p => fs.existsSync(p)) || candidateDbPaths[0];
   try {
-    const dir = path.dirname(DB_JSON_PATH);
+    let existingRaw: any = {};
+    if (fs.existsSync(existingCandidate)) {
+      try { existingRaw = JSON.parse(fs.readFileSync(existingCandidate, 'utf-8')); } catch {}
+    }
+    const mergedData = { ...existingRaw, ...data };
+    inMemoryJsonDbCache = mergedData;
+
+    const dir = path.dirname(existingCandidate);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    const tmpFile = `${DB_JSON_PATH}.tmp.${Date.now()}`;
-    fs.writeFileSync(tmpFile, JSON.stringify(data, null, 2), 'utf-8');
+    const tmpFile = `${existingCandidate}.tmp.${Date.now()}`;
+    fs.writeFileSync(tmpFile, JSON.stringify(mergedData, null, 2), 'utf-8');
     try {
-      fs.renameSync(tmpFile, DB_JSON_PATH);
+      fs.renameSync(tmpFile, existingCandidate);
     } catch {
-      fs.writeFileSync(DB_JSON_PATH, JSON.stringify(data, null, 2), 'utf-8');
+      fs.writeFileSync(existingCandidate, JSON.stringify(mergedData, null, 2), 'utf-8');
       if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
     }
   } catch (err) {
-    console.warn('[DB] JSON fallback write warning:', err);
+    // Expected on read-only file systems (Vercel)
   }
+
+  // Always write to /tmp on serverless environments like Vercel so changes persist across requests
+  try {
+    const tmpPath = path.join('/tmp', 'digital_journal_db.json');
+    let tmpExisting: any = {};
+    if (fs.existsSync(tmpPath)) {
+      try { tmpExisting = JSON.parse(fs.readFileSync(tmpPath, 'utf-8')); } catch {}
+    }
+    const mergedTmp = { ...tmpExisting, ...data };
+    inMemoryJsonDbCache = mergedTmp;
+    fs.writeFileSync(tmpPath, JSON.stringify(mergedTmp, null, 2), 'utf-8');
+  } catch (err) {}
 }
 
 let tableInitialized = false;
@@ -1094,31 +1209,34 @@ export const DB = {
     const cleanAuthor = (authorKey || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '-');
     if (!cleanFollower || !cleanAuthor) return { success: false, isFollowing: false, count: 0 };
 
+    const b2Followers = await getAuthorFollowersFromB2();
     const jsonDb = readJsonDb();
-    if (!jsonDb.author_followers || typeof jsonDb.author_followers !== 'object') {
-      jsonDb.author_followers = {};
-    }
-    if (!Array.isArray(jsonDb.author_followers[cleanAuthor])) {
-      jsonDb.author_followers[cleanAuthor] = [];
+    const followersMap: Record<string, string[]> = { ...(jsonDb.author_followers || {}), ...(b2Followers || {}) };
+
+    if (!Array.isArray(followersMap[cleanAuthor])) {
+      followersMap[cleanAuthor] = [];
     }
 
-    const followers = jsonDb.author_followers[cleanAuthor];
+    const followers = followersMap[cleanAuthor];
     const exists = followers.some(e => e.toLowerCase() === cleanFollower);
 
     let isFollowing = false;
     if (exists) {
-      jsonDb.author_followers[cleanAuthor] = followers.filter(e => e.toLowerCase() !== cleanFollower);
+      followersMap[cleanAuthor] = followers.filter(e => e.toLowerCase() !== cleanFollower);
       isFollowing = false;
     } else {
-      jsonDb.author_followers[cleanAuthor].push(cleanFollower);
+      followersMap[cleanAuthor].push(cleanFollower);
       isFollowing = true;
     }
 
+    jsonDb.author_followers = followersMap;
     writeJsonDb(jsonDb);
+    await saveAuthorFollowersToB2(followersMap);
+
     return {
       success: true,
       isFollowing,
-      count: jsonDb.author_followers[cleanAuthor].length
+      count: followersMap[cleanAuthor].length
     };
   },
 
@@ -1127,9 +1245,11 @@ export const DB = {
     const cleanAuthor = (authorKey || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '-');
     if (!cleanFollower || !cleanAuthor) return false;
 
+    const b2Followers = await getAuthorFollowersFromB2();
     const jsonDb = readJsonDb();
-    if (!jsonDb.author_followers) return false;
-    const followers = jsonDb.author_followers[cleanAuthor];
+    const followersMap: Record<string, string[]> = { ...(jsonDb.author_followers || {}), ...(b2Followers || {}) };
+
+    const followers = followersMap[cleanAuthor];
     return Array.isArray(followers) && followers.some(e => e.toLowerCase() === cleanFollower);
   },
 
@@ -1137,14 +1257,15 @@ export const DB = {
     const cleanAuthor = (authorKey || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '-');
     if (!cleanAuthor) return [];
 
+    const b2Followers = await getAuthorFollowersFromB2();
     const jsonDb = readJsonDb();
-    if (!jsonDb.author_followers) return [];
+    const followersMap: Record<string, string[]> = { ...(jsonDb.author_followers || {}), ...(b2Followers || {}) };
 
     const followersSet = new Set<string>();
-    Object.keys(jsonDb.author_followers).forEach(k => {
+    Object.keys(followersMap).forEach(k => {
       const normK = k.toLowerCase().replace(/[^a-z0-9]/g, '-');
       if (normK === cleanAuthor || normK.includes(cleanAuthor) || cleanAuthor.includes(normK)) {
-        const list = jsonDb.author_followers ? jsonDb.author_followers[k] : [];
+        const list = followersMap[k];
         if (Array.isArray(list)) {
           list.forEach(em => followersSet.add(em.toLowerCase().trim()));
         }
