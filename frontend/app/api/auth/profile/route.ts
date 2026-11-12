@@ -9,8 +9,57 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const email = searchParams.get('email');
     const name = searchParams.get('name');
+    const list = searchParams.get('list');
 
     const allUsers = await DB.getAllUsers();
+
+    if (list === 'writers') {
+      const articles = await readArticlesStore().catch(() => []);
+      const publishedArticles = Array.isArray(articles)
+        ? articles.filter((a: any) => !a.status || a.status.toLowerCase() === 'published' || a.status.toLowerCase() === 'approved')
+        : [];
+
+      const registeredWriters = allUsers.filter((u: any) => {
+        const r = (u.role || '').toLowerCase();
+        return r === 'writer';
+      });
+
+      const writers = registeredWriters.map((u: any) => {
+        const uName = (u.name || '').trim();
+        const uEmail = (u.email || '').toLowerCase().trim();
+        const uSlug = uName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || `writer-${u.id}`;
+
+        const matchedArts = publishedArticles.filter((a: any) => {
+          const aEmail = (a.authorEmail || a.author_email || '').toLowerCase().trim();
+          const aName = (a.authorName || a.author_name || a.author || '').toLowerCase().trim();
+          return (uEmail && aEmail === uEmail) || (uName && aName === uName.toLowerCase());
+        });
+
+        const articleAvatar = matchedArts.find(
+          (a: any) => (a.authorAvatar || a.author_avatar) && String(a.authorAvatar || a.author_avatar).length > 5
+        );
+        const resolvedAvatar =
+          (u.avatar && String(u.avatar).length > 5 && !String(u.avatar).includes('cart') ? u.avatar : null) ||
+          articleAvatar?.authorAvatar ||
+          articleAvatar?.author_avatar ||
+          '/author_bluesuit.jpg';
+
+        return {
+          name: uName || 'Journalist',
+          slug: uSlug,
+          email: u.email,
+          role: 'Staff Journalist',
+          avatar: resolvedAvatar,
+          bio: u.bio || '',
+          articlesCount: matchedArts.length,
+        };
+      });
+
+      return NextResponse.json({
+        success: true,
+        writers,
+      });
+    }
     
     let matchedUser = null;
     if (email) {
@@ -46,7 +95,29 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { email, name, avatar, bio, role: requestedRole, linkedin, yearsOfExperience, years_of_experience } = body;
+    const {
+      email,
+      name,
+      avatar,
+      bio,
+      role: requestedRole,
+      linkedin,
+      yearsOfExperience,
+      years_of_experience,
+      coverageAreas,
+      coverage_areas,
+      aboutTheJournalist,
+      about_the_journalist,
+      journalisticApproach,
+      journalistic_approach,
+      city,
+      country,
+      location,
+      expertise,
+      expertiseSlots,
+      expertiseRatings,
+      expertise_ratings,
+    } = body;
 
     if (!email) {
       return NextResponse.json({ success: false, error: 'Email is required' }, { status: 400 });
@@ -98,6 +169,35 @@ export async function POST(request: Request) {
       }
     }
 
+    const rawAreas = coverageAreas ?? coverage_areas;
+    const parsedAreas: string[] | undefined = Array.isArray(rawAreas)
+      ? rawAreas.map((s: any) => String(s || '').trim()).filter(Boolean)
+      : typeof rawAreas === 'string'
+        ? rawAreas.split(',').map((s: string) => s.trim()).filter(Boolean)
+        : undefined;
+
+    const clampWords = (str: any, maxWords: number): string | undefined => {
+      if (typeof str !== 'string') return undefined;
+      const trimmed = str.trim();
+      if (!trimmed) return '';
+      const words = trimmed.split(/\s+/);
+      return words.length > maxWords ? words.slice(0, maxWords).join(' ') : trimmed;
+    };
+
+    const rawAboutJ = aboutTheJournalist !== undefined ? aboutTheJournalist : about_the_journalist;
+    const rawApproachJ = journalisticApproach !== undefined ? journalisticApproach : journalistic_approach;
+
+    const rawExp = expertise ?? expertiseSlots;
+    const parsedExpertise: string[] | undefined = Array.isArray(rawExp)
+      ? rawExp.map((s: any) => (typeof s === 'object' && s?.topic ? String(s.topic) : String(s || '')).trim()).filter(Boolean).slice(0, 6)
+      : typeof rawExp === 'string' && rawExp.trim()
+        ? rawExp.split(',').map((s: string) => s.trim()).filter(Boolean).slice(0, 6)
+        : undefined;
+
+    // Admin-only expertise ratings enforcement
+    const rawRatings = expertiseRatings ?? expertise_ratings;
+    const allowedRatings = isAdmin && rawRatings && typeof rawRatings === 'object' ? rawRatings : undefined;
+
     const updated = await DB.updateUserProfile({
       email,
       name,
@@ -105,7 +205,15 @@ export async function POST(request: Request) {
       bio,
       role: targetRole,
       linkedin,
-      yearsOfExperience: yearsOfExperience !== undefined ? yearsOfExperience : years_of_experience
+      yearsOfExperience: yearsOfExperience !== undefined ? yearsOfExperience : years_of_experience,
+      coverageAreas: parsedAreas,
+      aboutTheJournalist: clampWords(rawAboutJ, 200),
+      journalisticApproach: clampWords(rawApproachJ, 50),
+      city: city !== undefined ? (city ? String(city).trim() : null) : undefined,
+      country: country !== undefined ? (country ? String(country).trim() : null) : undefined,
+      location: location !== undefined ? (location ? String(location).trim() : null) : undefined,
+      expertise: parsedExpertise,
+      ...(allowedRatings ? { expertiseRatings: allowedRatings } : {}),
     });
 
     // Also update server articles store so all published articles by this writer reflect the new name & avatar in real-time

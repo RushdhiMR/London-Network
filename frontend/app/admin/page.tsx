@@ -106,6 +106,12 @@ interface WorkspaceUser {
   is_default_admin?: boolean | number;
   joinedDate?: string;
   status?: string;
+  city?: string;
+  country?: string;
+  location?: string;
+  expertise?: Array<{ topic: string; rating?: number }> | string[];
+  expertiseRatings?: Record<string, number>;
+  expertise_ratings?: Record<string, number>;
 }
 
 interface SubmittedDraft {
@@ -717,6 +723,8 @@ export default function AdminDashboardPage() {
   const [editUserEmail, setEditUserEmail] = useState("");
   const [editUserPassword, setEditUserPassword] = useState("");
   const [editUserRole, setEditUserRole] = useState<"ADMIN" | "WRITER" | "READER">("WRITER");
+  const [editUserExpertise, setEditUserExpertise] = useState<string[]>([]);
+  const [editUserRatings, setEditUserRatings] = useState<Record<string, number>>({});
 
   // Subscriber Checkboxes state
   const [selectedSubscribers, setSelectedSubscribers] = useState<Array<number | string>>([]);
@@ -3590,6 +3598,28 @@ export default function AdminDashboardPage() {
     setEditUserEmail(user.email);
     setEditUserPassword("");
     setEditUserRole(user.role);
+
+    // Extract writer's 6 expertise slots
+    const rawExp = (user as any).expertise;
+    let slots: string[] = [];
+    if (Array.isArray(rawExp) && rawExp.length > 0) {
+      slots = rawExp.map((s: any) => (typeof s === "object" && s?.topic ? String(s.topic) : String(s || "")).trim()).filter(Boolean).slice(0, 6);
+    }
+    if (slots.length === 0) {
+      slots = ["UK Politics", "Parliamentary Affairs", "International Relations", "EU-UK Relations", "Policy Analysis", "Political Interviews"];
+    }
+    setEditUserExpertise(slots);
+
+    const existingRatings = (user as any).expertiseRatings || (user as any).expertise_ratings || {};
+    const initialRatings: Record<string, number> = {};
+    const defaultPcts = [95, 90, 85, 80, 85, 90];
+    slots.forEach((slot, idx) => {
+      initialRatings[slot] = existingRatings[slot] !== undefined && !isNaN(Number(existingRatings[slot]))
+        ? Number(existingRatings[slot])
+        : defaultPcts[idx % defaultPcts.length];
+    });
+    setEditUserRatings(initialRatings);
+
     setIsEditUserModalOpen(true);
   };
 
@@ -3636,6 +3666,8 @@ export default function AdminDashboardPage() {
           email: newEmail,
           role: newRole.toLowerCase(),
           ...(newPassword ? { password: newPassword } : {}),
+          expertise: editUserExpertise,
+          expertiseRatings: editUserRatings,
         }),
       });
 
@@ -3661,6 +3693,9 @@ export default function AdminDashboardPage() {
                     name: newName,
                     email: newEmail,
                     role: newRole.toLowerCase(),
+                    expertise: editUserExpertise,
+                    expertiseRatings: editUserRatings,
+                    expertise_ratings: editUserRatings,
                     ...(newPassword ? { password: newPassword } : {}),
                   };
                 }
@@ -3686,6 +3721,9 @@ export default function AdminDashboardPage() {
                   name: newName,
                   email: newEmail,
                   role: newRole.toLowerCase(),
+                  expertise: editUserExpertise,
+                  expertiseRatings: editUserRatings,
+                  expertise_ratings: editUserRatings,
                 };
                 localStorage.setItem("dj_user_profiles_db", JSON.stringify(profDb));
               }
@@ -3706,6 +3744,9 @@ export default function AdminDashboardPage() {
                     name: newName,
                     email: newEmail,
                     role: newRole.toLowerCase(),
+                    expertise: editUserExpertise,
+                    expertiseRatings: editUserRatings,
+                    expertise_ratings: editUserRatings,
                   };
                   localStorage.setItem(k, JSON.stringify(updated));
                 }
@@ -3722,6 +3763,8 @@ export default function AdminDashboardPage() {
                 const p = JSON.parse(oldProf);
                 p.name = newName;
                 p.email = newEmail;
+                p.expertise = editUserExpertise;
+                p.expertiseRatings = editUserRatings;
                 localStorage.setItem(`dj_profile_${newEmail}`, JSON.stringify(p));
               } catch (e) { }
             }
@@ -3740,6 +3783,9 @@ export default function AdminDashboardPage() {
             name: newName,
             email: newEmail,
             role: newRole as "ADMIN" | "WRITER" | "READER",
+            expertise: editUserExpertise,
+            expertiseRatings: editUserRatings,
+            expertise_ratings: editUserRatings,
           };
         }
         return u;
@@ -8444,6 +8490,75 @@ export default function AdminDashboardPage() {
 
                 )}
               </div>
+
+              {/* EXPERTISE PROFICIENCY RATINGS (ADMIN EVALUATION ONLY) */}
+              {(editUserRole === "WRITER" || editingUser.role === "WRITER") && (
+                <div className="pt-2 border-t border-slate-100 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider font-mono">
+                        Expertise Ratings (Admin Only)
+                      </label>
+                      <p className="text-[10.5px] text-slate-400">
+                        Set official proficiency ratings (%) for this journalist's 6 expertise slots.
+                      </p>
+                    </div>
+                    <span className="text-[9px] font-bold font-mono px-2 py-0.5 rounded bg-red-50 text-[#D31220] border border-red-200 uppercase">
+                      Admin Rated
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {editUserExpertise.map((slot, sIdx) => {
+                      const rating = editUserRatings[slot] ?? [95, 90, 85, 80, 85, 90][sIdx % 6];
+                      return (
+                        <div key={sIdx} className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 space-y-1.5">
+                          <div className="flex items-center justify-between text-xs font-semibold text-slate-800">
+                            <span className="truncate max-w-[200px] flex items-center gap-1.5">
+                              <span className="text-[10px] text-slate-400 font-mono">#{sIdx + 1}</span>
+                              <span className="truncate">{slot}</span>
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={rating}
+                                onChange={(e) => {
+                                  const val = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                                  setEditUserRatings((prev) => ({
+                                    ...prev,
+                                    [slot]: val,
+                                  }));
+                                }}
+                                className="w-14 px-2 py-0.5 text-right font-mono font-bold text-xs bg-white border border-slate-300 rounded focus:outline-none focus:border-[#D31220]"
+                              />
+                              <span className="text-slate-500 font-mono text-xs">%</span>
+                            </div>
+                          </div>
+                          {/* Progress bar preview */}
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              value={rating}
+                              onChange={(e) => {
+                                const val = Number(e.target.value);
+                                setEditUserRatings((prev) => ({
+                                  ...prev,
+                                  [slot]: val,
+                                }));
+                              }}
+                              className="w-full accent-[#BF1E2D] cursor-pointer h-1.5 bg-slate-200 rounded-lg"
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
                 <button

@@ -15,9 +15,23 @@ export interface UserRow {
   role: 'reader' | 'writer' | 'admin';
   avatar?: string | null;
   bio?: string | null;
+  city?: string | null;
+  country?: string | null;
+  location?: string | null;
   linkedin?: string | null;
   yearsOfExperience?: number | string | null;
   years_of_experience?: number | string | null;
+  coverageAreas?: string[] | null;
+  coverage_areas?: string[] | null;
+  aboutTheJournalist?: string | null;
+  about_the_journalist?: string | null;
+  journalisticApproach?: string | null;
+  journalistic_approach?: string | null;
+  expertise?: Array<{ topic: string; rating?: number }> | string[] | null;
+  expertiseRatings?: Record<string, number> | null;
+  expertise_ratings?: Record<string, number> | null;
+  joinedDate?: string | null;
+  joined_date?: string | null;
   email_verified: boolean | number;
   is_default_admin?: boolean | number;
   reset_token?: string | null;
@@ -639,6 +653,14 @@ export const DB = {
     avatar?: string | null;
     yearsOfExperience?: number | string | null;
     years_of_experience?: number | string | null;
+    coverageAreas?: string[] | null;
+    coverage_areas?: string[] | null;
+    city?: string | null;
+    country?: string | null;
+    location?: string | null;
+    expertise?: Array<{ topic: string; rating?: number }> | string[] | null;
+    expertiseRatings?: Record<string, number> | null;
+    expertise_ratings?: Record<string, number> | null;
   }): Promise<UserRow> {
     const norm = (userData.email || '').trim().toLowerCase();
     const role = userData.role || 'reader';
@@ -653,6 +675,13 @@ export const DB = {
     const restoredAvatar = userData.avatar || savedProfile?.avatar || null;
     const restoredRole = (userData.role && userData.role !== 'reader') ? userData.role : ((savedProfile?.role as any) || role);
     const restoredExp = userData.yearsOfExperience !== undefined ? userData.yearsOfExperience : (userData.years_of_experience !== undefined ? userData.years_of_experience : ((savedProfile as any)?.yearsOfExperience ?? (savedProfile as any)?.years_of_experience ?? null));
+    const restoredCoverage = userData.coverageAreas ?? userData.coverage_areas ?? (savedProfile as any)?.coverageAreas ?? (savedProfile as any)?.coverage_areas ?? null;
+    const restoredCity = userData.city ?? (savedProfile as any)?.city ?? null;
+    const restoredCountry = userData.country ?? (savedProfile as any)?.country ?? null;
+    const fallbackLocation = restoredCity && restoredCountry ? `${restoredCity}, ${restoredCountry}` : (restoredCity || restoredCountry || (savedProfile as any)?.location || null);
+    const restoredLocation = userData.location ?? fallbackLocation;
+    const restoredExpertise = userData.expertise ?? (savedProfile as any)?.expertise ?? null;
+    const restoredRatings = userData.expertiseRatings ?? userData.expertise_ratings ?? (savedProfile as any)?.expertiseRatings ?? (savedProfile as any)?.expertise_ratings ?? null;
 
     let finalPasswordHash = userData.password_hash || null;
     if (finalPasswordHash && !finalPasswordHash.startsWith('$2')) {
@@ -697,6 +726,14 @@ export const DB = {
       avatar: restoredAvatar,
       yearsOfExperience: restoredExp,
       years_of_experience: restoredExp,
+      coverageAreas: restoredCoverage,
+      coverage_areas: restoredCoverage,
+      city: restoredCity,
+      country: restoredCountry,
+      location: restoredLocation,
+      expertise: restoredExpertise,
+      expertiseRatings: restoredRatings,
+      expertise_ratings: restoredRatings,
       // Restore additional profile fields if saved
       ...(savedProfile?.bio ? { bio: savedProfile.bio } : {}),
       ...(savedProfile?.linkedin ? { linkedin: savedProfile.linkedin } : {}),
@@ -1137,6 +1174,18 @@ export const DB = {
     linkedin?: string;
     yearsOfExperience?: number | string | null;
     years_of_experience?: number | string | null;
+    coverageAreas?: string[] | null;
+    coverage_areas?: string[] | null;
+    aboutTheJournalist?: string | null;
+    about_the_journalist?: string | null;
+    journalisticApproach?: string | null;
+    journalistic_approach?: string | null;
+    city?: string | null;
+    country?: string | null;
+    location?: string | null;
+    expertise?: Array<{ topic: string; rating?: number }> | string[] | null;
+    expertiseRatings?: Record<string, number> | null;
+    expertise_ratings?: Record<string, number> | null;
   }): Promise<any> {
     const cleanEmail = (data.email || '').trim().toLowerCase();
     if (!cleanEmail) return null;
@@ -1147,6 +1196,14 @@ export const DB = {
     const existingIdx = jsonDb.users.findIndex(u => (u.email || '').toLowerCase().trim() === cleanEmail);
     let updatedUser: any;
     const exp = data.yearsOfExperience !== undefined ? data.yearsOfExperience : data.years_of_experience;
+    const cov = data.coverageAreas !== undefined ? data.coverageAreas : data.coverage_areas;
+    const aboutJ = data.aboutTheJournalist !== undefined ? data.aboutTheJournalist : data.about_the_journalist;
+    const approachJ = data.journalisticApproach !== undefined ? data.journalisticApproach : data.journalistic_approach;
+    const cityVal = data.city;
+    const countryVal = data.country;
+    const locVal = data.location ?? (cityVal && countryVal ? `${cityVal}, ${countryVal}` : (cityVal || countryVal));
+    const expSlots = data.expertise;
+    const expRatings = data.expertiseRatings ?? data.expertise_ratings;
 
     if (existingIdx >= 0) {
       jsonDb.users[existingIdx] = {
@@ -1157,6 +1214,14 @@ export const DB = {
         ...(data.role ? { role: data.role as any } : {}),
         ...(data.linkedin ? { linkedin: data.linkedin } : {}),
         ...(exp !== undefined ? { yearsOfExperience: exp, years_of_experience: exp } : {}),
+        ...(cov !== undefined ? { coverageAreas: cov, coverage_areas: cov } : {}),
+        ...(aboutJ !== undefined ? { aboutTheJournalist: aboutJ, about_the_journalist: aboutJ } : {}),
+        ...(approachJ !== undefined ? { journalisticApproach: approachJ, journalistic_approach: approachJ } : {}),
+        ...(cityVal !== undefined ? { city: cityVal } : {}),
+        ...(countryVal !== undefined ? { country: countryVal } : {}),
+        ...(locVal !== undefined ? { location: locVal } : {}),
+        ...(expSlots !== undefined ? { expertise: expSlots } : {}),
+        ...(expRatings !== undefined ? { expertiseRatings: expRatings, expertise_ratings: expRatings } : {}),
         updated_at: new Date().toISOString()
       };
       updatedUser = jsonDb.users[existingIdx];
@@ -1171,6 +1236,14 @@ export const DB = {
         provider: 'local',
         email_verified: 1,
         ...(exp !== undefined ? { yearsOfExperience: exp, years_of_experience: exp } : {}),
+        ...(cov !== undefined ? { coverageAreas: cov, coverage_areas: cov } : {}),
+        ...(aboutJ !== undefined ? { aboutTheJournalist: aboutJ, about_the_journalist: aboutJ } : {}),
+        ...(approachJ !== undefined ? { journalisticApproach: approachJ, journalistic_approach: approachJ } : {}),
+        ...(cityVal !== undefined ? { city: cityVal } : {}),
+        ...(countryVal !== undefined ? { country: countryVal } : {}),
+        ...(locVal !== undefined ? { location: locVal } : {}),
+        ...(expSlots !== undefined ? { expertise: expSlots } : {}),
+        ...(expRatings !== undefined ? { expertiseRatings: expRatings, expertise_ratings: expRatings } : {}),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };

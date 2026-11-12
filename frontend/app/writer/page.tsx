@@ -129,6 +129,13 @@ export default function WriterDashboardPage() {
   const [profileLinkedin, setProfileLinkedin] = useState("");
   const [profileAvatar, setProfileAvatar] = useState("");
   const [profileExperience, setProfileExperience] = useState<number | string>("");
+  const [profileCoverageAreas, setProfileCoverageAreas] = useState("");
+  const [profileAboutJournalist, setProfileAboutJournalist] = useState("");
+  const [profileJournalisticApproach, setProfileJournalisticApproach] = useState("");
+  const [profileCity, setProfileCity] = useState("");
+  const [profileCountry, setProfileCountry] = useState("");
+  const [profileExpertiseSlots, setProfileExpertiseSlots] = useState<string[]>(["", "", "", "", "", ""]);
+  const [profileExpertiseRatings, setProfileExpertiseRatings] = useState<Record<string, number>>({});
   const [profileMsg, setProfileMsg] = useState("");
   const [profileError, setProfileError] = useState("");
   const [currentPasswordInput, setCurrentPasswordInput] = useState("");
@@ -143,6 +150,28 @@ export default function WriterDashboardPage() {
       setProfileLinkedin((currentUser as any).linkedin || "https://www.linkedin.com/in/your-profile");
       setProfileAvatar(currentUser.avatar && isUploadedAvatar(currentUser.avatar) ? currentUser.avatar : "");
       setProfileExperience((currentUser as any).yearsOfExperience ?? (currentUser as any).years_of_experience ?? "");
+      const existingAreas = (currentUser as any).coverageAreas ?? (currentUser as any).coverage_areas;
+      setProfileCoverageAreas(Array.isArray(existingAreas) ? existingAreas.join(", ") : (typeof existingAreas === "string" ? existingAreas : ""));
+      setProfileAboutJournalist((currentUser as any).aboutTheJournalist ?? (currentUser as any).about_the_journalist ?? "");
+      setProfileJournalisticApproach((currentUser as any).journalisticApproach ?? (currentUser as any).journalistic_approach ?? "");
+      setProfileCity((currentUser as any).city || "");
+      setProfileCountry((currentUser as any).country || "");
+
+      const rawExp = (currentUser as any).expertise;
+      let slots = ["", "", "", "", "", ""];
+      if (Array.isArray(rawExp)) {
+        slots = [0, 1, 2, 3, 4, 5].map((i) => {
+          const item = rawExp[i];
+          return typeof item === "object" && item?.topic ? String(item.topic) : String(item || "");
+        });
+      } else if (typeof rawExp === "string" && rawExp.trim()) {
+        const parts = rawExp.split(",").map((s) => s.trim());
+        slots = [0, 1, 2, 3, 4, 5].map((i) => parts[i] || "");
+      }
+      setProfileExpertiseSlots(slots);
+
+      const ratings = (currentUser as any).expertiseRatings || (currentUser as any).expertise_ratings || {};
+      setProfileExpertiseRatings(ratings);
     }
   }, [currentUser, isProfileSettingsOpen]);
 
@@ -189,6 +218,25 @@ export default function WriterDashboardPage() {
       } catch (e) {}
     }
 
+    const parsedAreas = profileCoverageAreas
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const clampWords = (str: string, max: number) => {
+      const words = str.trim().split(/\s+/).filter(Boolean);
+      return words.length > max ? words.slice(0, max).join(" ") : str.trim();
+    };
+
+    const clampedAbout = clampWords(profileAboutJournalist, 200);
+    const clampedApproach = clampWords(profileJournalisticApproach, 50);
+
+    const validExpertise = profileExpertiseSlots.map((s) => s.trim()).filter(Boolean).slice(0, 6);
+    const finalCoverage = parsedAreas.length > 0 ? parsedAreas : (validExpertise.length > 0 ? validExpertise : []);
+    const cleanCity = profileCity.trim();
+    const cleanCountry = profileCountry.trim();
+    const cleanLocation = cleanCity && cleanCountry ? `${cleanCity}, ${cleanCountry}` : (cleanCity || cleanCountry || (currentUser as any)?.location);
+
     const updatedUser = {
       ...currentUser,
       name: profileName.trim() || "rushdhi",
@@ -198,11 +246,45 @@ export default function WriterDashboardPage() {
       linkedin: profileLinkedin.trim(),
       avatar: finalAvatar,
       yearsOfExperience: profileExperience !== "" ? Number(profileExperience) : undefined,
-      years_of_experience: profileExperience !== "" ? Number(profileExperience) : undefined
+      years_of_experience: profileExperience !== "" ? Number(profileExperience) : undefined,
+      coverageAreas: finalCoverage,
+      coverage_areas: finalCoverage,
+      aboutTheJournalist: clampedAbout,
+      about_the_journalist: clampedAbout,
+      journalisticApproach: clampedApproach,
+      journalistic_approach: clampedApproach,
+      city: cleanCity || undefined,
+      country: cleanCountry || undefined,
+      location: cleanLocation,
+      expertise: validExpertise,
+      expertiseRatings: profileExpertiseRatings,
+      expertise_ratings: profileExpertiseRatings,
     };
 
     setCurrentUser(updatedUser);
     saveUserProfile(updatedUser);
+
+    try {
+      fetch("/api/auth/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: updatedUser.email,
+          name: updatedUser.name,
+          avatar: updatedUser.avatar,
+          bio: updatedUser.bio,
+          linkedin: updatedUser.linkedin,
+          yearsOfExperience: updatedUser.yearsOfExperience,
+          coverageAreas: updatedUser.coverageAreas,
+          aboutTheJournalist: updatedUser.aboutTheJournalist,
+          journalisticApproach: updatedUser.journalisticApproach,
+          city: updatedUser.city,
+          country: updatedUser.country,
+          location: updatedUser.location,
+          expertise: updatedUser.expertise,
+        }),
+      }).catch(() => {});
+    } catch (e) {}
 
     setIsProfileSettingsOpen(false);
   };
@@ -1841,6 +1923,161 @@ export default function WriterDashboardPage() {
                 <p className="text-[11px] text-gray-400 font-normal mt-1.5 leading-normal">
                   Displayed on your public author profile card.
                 </p>
+              </div>
+
+              {/* City and Country */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                    CITY <span className="text-gray-400 font-normal lowercase">(Writer Details)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. London"
+                    value={profileCity}
+                    onChange={(e) => setProfileCity(e.target.value)}
+                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                    COUNTRY <span className="text-gray-400 font-normal lowercase">(Writer Details)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. United Kingdom"
+                    value={profileCountry}
+                    onChange={(e) => setProfileCountry(e.target.value)}
+                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* 6 Slots of Expertise */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                    AREAS OF EXPERTISE <span className="text-gray-400 font-normal lowercase">(6 slots)</span>
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-sans italic">Ratings evaluated by Admin only</span>
+                </div>
+                <div className="space-y-2">
+                  {[0, 1, 2, 3, 4, 5].map((slotIdx) => {
+                    const topic = profileExpertiseSlots[slotIdx] || "";
+                    const rating = profileExpertiseRatings[topic] ?? [95, 90, 85, 80, 85, 90][slotIdx];
+                    return (
+                      <div key={slotIdx} className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 font-mono">
+                            #{slotIdx + 1}
+                          </span>
+                          <input
+                            type="text"
+                            placeholder={
+                              [
+                                "e.g. UK Politics",
+                                "e.g. Parliamentary Affairs",
+                                "e.g. International Relations",
+                                "e.g. EU-UK Relations",
+                                "e.g. Policy Analysis",
+                                "e.g. Political Interviews",
+                              ][slotIdx]
+                            }
+                            value={topic}
+                            onChange={(e) => {
+                              const updated = [...profileExpertiseSlots];
+                              updated[slotIdx] = e.target.value;
+                              setProfileExpertiseSlots(updated);
+                            }}
+                            className="w-full pl-8 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium text-gray-900 focus:outline-none focus:border-[#D31220]"
+                          />
+                        </div>
+                        <div className="w-24 flex items-center justify-end gap-1.5 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-mono text-slate-600 shrink-0 select-none">
+                          <span className="text-[9px] uppercase font-bold text-slate-400">Admin:</span>
+                          <span className="font-bold text-[#BF1E2D]">{rating}%</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-[10.5px] text-gray-400 font-normal mt-1.5 leading-normal">
+                  You can customize your 6 expertise topics. Official proficiency ratings (%) are evaluated and updated by Admin only.
+                </p>
+              </div>
+
+              {/* Field 5: AREAS OF COVERAGE */}
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                  AREAS OF COVERAGE <span className="text-gray-400 font-normal lowercase">(comma-separated)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. UK Politics, Parliament, Government Policy"
+                  value={profileCoverageAreas}
+                  onChange={(e) => setProfileCoverageAreas(e.target.value)}
+                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all"
+                />
+                {profileCoverageAreas.trim() && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {profileCoverageAreas.split(",").map((t) => t.trim()).filter(Boolean).map((tag, i) => (
+                      <span key={i} className="px-2.5 py-0.5 bg-gray-100 border border-gray-200 rounded-full text-[11px] text-gray-700 font-medium">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Field 6: ABOUT THE JOURNALIST (Max 200 Words) */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                    ABOUT THE JOURNALIST <span className="text-gray-400 font-normal lowercase">(paragraphs, max 200 words)</span>
+                  </label>
+                  <span className={`text-[10px] font-semibold ${
+                    (profileAboutJournalist.trim() ? profileAboutJournalist.trim().split(/\s+/).length : 0) > 200 ? "text-red-600" : "text-gray-400"
+                  }`}>
+                    {profileAboutJournalist.trim() ? profileAboutJournalist.trim().split(/\s+/).length : 0} / 200 words
+                  </span>
+                </div>
+                <textarea
+                  rows={4}
+                  placeholder="Write 2-3 paragraphs about your journalistic background, beats covered, and career highlights (max 200 words)..."
+                  value={profileAboutJournalist}
+                  onChange={(e) => {
+                    const words = e.target.value.trim().split(/\s+/).filter(Boolean);
+                    if (words.length <= 200 || e.target.value.length < profileAboutJournalist.length) {
+                      setProfileAboutJournalist(e.target.value);
+                    }
+                  }}
+                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all resize-y"
+                />
+              </div>
+
+              {/* Field 7: JOURNALISTIC APPROACH (Max 50 Words) */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                    JOURNALISTIC APPROACH <span className="text-gray-400 font-normal lowercase">(max 50 words)</span>
+                  </label>
+                  <span className={`text-[10px] font-semibold ${
+                    (profileJournalisticApproach.trim() ? profileJournalisticApproach.trim().split(/\s+/).length : 0) > 50 ? "text-red-600" : "text-gray-400"
+                  }`}>
+                    {profileJournalisticApproach.trim() ? profileJournalisticApproach.trim().split(/\s+/).length : 0} / 50 words
+                  </span>
+                </div>
+                <textarea
+                  rows={2}
+                  placeholder="Briefly describe your reporting principles and commitment to readers (max 50 words)..."
+                  value={profileJournalisticApproach}
+                  onChange={(e) => {
+                    const words = e.target.value.trim().split(/\s+/).filter(Boolean);
+                    if (words.length <= 50 || e.target.value.length < profileJournalisticApproach.length) {
+                      setProfileJournalisticApproach(e.target.value);
+                    }
+                  }}
+                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all resize-y"
+                />
               </div>
 
               {/* Action Buttons */}

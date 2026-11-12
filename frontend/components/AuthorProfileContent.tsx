@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MapPin, Mail, Link2, Bell, ChevronRight, Award, BookOpen, ShieldCheck, Check } from "lucide-react";
+import { MapPin, Mail, Link2, Bell, ChevronRight, Award, BookOpen, ShieldCheck, Check, Calendar } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useLiveArticles } from "@/lib/articlesSync";
@@ -38,66 +38,29 @@ interface AuthorProfileContentProps {
     bio: string;
     location?: string;
     email?: string;
+    city?: string;
+    country?: string;
     articlesCount?: number;
     yearsOfExperience?: number;
     articleViews?: string;
     coverageAreas?: string[];
+    aboutTheJournalist?: string;
+    journalisticApproach?: string;
+    joinedDate?: string;
+    expertise?: string[];
+    expertiseRatings?: Record<string, number>;
   };
   initialArticles: ArticleItem[];
   mostReadSidebar?: SidebarItem[];
 }
 
-const MORE_WRITERS_DATA = [
-  {
-    name: "James Carter",
-    role: "Senior Political Analyst",
-    articlesCount: 278,
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop",
-    slug: "james-carter"
-  },
-  {
-    name: "Emily Watson",
-    role: "International Correspondent",
-    articlesCount: 312,
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop",
-    slug: "emily-watson"
-  },
-  {
-    name: "Daniel Brooks",
-    role: "Government and Policy Reporter",
-    articlesCount: 198,
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop",
-    slug: "daniel-brooks"
-  },
-  {
-    name: "Olivia Chen",
-    role: "Europe Correspondent",
-    articlesCount: 245,
-    avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&h=150&fit=crop",
-    slug: "olivia-chen"
-  },
-  {
-    name: "Rushdhi MR",
-    role: "Founder & Technology Lead",
-    articlesCount: 418,
-    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_bluesuit.jpg",
-    slug: "rushdhi-mr"
-  },
-  {
-    name: "Roomi",
-    role: "Staff Writer & Market Reporter",
-    articlesCount: 234,
-    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_glasses.jpg",
-    slug: "roomi"
-  },
-  {
-    name: "Ruzni",
-    role: "Editorial Director",
-    articlesCount: 312,
-    avatar: "https://f005.backblazeb2.com/file/LondonNetwork/avatars/author_beard.jpg",
-    slug: "ruzni"
-  }
-];
+interface WriterCardItem {
+  name: string;
+  role: string;
+  articlesCount: number;
+  avatar: string;
+  slug: string;
+}
 
 export default function AuthorProfileContent({
   slug,
@@ -112,6 +75,7 @@ export default function AuthorProfileContent({
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [followToast, setFollowToast] = useState<{ message: string; type: "success" | "info" } | null>(null);
+  const [moreWriters, setMoreWriters] = useState<WriterCardItem[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [syncTick, setSyncTick] = useState(0);
   const { articles: liveArticles } = useLiveArticles();
@@ -361,7 +325,7 @@ export default function AuthorProfileContent({
         finalViews = totalViews > 0 ? formatViewsCount(totalViews) : "0";
       }
 
-      // 5. Automatically load Years of Experience from author account or profile
+      // 5. Automatically load Years of Experience and Areas of Coverage from author account or profile
       let finalYears = 0;
       if (savedProfile?.yearsOfExperience !== undefined && savedProfile?.yearsOfExperience !== null && savedProfile?.yearsOfExperience !== "") {
         finalYears = Number(savedProfile.yearsOfExperience);
@@ -375,18 +339,123 @@ export default function AuthorProfileContent({
         finalYears = 12;
       }
 
+      const normalizeCoverage = (raw: any): string[] | null => {
+        if (Array.isArray(raw) && raw.length > 0) {
+          return raw.map((s) => (typeof s === "object" && s?.topic ? String(s.topic) : String(s || "")).trim()).filter(Boolean);
+        }
+        if (typeof raw === "string" && raw.trim()) return raw.split(",").map((s) => s.trim()).filter(Boolean);
+        return null;
+      };
+
+      const savedCov = normalizeCoverage((savedProfile as any)?.coverageAreas ?? (savedProfile as any)?.coverage_areas);
+      const authCov = (auth.user && (auth.user.name === finalName || isRushdhiPage))
+        ? normalizeCoverage((auth.user as any).coverageAreas ?? (auth.user as any).coverage_areas)
+        : null;
+
+      const savedExp = normalizeCoverage((savedProfile as any)?.expertise);
+      const authExp = (auth.user && (auth.user.name === finalName || isRushdhiPage))
+        ? normalizeCoverage((auth.user as any).expertise)
+        : null;
+      const initialExpertise = savedExp || authExp || (author as any).expertise || null;
+
+      const savedRatings = (savedProfile as any)?.expertiseRatings || (savedProfile as any)?.expertise_ratings;
+      const authRatings = (auth.user && (auth.user.name === finalName || isRushdhiPage))
+        ? ((auth.user as any).expertiseRatings || (auth.user as any).expertise_ratings)
+        : undefined;
+      const initialRatings = savedRatings || authRatings || (author as any).expertiseRatings || undefined;
+
+      const savedCity = (savedProfile as any)?.city;
+      const authCity = (auth.user && (auth.user.name === finalName || isRushdhiPage)) ? (auth.user as any).city : undefined;
+      const initialCity = savedCity || authCity || (author as any).city || undefined;
+
+      const savedCountry = (savedProfile as any)?.country;
+      const authCountry = (auth.user && (auth.user.name === finalName || isRushdhiPage)) ? (auth.user as any).country : undefined;
+      const initialCountry = savedCountry || authCountry || (author as any).country || undefined;
+
+      if (savedCov && savedCov.length > 0) {
+        finalCoverage = savedCov;
+      } else if (authCov && authCov.length > 0) {
+        finalCoverage = authCov;
+      } else if (initialExpertise && initialExpertise.length > 0) {
+        finalCoverage = initialExpertise;
+      }
+
+      const savedAboutJ = (savedProfile as any)?.aboutTheJournalist ?? (savedProfile as any)?.about_the_journalist;
+      const authAboutJ = (auth.user && (auth.user.name === finalName || isRushdhiPage))
+        ? ((auth.user as any).aboutTheJournalist ?? (auth.user as any).about_the_journalist)
+        : undefined;
+      const finalAboutJ = savedAboutJ || authAboutJ || author.aboutTheJournalist || "";
+
+      const savedApproachJ = (savedProfile as any)?.journalisticApproach ?? (savedProfile as any)?.journalistic_approach;
+      const authApproachJ = (auth.user && (auth.user.name === finalName || isRushdhiPage))
+        ? ((auth.user as any).journalisticApproach ?? (auth.user as any).journalistic_approach)
+        : undefined;
+      const finalApproachJ = savedApproachJ || authApproachJ || author.journalisticApproach || "";
+
       setAuthorProfile({
         name: finalName,
         role: finalRole,
         avatar: finalAvatar,
         bio: finalBio,
         location: finalLocation,
+        city: initialCity,
+        country: initialCountry,
         email: finalEmail,
         coverageAreas: finalCoverage,
         articlesCount: finalArticlesCount,
         yearsOfExperience: finalYears,
-        articleViews: finalViews
+        articleViews: finalViews,
+        aboutTheJournalist: finalAboutJ,
+        journalisticApproach: finalApproachJ,
+        joinedDate: author.joinedDate || "March 2018",
+        expertise: initialExpertise,
+        expertiseRatings: initialRatings,
       });
+
+      // Also hydrate latest experience, coverage areas, about, approach, joined date, bio & avatar from backend DB API for any visitor
+      const lookupParam = finalEmail ? `email=${encodeURIComponent(finalEmail)}` : `name=${encodeURIComponent(finalName)}`;
+      fetch(`/api/auth/profile?${lookupParam}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.success && data.user) {
+            const dbUser = data.user;
+            const dbExp = dbUser.yearsOfExperience ?? dbUser.years_of_experience;
+            const dbCov = normalizeCoverage(dbUser.coverageAreas ?? dbUser.coverage_areas);
+            const dbExpSlots = normalizeCoverage(dbUser.expertise);
+            const dbRatings = dbUser.expertiseRatings ?? dbUser.expertise_ratings;
+            const dbAbout = dbUser.aboutTheJournalist ?? dbUser.about_the_journalist;
+            const dbApproach = dbUser.journalisticApproach ?? dbUser.journalistic_approach;
+            const dbCity = dbUser.city;
+            const dbCountry = dbUser.country;
+            const dbLocation = dbUser.location || (dbCity && dbCountry ? `${dbCity}, ${dbCountry}` : (dbCity || dbCountry));
+            let formattedJoined: string | undefined;
+            if (dbUser.created_at) {
+              try {
+                const d = new Date(dbUser.created_at);
+                if (!isNaN(d.getTime())) {
+                  formattedJoined = d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+                }
+              } catch {}
+            }
+            setAuthorProfile((prev) => ({
+              ...prev,
+              ...(dbUser.name && !dbUser.name.toLowerCase().includes("reader") ? { name: dbUser.name } : {}),
+              ...(dbUser.bio && !dbUser.bio.toLowerCase().includes("avid reader") ? { bio: dbUser.bio } : {}),
+              ...(dbUser.avatar && dbUser.avatar.length > 5 && !dbUser.avatar.includes("cart") && !dbUser.avatar.includes("admin_profile") ? { avatar: dbUser.avatar } : {}),
+              ...(dbExp !== undefined && dbExp !== null && dbExp !== "" ? { yearsOfExperience: Number(dbExp) } : {}),
+              ...(dbCov && dbCov.length > 0 ? { coverageAreas: dbCov } : {}),
+              ...(dbExpSlots && dbExpSlots.length > 0 ? { expertise: dbExpSlots } : {}),
+              ...(dbRatings && typeof dbRatings === "object" ? { expertiseRatings: dbRatings } : {}),
+              ...(dbCity ? { city: dbCity } : {}),
+              ...(dbCountry ? { country: dbCountry } : {}),
+              ...(dbLocation ? { location: dbLocation } : {}),
+              ...(dbAbout ? { aboutTheJournalist: dbAbout } : {}),
+              ...(dbApproach ? { journalisticApproach: dbApproach } : {}),
+              ...(formattedJoined ? { joinedDate: formattedJoined } : {}),
+            }));
+          }
+        })
+        .catch(() => {});
 
       setIsLoaded(true);
     } catch (e) {
@@ -396,6 +465,102 @@ export default function AuthorProfileContent({
   }, [slug, author, initialArticles, liveArticles, syncTick]);
 
   useEffect(() => {
+    let active = true;
+    async function loadRegisteredWriters() {
+      try {
+        const [writersRes, teamRes] = await Promise.all([
+          fetch("/api/auth/profile?list=writers", { cache: "no-store" }).catch(() => null),
+          fetch("/api/team", { cache: "no-store" }).catch(() => null),
+        ]);
+
+        const writersData = writersRes && writersRes.ok ? await writersRes.json() : null;
+        const teamData = teamRes && teamRes.ok ? await teamRes.json() : null;
+
+        const mergedMap = new Map<string, WriterCardItem>();
+
+        const countArticlesFor = (wName: string, wEmail?: string, serverCount = 0) => {
+          if (!Array.isArray(liveArticles) || liveArticles.length === 0) return serverCount;
+          const cleanN = wName.toLowerCase().trim();
+          const cleanE = (wEmail || "").toLowerCase().trim();
+          const localCount = liveArticles.filter((post: any) => {
+            const st = (post.status || "Published").toLowerCase();
+            if (st !== "published" && st !== "approved") return false;
+            const pName = (post.authorName || post.author_name || post.author || "").toLowerCase().trim();
+            const pEmail = (post.authorEmail || post.author_email || "").toLowerCase().trim();
+            return (cleanE && pEmail === cleanE) || (cleanN && pName === cleanN);
+          }).length;
+          return Math.max(localCount, serverCount);
+        };
+
+        const addCandidate = (item: { name: string; slug: string; role: string; avatar?: string; email?: string; articlesCount?: number }) => {
+          const cleanName = (item.name || "").trim();
+          const cleanSlug = (item.slug || cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")).trim();
+          if (!cleanName || !cleanSlug) return;
+          if (cleanSlug === slug || cleanName.toLowerCase() === authorProfile.name.toLowerCase()) return;
+
+          const resolvedAv =
+            (item.avatar && item.avatar.length > 5 && !item.avatar.includes("cart") ? item.avatar : null) ||
+            resolveUserAvatar({ name: cleanName, email: item.email }) ||
+            getAuthorAvatarByNameOrEmail(cleanName, item.email) ||
+            "/author_bluesuit.jpg";
+
+          const key = cleanSlug;
+          const existing = mergedMap.get(key);
+          const artCount = countArticlesFor(cleanName, item.email, item.articlesCount || 0);
+
+          if (!existing) {
+            mergedMap.set(key, {
+              name: cleanName,
+              slug: cleanSlug,
+              role: item.role || "Staff Journalist",
+              avatar: resolvedAv,
+              articlesCount: artCount,
+            });
+          } else {
+            mergedMap.set(key, {
+              ...existing,
+              role: item.role && item.role !== "Staff Journalist" ? item.role : existing.role,
+              avatar: existing.avatar !== "/author_bluesuit.jpg" ? existing.avatar : resolvedAv,
+              articlesCount: Math.max(existing.articlesCount, artCount),
+            });
+          }
+        };
+
+        if (writersData?.success && Array.isArray(writersData.writers)) {
+          writersData.writers.forEach((w: any) => addCandidate(w));
+        }
+
+        if (teamData?.success && Array.isArray(teamData.team)) {
+          teamData.team.forEach((t: any) =>
+            addCandidate({
+              name: t.name,
+              slug: t.slug,
+              role: t.role,
+              avatar: t.image || t.fallbackImage,
+              email: t.email,
+              articlesCount: 0,
+            })
+          );
+        }
+
+        const list = Array.from(mergedMap.values())
+          .sort((a, b) => b.articlesCount - a.articlesCount)
+          .slice(0, 8);
+
+        if (active) {
+          setMoreWriters(list);
+        }
+      } catch (err) {
+        console.warn("Failed to load registered writers:", err);
+      }
+    }
+    loadRegisteredWriters();
+    return () => {
+      active = false;
+    };
+  }, [slug, authorProfile.name, liveArticles]);
+
+  useEffect(() => {
     if (isLoaded) {
       dispatchPageDataReady();
     }
@@ -403,10 +568,6 @@ export default function AuthorProfileContent({
 
   const visibleArticles = articlesList.slice(0, visibleCount);
   const hasMore = visibleCount < articlesList.length;
-
-  const moreWriters = MORE_WRITERS_DATA.filter(
-    (w) => w.name.toLowerCase() !== authorProfile.name.toLowerCase() && w.slug !== slug
-  ).slice(0, 4);
 
   return (
     <main className="min-h-screen bg-white text-slate-900 font-sans">
@@ -418,7 +579,21 @@ export default function AuthorProfileContent({
         <span className="text-slate-300">&gt;</span>
         <Link href="/team" className="hover:text-black transition-colors">Our Team</Link>
         <span className="text-slate-300">&gt;</span>
-        <span className="text-slate-900 font-medium">{authorProfile.name}</span>
+        {activeTab === "about" ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setActiveTab("articles")}
+              className="hover:text-black transition-colors cursor-pointer"
+            >
+              {authorProfile.name}
+            </button>
+            <span className="text-slate-300">&gt;</span>
+            <span className="text-slate-900 font-medium">About</span>
+          </>
+        ) : (
+          <span className="text-slate-900 font-medium">{authorProfile.name}</span>
+        )}
       </nav>
 
       {/* AUTHOR BIO & STATS HERO SECTION */}
@@ -604,23 +779,11 @@ export default function AuthorProfileContent({
             
             {activeTab === "articles" && (
               <div>
-                {/* Header with Title and "View All Articles →" */}
+                {/* Section Header */}
                 <div className="flex items-center justify-between pb-3 mb-6 border-b border-slate-200">
                   <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider font-sans">
                     LATEST ARTICLES BY {authorProfile.name.toUpperCase()}
                   </h2>
-                  {articlesList.length > visibleCount ? (
-                    <button
-                      onClick={() => setVisibleCount(articlesList.length)}
-                      className="text-xs font-semibold text-[#D31220] hover:underline flex items-center gap-1 cursor-pointer"
-                    >
-                      View All Articles &rarr;
-                    </button>
-                  ) : (
-                    <span className="text-xs font-semibold text-[#D31220] flex items-center gap-1">
-                      View All Articles &rarr;
-                    </span>
-                  )}
                 </div>
 
                 {/* 3-Column Articles Grid */}
@@ -686,41 +849,74 @@ export default function AuthorProfileContent({
             )}
 
             {activeTab === "about" && (
-              <div className="space-y-6">
-                <div className="pb-3 border-b border-slate-200">
-                  <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider font-sans">
-                    ABOUT {authorProfile.name.toUpperCase()}
-                  </h2>
-                </div>
-
-                <div className="prose prose-slate max-w-none text-sm text-slate-700 leading-relaxed space-y-4">
-                  <p>
-                    {authorProfile.bio}
-                  </p>
-                  <p>
-                    With over a decade of dedicated journalistic experience at leading national and international bureaus, {authorProfile.name} provides authoritative analysis on shifting regulatory frameworks, legislative deliberations, and global governance trends.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
-                  <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
-                    <div className="flex items-center gap-2 mb-2 text-slate-900 font-bold text-sm">
-                      <BookOpen className="w-4 h-4 text-[#D31220]" />
-                      Journalistic Methodology
-                    </div>
-                    <p className="text-xs text-slate-600 leading-relaxed">
-                      Rigorous fact-checking, primary source verification, on-the-ground reporting, and independent non-partisan coverage adhering strictly to London BigBen Network editorial standards.
-                    </p>
+              <div className="space-y-8">
+                {/* ABOUT [AUTHOR NAME] */}
+                <div>
+                  <div className="pb-3 mb-5 border-b border-slate-200">
+                    <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider font-sans">
+                      ABOUT {authorProfile.name.toUpperCase()}
+                    </h2>
                   </div>
 
-                  <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
-                    <div className="flex items-center gap-2 mb-2 text-slate-900 font-bold text-sm">
-                      <ShieldCheck className="w-4 h-4 text-[#D31220]" />
-                      Editorial Independence
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+                    <div className="md:col-span-7 text-[13.5px] text-slate-700 leading-[1.7] space-y-4 font-sans">
+                      {authorProfile.aboutTheJournalist && authorProfile.aboutTheJournalist.trim() ? (
+                        authorProfile.aboutTheJournalist
+                          .split(/\n+/)
+                          .map((p) => p.trim())
+                          .filter(Boolean)
+                          .map((para, i) => <p key={i}>{para}</p>)
+                      ) : (
+                        <>
+                          <p>{authorProfile.bio}</p>
+                          <p>
+                            With extensive experience in journalism, {authorProfile.name} reports from major news desks and capitals, providing in-depth analysis and on-the-ground reporting on key developments shaping the UK and the wider world.
+                          </p>
+                          <p>
+                            Their work combines accurate reporting, clear analysis, and a focus on the impact of policy decisions on people, businesses, and global stability, regularly interviewing leaders and policy experts to bring readers reliable insights.
+                          </p>
+                        </>
+                      )}
                     </div>
-                    <p className="text-xs text-slate-600 leading-relaxed">
-                      Committed to reporting free from corporate, political, or external commercial influence, ensuring readers receive verified, balanced, and high-impact investigative insights.
-                    </p>
+
+                    <div className="md:col-span-5">
+                      <div className="aspect-[4/3] w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                        <img
+                          src="https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=700&q=80&fit=crop"
+                          alt={`${authorProfile.name} editorial desk`}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* JOURNALISTIC APPROACH */}
+                <div className="pt-6 border-t border-slate-200">
+                  <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider font-sans mb-4">
+                    JOURNALISTIC APPROACH
+                  </h2>
+
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+                    <div className="md:col-span-7 text-[13.5px] text-slate-700 leading-[1.7] font-sans">
+                      <p>
+                        {authorProfile.journalisticApproach && authorProfile.journalisticApproach.trim()
+                          ? authorProfile.journalisticApproach
+                          : `${authorProfile.name} believes in independent, fact-based journalism and is committed to presenting complex issues in a clear, balanced, and accessible way, focusing on verified information and context-driven reporting.`}
+                      </p>
+                    </div>
+
+                    <div className="md:col-span-5">
+                      <div className="bg-[#F8F9FA] border border-slate-200/80 rounded-lg p-5">
+                        <span className="block text-slate-400 text-2xl leading-none font-serif mb-1">&ldquo;</span>
+                        <p className="text-[13px] italic text-slate-700 leading-relaxed font-serif">
+                          My goal is to make important news clear, accurate, and relevant to people&apos;s lives.
+                        </p>
+                        <p className="text-xs text-slate-500 mt-2.5 font-sans">
+                          &mdash; {authorProfile.name}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -866,53 +1062,134 @@ export default function AuthorProfileContent({
               )}
             </div>
 
-            {/* MORE WRITERS CARD */}
-            <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-xs">
-              <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-100">
-                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider font-sans">
-                  MORE WRITERS
-                </h3>
-                <Link
-                  href="/team"
-                  className="text-xs font-semibold text-[#D31220] hover:underline flex items-center gap-0.5"
-                >
-                  View All &rarr;
-                </Link>
-              </div>
+            {activeTab === "about" ? (
+              <>
+                {/* WRITER DETAILS CARD */}
+                <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-xs">
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider font-sans pb-3 mb-3 border-b border-slate-100">
+                    WRITER DETAILS
+                  </h3>
+                  <div className="space-y-3 text-xs text-slate-600 font-sans">
+                    <div className="flex items-center gap-2.5">
+                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span>
+                        {authorProfile.location ||
+                          (authorProfile.city && authorProfile.country
+                            ? `${authorProfile.city}, ${authorProfile.country}`
+                            : authorProfile.city || authorProfile.country) ||
+                          "London, United Kingdom"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                      <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <a
+                        href={`mailto:${authorProfile.email || "sarah.mitchell@londonbigben.com"}`}
+                        className="hover:text-[#BF1E2D] transition-colors truncate"
+                      >
+                        {authorProfile.email || "sarah.mitchell@londonbigben.com"}
+                      </a>
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                      <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span>Joined</span>
+                      <span className="ml-auto text-slate-700 font-medium">
+                        {authorProfile.joinedDate || "March 2018"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
 
-              <div className="divide-y divide-slate-100">
-                {moreWriters.map((w, idx) => (
-                  <Link
-                    key={idx}
-                    href={`/author/${w.slug}`}
-                    className="flex items-center justify-between py-3 group hover:bg-slate-50/80 -mx-2 px-2 rounded-lg transition-colors cursor-pointer"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <img
-                        src={w.avatar}
-                        alt={w.name}
-                        className="w-10 h-10 rounded-full object-cover border border-slate-200 flex-shrink-0"
-                        onError={(e) => {
-                          e.currentTarget.src = "/author_bluesuit.jpg";
-                        }}
-                      />
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-slate-900 group-hover:text-[#D31220] transition-colors truncate">
-                          {w.name}
-                        </p>
-                        <p className="text-[11px] text-slate-500 truncate">
-                          {w.role}
-                        </p>
-                        <p className="text-[10px] text-slate-400 font-sans">
-                          {w.articlesCount} Articles
-                        </p>
+                {/* EXPERTISE CARD */}
+                {(() => {
+                  const defaultExpertise = [
+                    { topic: "UK Politics", rating: 95 },
+                    { topic: "Parliamentary Affairs", rating: 90 },
+                    { topic: "International Relations", rating: 85 },
+                    { topic: "EU-UK Relations", rating: 80 },
+                    { topic: "Policy Analysis", rating: 85 },
+                    { topic: "Political Interviews", rating: 90 },
+                  ];
+
+                  const rawExpertiseSlots = (authorProfile.expertise && authorProfile.expertise.length > 0)
+                    ? authorProfile.expertise
+                    : (authorProfile.coverageAreas && authorProfile.coverageAreas.length > 0)
+                      ? authorProfile.coverageAreas
+                      : defaultExpertise.map((d) => d.topic);
+
+                  const resolvedExpertiseList = rawExpertiseSlots.slice(0, 6).map((topic, idx) => {
+                    const adminRating = authorProfile.expertiseRatings?.[topic];
+                    const rating = adminRating !== undefined && !isNaN(Number(adminRating))
+                      ? Number(adminRating)
+                      : defaultExpertise[idx % defaultExpertise.length]?.rating ?? 85;
+                    return { topic, rating };
+                  });
+
+                  return (
+                    <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-xs">
+                      <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider font-sans pb-3 mb-3 border-b border-slate-100">
+                        EXPERTISE
+                      </h3>
+                      <div className="space-y-3">
+                        {resolvedExpertiseList.map((item, idx) => (
+                          <div key={idx} className="flex items-center gap-3 text-xs font-sans">
+                            <span className="text-slate-700 truncate w-[44%] font-medium">{item.topic}</span>
+                            <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-[#BF1E2D] rounded-full transition-all duration-300"
+                                style={{ width: `${item.rating}%` }}
+                              />
+                            </div>
+                            <span className="text-slate-500 font-medium w-8 text-right font-mono">{item.rating}%</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-600 shrink-0 ml-2 transition-colors" />
-                  </Link>
-                ))}
+                  );
+                })()}
+              </>
+            ) : (
+              /* MORE WRITERS CARD */
+              <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-xs">
+                <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-100">
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider font-sans">
+                    MORE WRITERS
+                  </h3>
+                </div>
+
+                <div className="divide-y divide-slate-100">
+                  {moreWriters.map((w, idx) => (
+                    <Link
+                      key={idx}
+                      href={`/author/${w.slug}`}
+                      className="flex items-center justify-between py-3 group hover:bg-slate-50/80 -mx-2 px-2 rounded-lg transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <img
+                          src={w.avatar}
+                          alt={w.name}
+                          className="w-10 h-10 rounded-full object-cover border border-slate-200 flex-shrink-0"
+                          onError={(e) => {
+                            e.currentTarget.src = "/author_bluesuit.jpg";
+                          }}
+                        />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-900 group-hover:text-[#D31220] transition-colors truncate">
+                            {w.name}
+                          </p>
+                          <p className="text-[11px] text-slate-500 truncate">
+                            {w.role}
+                          </p>
+                          <p className="text-[10px] text-slate-400 font-sans">
+                            {w.articlesCount} Articles
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-600 shrink-0 ml-2 transition-colors" />
+                    </Link>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
           </div>
 

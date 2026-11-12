@@ -6,7 +6,20 @@ import { sendWelcomeEmail } from '@/lib/email';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, email, password, yearsOfExperience, years_of_experience } = body;
+    const {
+      name,
+      email,
+      password,
+      yearsOfExperience,
+      years_of_experience,
+      coverageAreas,
+      coverage_areas,
+      city,
+      country,
+      location,
+      expertise,
+      expertiseSlots,
+    } = body;
 
     // 1. Validation
     if (!name || !name.trim()) {
@@ -50,6 +63,29 @@ export async function POST(request: Request) {
     try {
       const expVal = yearsOfExperience !== undefined && yearsOfExperience !== '' ? Number(yearsOfExperience) : (years_of_experience !== undefined && years_of_experience !== '' ? Number(years_of_experience) : undefined);
 
+      const rawExp = expertise ?? expertiseSlots;
+      const parsedExpertise: string[] | undefined = Array.isArray(rawExp)
+        ? rawExp.map((s: any) => (typeof s === 'object' && s?.topic ? String(s.topic) : String(s || '')).trim()).filter(Boolean).slice(0, 6)
+        : typeof rawExp === 'string' && rawExp.trim()
+          ? rawExp.split(',').map((s: string) => s.trim()).filter(Boolean).slice(0, 6)
+          : undefined;
+
+      const rawAreas = coverageAreas ?? coverage_areas;
+      let parsedAreas: string[] | undefined = Array.isArray(rawAreas)
+        ? rawAreas.map((s: any) => String(s || '').trim()).filter(Boolean)
+        : typeof rawAreas === 'string' && rawAreas.trim()
+          ? rawAreas.split(',').map((s: string) => s.trim()).filter(Boolean)
+          : undefined;
+
+      // If coverage areas not provided separately, automatically link with author's registered expertise slots
+      if ((!parsedAreas || parsedAreas.length === 0) && parsedExpertise && parsedExpertise.length > 0) {
+        parsedAreas = [...parsedExpertise];
+      }
+
+      const cleanCity = city ? String(city).trim() : undefined;
+      const cleanCountry = country ? String(country).trim() : undefined;
+      const cleanLocation = location ? String(location).trim() : (cleanCity && cleanCountry ? `${cleanCity}, ${cleanCountry}` : (cleanCity || cleanCountry || undefined));
+
       const newUser = await DB.createUser({
         name: userName,
         email: normalized,
@@ -59,6 +95,12 @@ export async function POST(request: Request) {
         email_verified: false,
         yearsOfExperience: expVal,
         years_of_experience: expVal,
+        coverageAreas: parsedAreas && parsedAreas.length > 0 ? parsedAreas : undefined,
+        coverage_areas: parsedAreas && parsedAreas.length > 0 ? parsedAreas : undefined,
+        city: cleanCity,
+        country: cleanCountry,
+        location: cleanLocation,
+        expertise: parsedExpertise && parsedExpertise.length > 0 ? parsedExpertise : undefined,
       });
 
       const userPayload = {
@@ -68,6 +110,11 @@ export async function POST(request: Request) {
         role: newUser.role,
         provider: newUser.provider,
         yearsOfExperience: (newUser as any).yearsOfExperience,
+        coverageAreas: (newUser as any).coverageAreas,
+        city: (newUser as any).city,
+        country: (newUser as any).country,
+        location: (newUser as any).location,
+        expertise: (newUser as any).expertise,
       };
 
       // Set HTTP-Only session cookie and return token for tab session isolation

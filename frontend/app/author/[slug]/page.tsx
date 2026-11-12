@@ -20,14 +20,22 @@ const authorsDatabase: Record<string, {
   yearsOfExperience?: number;
   articleViews?: string;
   coverageAreas?: string[];
+  city?: string;
+  country?: string;
+  joinedDate?: string;
+  expertise?: string[];
+  expertiseRatings?: Record<string, number>;
 }> = {
   "sarah-mitchell": {
     name: "Sarah Mitchell",
     role: "POLITICAL CORRESPONDENT",
     avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=800&q=80&fit=crop",
     bio: "Sarah Mitchell is a political correspondent at London BigBen Network, covering UK government, Parliament, policy and international relations. She has more than a decade of experience reporting on political developments across the UK and Europe, with a focus on governance, policy reform and global diplomacy.",
+    city: "London",
+    country: "United Kingdom",
     location: "London, United Kingdom",
     email: "sarah.mitchell@londonbigben.com",
+    joinedDate: "March 2018",
     articlesCount: 526,
     yearsOfExperience: 12,
     articleViews: "18.4M",
@@ -35,15 +43,34 @@ const authorsDatabase: Record<string, {
       "UK Politics", "Parliament", "Government Policy",
       "International Relations", "EU-UK Relations", "Elections",
       "Defence and Security", "Trade", "Brexit", "Diplomacy"
-    ]
+    ],
+    expertise: [
+      "UK Politics",
+      "Parliamentary Affairs",
+      "International Relations",
+      "EU-UK Relations",
+      "Policy Analysis",
+      "Political Interviews"
+    ],
+    expertiseRatings: {
+      "UK Politics": 95,
+      "Parliamentary Affairs": 90,
+      "International Relations": 85,
+      "EU-UK Relations": 80,
+      "Policy Analysis": 85,
+      "Political Interviews": 90
+    }
   },
   "sarah": {
     name: "Sarah Mitchell",
     role: "POLITICAL CORRESPONDENT",
     avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=800&q=80&fit=crop",
     bio: "Sarah Mitchell is a political correspondent at London BigBen Network, covering UK government, Parliament, policy and international relations. She has more than a decade of experience reporting on political developments across the UK and Europe, with a focus on governance, policy reform and global diplomacy.",
+    city: "London",
+    country: "United Kingdom",
     location: "London, United Kingdom",
     email: "sarah.mitchell@londonbigben.com",
+    joinedDate: "March 2018",
     articlesCount: 526,
     yearsOfExperience: 12,
     articleViews: "18.4M",
@@ -51,7 +78,23 @@ const authorsDatabase: Record<string, {
       "UK Politics", "Parliament", "Government Policy",
       "International Relations", "EU-UK Relations", "Elections",
       "Defence and Security", "Trade", "Brexit", "Diplomacy"
-    ]
+    ],
+    expertise: [
+      "UK Politics",
+      "Parliamentary Affairs",
+      "International Relations",
+      "EU-UK Relations",
+      "Policy Analysis",
+      "Political Interviews"
+    ],
+    expertiseRatings: {
+      "UK Politics": 95,
+      "Parliamentary Affairs": 90,
+      "International Relations": 85,
+      "EU-UK Relations": 80,
+      "Policy Analysis": 85,
+      "Political Interviews": 90
+    }
   },
   "rushdhi": {
     name: "Rushdhi MR",

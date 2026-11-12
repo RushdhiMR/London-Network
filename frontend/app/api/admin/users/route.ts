@@ -305,6 +305,18 @@ export async function PUT(request: Request) {
       updates.avatar = finalAvatar;
     }
 
+    if (body.expertiseRatings !== undefined || body.expertise_ratings !== undefined) {
+      const expRatings = body.expertiseRatings ?? body.expertise_ratings;
+      updates.expertiseRatings = expRatings;
+      updates.expertise_ratings = expRatings;
+    }
+    if (body.expertise !== undefined) {
+      updates.expertise = body.expertise;
+    }
+    if (body.city !== undefined) updates.city = body.city;
+    if (body.country !== undefined) updates.country = body.country;
+    if (body.location !== undefined) updates.location = body.location;
+
     const updatedUser = await DB.updateUser(targetUser.id, updates, originalEmail || targetUser.email);
     const { password_hash: _uph, password: _up, ...safeUpdatedUser } = (updatedUser || targetUser || {}) as any;
 

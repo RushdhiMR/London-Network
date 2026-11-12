@@ -19,6 +19,10 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [yearsOfExperience, setYearsOfExperience] = useState("");
+  const [city, setCity] = useState("");
+  const [country, setCountry] = useState("");
+  const [coverageAreasInput, setCoverageAreasInput] = useState("");
+  const [expertiseSlots, setExpertiseSlots] = useState<string[]>(["", "", "", "", "", ""]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
@@ -147,6 +151,17 @@ export default function RegisterPage() {
 
     setIsSubmitting(true);
 
+    const parsedCoverageAreas = coverageAreasInput
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const validExpertise = expertiseSlots.map((s) => s.trim()).filter(Boolean).slice(0, 6);
+    const finalCoverage = parsedCoverageAreas.length > 0 ? parsedCoverageAreas : (validExpertise.length > 0 ? validExpertise : undefined);
+    const cleanCity = city.trim();
+    const cleanCountry = country.trim();
+    const cleanLocation = cleanCity && cleanCountry ? `${cleanCity}, ${cleanCountry}` : (cleanCity || cleanCountry || undefined);
+
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
@@ -156,6 +171,11 @@ export default function RegisterPage() {
           email,
           password,
           yearsOfExperience: yearsOfExperience ? parseInt(yearsOfExperience, 10) : undefined,
+          coverageAreas: finalCoverage,
+          city: cleanCity || undefined,
+          country: cleanCountry || undefined,
+          location: cleanLocation,
+          expertise: validExpertise.length > 0 ? validExpertise : undefined,
         }),
       });
 
@@ -168,11 +188,16 @@ export default function RegisterPage() {
 
       const registeredUser = data.user;
 
-      if (yearsOfExperience) {
+      if (yearsOfExperience || finalCoverage || cleanLocation || validExpertise.length > 0) {
         saveUserProfile({
           name: registeredUser.name,
           email: registeredUser.email,
-          yearsOfExperience: parseInt(yearsOfExperience, 10),
+          ...(yearsOfExperience ? { yearsOfExperience: parseInt(yearsOfExperience, 10) } : {}),
+          ...(finalCoverage ? { coverageAreas: finalCoverage } : {}),
+          ...(cleanCity ? { city: cleanCity } : {}),
+          ...(cleanCountry ? { country: cleanCountry } : {}),
+          ...(cleanLocation ? { location: cleanLocation } : {}),
+          ...(validExpertise.length > 0 ? { expertise: validExpertise } : {}),
         });
       }
       dispatchTabLogin({
@@ -356,6 +381,102 @@ export default function RegisterPage() {
                 onChange={(e) => setYearsOfExperience(e.target.value)}
                 className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/30 focus:bg-white"
               />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                  CITY <span className="text-slate-400 font-normal lowercase">(writer details)</span>
+                </label>
+                <input
+                  type="text"
+                  name="dj_register_city"
+                  autoComplete="off"
+                  placeholder="e.g. London"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/30 focus:bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                  COUNTRY <span className="text-slate-400 font-normal lowercase">(writer details)</span>
+                </label>
+                <input
+                  type="text"
+                  name="dj_register_country"
+                  autoComplete="off"
+                  placeholder="e.g. United Kingdom"
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                  className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/30 focus:bg-white"
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+                  AREAS OF EXPERTISE <span className="text-slate-400 font-normal lowercase">(6 slots for journalists / authors)</span>
+                </label>
+                <span className="text-[10px] text-slate-400 font-sans italic">Rated by admin only</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {[0, 1, 2, 3, 4, 5].map((slotIdx) => (
+                  <div key={slotIdx} className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10.5px] font-bold text-slate-400 font-mono">
+                      #{slotIdx + 1}
+                    </span>
+                    <input
+                      type="text"
+                      placeholder={
+                        [
+                          "e.g. UK Politics",
+                          "e.g. Parliamentary Affairs",
+                          "e.g. International Relations",
+                          "e.g. EU-UK Relations",
+                          "e.g. Policy Analysis",
+                          "e.g. Political Interviews",
+                        ][slotIdx]
+                      }
+                      value={expertiseSlots[slotIdx] || ""}
+                      onChange={(e) => {
+                        const updated = [...expertiseSlots];
+                        updated[slotIdx] = e.target.value;
+                        setExpertiseSlots(updated);
+                      }}
+                      className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/30 focus:bg-white"
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1.5 leading-tight">
+                Add up to 6 expertise areas. Proficiency ratings (%) are officially evaluated and assigned by Editorial Administration.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                ADDITIONAL COVERAGE AREAS <span className="text-slate-400 font-normal lowercase">(optional comma-separated)</span>
+              </label>
+              <input
+                type="text"
+                name="dj_register_coverage_areas"
+                autoComplete="off"
+                placeholder="e.g. Elections, Defence, Trade, Diplomacy"
+                value={coverageAreasInput}
+                onChange={(e) => setCoverageAreasInput(e.target.value)}
+                className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/30 focus:bg-white"
+              />
+              {coverageAreasInput.trim() && (
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {coverageAreasInput.split(",").map((t) => t.trim()).filter(Boolean).map((tag, i) => (
+                    <span key={i} className="px-2 py-0.5 bg-slate-100 border border-slate-200 rounded-full text-[10.5px] text-slate-700 font-medium">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div>
