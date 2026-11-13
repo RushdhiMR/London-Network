@@ -85,7 +85,7 @@ export default function WriterDashboardPage() {
           savedTab = sessionStorage.getItem("dj_active_tab") || localStorage.getItem("dj_active_tab");
           if (sessionStorage.getItem("dj_active_tab")) sessionStorage.removeItem("dj_active_tab");
           if (localStorage.getItem("dj_active_tab")) localStorage.removeItem("dj_active_tab");
-        } catch (e) {}
+        } catch (e) { }
       }
       if (tabParam === "pending" || tabParam === "pending review" || tabParam === "review" || savedTab === "Pending review") {
         setActiveTab("Pending review");
@@ -215,7 +215,7 @@ export default function WriterDashboardPage() {
         if (b2Url && b2Url.startsWith("http")) {
           finalAvatar = b2Url;
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     const parsedAreas = profileCoverageAreas
@@ -283,8 +283,8 @@ export default function WriterDashboardPage() {
           location: updatedUser.location,
           expertise: updatedUser.expertise,
         }),
-      }).catch(() => {});
-    } catch (e) {}
+      }).catch(() => { });
+    } catch (e) { }
 
     setIsProfileSettingsOpen(false);
   };
@@ -442,7 +442,7 @@ export default function WriterDashboardPage() {
       if (localUpdated && typeof window !== "undefined") {
         try {
           localStorage.setItem("dj_writer_submitted_articles", JSON.stringify(localArticles));
-        } catch (e) {}
+        } catch (e) { }
       }
 
       const uniqueList: any[] = [];
@@ -535,7 +535,7 @@ export default function WriterDashboardPage() {
         return [];
       });
       return;
-    } catch (e) {}
+    } catch (e) { }
 
     if (Array.isArray(liveArticles) && liveArticles.length > 0) {
       setPosts((prev) => (liveArticles.length > 0 ? (liveArticles as any) : prev));
@@ -689,7 +689,7 @@ export default function WriterDashboardPage() {
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("dj_articles_updated"));
       }
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const handleRestorePost = async (id: string) => {
@@ -708,7 +708,7 @@ export default function WriterDashboardPage() {
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("dj_articles_updated"));
       }
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const handleDeletePermanently = async (id: string) => {
@@ -721,7 +721,7 @@ export default function WriterDashboardPage() {
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("dj_articles_updated"));
       }
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const handleUpdateWriterPassword = async (e: React.FormEvent) => {
@@ -824,7 +824,7 @@ export default function WriterDashboardPage() {
             if (foundInLocal) return true;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     const postEmail = (post.authorEmail || (post as any).author_email || "").trim().toLowerCase();
@@ -954,11 +954,11 @@ export default function WriterDashboardPage() {
 
   return (
     <div className="min-h-screen bg-slate-50/50 text-slate-900 flex flex-col font-sans antialiased">
-      
+
       {/* TOP NAVBAR HEADER */}
       <header className="bg-white border-b border-gray-200/80 py-3 sticky top-0 z-30 shadow-xs">
         <div className="max-w-7xl w-full mx-auto px-5 sm:px-6 flex items-center justify-between">
-          
+
           {/* Left Side: Back Arrow, Logo, Badge */}
           <div className="flex items-center gap-3">
             <Link
@@ -993,78 +993,78 @@ export default function WriterDashboardPage() {
 
           {/* Right Side: Profile Dropdown */}
           <div className="relative" ref={userMenuRef}>
-          <button
-            onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-            className="flex items-center gap-2.5 border border-gray-200/90 rounded-full pl-1.5 pr-3 py-1 bg-white hover:bg-gray-50 transition-colors cursor-pointer shadow-xs"
-          >
-            <div className="w-7 h-7 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center">
-              {currentUser?.avatar && isUploadedAvatar(currentUser.avatar) ? (
-                <img
-                  src={currentUser.avatar}
-                  alt={currentUser?.name || "rushdhi"}
-                  className="w-full h-full object-cover rounded-full"
-                />
-              ) : (
-                <User className="w-4 h-4 text-gray-400" />
-              )}
-            </div>
-            <span className="text-xs font-semibold text-gray-800">
-              {currentUser?.name || "rushdhi"}
-            </span>
-            <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
-          </button>
-
-          {/* User Dropdown Menu */}
-          {isUserMenuOpen && (
-            <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200/90 shadow-lg rounded-xl text-left z-50 overflow-hidden font-sans animate-in fade-in slide-in-from-top-2 duration-150">
-              
-              {/* Section 1: User Profile Header with WRITER Badge */}
-              <div className="px-3 py-2 bg-white border-b border-gray-100">
-                <p className="text-[12px] font-bold text-gray-900 leading-snug">
-                  {currentUser?.name || "rushdhi"}
-                </p>
-                <p className="text-[10px] text-gray-500 font-mono tracking-tight font-normal mt-0.5 block truncate">
-                  {currentUser?.email || "rushdhiriyaj2005@gmail.com"}
-                </p>
-                <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 text-[8.5px] font-bold tracking-wider rounded uppercase inline-block mt-1">
-                  WRITER
-                </span>
+            <button
+              onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+              className="flex items-center gap-2.5 border border-gray-200/90 rounded-full pl-1.5 pr-3 py-1 bg-white hover:bg-gray-50 transition-colors cursor-pointer shadow-xs"
+            >
+              <div className="w-7 h-7 rounded-full overflow-hidden border border-gray-200 shrink-0 bg-gray-100 flex items-center justify-center">
+                {currentUser?.avatar && isUploadedAvatar(currentUser.avatar) ? (
+                  <img
+                    src={currentUser.avatar}
+                    alt={currentUser?.name || "rushdhi"}
+                    className="w-full h-full object-cover rounded-full"
+                  />
+                ) : (
+                  <User className="w-4 h-4 text-gray-400" />
+                )}
               </div>
+              <span className="text-xs font-semibold text-gray-800">
+                {currentUser?.name || "rushdhi"}
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+            </button>
 
-              {/* Section 2: Profile Settings */}
-              <button
-                onClick={() => {
-                  setIsUserMenuOpen(false);
-                  setIsProfileSettingsOpen(true);
-                }}
-                className="w-full text-left px-3 py-2 flex items-center gap-2 bg-white hover:bg-gray-50/80 transition-colors cursor-pointer group"
-              >
-                <User size={14} className="text-slate-400 group-hover:text-slate-600 flex-shrink-0" />
-                <span className="text-slate-800 font-bold text-[11.5px]">
-                  Profile Settings
-                </span>
-              </button>
+            {/* User Dropdown Menu */}
+            {isUserMenuOpen && (
+              <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200/90 shadow-lg rounded-xl text-left z-50 overflow-hidden font-sans animate-in fade-in slide-in-from-top-2 duration-150">
 
-              {/* Section 3: Log Out */}
-              <button
-                onClick={handleLogout}
-                className="w-full text-left px-3 py-2 flex items-center gap-2 bg-red-50/70 hover:bg-rose-100/70 transition-colors cursor-pointer group border-t border-red-100/50"
-              >
-                <LogOut size={14} className="text-red-600 flex-shrink-0" />
-                <span className="text-red-600 font-bold text-[11.5px]">
-                  Log Out
-                </span>
-              </button>
+                {/* Section 1: User Profile Header with WRITER Badge */}
+                <div className="px-3 py-2 bg-white border-b border-gray-100">
+                  <p className="text-[12px] font-bold text-gray-900 leading-snug">
+                    {currentUser?.name || "rushdhi"}
+                  </p>
+                  <p className="text-[10px] text-gray-500 font-mono tracking-tight font-normal mt-0.5 block truncate">
+                    {currentUser?.email || "rushdhiriyaj2005@gmail.com"}
+                  </p>
+                  <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 text-[8.5px] font-bold tracking-wider rounded uppercase inline-block mt-1">
+                    WRITER
+                  </span>
+                </div>
 
-            </div>
-          )}
+                {/* Section 2: Profile Settings */}
+                <button
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    setIsProfileSettingsOpen(true);
+                  }}
+                  className="w-full text-left px-3 py-2 flex items-center gap-2 bg-white hover:bg-gray-50/80 transition-colors cursor-pointer group"
+                >
+                  <User size={14} className="text-slate-400 group-hover:text-slate-600 flex-shrink-0" />
+                  <span className="text-slate-800 font-bold text-[11.5px]">
+                    Profile Settings
+                  </span>
+                </button>
+
+                {/* Section 3: Log Out */}
+                <button
+                  onClick={handleLogout}
+                  className="w-full text-left px-3 py-2 flex items-center gap-2 bg-red-50/70 hover:bg-rose-100/70 transition-colors cursor-pointer group border-t border-red-100/50"
+                >
+                  <LogOut size={14} className="text-red-600 flex-shrink-0" />
+                  <span className="text-red-600 font-bold text-[11.5px]">
+                    Log Out
+                  </span>
+                </button>
+
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
 
       {/* MAIN DASHBOARD CONTENT */}
       <main className="max-w-7xl w-full mx-auto px-5 sm:px-6 pt-10 pb-16 flex-1">
-        
+
         {/* Title & Primary Action Button Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
@@ -1144,11 +1144,10 @@ export default function WriterDashboardPage() {
                   <button
                     key={card.label}
                     onClick={() => setActiveTab(card.tab)}
-                    className={`text-left p-4 rounded-2xl bg-white border transition-all cursor-pointer shadow-2xs hover:shadow-xs group ${
-                      isSelected
+                    className={`text-left p-4 rounded-2xl bg-white border transition-all cursor-pointer shadow-2xs hover:shadow-xs group ${isSelected
                         ? `border-[#D31220]/60 ring-2 ring-[#D31220]/20 bg-red-50/10`
                         : "border-slate-200/80 hover:border-slate-300"
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
@@ -1176,7 +1175,7 @@ export default function WriterDashboardPage() {
         {/* Toolbar: Navigation Filter Tabs & Integrated Search */}
         <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs mb-6">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            
+
             {/* Filter Tabs */}
             <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1 lg:pb-0">
               {(["Published", "Drafts", "Pending review", "Rejected", "Trash"] as const).map((tab) => {
@@ -1195,22 +1194,20 @@ export default function WriterDashboardPage() {
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
-                      isActive
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${isActive
                         ? "bg-[#D31220] text-white shadow-sm shadow-red-950/20"
                         : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 bg-slate-50/60 border border-slate-200/70"
-                    }`}
+                      }`}
                   >
                     <span>{tab}</span>
-                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full transition-all ${
-                      isActive
+                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full transition-all ${isActive
                         ? "bg-white/20 text-white"
                         : tab === "Pending review" && count > 0
-                        ? "bg-amber-100 text-amber-700"
-                        : tab === "Rejected" && count > 0
-                        ? "bg-rose-100 text-rose-700"
-                        : "bg-slate-200/80 text-slate-600"
-                    }`}>
+                          ? "bg-amber-100 text-amber-700"
+                          : tab === "Rejected" && count > 0
+                            ? "bg-rose-100 text-rose-700"
+                            : "bg-slate-200/80 text-slate-600"
+                      }`}>
                       {count}
                     </span>
                   </button>
@@ -1413,23 +1410,21 @@ export default function WriterDashboardPage() {
 
                           {/* Status Column */}
                           <td className="py-3.5 px-4 whitespace-nowrap">
-                            <span className={`px-2.5 py-1 rounded-full text-[10.5px] font-semibold flex items-center gap-1.5 w-fit ${
-                              isPublished
+                            <span className={`px-2.5 py-1 rounded-full text-[10.5px] font-semibold flex items-center gap-1.5 w-fit ${isPublished
                                 ? "bg-emerald-50 text-emerald-700 border border-emerald-200/80"
                                 : isPending
-                                ? "bg-amber-50 text-amber-700 border border-amber-200/80"
-                                : isDraft
-                                ? "bg-slate-100 text-slate-700 border border-slate-200"
-                                : isRejected
-                                ? "bg-rose-50 text-rose-700 border border-rose-200/80"
-                                : "bg-red-50 text-red-700 border border-red-200/80"
-                            }`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${
-                                isPublished ? "bg-emerald-500 ring-2 ring-emerald-400/30" :
-                                isPending ? "bg-amber-500 ring-2 ring-amber-400/30" :
-                                isDraft ? "bg-slate-400" :
-                                isRejected ? "bg-rose-500 ring-2 ring-rose-400/30" : "bg-red-500"
-                              }`}></span>
+                                  ? "bg-amber-50 text-amber-700 border border-amber-200/80"
+                                  : isDraft
+                                    ? "bg-slate-100 text-slate-700 border border-slate-200"
+                                    : isRejected
+                                      ? "bg-rose-50 text-rose-700 border border-rose-200/80"
+                                      : "bg-red-50 text-red-700 border border-red-200/80"
+                              }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${isPublished ? "bg-emerald-500 ring-2 ring-emerald-400/30" :
+                                  isPending ? "bg-amber-500 ring-2 ring-amber-400/30" :
+                                    isDraft ? "bg-slate-400" :
+                                      isRejected ? "bg-rose-500 ring-2 ring-rose-400/30" : "bg-red-500"
+                                }`}></span>
                               {post.status}
                             </span>
                           </td>
@@ -1675,7 +1670,7 @@ export default function WriterDashboardPage() {
       {previewArticle && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl max-w-3xl w-full p-6 sm:p-8 shadow-2xl relative max-h-[90vh] flex flex-col border border-slate-200 animate-in zoom-in-95 duration-200">
-            
+
             {/* Modal Header */}
             <div className="flex items-start justify-between gap-4 pb-4 border-b border-gray-100">
               <div>
@@ -1716,17 +1711,17 @@ export default function WriterDashboardPage() {
               )}
 
               {/* Only show featured image banner if content does NOT already contain figure/img */}
-              {previewArticle.imageUrl && 
-                !previewArticle.content?.includes("<figure") && 
+              {previewArticle.imageUrl &&
+                !previewArticle.content?.includes("<figure") &&
                 !previewArticle.content?.includes("<img") && (
-                <div className="relative w-full max-h-[460px] rounded-2xl overflow-hidden bg-slate-950 border border-gray-200 shadow-2xs flex items-center justify-center">
-                  <img
-                    src={previewArticle.imageUrl}
-                    alt={previewArticle.title}
-                    className="w-full h-auto max-h-[460px] object-contain mx-auto block"
-                  />
-                </div>
-              )}
+                  <div className="relative w-full max-h-[460px] rounded-2xl overflow-hidden bg-slate-950 border border-gray-200 shadow-2xs flex items-center justify-center">
+                    <img
+                      src={previewArticle.imageUrl}
+                      alt={previewArticle.title}
+                      className="w-full h-auto max-h-[460px] object-contain mx-auto block"
+                    />
+                  </div>
+                )}
 
               {/* Rendered HTML or plain paragraphs */}
               {previewArticle.content ? (
@@ -1759,7 +1754,7 @@ export default function WriterDashboardPage() {
                     .trim()
                     .replace(/[^a-z0-9]+/g, "-")
                     .replace(/^-|-$/g, "");
-                  
+
                   const titleSlug = (previewArticle.slug || previewArticle.title || "")
                     .toLowerCase()
                     .trim()
@@ -1797,7 +1792,7 @@ export default function WriterDashboardPage() {
       {isProfileSettingsOpen && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl relative font-sans text-left overflow-hidden border-t-4 border-[#BF1E2D]">
-            
+
             {/* Close Button */}
             <button
               onClick={() => setIsProfileSettingsOpen(false)}
@@ -1851,7 +1846,7 @@ export default function WriterDashboardPage() {
 
             {/* Profile Form */}
             <form onSubmit={handleSaveWriterProfileSettings} className="px-6 pt-4 pb-6 space-y-4">
-              
+
               {/* Field 1: FULL NAME */}
               <div>
                 <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
@@ -1891,7 +1886,7 @@ export default function WriterDashboardPage() {
                     fill="currentColor"
                     viewBox="0 0 24 24"
                   >
-                    <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z"/>
+                    <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z" />
                   </svg>
                   <input
                     type="url"
@@ -2034,9 +2029,8 @@ export default function WriterDashboardPage() {
                   <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                     ABOUT THE JOURNALIST <span className="text-gray-400 font-normal lowercase">(paragraphs, max 200 words)</span>
                   </label>
-                  <span className={`text-[10px] font-semibold ${
-                    (profileAboutJournalist.trim() ? profileAboutJournalist.trim().split(/\s+/).length : 0) > 200 ? "text-red-600" : "text-gray-400"
-                  }`}>
+                  <span className={`text-[10px] font-semibold ${(profileAboutJournalist.trim() ? profileAboutJournalist.trim().split(/\s+/).length : 0) > 200 ? "text-red-600" : "text-gray-400"
+                    }`}>
                     {profileAboutJournalist.trim() ? profileAboutJournalist.trim().split(/\s+/).length : 0} / 200 words
                   </span>
                 </div>
@@ -2060,9 +2054,8 @@ export default function WriterDashboardPage() {
                   <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                     JOURNALISTIC APPROACH <span className="text-gray-400 font-normal lowercase">(max 50 words)</span>
                   </label>
-                  <span className={`text-[10px] font-semibold ${
-                    (profileJournalisticApproach.trim() ? profileJournalisticApproach.trim().split(/\s+/).length : 0) > 50 ? "text-red-600" : "text-gray-400"
-                  }`}>
+                  <span className={`text-[10px] font-semibold ${(profileJournalisticApproach.trim() ? profileJournalisticApproach.trim().split(/\s+/).length : 0) > 50 ? "text-red-600" : "text-gray-400"
+                    }`}>
                     {profileJournalisticApproach.trim() ? profileJournalisticApproach.trim().split(/\s+/).length : 0} / 50 words
                   </span>
                 </div>
@@ -2107,7 +2100,7 @@ export default function WriterDashboardPage() {
       {selectedReasonPost && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200 font-sans">
           <div className="bg-white rounded-3xl max-w-xl w-full shadow-[0_25px_70px_rgba(0,0,0,0.35)] overflow-hidden border border-slate-200/90 animate-in zoom-in-95 duration-200 relative text-left flex flex-col">
-            
+
             {/* Top Red Gradient London BigBen Accent Bar */}
             <div className="h-1.5 w-full bg-gradient-to-r from-[#BF1E2D] via-red-600 to-[#0F172A]" />
 
@@ -2132,7 +2125,7 @@ export default function WriterDashboardPage() {
                   </h3>
                 </div>
               </div>
-              
+
               <button
                 onClick={() => setSelectedReasonPost(null)}
                 className="w-9 h-9 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer shrink-0"
@@ -2144,7 +2137,7 @@ export default function WriterDashboardPage() {
 
             {/* Modal Body */}
             <div className="p-6 sm:p-8 space-y-5 overflow-y-auto max-h-[calc(85vh-160px)]">
-              
+
               {/* ARTICLE METADATA CARD */}
               <div className="bg-slate-50/90 border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-2.5 shadow-2xs">
                 <div className="flex items-center justify-between gap-2 flex-wrap">

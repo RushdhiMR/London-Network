@@ -45,7 +45,7 @@ export default function RegisterPage() {
             }
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     }
     const role = (userRole || "").toLowerCase();
     const isAdmin = role === "admin" || role === "co-admin";
@@ -236,7 +236,7 @@ export default function RegisterPage() {
       {/* RIGHT COLUMN: REGISTER CARD */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-3 sm:p-4 lg:p-6 h-full bg-white overflow-hidden">
         <div className="w-full max-w-[420px] bg-white border border-slate-100/90 rounded-2xl p-5 sm:p-6 lg:p-7 shadow-[0_10px_40px_rgba(0,0,0,0.06)] font-sans text-slate-900 my-auto">
-          
+
           {/* Logo & Corporate Title */}
           <div className="flex flex-col items-center mb-4 text-center">
             <Link href="/" className="inline-block hover:opacity-90 transition-opacity mb-2">
@@ -271,7 +271,7 @@ export default function RegisterPage() {
 
           {/* Official Google Sign In Section */}
           <div className="w-full mb-3.5">
-            <button 
+            <button
               onClick={handleGoogleSignIn}
               disabled={isSubmitting || isGoogleLoading}
               type="button"

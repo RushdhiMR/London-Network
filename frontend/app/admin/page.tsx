@@ -29,6 +29,8 @@ import {
   Eye,
   Trash2,
   Star,
+  Save,
+  Sliders,
   Zap,
   RefreshCw,
   UserCheck,
@@ -347,7 +349,7 @@ export default function AdminDashboardPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const [activeTab, setActiveTab] = useState<
-    "overview" | "newsletter" | "subscriptions" | "articles" | "users" | "ads" | "contact_submissions" | "advertise_leads" | "backups" | "trending_words" | "trending_topics" | "reels" | "team"
+    "overview" | "newsletter" | "subscriptions" | "articles" | "users" | "rate_writers" | "ads" | "contact_submissions" | "advertise_leads" | "backups" | "trending_words" | "trending_topics" | "reels" | "team"
   >("overview");
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -372,7 +374,7 @@ export default function AdminDashboardPage() {
   const [deleteTeamTarget, setDeleteTeamTarget] = useState<TeamMember | null>(null);
   const [isTeamSubmitting, setIsTeamSubmitting] = useState(false);
 
-  const [userSubTab, setUserSubTab] = useState<"ALL" | "ADMINS" | "WRITERS" | "READERS">("ALL");
+  const [userSubTab, setUserSubTab] = useState<"ALL" | "ADMINS" | "WRITERS" | "READERS" | "RATINGS">("ALL");
   const [postSubTab, setPostSubTab] = useState<"published" | "drafts" | "pending" | "rejected" | "trash">("published");
   const [trashedArticles, setTrashedArticles] = useState<Article[]>([]);
 
@@ -725,6 +727,14 @@ export default function AdminDashboardPage() {
   const [editUserRole, setEditUserRole] = useState<"ADMIN" | "WRITER" | "READER">("WRITER");
   const [editUserExpertise, setEditUserExpertise] = useState<string[]>([]);
   const [editUserRatings, setEditUserRatings] = useState<Record<string, number>>({});
+
+  // Dedicated Rate Writer Modal State
+  const [isRateWriterModalOpen, setIsRateWriterModalOpen] = useState(false);
+  const [ratingWriter, setRatingWriter] = useState<WorkspaceUser | null>(null);
+  const [ratingWriterSlots, setRatingWriterSlots] = useState<string[]>([]);
+  const [ratingWriterScores, setRatingWriterScores] = useState<Record<string, number>>({});
+  const [isSavingRating, setIsSavingRating] = useState(false);
+  const [rateWriterToast, setRateWriterToast] = useState<string | null>(null);
 
   // Subscriber Checkboxes state
   const [selectedSubscribers, setSelectedSubscribers] = useState<Array<number | string>>([]);
@@ -3592,12 +3602,8 @@ export default function AdminDashboardPage() {
     setIsAddUserModalOpen(true);
   };
 
-  const handleOpenEditUserModal = (user: WorkspaceUser) => {
-    setEditingUser(user);
-    setEditUserName(user.name);
-    setEditUserEmail(user.email);
-    setEditUserPassword("");
-    setEditUserRole(user.role);
+  const handleOpenRateWriterModal = (user: WorkspaceUser) => {
+    setRatingWriter(user);
 
     // Extract writer's 6 expertise slots
     const rawExp = (user as any).expertise;
@@ -3608,7 +3614,7 @@ export default function AdminDashboardPage() {
     if (slots.length === 0) {
       slots = ["UK Politics", "Parliamentary Affairs", "International Relations", "EU-UK Relations", "Policy Analysis", "Political Interviews"];
     }
-    setEditUserExpertise(slots);
+    setRatingWriterSlots(slots);
 
     const existingRatings = (user as any).expertiseRatings || (user as any).expertise_ratings || {};
     const initialRatings: Record<string, number> = {};
@@ -3618,8 +3624,94 @@ export default function AdminDashboardPage() {
         ? Number(existingRatings[slot])
         : defaultPcts[idx % defaultPcts.length];
     });
-    setEditUserRatings(initialRatings);
+    setRatingWriterScores(initialRatings);
+    setRateWriterToast(null);
+    setIsRateWriterModalOpen(true);
+  };
 
+  const handleSaveRateWriterModal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ratingWriter) return;
+    setIsSavingRating(true);
+
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PUT",
+        headers: getAdminHeaders({
+          "Content-Type": "application/json",
+        }),
+        credentials: "include",
+        body: JSON.stringify({
+          id: ratingWriter.id,
+          originalEmail: ratingWriter.email,
+          name: ratingWriter.name,
+          email: ratingWriter.email,
+          role: "writer",
+          expertise: ratingWriterSlots,
+          expertiseRatings: ratingWriterScores,
+        }),
+      });
+
+      // Also sync to auth profile route for public profile parity
+      fetch("/api/auth/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: ratingWriter.email,
+          expertise: ratingWriterSlots,
+          expertiseRatings: ratingWriterScores,
+        }),
+      }).catch(() => {});
+
+      // Update workspaceUsers state
+      setWorkspaceUsers(prev => prev.map(u => {
+        if (u.id === ratingWriter.id || (u.email && u.email.toLowerCase().trim() === ratingWriter.email.toLowerCase().trim())) {
+          return {
+            ...u,
+            expertise: ratingWriterSlots,
+            expertiseRatings: ratingWriterScores,
+            expertise_ratings: ratingWriterScores,
+          };
+        }
+        return u;
+      }));
+
+      // Update local storage caches
+      if (typeof window !== "undefined") {
+        try {
+          const emailKey = ratingWriter.email.toLowerCase().trim();
+          const profStr = localStorage.getItem("dj_user_profiles_db");
+          if (profStr) {
+            const profDb = JSON.parse(profStr);
+            if (profDb[emailKey]) {
+              profDb[emailKey].expertise = ratingWriterSlots;
+              profDb[emailKey].expertiseRatings = ratingWriterScores;
+              localStorage.setItem("dj_user_profiles_db", JSON.stringify(profDb));
+            }
+          }
+          window.dispatchEvent(new Event("dj_profile_updated"));
+        } catch (e) {}
+      }
+
+      setRateWriterToast(`Ratings for ${ratingWriter.name} saved successfully!`);
+      setTimeout(() => {
+        setIsRateWriterModalOpen(false);
+        setRatingWriter(null);
+        setRateWriterToast(null);
+        setIsSavingRating(false);
+      }, 1000);
+    } catch (err: any) {
+      alert(err?.message || "Failed to save ratings");
+      setIsSavingRating(false);
+    }
+  };
+
+  const handleOpenEditUserModal = (user: WorkspaceUser) => {
+    setEditingUser(user);
+    setEditUserName(user.name);
+    setEditUserEmail(user.email);
+    setEditUserPassword("");
+    setEditUserRole(user.role);
     setIsEditUserModalOpen(true);
   };
 
@@ -4178,6 +4270,7 @@ export default function AdminDashboardPage() {
       if (userSubTab === "ADMINS") return u.role === "ADMIN";
       if (userSubTab === "WRITERS") return u.role === "WRITER";
       if (userSubTab === "READERS") return u.role === "READER";
+      if (userSubTab === "RATINGS") return u.role === "WRITER";
       return true;
     });
 
@@ -6118,128 +6211,240 @@ export default function AdminDashboardPage() {
               >
                 READERS ({countReaders})
               </button>
+
+              <button
+                onClick={() => setUserSubTab("RATINGS")}
+                className={`pb-3 font-extrabold transition-all cursor-pointer border-b-2 uppercase tracking-wider flex items-center gap-1.5 ${userSubTab === "RATINGS"
+                    ? "border-[#D31220] text-[#D31220]"
+                    : "border-transparent text-slate-400 hover:text-slate-700"
+                  }`}
+              >
+                <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
+                EXPERTISE RATINGS ({countWriters})
+              </button>
             </div>
 
-            {/* Subheading */}
-            <h3 className="text-base font-extrabold font-sans text-slate-900 tracking-tight pt-2">
-              User Workspace Roles
-            </h3>
+            {userSubTab === "RATINGS" ? (
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-100">
+                  <div>
+                    <h3 className="text-base font-extrabold font-sans text-slate-900 tracking-tight flex items-center gap-2">
+                      <span>Journalist Expertise Ratings</span>
+                      <span className="text-[9.5px] font-bold font-mono px-2 py-0.5 rounded bg-red-50 text-[#D31220] border border-red-200 uppercase">
+                        Admin Only
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-500 font-sans mt-0.5">
+                      Assign and update proficiency ratings (%) for each journalist's 6 expertise slots. Ratings display live on author profiles.
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-extrabold bg-slate-200/80 text-slate-700 px-3.5 py-1.5 rounded-full font-mono shrink-0">
+                    Total Journalists: {countWriters}
+                  </span>
+                </div>
 
-            {/* USERS DESK TABLE */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-200/60 bg-slate-50/80 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 font-mono">
-                      <th className="py-3.5 px-6">NAME</th>
-                      <th className="py-3.5 px-6">EMAIL ADDRESS</th>
-                      <th className="py-3.5 px-6">WORKSPACE ROLE</th>
-                      <th className="py-3.5 px-6 text-right">ACTIONS</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-xs">
-                    {filteredWorkspaceUsers.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="py-12 text-center text-slate-400 font-mono">
-                          No users found matching selected sub-tab filter.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredWorkspaceUsers.map((user, idx) => {
-                        const currentUserEmail = (adminUser?.email || auth.user?.email || "").toLowerCase().trim();
-                        const userEmail = (user.email || "").toLowerCase().trim();
-                        const isSelf = Boolean(currentUserEmail && userEmail && currentUserEmail === userEmail);
-                        const isTargetAdmin = user.role === "ADMIN";
-                        const isTargetDefaultAdmin = Boolean(user.isDefaultAdmin || user.is_default_admin);
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {cleanUsersList.filter(u => u.role === "WRITER").map((writer, wIdx) => {
+                    const rawExp = (writer as any).expertise;
+                    let slots: string[] = [];
+                    if (Array.isArray(rawExp) && rawExp.length > 0) {
+                      slots = rawExp.map((s: any) => (typeof s === "object" && s?.topic ? String(s.topic) : String(s || "")).trim()).filter(Boolean).slice(0, 6);
+                    }
+                    if (slots.length === 0) {
+                      slots = ["UK Politics", "Parliamentary Affairs", "International Relations", "EU-UK Relations", "Policy Analysis", "Political Interviews"];
+                    }
+                    const existingRatings = (writer as any).expertiseRatings || (writer as any).expertise_ratings || {};
 
-                        // Default admin can edit normal admins, writers, readers, and himself.
-                        // Normal admin can edit himself, writers, and readers (but not other admins).
-                        const canEdit = isSelf || (isCurrentAdminDefault ? !isTargetDefaultAdmin : (!isTargetAdmin && !isTargetDefaultAdmin));
-                        const canDelete = !isTargetDefaultAdmin && !isSelf && (isCurrentAdminDefault || user.role !== "ADMIN");
+                    return (
+                      <div key={`writer-card-${writer.id}-${wIdx}`} className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4 hover:shadow-sm transition-shadow">
+                        {/* Writer Header */}
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-full bg-[#D31220] text-white flex items-center justify-center font-bold text-sm font-mono shadow-xs shrink-0">
+                              {writer.name.charAt(0)}
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="text-sm font-bold text-slate-900 truncate">{writer.name}</h4>
+                              <p className="text-[11px] text-slate-500 font-mono truncate">{writer.email}</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleOpenRateWriterModal(writer)}
+                            className="bg-[#D31220] hover:bg-[#BF1E2D] text-white text-[11px] font-extrabold px-3.5 py-2 rounded-xl transition-all cursor-pointer inline-flex items-center gap-1.5 uppercase tracking-wider shadow-xs"
+                          >
+                            <Star className="w-3.5 h-3.5 fill-white" />
+                            RATE SLOTS
+                          </button>
+                        </div>
 
-                        return (
-                          <tr key={`usr-${user.id}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
+                        {/* 6 Slots Preview with Ratings */}
+                        <div className="space-y-2">
+                          {slots.map((slot, sIdx) => {
+                            const defaultPcts = [95, 90, 85, 80, 85, 90];
+                            const rating = existingRatings[slot] !== undefined && !isNaN(Number(existingRatings[slot]))
+                              ? Number(existingRatings[slot])
+                              : defaultPcts[sIdx % defaultPcts.length];
 
-                            {/* NAME + DEFAULT ADMIN BADGE */}
-                            <td className="py-4 px-6 font-extrabold text-slate-900 whitespace-nowrap">
-                              <div className="flex items-center gap-2">
-                                <span>{user.name}</span>
-                                {user.isDefaultAdmin && (
-                                  <span className="bg-amber-100/90 text-amber-800 border border-amber-300 text-[9px] font-mono font-extrabold uppercase px-2 py-0.5 rounded-md">
-                                    DEFAULT ADMIN
+                            return (
+                              <div key={sIdx} className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 space-y-1 text-xs">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-semibold text-slate-700 truncate w-[65%] flex items-center gap-1.5">
+                                    <span className="text-[10px] text-slate-400 font-mono font-bold">#{sIdx + 1}</span>
+                                    <span className="truncate">{slot}</span>
                                   </span>
-                                )}
+                                  <span className="font-mono font-bold text-[#D31220]">{rating}%</span>
+                                </div>
+                                <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-[#BF1E2D] rounded-full transition-all duration-300"
+                                    style={{ width: `${rating}%` }}
+                                  />
+                                </div>
                               </div>
-                            </td>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Subheading */}
+                <h3 className="text-base font-extrabold font-sans text-slate-900 tracking-tight pt-2">
+                  User Workspace Roles
+                </h3>
 
-                            {/* EMAIL ADDRESS */}
-                            <td className="py-4 px-6 font-mono text-slate-600 whitespace-nowrap">
-                              {user.email}
-                            </td>
-
-                            {/* WORKSPACE ROLE */}
-                            <td className="py-4 px-6 whitespace-nowrap">
-                              {user.role === "WRITER" && (
-                                <span className="border border-blue-300 bg-blue-50 text-blue-700 text-[10px] font-extrabold px-3.5 py-1 rounded-full font-mono uppercase tracking-wider">
-                                  WRITER
-                                </span>
-                              )}
-                              {user.role === "ADMIN" && (
-                                <span className="border border-rose-300 bg-rose-50 text-rose-700 text-[10px] font-extrabold px-3.5 py-1 rounded-full font-mono uppercase tracking-wider">
-                                  ADMIN
-                                </span>
-                              )}
-                              {user.role === "READER" && (
-                                <span className="border border-emerald-300 bg-emerald-50 text-emerald-700 text-[10px] font-extrabold px-3.5 py-1 rounded-full font-mono uppercase tracking-wider">
-                                  READER
-                                </span>
-                              )}
-                            </td>
-
-                            {/* ACTIONS */}
-                            <td className="py-4 px-6 whitespace-nowrap text-right">
-                              <div className="flex items-center justify-end gap-2">
-
-                                {/* VIEW ICON */}
-                                <button
-                                  onClick={() => setViewingUser(user)}
-                                  title="View User Details"
-                                  className="w-8 h-8 rounded-xl bg-blue-50/70 text-blue-600 hover:bg-blue-100 flex items-center justify-center transition-colors cursor-pointer border border-blue-200/60"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                </button>
-
-                                {/* EDIT BUTTON (Admin can edit his own account, but not other admin accounts) */}
-                                {canEdit && (
-                                  <button
-                                    onClick={() => handleOpenEditUserModal(user)}
-                                    className="border border-slate-200 hover:bg-slate-100 text-slate-700 text-[10.5px] font-extrabold px-3 py-1.5 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5 uppercase tracking-wider font-mono"
-                                  >
-                                    <Pencil className="w-3 h-3 text-slate-500" />
-                                    EDIT
-                                  </button>
-                                )}
-
-                                {/* DELETE BUTTON */}
-                                {canDelete && (
-                                  <button
-                                    onClick={() => handleDeleteUser(user.id, user.name, user.isDefaultAdmin)}
-                                    className="border border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 text-[10.5px] font-extrabold px-3 py-1.5 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5 uppercase tracking-wider font-mono"
-                                  >
-                                    <Trash2 className="w-3 h-3 text-rose-500" />
-                                    DELETE
-                                  </button>
-                                )}
-                              </div>
+                {/* USERS DESK TABLE */}
+                <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-200/60 bg-slate-50/80 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 font-mono">
+                          <th className="py-3.5 px-6">NAME</th>
+                          <th className="py-3.5 px-6">EMAIL ADDRESS</th>
+                          <th className="py-3.5 px-6">WORKSPACE ROLE</th>
+                          <th className="py-3.5 px-6 text-right">ACTIONS</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-xs">
+                        {filteredWorkspaceUsers.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="py-12 text-center text-slate-400 font-mono">
+                              No users found matching selected sub-tab filter.
                             </td>
                           </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                        ) : (
+                          filteredWorkspaceUsers.map((user, idx) => {
+                            const currentUserEmail = (adminUser?.email || auth.user?.email || "").toLowerCase().trim();
+                            const userEmail = (user.email || "").toLowerCase().trim();
+                            const isSelf = Boolean(currentUserEmail && userEmail && currentUserEmail === userEmail);
+                            const isTargetAdmin = user.role === "ADMIN";
+                            const isTargetDefaultAdmin = Boolean(user.isDefaultAdmin || user.is_default_admin);
+
+                            // Default admin can edit normal admins, writers, readers, and himself.
+                            // Normal admin can edit himself, writers, and readers (but not other admins).
+                            const canEdit = isSelf || (isCurrentAdminDefault ? !isTargetDefaultAdmin : (!isTargetAdmin && !isTargetDefaultAdmin));
+                            const canDelete = !isTargetDefaultAdmin && !isSelf && (isCurrentAdminDefault || user.role !== "ADMIN");
+
+                            return (
+                              <tr key={`usr-${user.id}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
+
+                                {/* NAME + DEFAULT ADMIN BADGE */}
+                                <td className="py-4 px-6 font-extrabold text-slate-900 whitespace-nowrap">
+                                  <div className="flex items-center gap-2">
+                                    <span>{user.name}</span>
+                                    {user.isDefaultAdmin && (
+                                      <span className="bg-amber-100/90 text-amber-800 border border-amber-300 text-[9px] font-mono font-extrabold uppercase px-2 py-0.5 rounded-md">
+                                        DEFAULT ADMIN
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+
+                                {/* EMAIL ADDRESS */}
+                                <td className="py-4 px-6 font-mono text-slate-600 whitespace-nowrap">
+                                  {user.email}
+                                </td>
+
+                                {/* WORKSPACE ROLE */}
+                                <td className="py-4 px-6 whitespace-nowrap">
+                                  {user.role === "WRITER" && (
+                                    <span className="border border-blue-300 bg-blue-50 text-blue-700 text-[10px] font-extrabold px-3.5 py-1 rounded-full font-mono uppercase tracking-wider">
+                                      WRITER
+                                    </span>
+                                  )}
+                                  {user.role === "ADMIN" && (
+                                    <span className="border border-rose-300 bg-rose-50 text-rose-700 text-[10px] font-extrabold px-3.5 py-1 rounded-full font-mono uppercase tracking-wider">
+                                      ADMIN
+                                    </span>
+                                  )}
+                                  {user.role === "READER" && (
+                                    <span className="border border-emerald-300 bg-emerald-50 text-emerald-700 text-[10px] font-extrabold px-3.5 py-1 rounded-full font-mono uppercase tracking-wider">
+                                      READER
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* ACTIONS */}
+                                <td className="py-4 px-6 whitespace-nowrap text-right">
+                                  <div className="flex items-center justify-end gap-2">
+
+                                    {/* VIEW ICON */}
+                                    <button
+                                      onClick={() => setViewingUser(user)}
+                                      title="View User Details"
+                                      className="w-8 h-8 rounded-xl bg-blue-50/70 text-blue-600 hover:bg-blue-100 flex items-center justify-center transition-colors cursor-pointer border border-blue-200/60"
+                                    >
+                                      <Eye className="w-4 h-4" />
+                                    </button>
+
+                                    {/* SEPARATE RATE BUTTON FOR WRITERS */}
+                                    {user.role === "WRITER" && (
+                                      <button
+                                        onClick={() => handleOpenRateWriterModal(user)}
+                                        className="border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10.5px] font-extrabold px-3 py-1.5 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5 uppercase tracking-wider font-mono shadow-xs"
+                                        title={`Rate ${user.name}'s Expertise`}
+                                      >
+                                        <Star className="w-3.5 h-3.5 text-amber-600 fill-amber-400" />
+                                        RATE
+                                      </button>
+                                    )}
+
+                                    {/* EDIT BUTTON (Admin can edit his own account, but not other admin accounts) */}
+                                    {canEdit && (
+                                      <button
+                                        onClick={() => handleOpenEditUserModal(user)}
+                                        className="border border-slate-200 hover:bg-slate-100 text-slate-700 text-[10.5px] font-extrabold px-3 py-1.5 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5 uppercase tracking-wider font-mono"
+                                      >
+                                        <Pencil className="w-3 h-3 text-slate-500" />
+                                        EDIT
+                                      </button>
+                                    )}
+
+                                    {/* DELETE BUTTON */}
+                                    {canDelete && (
+                                      <button
+                                        onClick={() => handleDeleteUser(user.id, user.name, user.isDefaultAdmin)}
+                                        className="border border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 text-[10.5px] font-extrabold px-3 py-1.5 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5 uppercase tracking-wider font-mono"
+                                      >
+                                        <Trash2 className="w-3 h-3 text-rose-500" />
+                                        DELETE
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -8491,75 +8696,6 @@ export default function AdminDashboardPage() {
                 )}
               </div>
 
-              {/* EXPERTISE PROFICIENCY RATINGS (ADMIN EVALUATION ONLY) */}
-              {(editUserRole === "WRITER" || editingUser.role === "WRITER") && (
-                <div className="pt-2 border-t border-slate-100 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider font-mono">
-                        Expertise Ratings (Admin Only)
-                      </label>
-                      <p className="text-[10.5px] text-slate-400">
-                        Set official proficiency ratings (%) for this journalist's 6 expertise slots.
-                      </p>
-                    </div>
-                    <span className="text-[9px] font-bold font-mono px-2 py-0.5 rounded bg-red-50 text-[#D31220] border border-red-200 uppercase">
-                      Admin Rated
-                    </span>
-                  </div>
-
-                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                    {editUserExpertise.map((slot, sIdx) => {
-                      const rating = editUserRatings[slot] ?? [95, 90, 85, 80, 85, 90][sIdx % 6];
-                      return (
-                        <div key={sIdx} className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 space-y-1.5">
-                          <div className="flex items-center justify-between text-xs font-semibold text-slate-800">
-                            <span className="truncate max-w-[200px] flex items-center gap-1.5">
-                              <span className="text-[10px] text-slate-400 font-mono">#{sIdx + 1}</span>
-                              <span className="truncate">{slot}</span>
-                            </span>
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                value={rating}
-                                onChange={(e) => {
-                                  const val = Math.max(0, Math.min(100, Number(e.target.value) || 0));
-                                  setEditUserRatings((prev) => ({
-                                    ...prev,
-                                    [slot]: val,
-                                  }));
-                                }}
-                                className="w-14 px-2 py-0.5 text-right font-mono font-bold text-xs bg-white border border-slate-300 rounded focus:outline-none focus:border-[#D31220]"
-                              />
-                              <span className="text-slate-500 font-mono text-xs">%</span>
-                            </div>
-                          </div>
-                          {/* Progress bar preview */}
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="range"
-                              min="0"
-                              max="100"
-                              value={rating}
-                              onChange={(e) => {
-                                const val = Number(e.target.value);
-                                setEditUserRatings((prev) => ({
-                                  ...prev,
-                                  [slot]: val,
-                                }));
-                              }}
-                              className="w-full accent-[#BF1E2D] cursor-pointer h-1.5 bg-slate-200 rounded-lg"
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
               <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
@@ -8573,6 +8709,159 @@ export default function AdminDashboardPage() {
                   className="px-5 py-2 text-xs font-extrabold text-white bg-[#D31220] hover:bg-[#BF1E2D] rounded-xl shadow"
                 >
                   Save User Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DEDICATED SEPARATE RATE WRITER MODAL */}
+      {isRateWriterModalOpen && ratingWriter && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-slate-200">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-extrabold text-base font-sans text-slate-900 uppercase tracking-tight">
+                    EXPERTISE RATINGS (ADMIN ONLY)
+                  </h3>
+                  <span className="text-[9.5px] font-bold font-mono px-2 py-0.5 rounded bg-red-50 text-[#D31220] border border-red-200 uppercase tracking-wider">
+                    ADMIN RATED
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Set official proficiency ratings (%) for <span className="font-bold text-slate-800">{ratingWriter.name}</span>'s 6 expertise slots.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setIsRateWriterModalOpen(false);
+                  setRatingWriter(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Writer Identity Badge */}
+            <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200/80 rounded-xl">
+              <div className="w-9 h-9 rounded-full bg-[#D31220] text-white flex items-center justify-center font-bold text-xs font-mono shadow-xs shrink-0">
+                {ratingWriter.name.charAt(0)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-slate-900 truncate">{ratingWriter.name}</p>
+                <p className="text-[11px] text-slate-500 font-mono truncate">{ratingWriter.email}</p>
+              </div>
+              <span className="border border-blue-300 bg-blue-50 text-blue-700 text-[9.5px] font-extrabold px-2.5 py-0.5 rounded-full font-mono uppercase tracking-wider">
+                WRITER
+              </span>
+            </div>
+
+            {rateWriterToast && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl flex items-center gap-2 animate-in fade-in">
+                <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{rateWriterToast}</span>
+              </div>
+            )}
+
+            {/* 6 Expertise Slots Rating Form */}
+            <form onSubmit={handleSaveRateWriterModal} className="space-y-3">
+              <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+                {ratingWriterSlots.map((slot, sIdx) => {
+                  const rating = ratingWriterScores[slot] ?? [95, 90, 85, 80, 85, 90][sIdx % 6];
+                  return (
+                    <div key={sIdx} className="bg-white border border-slate-200 hover:border-slate-300 rounded-xl p-3 shadow-xs space-y-2 transition-colors">
+                      <div className="flex items-center justify-between gap-3 text-xs font-semibold text-slate-800">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="text-[11px] text-slate-400 font-mono font-bold shrink-0">
+                            #{sIdx + 1}
+                          </span>
+                          <input
+                            type="text"
+                            value={slot}
+                            onChange={(e) => {
+                              const newTopic = e.target.value;
+                              const updated = [...ratingWriterSlots];
+                              updated[sIdx] = newTopic;
+                              setRatingWriterSlots(updated);
+                              if (ratingWriterScores[slot] !== undefined) {
+                                const newScores = { ...ratingWriterScores };
+                                newScores[newTopic] = ratingWriterScores[slot];
+                                delete newScores[slot];
+                                setRatingWriterScores(newScores);
+                              }
+                            }}
+                            className="text-xs font-bold text-slate-900 bg-slate-50/50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:border-[#D31220] px-2.5 py-1 rounded-lg outline-none transition-all w-full truncate"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={rating}
+                            onChange={(e) => {
+                              const val = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                              setRatingWriterScores((prev) => ({
+                                ...prev,
+                                [slot]: val,
+                              }));
+                            }}
+                            className="w-14 px-2 py-1 text-center font-mono font-extrabold text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100"
+                          />
+                          <span className="text-slate-500 font-mono text-xs font-bold">%</span>
+                        </div>
+                      </div>
+
+                      {/* Interactive Slider */}
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={rating}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setRatingWriterScores((prev) => ({
+                              ...prev,
+                              [slot]: val,
+                            }));
+                          }}
+                          className="w-full accent-[#BF1E2D] cursor-pointer h-2 bg-slate-100 rounded-lg"
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  disabled={isSavingRating}
+                  onClick={() => {
+                    setIsRateWriterModalOpen(false);
+                    setRatingWriter(null);
+                  }}
+                  className="px-4 py-2.5 text-xs font-bold text-slate-600 border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingRating}
+                  className="px-5 py-2.5 text-xs font-extrabold text-white bg-[#D31220] hover:bg-[#BF1E2D] rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                >
+                  {isSavingRating ? (
+                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Check className="w-3.5 h-3.5" />
+                  )}
+                  <span>Save Ratings</span>
                 </button>
               </div>
             </form>
