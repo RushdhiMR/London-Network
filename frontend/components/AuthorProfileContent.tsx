@@ -804,6 +804,134 @@ export default function AuthorProfileContent({
     });
   }, [authorProfile, articlesList, slugClean]);
 
+  const authorRegionsOfFocus = useMemo(() => {
+    const isSarah = (authorProfile.name || "").toLowerCase().includes("sarah") || slugClean.includes("sarah");
+
+    if (isSarah) {
+      return [
+        {
+          id: "britain",
+          name: "United Kingdom",
+          level: "Primary focus",
+          color: "#D31220",
+          active: true,
+        },
+        {
+          id: "europe",
+          name: "Europe",
+          level: "Regular coverage",
+          color: "#2563EB",
+          active: true,
+        },
+        {
+          id: "unitedStates",
+          name: "United States",
+          level: "Regular coverage",
+          color: "#F59E0B",
+          active: true,
+        },
+        {
+          id: "asia",
+          name: "Asia",
+          level: "Occasional coverage",
+          color: "#10B981",
+          active: true,
+        },
+        {
+          id: "middleEast",
+          name: "Middle East",
+          level: "Occasional coverage",
+          color: "#9333EA",
+          active: true,
+        },
+        {
+          id: "global",
+          name: "Global",
+          level: "Ongoing coverage",
+          color: "#06B6D4",
+          active: true,
+        },
+      ];
+    }
+
+    // World categories & regions from Image 2
+    const regionDefs = [
+      { id: "britain", name: "Britain", label: "United Kingdom", color: "#D31220", aliases: ["britain", "uk", "united kingdom", "london", "england", "scotland", "wales", "westminster"] },
+      { id: "europe", name: "Europe", label: "Europe", color: "#2563EB", aliases: ["europe", "european", "eu", "france", "germany", "brussels", "italy", "spain"] },
+      { id: "unitedStates", name: "United States", label: "United States", color: "#F59E0B", aliases: ["united states", "us", "usa", "america", "washington", "new york"] },
+      { id: "china", name: "China", label: "China", color: "#10B981", aliases: ["china", "chinese", "beijing", "shanghai"] },
+      { id: "asia", name: "Asia", label: "Asia", color: "#059669", aliases: ["asia", "asian", "japan", "tokyo", "korea", "india", "singapore"] },
+      { id: "middleEast", name: "Middle East", label: "Middle East", color: "#9333EA", aliases: ["middle east", "middle-east", "gulf", "saudi", "dubai", "uae", "qatar", "israel", "iran", "yemen"] },
+      { id: "africa", name: "Africa", label: "Africa", color: "#EA580C", aliases: ["africa", "african", "cairo", "egypt", "nigeria", "kenya", "south africa"] },
+      { id: "global", name: "World News", label: "Global", color: "#06B6D4", aliases: ["world", "global", "international", "world news"] },
+    ];
+
+    const regionCounts: Record<string, number> = {};
+    regionDefs.forEach((r) => {
+      regionCounts[r.id] = 0;
+    });
+
+    articlesList.forEach((art) => {
+      const rawCat = (art.category || "").toLowerCase();
+      const rawSubs = Array.isArray((art as any).subcategories)
+        ? (art as any).subcategories.join(" ").toLowerCase()
+        : typeof (art as any).subcategory === "string"
+          ? (art as any).subcategory.toLowerCase()
+          : "";
+      const titleAndSummary = ((art.title || "") + " " + (art.desc || "")).toLowerCase();
+      const fullText = `${rawCat} ${rawSubs} ${titleAndSummary}`;
+
+      regionDefs.forEach((r) => {
+        const isMatch = r.aliases.some((alias) => fullText.includes(alias));
+        if (isMatch) {
+          regionCounts[r.id] += 1;
+        }
+      });
+    });
+
+    const activeList = regionDefs
+      .map((r) => ({
+        ...r,
+        count: regionCounts[r.id],
+      }))
+      .filter((r) => r.count > 0)
+      .sort((a, b) => b.count - a.count);
+
+    if (activeList.length > 0) {
+      const maxCount = activeList[0].count;
+      return activeList.map((r) => {
+        let level = "Occasional coverage";
+        if (r.count === maxCount && r.count >= 2) {
+          level = "Primary focus";
+        } else if (r.count >= 2) {
+          level = "Regular coverage";
+        } else if (r.count === 1) {
+          level = "Occasional coverage";
+        } else {
+          level = "Ongoing coverage";
+        }
+        return {
+          id: r.id,
+          name: r.label,
+          level,
+          color: r.color,
+          active: true,
+          count: r.count,
+        };
+      });
+    }
+
+    // Default fallback when author hasn't written regional articles yet
+    return [
+      { id: "britain", name: "United Kingdom", level: "Primary focus", color: "#D31220", active: true },
+      { id: "europe", name: "Europe", level: "Regular coverage", color: "#2563EB", active: true },
+      { id: "unitedStates", name: "United States", level: "Regular coverage", color: "#F59E0B", active: false },
+      { id: "asia", name: "Asia", level: "Occasional coverage", color: "#10B981", active: false },
+      { id: "middleEast", name: "Middle East", level: "Occasional coverage", color: "#9333EA", active: false },
+      { id: "global", name: "Global", level: "Ongoing coverage", color: "#06B6D4", active: true },
+    ];
+  }, [authorProfile, articlesList, slugClean]);
+
   return (
     <main className="min-h-screen bg-white text-slate-900 font-sans">
       <Header />
@@ -1433,6 +1561,121 @@ export default function AuthorProfileContent({
                   );
                 })()}
               </>
+            ) : activeTab === "coverage" ? (
+              /* REGIONS OF FOCUS CARD (WORLD MAP + REGIONS LIST) */
+              <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-xs">
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider font-sans pb-3 mb-4 border-b border-slate-100">
+                  REGIONS OF FOCUS
+                </h3>
+
+                <div className="space-y-4">
+                  {/* World Map Illustration */}
+                  <div className="w-full bg-slate-50/60 border border-slate-100 rounded-xl p-3 flex items-center justify-center overflow-hidden">
+                    <svg
+                      viewBox="0 0 580 290"
+                      className="w-full h-auto max-h-[170px]"
+                    >
+                      {/* Canada & Greenland */}
+                      <path
+                        d="M 35,45 L 55,25 L 85,20 L 125,22 L 165,30 L 195,48 L 185,75 L 140,82 L 80,82 L 65,90 L 45,78 Z M 205,15 L 245,18 L 240,48 L 215,50 Z"
+                        fill="#CBD5E1"
+                        stroke="#FFFFFF"
+                        strokeWidth="1.5"
+                      />
+
+                      {/* United States (Amber #F59E0B if active, else #CBD5E1) */}
+                      <path
+                        d="M 65,90 L 80,82 L 140,82 L 175,85 L 180,105 L 175,130 L 155,138 L 140,150 L 115,150 L 105,138 L 90,138 L 78,128 L 65,115 Z M 25,48 L 45,45 L 42,75 L 22,68 Z"
+                        fill={authorRegionsOfFocus.some(r => r.id === "unitedStates" && r.active) ? "#F59E0B" : "#CBD5E1"}
+                        stroke="#FFFFFF"
+                        strokeWidth="1.5"
+                        className="transition-colors duration-300"
+                      />
+
+                      {/* Central & South America */}
+                      <path
+                        d="M 105,150 L 120,155 L 138,170 L 165,165 L 195,182 L 210,215 L 185,275 L 165,270 L 148,225 L 135,190 Z"
+                        fill="#CBD5E1"
+                        stroke="#FFFFFF"
+                        strokeWidth="1.5"
+                      />
+
+                      {/* Europe (Royal Blue #2563EB if active, else #CBD5E1) */}
+                      <path
+                        d="M 275,75 L 305,65 L 335,68 L 345,92 L 325,120 L 298,125 L 282,120 L 275,108 L 285,95 Z M 305,42 L 325,38 L 330,68 L 315,70 Z"
+                        fill={authorRegionsOfFocus.some(r => r.id === "europe" && r.active) ? "#2563EB" : "#CBD5E1"}
+                        stroke="#FFFFFF"
+                        strokeWidth="1.5"
+                        className="transition-colors duration-300"
+                      />
+
+                      {/* Britain / United Kingdom (Crimson Red #D31220 if active, else #CBD5E1) */}
+                      <path
+                        d="M 262,80 C 267,76 272,80 270,88 C 268,95 272,102 266,106 C 260,103 258,95 262,88 Z M 254,88 C 257,85 259,89 257,94 C 254,96 251,92 254,88 Z"
+                        fill={authorRegionsOfFocus.some(r => r.id === "britain" && r.active) ? "#D31220" : "#CBD5E1"}
+                        stroke="#FFFFFF"
+                        strokeWidth="1.5"
+                        className="transition-colors duration-300"
+                      />
+
+                      {/* Africa (Orange #EA580C if active, else #CBD5E1) */}
+                      <path
+                        d="M 262,132 L 315,128 L 345,152 L 345,182 L 322,255 L 292,255 L 260,200 L 255,160 Z M 350,220 L 360,225 L 355,250 L 345,245 Z"
+                        fill={authorRegionsOfFocus.some(r => r.id === "africa" && r.active) ? "#EA580C" : "#CBD5E1"}
+                        stroke="#FFFFFF"
+                        strokeWidth="1.5"
+                        className="transition-colors duration-300"
+                      />
+
+                      {/* Middle East (Purple #9333EA if active, else #CBD5E1) */}
+                      <path
+                        d="M 342,125 L 372,120 L 388,138 L 382,172 L 360,172 L 345,152 Z"
+                        fill={authorRegionsOfFocus.some(r => r.id === "middleEast" && r.active) ? "#9333EA" : "#CBD5E1"}
+                        stroke="#FFFFFF"
+                        strokeWidth="1.5"
+                        className="transition-colors duration-300"
+                      />
+
+                      {/* Asia & China (Emerald Green #10B981 if active, else #CBD5E1) */}
+                      <path
+                        d="M 345,68 L 440,55 L 525,65 L 520,110 L 490,140 L 440,138 L 415,180 L 388,138 L 372,120 L 345,92 Z M 528,105 L 538,108 L 532,135 L 522,128 Z M 435,182 L 478,188 L 510,218 L 455,228 Z"
+                        fill={authorRegionsOfFocus.some(r => (r.id === "asia" || r.id === "china") && r.active) ? "#10B981" : "#CBD5E1"}
+                        stroke="#FFFFFF"
+                        strokeWidth="1.5"
+                        className="transition-colors duration-300"
+                      />
+
+                      {/* Australia & Oceania */}
+                      <path
+                        d="M 470,220 L 535,215 L 548,252 L 492,265 L 465,242 Z M 552,255 L 560,260 L 555,280 L 548,272 Z"
+                        fill="#CBD5E1"
+                        stroke="#FFFFFF"
+                        strokeWidth="1.5"
+                      />
+                    </svg>
+                  </div>
+
+                  {/* Regions List */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-4 pt-1">
+                    {authorRegionsOfFocus.map((item, idx) => (
+                      <div key={idx} className="flex items-start gap-2.5 text-xs font-sans">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0 mt-0.5"
+                          style={{ backgroundColor: item.color }}
+                        />
+                        <div className="min-w-0">
+                          <span className="font-bold text-slate-900 block leading-tight truncate">
+                            {item.name}
+                          </span>
+                          <span className="text-[11px] text-slate-500 block leading-tight">
+                            {item.level}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             ) : (
               /* MORE WRITERS CARD */
               <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-xs">
