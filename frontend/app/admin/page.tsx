@@ -374,7 +374,7 @@ export default function AdminDashboardPage() {
   const [deleteTeamTarget, setDeleteTeamTarget] = useState<TeamMember | null>(null);
   const [isTeamSubmitting, setIsTeamSubmitting] = useState(false);
 
-  const [userSubTab, setUserSubTab] = useState<"ALL" | "ADMINS" | "WRITERS" | "READERS" | "RATINGS">("ALL");
+  const [userSubTab, setUserSubTab] = useState<"ALL" | "ADMINS" | "WRITERS" | "READERS">("ALL");
   const [postSubTab, setPostSubTab] = useState<"published" | "drafts" | "pending" | "rejected" | "trash">("published");
   const [trashedArticles, setTrashedArticles] = useState<Article[]>([]);
 
@@ -4270,7 +4270,6 @@ export default function AdminDashboardPage() {
       if (userSubTab === "ADMINS") return u.role === "ADMIN";
       if (userSubTab === "WRITERS") return u.role === "WRITER";
       if (userSubTab === "READERS") return u.role === "READER";
-      if (userSubTab === "RATINGS") return u.role === "WRITER";
       return true;
     });
 
@@ -6211,113 +6210,15 @@ export default function AdminDashboardPage() {
               >
                 READERS ({countReaders})
               </button>
-
-              <button
-                onClick={() => setUserSubTab("RATINGS")}
-                className={`pb-3 font-extrabold transition-all cursor-pointer border-b-2 uppercase tracking-wider flex items-center gap-1.5 ${userSubTab === "RATINGS"
-                    ? "border-[#D31220] text-[#D31220]"
-                    : "border-transparent text-slate-400 hover:text-slate-700"
-                  }`}
-              >
-                <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
-                EXPERTISE RATINGS ({countWriters})
-              </button>
             </div>
 
-            {userSubTab === "RATINGS" ? (
-              <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-100">
-                  <div>
-                    <h3 className="text-base font-extrabold font-sans text-slate-900 tracking-tight flex items-center gap-2">
-                      <span>Journalist Expertise Ratings</span>
-                      <span className="text-[9.5px] font-bold font-mono px-2 py-0.5 rounded bg-red-50 text-[#D31220] border border-red-200 uppercase">
-                        Admin Only
-                      </span>
-                    </h3>
-                    <p className="text-xs text-slate-500 font-sans mt-0.5">
-                      Assign and update proficiency ratings (%) for each journalist's 6 expertise slots. Ratings display live on author profiles.
-                    </p>
-                  </div>
-                  <span className="text-[11px] font-extrabold bg-slate-200/80 text-slate-700 px-3.5 py-1.5 rounded-full font-mono shrink-0">
-                    Total Journalists: {countWriters}
-                  </span>
-                </div>
+            {/* Subheading */}
+            <h3 className="text-base font-extrabold font-sans text-slate-900 tracking-tight pt-2">
+              User Workspace Roles
+            </h3>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  {cleanUsersList.filter(u => u.role === "WRITER").map((writer, wIdx) => {
-                    const rawExp = (writer as any).expertise;
-                    let slots: string[] = [];
-                    if (Array.isArray(rawExp) && rawExp.length > 0) {
-                      slots = rawExp.map((s: any) => (typeof s === "object" && s?.topic ? String(s.topic) : String(s || "")).trim()).filter(Boolean).slice(0, 6);
-                    }
-                    if (slots.length === 0) {
-                      slots = ["UK Politics", "Parliamentary Affairs", "International Relations", "EU-UK Relations", "Policy Analysis", "Political Interviews"];
-                    }
-                    const existingRatings = (writer as any).expertiseRatings || (writer as any).expertise_ratings || {};
-
-                    return (
-                      <div key={`writer-card-${writer.id}-${wIdx}`} className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4 hover:shadow-sm transition-shadow">
-                        {/* Writer Header */}
-                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-10 h-10 rounded-full bg-[#D31220] text-white flex items-center justify-center font-bold text-sm font-mono shadow-xs shrink-0">
-                              {writer.name.charAt(0)}
-                            </div>
-                            <div className="min-w-0">
-                              <h4 className="text-sm font-bold text-slate-900 truncate">{writer.name}</h4>
-                              <p className="text-[11px] text-slate-500 font-mono truncate">{writer.email}</p>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleOpenRateWriterModal(writer)}
-                            className="bg-[#D31220] hover:bg-[#BF1E2D] text-white text-[11px] font-extrabold px-3.5 py-2 rounded-xl transition-all cursor-pointer inline-flex items-center gap-1.5 uppercase tracking-wider shadow-xs"
-                          >
-                            <Star className="w-3.5 h-3.5 fill-white" />
-                            RATE SLOTS
-                          </button>
-                        </div>
-
-                        {/* 6 Slots Preview with Ratings */}
-                        <div className="space-y-2">
-                          {slots.map((slot, sIdx) => {
-                            const defaultPcts = [95, 90, 85, 80, 85, 90];
-                            const rating = existingRatings[slot] !== undefined && !isNaN(Number(existingRatings[slot]))
-                              ? Number(existingRatings[slot])
-                              : defaultPcts[sIdx % defaultPcts.length];
-
-                            return (
-                              <div key={sIdx} className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 space-y-1 text-xs">
-                                <div className="flex items-center justify-between">
-                                  <span className="font-semibold text-slate-700 truncate w-[65%] flex items-center gap-1.5">
-                                    <span className="text-[10px] text-slate-400 font-mono font-bold">#{sIdx + 1}</span>
-                                    <span className="truncate">{slot}</span>
-                                  </span>
-                                  <span className="font-mono font-bold text-[#D31220]">{rating}%</span>
-                                </div>
-                                <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full bg-[#BF1E2D] rounded-full transition-all duration-300"
-                                    style={{ width: `${rating}%` }}
-                                  />
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <>
-                {/* Subheading */}
-                <h3 className="text-base font-extrabold font-sans text-slate-900 tracking-tight pt-2">
-                  User Workspace Roles
-                </h3>
-
-                {/* USERS DESK TABLE */}
-                <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+            {/* USERS DESK TABLE */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                       <thead>
@@ -6443,8 +6344,6 @@ export default function AdminDashboardPage() {
                     </table>
                   </div>
                 </div>
-              </>
-            )}
           </div>
         )}
 
