@@ -72,6 +72,15 @@ export default function AuthorProfileContent({
   const [articlesList, setArticlesList] = useState<ArticleItem[]>(initialArticles);
   const [visibleCount, setVisibleCount] = useState(6);
   const [activeTab, setActiveTab] = useState<"articles" | "about" | "coverage" | "awards">("articles");
+
+  const handleTabChange = (tabId: "articles" | "about" | "coverage" | "awards") => {
+    setActiveTab(tabId);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", tabId);
+      window.history.replaceState({}, "", url.toString());
+    }
+  };
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [followToast, setFollowToast] = useState<{ message: string; type: "success" | "info" } | null>(null);
@@ -93,6 +102,19 @@ export default function AuthorProfileContent({
       window.removeEventListener("dj_profile_updated", handleSync);
       window.removeEventListener("dj_auth_change", handleSync);
     };
+  }, []);
+
+  // Support direct URL navigation/linking to tabs (e.g. ?tab=coverage or #coverage)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tabParam = urlParams.get("tab");
+      const hash = window.location.hash.replace("#", "");
+      const target = tabParam || hash;
+      if (target && ["articles", "about", "coverage", "awards"].includes(target)) {
+        setActiveTab(target as any);
+      }
+    }
   }, []);
 
   // Check initial follow state and handle pending follow if user just signed in
@@ -807,67 +829,31 @@ export default function AuthorProfileContent({
   const authorRegionsOfFocus = useMemo(() => {
     const isSarah = (authorProfile.name || "").toLowerCase().includes("sarah") || slugClean.includes("sarah");
 
-    if (isSarah) {
-      return [
-        {
-          id: "britain",
-          name: "United Kingdom",
-          level: "Primary focus",
-          color: "#D31220",
-          active: true,
-        },
-        {
-          id: "europe",
-          name: "Europe",
-          level: "Regular coverage",
-          color: "#2563EB",
-          active: true,
-        },
-        {
-          id: "unitedStates",
-          name: "United States",
-          level: "Regular coverage",
-          color: "#F59E0B",
-          active: true,
-        },
-        {
-          id: "asia",
-          name: "Asia",
-          level: "Occasional coverage",
-          color: "#10B981",
-          active: true,
-        },
-        {
-          id: "middleEast",
-          name: "Middle East",
-          level: "Occasional coverage",
-          color: "#9333EA",
-          active: true,
-        },
-        {
-          id: "global",
-          name: "Global",
-          level: "Ongoing coverage",
-          color: "#06B6D4",
-          active: true,
-        },
-      ];
-    }
-
-    // World categories & regions from Image 2
-    const regionDefs = [
+    // Strictly the 7 regions from Image 2
+    const image2RegionDefs = [
       { id: "britain", name: "Britain", label: "United Kingdom", color: "#D31220", aliases: ["britain", "uk", "united kingdom", "london", "england", "scotland", "wales", "westminster"] },
       { id: "europe", name: "Europe", label: "Europe", color: "#2563EB", aliases: ["europe", "european", "eu", "france", "germany", "brussels", "italy", "spain"] },
       { id: "unitedStates", name: "United States", label: "United States", color: "#F59E0B", aliases: ["united states", "us", "usa", "america", "washington", "new york"] },
       { id: "china", name: "China", label: "China", color: "#10B981", aliases: ["china", "chinese", "beijing", "shanghai"] },
-      { id: "asia", name: "Asia", label: "Asia", color: "#059669", aliases: ["asia", "asian", "japan", "tokyo", "korea", "india", "singapore"] },
       { id: "middleEast", name: "Middle East", label: "Middle East", color: "#9333EA", aliases: ["middle east", "middle-east", "gulf", "saudi", "dubai", "uae", "qatar", "israel", "iran", "yemen"] },
       { id: "africa", name: "Africa", label: "Africa", color: "#EA580C", aliases: ["africa", "african", "cairo", "egypt", "nigeria", "kenya", "south africa"] },
-      { id: "global", name: "World News", label: "Global", color: "#06B6D4", aliases: ["world", "global", "international", "world news"] },
+      { id: "asia", name: "Asia", label: "Asia", color: "#059669", aliases: ["asia", "asian", "japan", "tokyo", "korea", "india", "singapore"] },
     ];
 
+    if (isSarah) {
+      return [
+        { id: "britain", name: "United Kingdom", level: "Primary focus", color: "#D31220", active: true, count: 186 },
+        { id: "europe", name: "Europe", level: "Regular coverage", color: "#2563EB", active: true, count: 128 },
+        { id: "unitedStates", name: "United States", level: "Regular coverage", color: "#F59E0B", active: true, count: 84 },
+        { id: "china", name: "China", level: "Regular coverage", color: "#10B981", active: true, count: 62 },
+        { id: "middleEast", name: "Middle East", level: "Occasional coverage", color: "#9333EA", active: true, count: 48 },
+        { id: "asia", name: "Asia", level: "Occasional coverage", color: "#059669", active: true, count: 35 },
+        { id: "africa", name: "Africa", level: "Ongoing coverage", color: "#EA580C", active: true, count: 24 },
+      ];
+    }
+
     const regionCounts: Record<string, number> = {};
-    regionDefs.forEach((r) => {
+    image2RegionDefs.forEach((r) => {
       regionCounts[r.id] = 0;
     });
 
@@ -881,7 +867,7 @@ export default function AuthorProfileContent({
       const titleAndSummary = ((art.title || "") + " " + (art.desc || "")).toLowerCase();
       const fullText = `${rawCat} ${rawSubs} ${titleAndSummary}`;
 
-      regionDefs.forEach((r) => {
+      image2RegionDefs.forEach((r) => {
         const isMatch = r.aliases.some((alias) => fullText.includes(alias));
         if (isMatch) {
           regionCounts[r.id] += 1;
@@ -889,47 +875,34 @@ export default function AuthorProfileContent({
       });
     });
 
-    const activeList = regionDefs
-      .map((r) => ({
-        ...r,
-        count: regionCounts[r.id],
-      }))
-      .filter((r) => r.count > 0)
-      .sort((a, b) => b.count - a.count);
+    const maxCount = Math.max(...Object.values(regionCounts), 0);
 
-    if (activeList.length > 0) {
-      const maxCount = activeList[0].count;
-      return activeList.map((r) => {
-        let level = "Occasional coverage";
-        if (r.count === maxCount && r.count >= 2) {
+    return image2RegionDefs.map((r) => {
+      const count = regionCounts[r.id];
+      const hasCoverage = count > 0;
+      let level = "No published coverage";
+
+      if (hasCoverage) {
+        if (count === maxCount && count >= 2) {
           level = "Primary focus";
-        } else if (r.count >= 2) {
+        } else if (count >= 2) {
           level = "Regular coverage";
-        } else if (r.count === 1) {
-          level = "Occasional coverage";
         } else {
-          level = "Ongoing coverage";
+          level = "Occasional coverage";
         }
-        return {
-          id: r.id,
-          name: r.label,
-          level,
-          color: r.color,
-          active: true,
-          count: r.count,
-        };
-      });
-    }
+      } else {
+        level = "Ongoing coverage";
+      }
 
-    // Default fallback when author hasn't written regional articles yet
-    return [
-      { id: "britain", name: "United Kingdom", level: "Primary focus", color: "#D31220", active: true },
-      { id: "europe", name: "Europe", level: "Regular coverage", color: "#2563EB", active: true },
-      { id: "unitedStates", name: "United States", level: "Regular coverage", color: "#F59E0B", active: false },
-      { id: "asia", name: "Asia", level: "Occasional coverage", color: "#10B981", active: false },
-      { id: "middleEast", name: "Middle East", level: "Occasional coverage", color: "#9333EA", active: false },
-      { id: "global", name: "Global", level: "Ongoing coverage", color: "#06B6D4", active: true },
-    ];
+      return {
+        id: r.id,
+        name: r.name,
+        level,
+        color: r.color,
+        active: hasCoverage,
+        count,
+      };
+    });
   }, [authorProfile, articlesList, slugClean]);
 
   return (
@@ -946,7 +919,7 @@ export default function AuthorProfileContent({
           <>
             <button
               type="button"
-              onClick={() => setActiveTab("articles")}
+              onClick={() => handleTabChange("articles")}
               className="hover:text-black transition-colors cursor-pointer"
             >
               {authorProfile.name}
@@ -958,7 +931,7 @@ export default function AuthorProfileContent({
           <>
             <button
               type="button"
-              onClick={() => setActiveTab("articles")}
+              onClick={() => handleTabChange("articles")}
               className="hover:text-black transition-colors cursor-pointer"
             >
               {authorProfile.name}
@@ -970,7 +943,7 @@ export default function AuthorProfileContent({
           <>
             <button
               type="button"
-              onClick={() => setActiveTab("articles")}
+              onClick={() => handleTabChange("articles")}
               className="hover:text-black transition-colors cursor-pointer"
             >
               {authorProfile.name}
@@ -1120,6 +1093,7 @@ export default function AuthorProfileContent({
                 ]).map((area, i) => (
                   <span
                     key={i}
+                    onClick={() => handleTabChange("coverage")}
                     className="px-3 py-1 bg-slate-100 hover:bg-slate-200/80 text-slate-700 rounded-full text-xs font-medium border border-slate-200/70 transition-colors cursor-pointer"
                   >
                     {area}
@@ -1144,7 +1118,7 @@ export default function AuthorProfileContent({
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => handleTabChange(tab.id as any)}
               className={`pb-3 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap relative ${
                 activeTab === tab.id
                   ? "text-[#D31220] border-b-2 border-[#D31220]"
@@ -1562,20 +1536,20 @@ export default function AuthorProfileContent({
                 })()}
               </>
             ) : activeTab === "coverage" ? (
-              /* REGIONS OF FOCUS CARD (WORLD MAP + REGIONS LIST) */
+              /* REGIONS OF FOCUS CARD (WORLD MAP + EXACT IMAGE 2 REGIONS ONLY) */
               <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-xs">
                 <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider font-sans pb-3 mb-4 border-b border-slate-100">
                   REGIONS OF FOCUS
                 </h3>
 
-                <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row items-center gap-4">
                   {/* World Map Illustration */}
-                  <div className="w-full bg-slate-50/60 border border-slate-100 rounded-xl p-3 flex items-center justify-center overflow-hidden">
+                  <div className="w-full sm:w-[52%] bg-slate-50/60 border border-slate-100 rounded-xl p-2.5 flex items-center justify-center shrink-0">
                     <svg
                       viewBox="0 0 580 290"
-                      className="w-full h-auto max-h-[170px]"
+                      className="w-full h-auto max-h-[160px]"
                     >
-                      {/* Canada & Greenland */}
+                      {/* Canada & Greenland (Neutral Slate) */}
                       <path
                         d="M 35,45 L 55,25 L 85,20 L 125,22 L 165,30 L 195,48 L 185,75 L 140,82 L 80,82 L 65,90 L 45,78 Z M 205,15 L 245,18 L 240,48 L 215,50 Z"
                         fill="#CBD5E1"
@@ -1583,7 +1557,7 @@ export default function AuthorProfileContent({
                         strokeWidth="1.5"
                       />
 
-                      {/* United States (Amber #F59E0B if active, else #CBD5E1) */}
+                      {/* 1. United States (Amber #F59E0B if active) */}
                       <path
                         d="M 65,90 L 80,82 L 140,82 L 175,85 L 180,105 L 175,130 L 155,138 L 140,150 L 115,150 L 105,138 L 90,138 L 78,128 L 65,115 Z M 25,48 L 45,45 L 42,75 L 22,68 Z"
                         fill={authorRegionsOfFocus.some(r => r.id === "unitedStates" && r.active) ? "#F59E0B" : "#CBD5E1"}
@@ -1592,7 +1566,7 @@ export default function AuthorProfileContent({
                         className="transition-colors duration-300"
                       />
 
-                      {/* Central & South America */}
+                      {/* Central & South America (Neutral Slate) */}
                       <path
                         d="M 105,150 L 120,155 L 138,170 L 165,165 L 195,182 L 210,215 L 185,275 L 165,270 L 148,225 L 135,190 Z"
                         fill="#CBD5E1"
@@ -1600,7 +1574,7 @@ export default function AuthorProfileContent({
                         strokeWidth="1.5"
                       />
 
-                      {/* Europe (Royal Blue #2563EB if active, else #CBD5E1) */}
+                      {/* 2. Europe (Royal Blue #2563EB if active) */}
                       <path
                         d="M 275,75 L 305,65 L 335,68 L 345,92 L 325,120 L 298,125 L 282,120 L 275,108 L 285,95 Z M 305,42 L 325,38 L 330,68 L 315,70 Z"
                         fill={authorRegionsOfFocus.some(r => r.id === "europe" && r.active) ? "#2563EB" : "#CBD5E1"}
@@ -1609,7 +1583,7 @@ export default function AuthorProfileContent({
                         className="transition-colors duration-300"
                       />
 
-                      {/* Britain / United Kingdom (Crimson Red #D31220 if active, else #CBD5E1) */}
+                      {/* 3. Britain / United Kingdom (Crimson Red #D31220 if active) */}
                       <path
                         d="M 262,80 C 267,76 272,80 270,88 C 268,95 272,102 266,106 C 260,103 258,95 262,88 Z M 254,88 C 257,85 259,89 257,94 C 254,96 251,92 254,88 Z"
                         fill={authorRegionsOfFocus.some(r => r.id === "britain" && r.active) ? "#D31220" : "#CBD5E1"}
@@ -1618,7 +1592,7 @@ export default function AuthorProfileContent({
                         className="transition-colors duration-300"
                       />
 
-                      {/* Africa (Orange #EA580C if active, else #CBD5E1) */}
+                      {/* 4. Africa (Orange #EA580C if active) */}
                       <path
                         d="M 262,132 L 315,128 L 345,152 L 345,182 L 322,255 L 292,255 L 260,200 L 255,160 Z M 350,220 L 360,225 L 355,250 L 345,245 Z"
                         fill={authorRegionsOfFocus.some(r => r.id === "africa" && r.active) ? "#EA580C" : "#CBD5E1"}
@@ -1627,7 +1601,7 @@ export default function AuthorProfileContent({
                         className="transition-colors duration-300"
                       />
 
-                      {/* Middle East (Purple #9333EA if active, else #CBD5E1) */}
+                      {/* 5. Middle East (Purple #9333EA if active) */}
                       <path
                         d="M 342,125 L 372,120 L 388,138 L 382,172 L 360,172 L 345,152 Z"
                         fill={authorRegionsOfFocus.some(r => r.id === "middleEast" && r.active) ? "#9333EA" : "#CBD5E1"}
@@ -1636,16 +1610,25 @@ export default function AuthorProfileContent({
                         className="transition-colors duration-300"
                       />
 
-                      {/* Asia & China (Emerald Green #10B981 if active, else #CBD5E1) */}
+                      {/* 6. China (Emerald Green #10B981 if active) */}
                       <path
-                        d="M 345,68 L 440,55 L 525,65 L 520,110 L 490,140 L 440,138 L 415,180 L 388,138 L 372,120 L 345,92 Z M 528,105 L 538,108 L 532,135 L 522,128 Z M 435,182 L 478,188 L 510,218 L 455,228 Z"
-                        fill={authorRegionsOfFocus.some(r => (r.id === "asia" || r.id === "china") && r.active) ? "#10B981" : "#CBD5E1"}
+                        d="M 410,100 L 465,95 L 485,120 L 475,155 L 435,160 L 415,138 Z"
+                        fill={authorRegionsOfFocus.some(r => r.id === "china" && r.active) ? "#10B981" : "#CBD5E1"}
                         stroke="#FFFFFF"
                         strokeWidth="1.5"
                         className="transition-colors duration-300"
                       />
 
-                      {/* Australia & Oceania */}
+                      {/* 7. Asia (Green #059669 if active) */}
+                      <path
+                        d="M 345,68 L 440,55 L 525,65 L 520,110 L 490,140 L 440,138 L 415,180 L 388,138 L 372,120 L 345,92 Z M 528,105 L 538,108 L 532,135 L 522,128 Z M 435,182 L 478,188 L 510,218 L 455,228 Z"
+                        fill={authorRegionsOfFocus.some(r => r.id === "asia" && r.active) ? "#059669" : "#CBD5E1"}
+                        stroke="#FFFFFF"
+                        strokeWidth="1.5"
+                        className="transition-colors duration-300"
+                      />
+
+                      {/* Australia & Oceania (Neutral Slate) */}
                       <path
                         d="M 470,220 L 535,215 L 548,252 L 492,265 L 465,242 Z M 552,255 L 560,260 L 555,280 L 548,272 Z"
                         fill="#CBD5E1"
@@ -1655,10 +1638,10 @@ export default function AuthorProfileContent({
                     </svg>
                   </div>
 
-                  {/* Regions List */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-4 pt-1">
+                  {/* Regions List - strictly only the 7 regions from Image 2 */}
+                  <div className="w-full sm:w-[48%] space-y-2">
                     {authorRegionsOfFocus.map((item, idx) => (
-                      <div key={idx} className="flex items-start gap-2.5 text-xs font-sans">
+                      <div key={idx} className="flex items-start gap-2 text-xs font-sans">
                         <span
                           className="w-2.5 h-2.5 rounded-full shrink-0 mt-0.5"
                           style={{ backgroundColor: item.color }}
@@ -1667,7 +1650,7 @@ export default function AuthorProfileContent({
                           <span className="font-bold text-slate-900 block leading-tight truncate">
                             {item.name}
                           </span>
-                          <span className="text-[11px] text-slate-500 block leading-tight">
+                          <span className="text-[10.5px] text-slate-500 block leading-tight">
                             {item.level}
                           </span>
                         </div>
