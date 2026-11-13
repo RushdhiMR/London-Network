@@ -1341,48 +1341,100 @@ export default function AuthorProfileContent({
             )}
 
             {activeTab === "awards" && (
-              <div className="space-y-6">
+              <div className="space-y-4">
                 <div className="pb-3 border-b border-slate-200">
                   <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider font-sans">
-                    AWARDS & EDITORIAL RECOGNITION
+                    AWARDS & RECOGNITION
                   </h2>
+                  <p className="text-xs text-slate-500 font-sans mt-1 leading-relaxed">
+                    {(authorProfile.name || "").toLowerCase().includes("sarah") || slugClean.includes("sarah")
+                      ? "Sarah Mitchell has been recognised for her outstanding journalism, in-depth political reporting and contributions to public understanding of key global issues."
+                      : `${authorProfile.name} has been recognised for outstanding journalism, in-depth reporting and contributions to public understanding of key global issues.`}
+                  </p>
                 </div>
 
-                <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                   {[
                     {
-                      year: "2025",
-                      title: "London BigBen Network Editorial Excellence Award",
-                      organization: "Press Standards Board",
-                      desc: "Awarded for exceptional investigative reporting on cross-border regulatory compliance and economic reform."
+                      image: "/awards/award_1_british_journalism.webp",
+                      title: "British Journalism Awards 2024",
+                      category: "Excellence in Political Reporting",
+                      location: "London, United Kingdom",
+                      desc: "Recognised for in-depth reporting on UK government and Parliament."
                     },
                     {
-                      year: "2024",
-                      title: "British Press Awards — Nominee, Political Correspondent of the Year",
-                      organization: "Society of Editors",
-                      desc: "Recognized for incisive multi-source coverage of Westminster policy deliberations and diplomatic negotiations."
+                      image: "/awards/award_2_global_media.webp",
+                      title: "Global Media Awards 2023",
+                      category: "Best International Political Coverage",
+                      location: "Europe",
+                      desc: "Awarded for outstanding coverage of EU-UK relations and global diplomacy."
                     },
                     {
-                      year: "2022",
-                      title: "European Fellowship for Investigative Journalism",
-                      organization: "International Media Institute",
-                      desc: "Honored for groundbreaking reporting on international trade agreements and supply chain governance."
+                      image: "/awards/award_3_political_reporting.webp",
+                      title: "Political Reporting Excellence 2022",
+                      category: "Outstanding Political Journalism",
+                      location: "United Kingdom",
+                      desc: "Honoured for consistent and accurate reporting on national policy and governance."
+                    },
+                    {
+                      image: "/awards/award_4_media_leadership.webp",
+                      title: "Media Leadership Awards 2021",
+                      category: "Rising Star in Political Journalism",
+                      location: "London, United Kingdom",
+                      desc: "Recognised for impactful storytelling and public interest journalism."
+                    },
+                    {
+                      image: "/awards/award_5_special_recognition.webp",
+                      title: "Special Recognition 2020",
+                      category: "Contribution to Democratic Discourse",
+                      location: "United Kingdom",
+                      desc: "Acknowledged for reporting that strengthened public understanding of democratic institutions."
+                    },
+                    {
+                      image: "/awards/award_6_press_association.webp",
+                      title: "International Press Association 2019",
+                      category: "Commitment to Ethical Journalism",
+                      location: "Global",
+                      desc: "Recognised for upholding the highest standards of independent and responsible journalism."
+                    },
+                    {
+                      image: "/awards/award_7_european_fellowship.webp",
+                      title: "European Media Forum Fellowship",
+                      category: "Journalism Fellowship 2018",
+                      location: "Brussels, Belgium",
+                      desc: "Selected for excellence in European political reporting."
+                    },
+                    {
+                      image: "/awards/award_8_top_media_lists.webp",
+                      title: "Featured in Top Media Lists",
+                      category: "Top 100 Influential Journalists 2020–2024",
+                      location: "United Kingdom",
+                      desc: "Listed among influential journalists covering UK politics and international affairs."
                     }
                   ].map((award, idx) => (
-                    <div key={idx} className="p-4 rounded-xl border border-slate-200 bg-white flex items-start gap-4">
-                      <div className="w-10 h-10 rounded-full bg-red-50 text-[#D31220] flex items-center justify-center shrink-0">
-                        <Award className="w-5 h-5" />
+                    <div
+                      key={idx}
+                      className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition-shadow flex flex-col"
+                    >
+                      <div className="relative aspect-[16/10] w-full overflow-hidden bg-slate-900 shrink-0">
+                        <img
+                          src={award.image}
+                          alt={award.title}
+                          className="w-full h-full object-cover"
+                        />
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-[#D31220]">{award.year}</span>
-                          <span className="text-xs text-slate-400">•</span>
-                          <span className="text-xs text-slate-500 font-medium">{award.organization}</span>
-                        </div>
-                        <h4 className="text-sm font-bold text-slate-900 mt-0.5">
+                      <div className="p-3 flex flex-col flex-1">
+                        <h4 className="text-xs font-bold text-slate-900 leading-snug line-clamp-2">
                           {award.title}
                         </h4>
-                        <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                        <p className="text-[11px] text-slate-500 font-medium leading-tight mt-1 line-clamp-1">
+                          {award.category}
+                        </p>
+                        <div className="flex items-center gap-1 text-[10.5px] text-slate-400 mt-1.5 mb-2">
+                          <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span className="truncate">{award.location}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 leading-relaxed line-clamp-3 mt-auto">
                           {award.desc}
                         </p>
                       </div>
@@ -1659,6 +1711,70 @@ export default function AuthorProfileContent({
                   </div>
                 </div>
               </div>
+            ) : activeTab === "awards" ? (
+              <>
+                {/* PROFESSIONAL MEMBERSHIPS CARD */}
+                <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-xs">
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider font-sans pb-3 mb-3 border-b border-slate-100">
+                    PROFESSIONAL MEMBERSHIPS
+                  </h3>
+                  <div className="space-y-3.5">
+                    {[
+                      {
+                        logo: "/awards/memberships/membership_se.webp",
+                        name: "Society of Editors (UK)",
+                        role: "Member since 2018"
+                      },
+                      {
+                        logo: "/awards/memberships/membership_ipa.webp",
+                        name: "International Press Association (IPA)",
+                        role: "Member since 2019"
+                      },
+                      {
+                        logo: "/awards/memberships/membership_emf.webp",
+                        name: "European Media Forum",
+                        role: "Fellow since 2018"
+                      },
+                      {
+                        logo: "/awards/memberships/membership_pja.webp",
+                        name: "Political Journalists Association (UK)",
+                        role: "Member since 2017"
+                      }
+                    ].map((m, idx) => (
+                      <div key={idx} className="flex items-center gap-3">
+                        <img
+                          src={m.logo}
+                          alt={m.name}
+                          className="w-7 h-7 rounded object-contain shrink-0 border border-slate-200"
+                        />
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-bold text-slate-900 truncate">
+                            {m.name}
+                          </h4>
+                          <p className="text-[11px] text-slate-500 truncate">
+                            {m.role}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* QUOTE CARD */}
+                <div className="border border-slate-200/90 rounded-xl p-5 bg-[#FAFBFB] shadow-xs">
+                  <div className="flex items-start gap-3">
+                    <span className="text-3xl font-serif text-slate-400 leading-none shrink-0 -mt-1 select-none">“</span>
+                    <div>
+                      <p className="text-xs font-serif italic text-slate-700 leading-relaxed">
+                        Journalism has the power to inform, hold power to account and create a more open and informed society.
+                      </p>
+                      <span className="text-xs text-slate-500 font-sans mt-3 block">
+                        — {authorProfile.name}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </>
             ) : (
               /* MORE WRITERS CARD */
               <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-xs">
