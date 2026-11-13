@@ -19,6 +19,7 @@ export async function POST(request: Request) {
       location,
       expertise,
       expertiseSlots,
+      quote,
     } = body;
 
     // 1. Validation
@@ -101,6 +102,7 @@ export async function POST(request: Request) {
         country: cleanCountry,
         location: cleanLocation,
         expertise: parsedExpertise && parsedExpertise.length > 0 ? parsedExpertise : undefined,
+        quote: quote ? String(quote).trim() : undefined,
       });
 
       const userPayload = {
@@ -115,6 +117,7 @@ export async function POST(request: Request) {
         country: (newUser as any).country,
         location: (newUser as any).location,
         expertise: (newUser as any).expertise,
+        quote: (newUser as any).quote,
       };
 
       // Set HTTP-Only session cookie and return token for tab session isolation

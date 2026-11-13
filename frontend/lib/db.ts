@@ -30,6 +30,7 @@ export interface UserRow {
   expertise?: Array<{ topic: string; rating?: number }> | string[] | null;
   expertiseRatings?: Record<string, number> | null;
   expertise_ratings?: Record<string, number> | null;
+  quote?: string | null;
   joinedDate?: string | null;
   joined_date?: string | null;
   email_verified: boolean | number;
@@ -231,6 +232,7 @@ interface DeletedUserProfile {
   bio?: string | null;
   linkedin?: string | null;
   role?: string;
+  quote?: string | null;
   deleted_at: string;
 }
 
@@ -661,6 +663,7 @@ export const DB = {
     expertise?: Array<{ topic: string; rating?: number }> | string[] | null;
     expertiseRatings?: Record<string, number> | null;
     expertise_ratings?: Record<string, number> | null;
+    quote?: string | null;
   }): Promise<UserRow> {
     const norm = (userData.email || '').trim().toLowerCase();
     const role = userData.role || 'reader';
@@ -734,6 +737,7 @@ export const DB = {
       expertise: restoredExpertise,
       expertiseRatings: restoredRatings,
       expertise_ratings: restoredRatings,
+      quote: userData.quote ? String(userData.quote).trim() : (savedProfile?.quote || null),
       // Restore additional profile fields if saved
       ...(savedProfile?.bio ? { bio: savedProfile.bio } : {}),
       ...(savedProfile?.linkedin ? { linkedin: savedProfile.linkedin } : {}),
@@ -1186,6 +1190,7 @@ export const DB = {
     expertise?: Array<{ topic: string; rating?: number }> | string[] | null;
     expertiseRatings?: Record<string, number> | null;
     expertise_ratings?: Record<string, number> | null;
+    quote?: string | null;
   }): Promise<any> {
     const cleanEmail = (data.email || '').trim().toLowerCase();
     if (!cleanEmail) return null;
@@ -1222,6 +1227,7 @@ export const DB = {
         ...(locVal !== undefined ? { location: locVal } : {}),
         ...(expSlots !== undefined ? { expertise: expSlots } : {}),
         ...(expRatings !== undefined ? { expertiseRatings: expRatings, expertise_ratings: expRatings } : {}),
+        ...(data.quote !== undefined ? { quote: data.quote ? String(data.quote).trim() : null } : {}),
         updated_at: new Date().toISOString()
       };
       updatedUser = jsonDb.users[existingIdx];
@@ -1244,6 +1250,7 @@ export const DB = {
         ...(locVal !== undefined ? { location: locVal } : {}),
         ...(expSlots !== undefined ? { expertise: expSlots } : {}),
         ...(expRatings !== undefined ? { expertiseRatings: expRatings, expertise_ratings: expRatings } : {}),
+        ...(data.quote !== undefined ? { quote: data.quote ? String(data.quote).trim() : null } : {}),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };

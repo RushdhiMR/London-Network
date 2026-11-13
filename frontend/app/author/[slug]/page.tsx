@@ -25,6 +25,7 @@ const authorsDatabase: Record<string, {
   joinedDate?: string;
   expertise?: string[];
   expertiseRatings?: Record<string, number>;
+  quote?: string;
 }> = {
   "sarah-mitchell": {
     name: "Sarah Mitchell",
@@ -39,6 +40,7 @@ const authorsDatabase: Record<string, {
     articlesCount: 526,
     yearsOfExperience: 12,
     articleViews: "18.4M",
+    quote: "Journalism has the power to inform, hold power to account and create a more open and informed society.",
     coverageAreas: [
       "UK Politics", "Parliament", "Government Policy",
       "International Relations", "EU-UK Relations", "Elections",
@@ -74,6 +76,7 @@ const authorsDatabase: Record<string, {
     articlesCount: 526,
     yearsOfExperience: 12,
     articleViews: "18.4M",
+    quote: "Journalism has the power to inform, hold power to account and create a more open and informed society.",
     coverageAreas: [
       "UK Politics", "Parliament", "Government Policy",
       "International Relations", "EU-UK Relations", "Elections",

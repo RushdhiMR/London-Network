@@ -23,6 +23,7 @@ export default function RegisterPage() {
   const [country, setCountry] = useState("");
   const [coverageAreasInput, setCoverageAreasInput] = useState("");
   const [expertiseSlots, setExpertiseSlots] = useState<string[]>(["", "", "", "", "", ""]);
+  const [quote, setQuote] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
@@ -176,6 +177,7 @@ export default function RegisterPage() {
           country: cleanCountry || undefined,
           location: cleanLocation,
           expertise: validExpertise.length > 0 ? validExpertise : undefined,
+          quote: quote.trim() || undefined,
         }),
       });
 
@@ -188,7 +190,7 @@ export default function RegisterPage() {
 
       const registeredUser = data.user;
 
-      if (yearsOfExperience || finalCoverage || cleanLocation || validExpertise.length > 0) {
+      if (yearsOfExperience || finalCoverage || cleanLocation || validExpertise.length > 0 || quote.trim()) {
         saveUserProfile({
           name: registeredUser.name,
           email: registeredUser.email,
@@ -198,6 +200,7 @@ export default function RegisterPage() {
           ...(cleanCountry ? { country: cleanCountry } : {}),
           ...(cleanLocation ? { location: cleanLocation } : {}),
           ...(validExpertise.length > 0 ? { expertise: validExpertise } : {}),
+          ...(quote.trim() ? { quote: quote.trim() } : {}),
         });
       }
       dispatchTabLogin({
@@ -477,6 +480,21 @@ export default function RegisterPage() {
                   ))}
                 </div>
               )}
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                PERSONAL QUOTE / STATEMENT <span className="text-slate-400 font-normal lowercase">(for author / journalist profile)</span>
+              </label>
+              <textarea
+                rows={2}
+                name="dj_register_quote"
+                autoComplete="off"
+                placeholder="e.g. Journalism has the power to inform, hold power to account and create a more open and informed society."
+                value={quote}
+                onChange={(e) => setQuote(e.target.value)}
+                className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/30 focus:bg-white resize-y"
+              />
             </div>
 
             <div>

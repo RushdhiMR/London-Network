@@ -132,6 +132,7 @@ export default function WriterDashboardPage() {
   const [profileCoverageAreas, setProfileCoverageAreas] = useState("");
   const [profileAboutJournalist, setProfileAboutJournalist] = useState("");
   const [profileJournalisticApproach, setProfileJournalisticApproach] = useState("");
+  const [profileQuote, setProfileQuote] = useState("");
   const [profileCity, setProfileCity] = useState("");
   const [profileCountry, setProfileCountry] = useState("");
   const [profileExpertiseSlots, setProfileExpertiseSlots] = useState<string[]>(["", "", "", "", "", ""]);
@@ -154,6 +155,7 @@ export default function WriterDashboardPage() {
       setProfileCoverageAreas(Array.isArray(existingAreas) ? existingAreas.join(", ") : (typeof existingAreas === "string" ? existingAreas : ""));
       setProfileAboutJournalist((currentUser as any).aboutTheJournalist ?? (currentUser as any).about_the_journalist ?? "");
       setProfileJournalisticApproach((currentUser as any).journalisticApproach ?? (currentUser as any).journalistic_approach ?? "");
+      setProfileQuote((currentUser as any).quote || "");
       setProfileCity((currentUser as any).city || "");
       setProfileCountry((currentUser as any).country || "");
 
@@ -253,6 +255,7 @@ export default function WriterDashboardPage() {
       about_the_journalist: clampedAbout,
       journalisticApproach: clampedApproach,
       journalistic_approach: clampedApproach,
+      quote: profileQuote.trim() || undefined,
       city: cleanCity || undefined,
       country: cleanCountry || undefined,
       location: cleanLocation,
@@ -278,6 +281,7 @@ export default function WriterDashboardPage() {
           coverageAreas: updatedUser.coverageAreas,
           aboutTheJournalist: updatedUser.aboutTheJournalist,
           journalisticApproach: updatedUser.journalisticApproach,
+          quote: updatedUser.quote,
           city: updatedUser.city,
           country: updatedUser.country,
           location: updatedUser.location,
@@ -2071,6 +2075,23 @@ export default function WriterDashboardPage() {
                   }}
                   className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all resize-y"
                 />
+              </div>
+
+              {/* Field 8: PERSONAL QUOTE / STATEMENT */}
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                  PERSONAL QUOTE / STATEMENT
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Journalism has the power to inform, hold power to account and create a more open and informed society."
+                  value={profileQuote}
+                  onChange={(e) => setProfileQuote(e.target.value)}
+                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all resize-y leading-relaxed"
+                />
+                <p className="text-[11px] text-gray-400 font-normal mt-1.5 leading-normal">
+                  Displayed on your author profile card and Awards & Recognition tab.
+                </p>
               </div>
 
               {/* Action Buttons */}

@@ -117,6 +117,7 @@ export async function POST(request: Request) {
       expertiseSlots,
       expertiseRatings,
       expertise_ratings,
+      quote,
     } = body;
 
     if (!email) {
@@ -213,6 +214,7 @@ export async function POST(request: Request) {
       country: country !== undefined ? (country ? String(country).trim() : null) : undefined,
       location: location !== undefined ? (location ? String(location).trim() : null) : undefined,
       expertise: parsedExpertise,
+      ...(quote !== undefined ? { quote: quote ? String(quote).trim() : null } : {}),
       ...(allowedRatings ? { expertiseRatings: allowedRatings } : {}),
     });
 

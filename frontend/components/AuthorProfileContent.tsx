@@ -49,6 +49,7 @@ interface AuthorProfileContentProps {
     joinedDate?: string;
     expertise?: string[];
     expertiseRatings?: Record<string, number>;
+    quote?: string;
   };
   initialArticles: ArticleItem[];
   mostReadSidebar?: SidebarItem[];
@@ -414,6 +415,12 @@ export default function AuthorProfileContent({
         : undefined;
       const finalApproachJ = savedApproachJ || authApproachJ || author.journalisticApproach || "";
 
+      const savedQuote = (savedProfile as any)?.quote;
+      const authQuote = (auth.user && (auth.user.name === finalName || isRushdhiPage))
+        ? (auth.user as any).quote
+        : undefined;
+      const finalQuote = savedQuote || authQuote || author.quote || (slugClean.includes("sarah") ? "Journalism has the power to inform, hold power to account and create a more open and informed society." : "");
+
       setAuthorProfile({
         name: finalName,
         role: finalRole,
@@ -432,6 +439,7 @@ export default function AuthorProfileContent({
         joinedDate: author.joinedDate || "March 2018",
         expertise: initialExpertise,
         expertiseRatings: initialRatings,
+        quote: finalQuote,
       });
 
       // Also hydrate latest experience, coverage areas, about, approach, joined date, bio & avatar from backend DB API for any visitor
@@ -459,6 +467,7 @@ export default function AuthorProfileContent({
                 }
               } catch {}
             }
+            const dbQuote = dbUser.quote;
             setAuthorProfile((prev) => ({
               ...prev,
               ...(dbUser.name && !dbUser.name.toLowerCase().includes("reader") ? { name: dbUser.name } : {}),
@@ -474,6 +483,7 @@ export default function AuthorProfileContent({
               ...(dbAbout ? { aboutTheJournalist: dbAbout } : {}),
               ...(dbApproach ? { journalisticApproach: dbApproach } : {}),
               ...(formattedJoined ? { joinedDate: formattedJoined } : {}),
+              ...(dbQuote ? { quote: dbQuote } : {}),
             }));
           }
         })
@@ -1771,7 +1781,9 @@ export default function AuthorProfileContent({
                     </svg>
                     <div>
                       <p className="text-[13px] font-serif italic text-slate-700 leading-[1.65]">
-                        Journalism has the power to inform, hold power to account and create a more open and informed society.
+                        {authorProfile.quote && authorProfile.quote.trim()
+                          ? authorProfile.quote.trim()
+                          : "Journalism has the power to inform, hold power to account and create a more open and informed society."}
                       </p>
                       <span className="text-xs text-slate-500 font-sans mt-3 block">
                         — {authorProfile.name}

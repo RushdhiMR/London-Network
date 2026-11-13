@@ -5,6 +5,7 @@ export interface UserProfileData {
   bio?: string;
   role?: string;
   linkedin?: string;
+  quote?: string;
   [key: string]: any;
 }
 
