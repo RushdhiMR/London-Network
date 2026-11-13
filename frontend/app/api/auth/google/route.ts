@@ -82,6 +82,7 @@ export async function POST(request: Request) {
         google_id: googleId || existingUser.google_id,
         provider: updatedProvider,
         avatar: existingUser.avatar || avatar,
+        quote: (existingUser as any).quote,
         email_verified: 1,
       });
 
@@ -92,6 +93,7 @@ export async function POST(request: Request) {
         role: existingUser.role, // Kept from DB
         provider: updatedProvider,
         avatar: existingUser.avatar || avatar,
+        quote: (existingUser as any).quote,
       };
     } else {
       // New Google user defaults to 'reader' role strictly

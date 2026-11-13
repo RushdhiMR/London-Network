@@ -97,7 +97,7 @@ export default function Header({
   const searchDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const headerSearchRef = useRef<HTMLDivElement>(null);
   const mobileSearchRef = useRef<HTMLDivElement>(null);
-  const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role?: string; avatar?: string; bio?: string; linkedin?: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role?: string; avatar?: string; bio?: string; linkedin?: string; quote?: string } | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   const [isMobileUserDropdownOpen, setIsMobileUserDropdownOpen] = useState(false);
@@ -349,6 +349,7 @@ export default function Header({
   const [profileBio, setProfileBio] = useState("");
   const [profileLinkedin, setProfileLinkedin] = useState("");
   const [profileAvatar, setProfileAvatar] = useState("");
+  const [profileQuote, setProfileQuote] = useState("");
 
   const userDropdownRef = useRef<HTMLDivElement>(null);
   const notifDropdownRef = useRef<HTMLDivElement>(null);
@@ -433,6 +434,7 @@ export default function Header({
       setProfileBio(currentUser.bio || "Writer User");
       setProfileLinkedin(currentUser.linkedin || "https://www.linkedin.com/in/your-profile");
       setProfileAvatar(currentUser.avatar && isUploadedAvatar(currentUser.avatar) ? currentUser.avatar : "");
+      setProfileQuote(currentUser.quote || "");
     }
   }, [currentUser, isProfileSettingsOpen]);
 
@@ -483,13 +485,30 @@ export default function Header({
       role: currentUser?.role || "Writer",
       bio: profileBio.trim(),
       linkedin: profileLinkedin.trim(),
+      quote: profileQuote.trim() || undefined,
       avatar: finalAvatar
     };
 
     setCurrentUser(updatedUser);
     saveUserProfile(updatedUser);
+    try {
+      fetch("/api/auth/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: updatedUser.email,
+          name: updatedUser.name,
+          avatar: updatedUser.avatar,
+          bio: updatedUser.bio,
+          linkedin: updatedUser.linkedin,
+          quote: updatedUser.quote,
+        }),
+      }).catch(() => {});
+    } catch (e) {}
+
     if (typeof window !== "undefined") {
       window.dispatchEvent(new Event("dj_auth_change"));
+      window.dispatchEvent(new Event("dj_profile_updated"));
     }
 
     setToastMessage("🎉 Profile settings saved successfully!");
@@ -535,7 +554,8 @@ export default function Header({
         role: displayRole,
         avatar: isUploadedAvatar(resolvedAvatar) ? resolvedAvatar : "",
         bio: savedProfile?.bio,
-        linkedin: savedProfile?.linkedin
+        linkedin: savedProfile?.linkedin,
+        quote: (savedProfile as any)?.quote || (auth.user as any)?.quote,
       });
     } else {
       setCurrentUser(null);
@@ -1954,6 +1974,23 @@ export default function Header({
                 </div>
                 <p className="text-[11px] text-slate-400 font-normal mt-1.5 leading-normal">
                   Shown on your article bylines so readers can connect with you.
+                </p>
+              </div>
+
+              {/* Field 4: PERSONAL QUOTE / STATEMENT */}
+              <div>
+                <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">
+                  PERSONAL QUOTE / STATEMENT
+                </label>
+                <textarea
+                  rows={2}
+                  value={profileQuote}
+                  onChange={(e) => setProfileQuote(e.target.value)}
+                  placeholder="e.g. Journalism has the power to inform, hold power to account and create a more open and informed society."
+                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-[#005691] focus:ring-1 focus:ring-blue-100 transition-all leading-relaxed resize-y"
+                />
+                <p className="text-[11px] text-slate-400 font-normal mt-1.5 leading-normal">
+                  Displayed on your author profile card and Awards & Recognition quote section.
                 </p>
               </div>
 

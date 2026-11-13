@@ -39,6 +39,14 @@ export async function POST(request: Request) {
           email: user.email,
           role: user.role,
           provider: user.provider,
+          avatar: (user as any).avatar,
+          quote: (user as any).quote,
+          yearsOfExperience: (user as any).yearsOfExperience ?? (user as any).years_of_experience,
+          coverageAreas: (user as any).coverageAreas ?? (user as any).coverage_areas,
+          expertise: (user as any).expertise,
+          city: (user as any).city,
+          country: (user as any).country,
+          location: (user as any).location,
         };
 
         // Issue secure HTTP-Only session cookie and return token for tab session isolation

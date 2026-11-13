@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Lock } from "lucide-react";
 import { triggerGoogleOAuth } from "@/lib/googleAuth";
 import { useAuth, dispatchTabLogin } from "@/lib/auth-context";
+import { saveUserProfile } from "@/lib/userProfiles";
 
 function LoginFormContent() {
   const router = useRouter();
@@ -185,7 +186,11 @@ function LoginFormContent() {
         email: authenticatedUser.email,
         role: authenticatedUser.role,
         provider: authenticatedUser.provider || 'local',
+        avatar: authenticatedUser.avatar,
+        quote: authenticatedUser.quote,
       }, data.token);
+
+      saveUserProfile(authenticatedUser);
 
       const targetDestination = getRedirectDestination(userRole);
       try {

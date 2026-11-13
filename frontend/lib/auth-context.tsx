@@ -10,6 +10,7 @@ export interface User {
   provider: string;
   avatar?: string;
   bio?: string;
+  quote?: string;
 }
 
 interface AuthContextType {

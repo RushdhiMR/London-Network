@@ -8,7 +8,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useLiveArticles } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
-import { getUserProfile, getAuthorAvatarByNameOrEmail, getAuthorFullProfileByNameOrEmail, resolveUserAvatar } from "@/lib/userProfiles";
+import { getUserProfile, saveUserProfile, getAuthorAvatarByNameOrEmail, getAuthorFullProfileByNameOrEmail, resolveUserAvatar } from "@/lib/userProfiles";
 import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
 
 export interface ArticleItem {
@@ -88,6 +88,10 @@ export default function AuthorProfileContent({
   const [moreWriters, setMoreWriters] = useState<WriterCardItem[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [syncTick, setSyncTick] = useState(0);
+  const [isEditingQuote, setIsEditingQuote] = useState(false);
+  const [quoteInput, setQuoteInput] = useState("");
+  const [isSavingQuote, setIsSavingQuote] = useState(false);
+  const [quoteSuccessMsg, setQuoteSuccessMsg] = useState("");
   const { articles: liveArticles } = useLiveArticles();
   const auth = useAuth();
 
@@ -232,9 +236,12 @@ export default function AuthorProfileContent({
 
       // 2. Look up live profile data from user profiles database
       const isRushdhiPage = slugClean.includes("rushdhi") || slug === "rushdhi" || slug === "rushdhi-mr";
+      const isMubaPage = slugClean.includes("muba") || slug === "muba" || slug === "muba-kity" || finalName.toLowerCase().includes("muba");
       const savedProfile = isRushdhiPage
         ? (getUserProfile("rushdhiwriter@gmail.com") || getUserProfile("writer@digitaljournal.com") || getAuthorFullProfileByNameOrEmail("rushdhi"))
-        : (getUserProfile(slugClean) || getAuthorFullProfileByNameOrEmail(slugClean));
+        : isMubaPage
+        ? (getUserProfile("rura@gmail.com") || getUserProfile("muba") || getUserProfile("muba-kity") || getAuthorFullProfileByNameOrEmail("muba_kity"))
+        : (getUserProfile(slugClean) || (finalEmail ? getUserProfile(finalEmail) : null) || getAuthorFullProfileByNameOrEmail(slugClean));
 
       if (savedProfile) {
         if (savedProfile.name && !savedProfile.name.toLowerCase().includes("reader")) finalName = savedProfile.name;
@@ -403,20 +410,30 @@ export default function AuthorProfileContent({
         finalCoverage = initialExpertise;
       }
 
+      const isAuthorUserMatch = Boolean(
+        auth.user && (
+          auth.user.name === finalName ||
+          (auth.user.name && finalName && auth.user.name.toLowerCase().trim() === finalName.toLowerCase().trim()) ||
+          (auth.user.email && finalEmail && auth.user.email.toLowerCase().trim() === finalEmail.toLowerCase().trim()) ||
+          isRushdhiPage ||
+          (isMubaPage && ((auth.user.email || "").toLowerCase().includes("rura") || (auth.user.name || "").toLowerCase().includes("muba")))
+        )
+      );
+
       const savedAboutJ = (savedProfile as any)?.aboutTheJournalist ?? (savedProfile as any)?.about_the_journalist;
-      const authAboutJ = (auth.user && (auth.user.name === finalName || isRushdhiPage))
+      const authAboutJ = (auth.user && isAuthorUserMatch)
         ? ((auth.user as any).aboutTheJournalist ?? (auth.user as any).about_the_journalist)
         : undefined;
       const finalAboutJ = savedAboutJ || authAboutJ || author.aboutTheJournalist || "";
 
       const savedApproachJ = (savedProfile as any)?.journalisticApproach ?? (savedProfile as any)?.journalistic_approach;
-      const authApproachJ = (auth.user && (auth.user.name === finalName || isRushdhiPage))
+      const authApproachJ = (auth.user && isAuthorUserMatch)
         ? ((auth.user as any).journalisticApproach ?? (auth.user as any).journalistic_approach)
         : undefined;
       const finalApproachJ = savedApproachJ || authApproachJ || author.journalisticApproach || "";
 
       const savedQuote = (savedProfile as any)?.quote;
-      const authQuote = (auth.user && (auth.user.name === finalName || isRushdhiPage))
+      const authQuote = (auth.user && isAuthorUserMatch)
         ? (auth.user as any).quote
         : undefined;
       const finalQuote = savedQuote || authQuote || author.quote || (slugClean.includes("sarah") ? "Journalism has the power to inform, hold power to account and create a more open and informed society." : "");
@@ -443,7 +460,8 @@ export default function AuthorProfileContent({
       });
 
       // Also hydrate latest experience, coverage areas, about, approach, joined date, bio & avatar from backend DB API for any visitor
-      const lookupParam = finalEmail ? `email=${encodeURIComponent(finalEmail)}` : `name=${encodeURIComponent(finalName)}`;
+      const lookupEmail = finalEmail || (isMubaPage ? "rura@gmail.com" : (isRushdhiPage ? "rushdhiwriter@gmail.com" : ""));
+      const lookupParam = lookupEmail ? `email=${encodeURIComponent(lookupEmail)}` : `name=${encodeURIComponent(finalName)}`;
       fetch(`/api/auth/profile?${lookupParam}`)
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
@@ -601,6 +619,80 @@ export default function AuthorProfileContent({
   const slugClean = (slug || "").toLowerCase().replace(/-/g, " ").trim();
   const visibleArticles = articlesList.slice(0, visibleCount);
   const hasMore = visibleCount < articlesList.length;
+
+  const isOwner = useMemo(() => {
+    if (!auth.authenticated || !auth.user) return false;
+    const authNameClean = (auth.user.name || "").toLowerCase().trim();
+    const authEmailClean = (auth.user.email || "").toLowerCase().trim();
+    const authorNameClean = (authorProfile.name || author.name || "").toLowerCase().trim();
+    const authorEmailClean = (authorProfile.email || author.email || "").toLowerCase().trim();
+    const cleanSlug = (slug || "").toLowerCase().replace(/[^a-z0-9]/g, "-").trim();
+
+    return Boolean(
+      (authEmailClean && authorEmailClean && authEmailClean === authorEmailClean) ||
+      (authNameClean && authorNameClean && authNameClean === authorNameClean) ||
+      (cleanSlug.includes("muba") && (authEmailClean.includes("rura") || authNameClean.includes("muba"))) ||
+      (cleanSlug.includes("rushdhi") && (authEmailClean.includes("rushdhi") || authNameClean.includes("rushdhi"))) ||
+      (authNameClean && (cleanSlug === authNameClean.replace(/[^a-z0-9]/g, "-") || cleanSlug === authNameClean)) ||
+      ((auth.user.role || "").toLowerCase() === "writer" && (authNameClean === authorNameClean || (cleanSlug.includes("muba") && authEmailClean.includes("rura")))) ||
+      ((auth.user.role || "").toLowerCase() === "admin")
+    );
+  }, [auth.authenticated, auth.user, authorProfile.name, authorProfile.email, author.name, author.email, slug]);
+
+  const handleSaveQuote = async () => {
+    const trimmed = quoteInput.trim();
+    setIsSavingQuote(true);
+    try {
+      const isMuba = slug.toLowerCase().includes("muba") || (authorProfile.name || "").toLowerCase().includes("muba");
+      const emailToUse = authorProfile.email || auth.user?.email || (isMuba ? "rura@gmail.com" : "");
+      const nameToUse = authorProfile.name || auth.user?.name || "Author";
+
+      setAuthorProfile((prev) => ({
+        ...prev,
+        quote: trimmed,
+      }));
+
+      const profileToSave = {
+        ...authorProfile,
+        email: emailToUse,
+        name: nameToUse,
+        quote: trimmed,
+      };
+      saveUserProfile(profileToSave);
+
+      if (emailToUse || nameToUse) {
+        await fetch("/api/auth/profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: emailToUse,
+            name: nameToUse,
+            quote: trimmed,
+          }),
+        }).catch(() => {});
+      }
+
+      if (auth.user) {
+        (auth.user as any).quote = trimmed;
+      }
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("dj_profile_updated"));
+        window.dispatchEvent(new Event("dj_auth_change"));
+      }
+
+      setQuoteSuccessMsg("Saved!");
+      setTimeout(() => {
+        setQuoteSuccessMsg("");
+        setIsEditingQuote(false);
+      }, 500);
+    } catch (err) {
+      console.warn("Could not save quote:", err);
+      setIsEditingQuote(false);
+    } finally {
+      setIsSavingQuote(false);
+    }
+  };
 
   const authorCoverageCards = useMemo(() => {
     const isSarah = (authorProfile.name || "").toLowerCase().includes("sarah") || slugClean.includes("sarah");
@@ -1772,24 +1864,93 @@ export default function AuthorProfileContent({
 
                 {/* QUOTE CARD */}
                 <div className="border border-slate-200/80 rounded-xl p-5 bg-[#F8F9FA] shadow-xs">
-                  <div className="flex items-start gap-3">
-                    <svg
-                      className="w-4 h-4 text-slate-400 fill-current shrink-0 mt-0.5"
-                      viewBox="0 0 24 24"
-                    >
-                      <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z" />
-                    </svg>
-                    <div>
-                      <p className="text-[13px] font-serif italic text-slate-700 leading-[1.65]">
-                        {authorProfile.quote && authorProfile.quote.trim()
-                          ? authorProfile.quote.trim()
-                          : "Journalism has the power to inform, hold power to account and create a more open and informed society."}
-                      </p>
-                      <span className="text-xs text-slate-500 font-sans mt-3 block">
-                        — {authorProfile.name}
-                      </span>
+                  {isEditingQuote ? (
+                    <div className="space-y-3 font-sans">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                          <svg className="w-3.5 h-3.5 text-[#BF1E2D] fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+                            <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                          </svg>
+                          YOUR PERSONAL QUOTE / STATEMENT
+                        </label>
+                        <span className="text-[10px] text-slate-400">
+                          Visible to all readers
+                        </span>
+                      </div>
+                      <textarea
+                        rows={3}
+                        value={quoteInput}
+                        onChange={(e) => setQuoteInput(e.target.value)}
+                        placeholder="Write your personal quote in your own words (e.g. Journalism has the power to inform...)"
+                        className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-[13px] font-serif italic text-slate-800 placeholder:text-slate-400 placeholder:font-sans placeholder:not-italic focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all resize-y leading-relaxed"
+                        autoFocus
+                      />
+                      <div className="flex items-center justify-between pt-1">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleSaveQuote}
+                            disabled={isSavingQuote}
+                            className="px-3.5 py-1.5 bg-[#BF1E2D] hover:bg-[#991B1B] text-white rounded-md text-xs font-bold tracking-tight shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                          >
+                            {isSavingQuote ? "Saving..." : "Save Quote"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsEditingQuote(false)}
+                            disabled={isSavingQuote}
+                            className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-md text-xs font-semibold tracking-tight transition-colors cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                        {quoteSuccessMsg && (
+                          <span className="text-xs text-emerald-600 font-semibold animate-in fade-in">
+                            {quoteSuccessMsg}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div>
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <svg
+                          className="w-4 h-4 text-slate-400 fill-current shrink-0 mt-0.5"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z" />
+                        </svg>
+                        {isOwner && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setQuoteInput(authorProfile.quote || "");
+                              setIsEditingQuote(true);
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-[#BF1E2D] hover:text-[#991B1B] hover:bg-red-50 border border-red-200/70 rounded-md transition-colors cursor-pointer shrink-0 font-sans"
+                            title="Write or change your personal quote"
+                          >
+                            <svg className="w-3 h-3 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+                              <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                            </svg>
+                            <span>{authorProfile.quote ? "Edit Quote" : "Write Your Quote"}</span>
+                          </button>
+                        )}
+                      </div>
+                      <div className="pl-7 -mt-2">
+                        <p className="text-[13px] font-serif italic text-slate-700 leading-[1.65]">
+                          {authorProfile.quote && authorProfile.quote.trim()
+                            ? authorProfile.quote.trim()
+                            : isOwner
+                            ? "You haven't written a personal quote yet. Click 'Write Your Quote' above to add one in your own words."
+                            : "Journalism has the power to inform, hold power to account and create a more open and informed society."}
+                        </p>
+                        <span className="text-xs text-slate-500 font-sans mt-3 block">
+                          — {authorProfile.name}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </>
             ) : (
