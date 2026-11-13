@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MapPin, Mail, Link2, Bell, ChevronRight, Award, BookOpen, ShieldCheck, Check, Calendar } from "lucide-react";
@@ -566,8 +566,243 @@ export default function AuthorProfileContent({
     }
   }, [isLoaded]);
 
+  const slugClean = (slug || "").toLowerCase().replace(/-/g, " ").trim();
   const visibleArticles = articlesList.slice(0, visibleCount);
   const hasMore = visibleCount < articlesList.length;
+
+  const authorCoverageCards = useMemo(() => {
+    const isSarah = (authorProfile.name || "").toLowerCase().includes("sarah") || slugClean.includes("sarah");
+    if (isSarah) {
+      return [
+        {
+          name: "UK Politics",
+          category: "POLITICS",
+          desc: "Government policy, political leadership, elections and national governance.",
+          image: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=600&h=380&fit=crop",
+          count: 186,
+          href: "/politics",
+        },
+        {
+          name: "Parliament",
+          category: "POLITICS",
+          desc: "Parliamentary debates, legislation and the work of MPs and the House of Commons and Lords.",
+          image: "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=600&h=380&fit=crop",
+          count: 142,
+          href: "/politics",
+        },
+        {
+          name: "Government Policy",
+          category: "POLITICS",
+          desc: "Policy reform, public services, regulation and political strategy.",
+          image: "https://images.unsplash.com/photo-1529655683826-aba9b3e77383?w=600&h=380&fit=crop",
+          count: 128,
+          href: "/politics",
+        },
+        {
+          name: "EU-UK Relations",
+          category: "POLITICS",
+          desc: "Post-Brexit developments, trade, cooperation and political negotiations.",
+          image: "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=600&h=380&fit=crop",
+          count: 128,
+          href: "/politics",
+        },
+        {
+          name: "International Relations",
+          category: "POLITICS",
+          desc: "Global diplomacy, foreign policy and international partnerships.",
+          image: "https://images.unsplash.com/photo-1511556532299-8f662fc26c06?w=600&h=380&fit=crop",
+          count: 110,
+          href: "/politics",
+        },
+        {
+          name: "Defence and Security",
+          category: "POLITICS",
+          desc: "National security, defence policy, NATO, military strategy and international security.",
+          image: "https://images.unsplash.com/photo-1579829366248-204fe8413f31?w=600&h=380&fit=crop",
+          count: 76,
+          href: "/politics",
+        },
+        {
+          name: "Trade and Economy",
+          category: "ECONOMY",
+          desc: "Trade agreements, economic policy and the impact of global markets on UK politics.",
+          image: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=600&h=380&fit=crop",
+          count: 64,
+          href: "/economy",
+        },
+        {
+          name: "Elections",
+          category: "POLITICS",
+          desc: "General elections, local elections, political campaigns and voter trends.",
+          image: "https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?w=600&h=380&fit=crop",
+          count: 64,
+          href: "/politics",
+        },
+        {
+          name: "Diplomacy",
+          category: "POLITICS",
+          desc: "Bilateral relations, international summits and diplomatic engagements.",
+          image: "https://images.unsplash.com/photo-1521791136064-7986c2920216?w=600&h=380&fit=crop",
+          count: 52,
+          href: "/politics",
+        },
+        {
+          name: "European Affairs",
+          category: "WORLD",
+          desc: "EU policy, European institutions and regional political developments.",
+          image: "https://images.unsplash.com/photo-1467269204594-9661b134dd2b?w=600&h=380&fit=crop",
+          count: 46,
+          href: "/world",
+        },
+      ];
+    }
+
+    const CATEGORY_META: Record<string, { image: string; desc: string }> = {
+      politics: {
+        image: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=600&h=380&fit=crop",
+        desc: "Government policy, political leadership, elections and national governance.",
+      },
+      economy: {
+        image: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=600&h=380&fit=crop",
+        desc: "Trade agreements, economic policy and the impact of global markets.",
+      },
+      business: {
+        image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=600&h=380&fit=crop",
+        desc: "Corporate developments, enterprise strategy and boardroom governance.",
+      },
+      technology: {
+        image: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=600&h=380&fit=crop",
+        desc: "Enterprise software, artificial intelligence and digital infrastructure.",
+      },
+      markets: {
+        image: "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600&h=380&fit=crop",
+        desc: "Equities, foreign exchange, global bond markets and capital flows.",
+      },
+      sports: {
+        image: "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=600&h=380&fit=crop",
+        desc: "Premier league, global athletics and sporting championship coverage.",
+      },
+      lifestyle: {
+        image: "https://images.unsplash.com/photo-1511988617509-a57c8a288659?w=600&h=380&fit=crop",
+        desc: "Culture, culinary trends, modern urban living and leisure journalism.",
+      },
+      entertainment: {
+        image: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&h=380&fit=crop",
+        desc: "Film, arts, broadcast media, and contemporary popular culture reporting.",
+      },
+      health: {
+        image: "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=600&h=380&fit=crop",
+        desc: "Healthcare systems, biomedical research, medical policy and wellbeing.",
+      },
+      research: {
+        image: "https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=600&h=380&fit=crop",
+        desc: "Scientific analysis, investigative academic research, and policy forecasts.",
+      },
+      interview: {
+        image: "https://images.unsplash.com/photo-1557804506-669a67965ba0?w=600&h=380&fit=crop",
+        desc: "Exclusive conversations with industry executives and thought leaders.",
+      },
+      world: {
+        image: "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=600&h=380&fit=crop",
+        desc: "Global diplomacy, cross-border reporting and international partnerships.",
+      },
+      ufo: {
+        image: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=600&h=380&fit=crop",
+        desc: "Unidentified aerial phenomena, aerospace investigations, and defense intelligence.",
+      },
+      asia: {
+        image: "https://images.unsplash.com/photo-1474181487882-5abf3f0ba6c2?w=600&h=380&fit=crop",
+        desc: "Regional geopolitical dynamics, economic manufacturing, and cross-border trade.",
+      },
+      europe: {
+        image: "https://images.unsplash.com/photo-1467269204594-9661b134dd2b?w=600&h=380&fit=crop",
+        desc: "EU policy, European institutions and regional political developments.",
+      },
+      britain: {
+        image: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=600&h=380&fit=crop",
+        desc: "British governance, domestic reforms, and nationwide public policy.",
+      },
+      "united states": {
+        image: "https://images.unsplash.com/photo-1485738422979-f5c462d49f74?w=600&h=380&fit=crop",
+        desc: "US domestic policy, federal elections, Washington politics and bilateral diplomacy.",
+      },
+      "middle east": {
+        image: "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=600&h=380&fit=crop",
+        desc: "Middle Eastern diplomacy, regional stability, energy resources and governance.",
+      },
+      africa: {
+        image: "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?w=600&h=380&fit=crop",
+        desc: "Pan-African trade, emerging technological hubs and economic growth.",
+      },
+      china: {
+        image: "https://images.unsplash.com/photo-1508804185872-d7badad00f7d?w=600&h=380&fit=crop",
+        desc: "China macroeconomic updates, foreign policy, and technological manufacturing.",
+      },
+    };
+
+    // Calculate categories where this author has written articles
+    const categoryCounts: Record<string, { count: number; firstImage?: string }> = {};
+    articlesList.forEach((art) => {
+      const rawCat = (art.category || "").trim();
+      if (!rawCat) return;
+      const key = rawCat.toLowerCase();
+      if (!categoryCounts[key]) {
+        categoryCounts[key] = { count: 0, firstImage: art.image };
+      }
+      categoryCounts[key].count += 1;
+      if (!categoryCounts[key].firstImage && art.image) {
+        categoryCounts[key].firstImage = art.image;
+      }
+    });
+
+    const writtenCategories = Object.keys(categoryCounts);
+
+    if (writtenCategories.length > 0) {
+      return writtenCategories.map((catKey) => {
+        const data = categoryCounts[catKey];
+        const meta = CATEGORY_META[catKey];
+        const displayName = catKey === "ufo"
+          ? "UFO"
+          : catKey.split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+
+        const image = data.firstImage || meta?.image || "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=600&h=380&fit=crop";
+        const desc = meta?.desc || `Dedicated investigative reporting, daily updates, and specialized coverage in ${displayName.toLowerCase()}.`;
+
+        return {
+          name: displayName,
+          category: catKey.toUpperCase(),
+          desc,
+          image,
+          count: data.count,
+          href: `/${catKey}`,
+        };
+      });
+    }
+
+    // Fallback: If author has not written articles yet, show registered coverage areas / expertise
+    const fallbackAreas = (authorProfile.coverageAreas && authorProfile.coverageAreas.length > 0)
+      ? authorProfile.coverageAreas
+      : (authorProfile.expertise && authorProfile.expertise.length > 0)
+        ? authorProfile.expertise
+        : ["Politics", "Business", "Technology", "Economy", "Markets", "Lifestyle"];
+
+    return fallbackAreas.map((area) => {
+      const key = area.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const metaMatch = Object.entries(CATEGORY_META).find(([k]) => key.includes(k) || k.includes(key));
+      const meta = metaMatch ? metaMatch[1] : undefined;
+      const image = meta?.image || "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=600&h=380&fit=crop";
+      const desc = meta?.desc || `Dedicated investigative reporting, daily updates, and specialized coverage in ${area.toLowerCase()}.`;
+
+      return {
+        name: area,
+        category: area.toUpperCase(),
+        desc,
+        image,
+        count: 0,
+        href: `/${metaMatch ? metaMatch[0] : "news"}`,
+      };
+    });
+  }, [authorProfile, articlesList, slugClean]);
 
   return (
     <main className="min-h-screen bg-white text-slate-900 font-sans">
@@ -590,6 +825,30 @@ export default function AuthorProfileContent({
             </button>
             <span className="text-slate-300">&gt;</span>
             <span className="text-slate-900 font-medium">About</span>
+          </>
+        ) : activeTab === "coverage" ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setActiveTab("articles")}
+              className="hover:text-black transition-colors cursor-pointer"
+            >
+              {authorProfile.name}
+            </button>
+            <span className="text-slate-300">&gt;</span>
+            <span className="text-slate-900 font-medium">Coverage Areas</span>
+          </>
+        ) : activeTab === "awards" ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setActiveTab("articles")}
+              className="hover:text-black transition-colors cursor-pointer"
+            >
+              {authorProfile.name}
+            </button>
+            <span className="text-slate-300">&gt;</span>
+            <span className="text-slate-900 font-medium">Awards & Recognition</span>
           </>
         ) : (
           <span className="text-slate-900 font-medium">{authorProfile.name}</span>
@@ -925,28 +1184,55 @@ export default function AuthorProfileContent({
             {activeTab === "coverage" && (
               <div className="space-y-6">
                 <div className="pb-3 border-b border-slate-200">
-                  <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider font-sans">
-                    BEATS & COVERAGE AREAS
+                  <h2 className="text-sm sm:text-base font-extrabold text-slate-900 uppercase tracking-wider font-sans">
+                    COVERAGE AREAS
                   </h2>
+                  <p className="text-xs text-slate-500 font-sans mt-1 leading-relaxed">
+                    {(authorProfile.name || "").toLowerCase().includes("sarah") || slugClean.includes("sarah")
+                      ? "Sarah Mitchell focuses on key political developments in the UK, Europe and global affairs, with in-depth reporting, analysis and exclusive interviews."
+                      : `${authorProfile.name} focuses on in-depth reporting, analysis and exclusive coverage across these specialized beats and categories.`}
+                  </p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {(authorProfile.coverageAreas || [
-                    "UK Politics", "Parliament", "Government Policy",
-                    "International Relations", "EU-UK Relations", "Elections",
-                    "Defence and Security", "Trade", "Brexit", "Diplomacy"
-                  ]).map((area, idx) => (
-                    <div key={idx} className="p-4 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-colors">
-                      <span className="text-[10.5px] font-bold text-[#D31220] uppercase tracking-wider block mb-1">
-                        Beat {idx + 1}
-                      </span>
-                      <h4 className="text-sm font-bold text-slate-900 mb-1">
-                        {area}
-                      </h4>
-                      <p className="text-xs text-slate-500 leading-relaxed">
-                        Dedicated investigative dispatches, daily briefings, and policy forecasts focused on {area.toLowerCase()}.
-                      </p>
-                    </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
+                  {authorCoverageCards.map((item, idx) => (
+                    <Link
+                      key={idx}
+                      href={item.href}
+                      className="group bg-white rounded-lg border border-slate-200 overflow-hidden hover:shadow-md hover:border-slate-300 transition-all flex flex-col cursor-pointer"
+                    >
+                      {/* Image Header */}
+                      <div className="relative aspect-[16/10] w-full overflow-hidden bg-slate-100">
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          onError={(e) => {
+                            e.currentTarget.src = "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=600&h=380&fit=crop";
+                          }}
+                        />
+                      </div>
+
+                      {/* Card Content */}
+                      <div className="p-3 flex flex-col flex-1">
+                        <h4 className="font-bold text-slate-900 text-xs sm:text-[13px] leading-tight mb-1.5 group-hover:text-[#D31220] transition-colors">
+                          {item.name}
+                        </h4>
+                        <p className="text-[11px] text-slate-500 leading-snug line-clamp-3 mb-3">
+                          {item.desc}
+                        </p>
+
+                        {/* Article Count & Arrow */}
+                        <div className="mt-auto pt-2 flex items-center justify-between text-[11px] font-medium text-slate-600">
+                          <span>
+                            {item.count} {item.count === 1 ? "Article" : "Articles"}
+                          </span>
+                          <span className="text-slate-400 group-hover:text-[#D31220] group-hover:translate-x-0.5 transition-all font-bold">
+                            &rarr;
+                          </span>
+                        </div>
+                      </div>
+                    </Link>
                   ))}
                 </div>
               </div>
