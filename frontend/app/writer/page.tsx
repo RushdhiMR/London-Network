@@ -1647,39 +1647,39 @@ export default function WriterDashboardPage() {
 
           {/* Right Column: Contributor Quota & Weekly Deadline Sidebar */}
           {isContributor && (
-            <aside className="w-full lg:w-80 shrink-0 space-y-4 font-sans">
+            <aside className="w-full lg:w-80 shrink-0 space-y-3.5 font-sans">
               {/* Countdown Timer Header */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
-                <div className="grid grid-cols-4 gap-2 text-center divide-x divide-slate-100">
+              <div className="bg-white border border-slate-200/90 rounded-xl p-4 shadow-xs">
+                <div className="grid grid-cols-4 text-center divide-x divide-slate-100">
                   <div className="px-1">
-                    <span className="block text-2xl font-bold font-mono text-slate-900 tracking-tight">
+                    <span className="block text-2xl font-bold text-slate-800 tracking-tight leading-none font-sans">
                       {String(countdown.days).padStart(2, "0")}
                     </span>
-                    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">
+                    <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mt-2">
                       DAYS
                     </span>
                   </div>
                   <div className="px-1">
-                    <span className="block text-2xl font-bold font-mono text-slate-900 tracking-tight">
+                    <span className="block text-2xl font-bold text-slate-800 tracking-tight leading-none font-sans">
                       {String(countdown.hours).padStart(2, "0")}
                     </span>
-                    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">
+                    <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mt-2">
                       HOURS
                     </span>
                   </div>
                   <div className="px-1">
-                    <span className="block text-2xl font-bold font-mono text-slate-900 tracking-tight">
+                    <span className="block text-2xl font-bold text-slate-800 tracking-tight leading-none font-sans">
                       {String(countdown.minutes).padStart(2, "0")}
                     </span>
-                    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">
+                    <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mt-2">
                       MINS
                     </span>
                   </div>
                   <div className="px-1">
-                    <span className="block text-2xl font-bold font-mono text-slate-900 tracking-tight">
+                    <span className="block text-2xl font-bold text-slate-800 tracking-tight leading-none font-sans">
                       {String(countdown.seconds).padStart(2, "0")}
                     </span>
-                    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">
+                    <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mt-2">
                       SECS
                     </span>
                   </div>
@@ -1688,68 +1688,76 @@ export default function WriterDashboardPage() {
 
               {/* 2-Day Deadline Urgent Reminder Alert */}
               {isReminderDue && (
-                <div className="p-4 bg-gradient-to-br from-amber-500 to-rose-600 text-white rounded-2xl shadow-md space-y-2 animate-in fade-in">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="w-5 h-5 text-white shrink-0 animate-bounce" />
-                    <span className="text-xs font-black uppercase tracking-wider">
-                      Deadline Reminder (2 Days Left)
+                <div className="bg-white border-l-4 border-l-amber-500 border border-slate-200/90 rounded-xl p-4 shadow-xs space-y-2.5 transition-all">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-900">
+                        Deadline Reminder
+                      </span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                      2 Days Left
                     </span>
                   </div>
-                  <p className="text-xs text-white/95 leading-snug font-medium">
-                    Your weekly publishing cycle ends in <strong>{countdown.days}d {countdown.hours}h {countdown.minutes}m</strong>. You have submitted <strong>{weeklySubmitted} / 5</strong> required articles.
+
+                  <p className="text-xs text-slate-600 leading-relaxed font-normal">
+                    Your weekly publishing cycle ends in <strong className="text-slate-900 font-semibold">{countdown.days}d {countdown.hours}h {countdown.minutes}m</strong>. You have submitted <strong className="text-slate-900 font-semibold">{weeklySubmitted} / 5</strong> required articles.
                   </p>
-                  <div className="pt-2 border-t border-white/20 flex items-center justify-between text-[11px]">
-                    <span className="font-bold text-white">
-                      ⚠️ {Math.max(0, 5 - weeklySubmitted)} article{Math.max(0, 5 - weeklySubmitted) > 1 ? "s" : ""} remaining
+
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-amber-700 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 animate-pulse" />
+                      {Math.max(0, 5 - weeklySubmitted)} article{Math.max(0, 5 - weeklySubmitted) > 1 ? "s" : ""} remaining
                     </span>
                     <Link
                       href="/writer/create"
-                      className="px-2.5 py-1 bg-white text-rose-700 font-bold rounded-lg hover:bg-white/90 transition-all text-[11px] shadow-xs"
+                      className="px-3 py-1.5 bg-[#D31220] hover:bg-[#b91522] text-white font-bold rounded-lg transition-colors text-xs shadow-xs flex items-center gap-1 cursor-pointer"
                     >
-                      + Write Now
+                      <Plus size={13} />
+                      <span>Write Now</span>
                     </Link>
                   </div>
                 </div>
               )}
 
               {/* Weekly Requirement Card */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+              <div className="bg-white border border-slate-200/90 rounded-xl p-4 shadow-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                  <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider font-sans">
                     WEEKLY REQUIREMENT
                   </span>
-                  <span className="text-xs font-mono font-bold text-slate-900">
+                  <span className="text-xs font-semibold text-slate-700 font-sans">
                     {weeklySubmitted} / 5 Submitted
                   </span>
                 </div>
                 <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden mt-3 mb-2.5">
                   <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      weeklySubmitted >= 5 ? "bg-[#00C853]" : "bg-emerald-500"
-                    }`}
+                    className="h-full rounded-full bg-[#00C853] transition-all duration-500"
                     style={{ width: `${Math.min(100, Math.round((weeklySubmitted / 5) * 100))}%` }}
                   />
                 </div>
-                <div className="text-[11px] font-semibold">
+                <div className="text-xs font-medium">
                   {weeklySubmitted >= 5 ? (
-                    <span className="text-emerald-600 flex items-center gap-1">
+                    <span className="text-[#00C853] flex items-center gap-1 font-semibold">
                       ✓ Weekly requirement satisfied
                     </span>
                   ) : (
-                    <span className="text-amber-600 flex items-center gap-1">
-                      ⚠️ {5 - weeklySubmitted} article{5 - weeklySubmitted > 1 ? "s" : ""} needed before week ends
+                    <span className="text-amber-600 flex items-center gap-1.5 font-medium">
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      {5 - weeklySubmitted} article{5 - weeklySubmitted > 1 ? "s" : ""} needed before week ends
                     </span>
                   )}
                 </div>
               </div>
 
               {/* Monthly Requirement Card */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+              <div className="bg-white border border-slate-200/90 rounded-xl p-4 shadow-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                  <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider font-sans">
                     MONTHLY REQUIREMENT
                   </span>
-                  <span className="text-xs font-mono font-bold text-slate-900">
+                  <span className="text-xs font-semibold text-slate-700 font-sans">
                     {monthlySubmitted} / 20 Submitted
                   </span>
                 </div>
@@ -1759,9 +1767,9 @@ export default function WriterDashboardPage() {
                     style={{ width: `${Math.min(100, Math.round((monthlySubmitted / 20) * 100))}%` }}
                   />
                 </div>
-                <div className="text-[11px] font-semibold">
+                <div className="text-xs font-medium">
                   {monthlySubmitted >= 20 ? (
-                    <span className="text-emerald-600 flex items-center gap-1">
+                    <span className="text-[#00C853] flex items-center gap-1 font-semibold">
                       ✓ Monthly quota fulfilled
                     </span>
                   ) : (
@@ -1773,25 +1781,25 @@ export default function WriterDashboardPage() {
               </div>
 
               {/* Contributor Policy & Requirements */}
-              <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 shadow-xs text-left">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900 mb-2.5">
-                  <span className="w-4 h-4 rounded-full border border-slate-700 flex items-center justify-center text-[10px] font-serif font-bold">
+              <div className="bg-slate-50 border border-slate-200/90 rounded-xl p-4 shadow-xs text-left">
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-800 mb-3">
+                  <div className="w-4 h-4 rounded-full border border-slate-600 flex items-center justify-center text-[10px] font-serif font-bold text-slate-700 leading-none">
                     i
-                  </span>
+                  </div>
                   <span>Contributor Policy & Requirements</span>
                 </div>
-                <ul className="text-[11px] text-slate-600 space-y-2 leading-relaxed">
-                  <li className="flex items-start gap-1.5">
-                    <span className="text-slate-400 mt-0.5">•</span>
-                    <span>You must publish a minimum of <strong>5 articles per week</strong> (every 7 days).</span>
+                <ul className="text-xs text-slate-600 space-y-2.5 leading-relaxed pl-1">
+                  <li className="flex items-start gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
+                    <span>You must publish a minimum of <strong className="text-slate-800 font-semibold">5 articles per week</strong> (every 7 days).</span>
                   </li>
-                  <li className="flex items-start gap-1.5">
-                    <span className="text-slate-400 mt-0.5">•</span>
-                    <span>You must publish a minimum of <strong>20 articles per month</strong> (every 30 days).</span>
+                  <li className="flex items-start gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
+                    <span>You must publish a minimum of <strong className="text-slate-800 font-semibold">20 articles per month</strong> (every 30 days).</span>
                   </li>
-                  <li className="flex items-start gap-1.5">
-                    <span className="text-slate-400 mt-0.5">•</span>
-                    <span>If you fail to meet these minimums, your account will be <strong>automatically suspended</strong> and login will be blocked.</span>
+                  <li className="flex items-start gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
+                    <span>If you fail to meet these minimums, your account will be <strong className="text-slate-800 font-semibold">automatically suspended</strong> and login will be blocked.</span>
                   </li>
                 </ul>
               </div>
