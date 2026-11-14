@@ -535,19 +535,50 @@ export function setCachedArticles(articles: ArticleItem[], notify = true) {
 let activeArticlesFetchPromise: Promise<ArticleItem[]> | null = null;
 let cachedServerArticles: ArticleItem[] | null = null;
 let lastArticlesFetchTime = 0;
+const ARTICLES_CACHE_TTL_MS = 3500; // 3.5 seconds fresh window to eliminate duplicate API requests
+
+let isSyncListenerAttached = false;
+const liveArticlesSubscribers = new Set<(articles: ArticleItem[]) => void>();
+
+function notifyLiveArticlesSubscribers(freshArticles: ArticleItem[]) {
+  liveArticlesSubscribers.forEach((cb) => {
+    try {
+      cb(freshArticles);
+    } catch {}
+  });
+}
+
+function ensureSyncListener() {
+  if (typeof window === "undefined" || isSyncListenerAttached) return;
+  isSyncListenerAttached = true;
+  window.addEventListener(SYNC_EVENT_NAME, () => {
+    fetchArticlesFromServer(true).then((fresh) => {
+      if (Array.isArray(fresh)) {
+        notifyLiveArticlesSubscribers(fresh);
+      }
+    }).catch(() => {});
+  });
+}
 
 /**
  * Reset the in-memory fetch cache so the next fetchArticlesFromServer call
  * always goes to the server instead of returning stale localStorage data.
- * Call this on every route change to prevent stale/duplicate data flashes.
+ * Pass force=true on write/update actions to guarantee immediate re-fetching.
  */
-export function resetArticlesFetchCache() {
-  lastArticlesFetchTime = 0;
-  activeArticlesFetchPromise = null;
-  cachedServerArticles = null;
+export function resetArticlesFetchCache(force = false) {
+  if (force || Date.now() - lastArticlesFetchTime > ARTICLES_CACHE_TTL_MS) {
+    lastArticlesFetchTime = 0;
+    activeArticlesFetchPromise = null;
+    cachedServerArticles = null;
+  }
 }
 
-export async function fetchArticlesFromServer(): Promise<ArticleItem[]> {
+export async function fetchArticlesFromServer(forceFresh = false): Promise<ArticleItem[]> {
+  const now = Date.now();
+  if (!forceFresh && cachedServerArticles && cachedServerArticles.length > 0 && (now - lastArticlesFetchTime < ARTICLES_CACHE_TTL_MS)) {
+    return cachedServerArticles;
+  }
+
   if (activeArticlesFetchPromise) {
     return activeArticlesFetchPromise;
   }
@@ -625,6 +656,7 @@ export async function fetchArticlesFromServer(): Promise<ArticleItem[]> {
           setCachedArticles(combined, false);
           cachedServerArticles = combined;
           lastArticlesFetchTime = Date.now();
+          notifyLiveArticlesSubscribers(combined);
           return combined;
         }
       }
@@ -635,7 +667,6 @@ export async function fetchArticlesFromServer(): Promise<ArticleItem[]> {
     }
     return cachedServerArticles || getCachedArticles();
   })();
-
 
   return activeArticlesFetchPromise;
 }
@@ -765,7 +796,7 @@ export async function saveArticleToServer(article: ArticleItem): Promise<Article
             mergedList.push(item);
           }
         }
-        resetArticlesFetchCache();
+        resetArticlesFetchCache(true);
         setCachedArticles(mergedList, true);
         return mergedList;
       }
@@ -774,13 +805,13 @@ export async function saveArticleToServer(article: ArticleItem): Promise<Article
     console.error("[articlesSync] Error saving article to server:", e);
   }
 
-  resetArticlesFetchCache();
+  resetArticlesFetchCache(true);
   return updated;
 }
 
 export async function updateArticleStatusOnServer(id: string | number, status: string): Promise<ArticleItem[]> {
   const nowIso = new Date().toISOString();
-  resetArticlesFetchCache();
+  resetArticlesFetchCache(true);
   try {
     const res = await fetch("/api/articles", {
       method: "PUT",
@@ -952,56 +983,56 @@ export async function deletePermanentlyOnServer(id: string | number, title?: str
 }
 
 export function useLiveArticles() {
-  const [articles, setArticles] = useState<ArticleItem[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [articles, setArticles] = useState<ArticleItem[]>(() => {
+    if (cachedServerArticles && cachedServerArticles.length > 0) {
+      return cachedServerArticles;
+    }
+    if (typeof window !== "undefined") {
+      const cached = getCachedArticles();
+      if (cached && cached.length > 0) return cached;
+    }
+    return [];
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    return !(cachedServerArticles && cachedServerArticles.length > 0);
+  });
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const fresh = await fetchArticlesFromServer();
+    const fresh = await fetchArticlesFromServer(true);
     setArticles(fresh);
+    notifyLiveArticlesSubscribers(fresh);
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    // On mount: always fetch fresh data from the server first.
-    // Do NOT pre-populate from localStorage cache — that would show stale data
-    // before the real server response arrives.
-    // NOTE: dispatchPageDataReady is NOT called here. Each page-level component
-    // (HeroSection, CategoryPageLayout, ArticlePageContent, etc.) calls it
-    // only after its own derived state is fully computed and ready to display.
+    ensureSyncListener();
+
+    let isMounted = true;
+    const subscriber = (freshArticles: ArticleItem[]) => {
+      if (isMounted) {
+        setArticles(freshArticles);
+        setLoading(false);
+      }
+    };
+    liveArticlesSubscribers.add(subscriber);
+
     fetchArticlesFromServer().then((fresh) => {
-      setArticles(Array.isArray(fresh) ? fresh : []);
-      setLoading(false);
+      if (isMounted && Array.isArray(fresh)) {
+        setArticles(fresh);
+        setLoading(false);
+      }
     }).catch(() => {
-      // On fetch failure, fall back to cache so page isn't blank
-      const cached = getCachedArticles();
-      setArticles(cached);
-      setLoading(false);
+      if (isMounted) {
+        const cached = getCachedArticles();
+        setArticles(cached);
+        setLoading(false);
+      }
     });
 
-    // Listen for in-tab write events triggered by admin/writer actions
-    // (e.g. publishing, editing). These dispatch a window event — NOT a
-    // cross-tab storage event — so they are safe to listen to.
-    const handleSync = () => {
-      fetchArticlesFromServer().then((fresh) => {
-        setArticles(Array.isArray(fresh) ? fresh : []);
-      }).catch(() => {});
-    };
-
-    // NOTE: We intentionally do NOT listen to the native "storage" event here.
-    // That event fires when OTHER browser tabs modify localStorage, which would
-    // cause unrelated tabs to re-fetch/re-render — the cross-tab reload bug.
-
-    if (typeof window !== "undefined") {
-      window.addEventListener(SYNC_EVENT_NAME, handleSync);
-      window.addEventListener("dj_articles_updated", handleSync);
-    }
-
     return () => {
-      if (typeof window !== "undefined") {
-        window.removeEventListener(SYNC_EVENT_NAME, handleSync);
-        window.removeEventListener("dj_articles_updated", handleSync);
-      }
+      isMounted = false;
+      liveArticlesSubscribers.delete(subscriber);
     };
   }, []);
 

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Search, ChevronDown, User, Mail, Menu, X, PenTool, LogOut, Settings, BookOpen, ShieldCheck, Bell, Globe, Award } from "lucide-react";
 import { saveUserProfile, getUserProfile, resolveUserAvatar, isUploadedAvatar } from "@/lib/userProfiles";
 import { uploadImageToBackblaze } from "@/lib/imageUtils";
@@ -373,23 +373,22 @@ export default function Header({
   }, []);
 
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const [allSearchArticles, setAllSearchArticles] = useState<SearchableArticle[]>([]);
+  const [asyncSearchArticles, setAsyncSearchArticles] = useState<SearchableArticle[]>([]);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [articleNotifications, setArticleNotifications] = useState<{ id: string; title: string; status: string; date: string }[]>([]);
   const { articles: liveArticles } = useLiveArticles();
 
-  useEffect(() => {
+  const allSearchArticles = useMemo<SearchableArticle[]>(() => {
     if (Array.isArray(liveArticles) && liveArticles.length > 0) {
-      setAllSearchArticles(articlesToSearchable(liveArticles));
-    } else {
-      setAllSearchArticles(getAllSearchableArticles());
+      return articlesToSearchable(liveArticles);
     }
-  }, [liveArticles]);
+    if (asyncSearchArticles.length > 0) {
+      return asyncSearchArticles;
+    }
+    return getAllSearchableArticles();
+  }, [liveArticles, asyncSearchArticles]);
 
-  useEffect(() => {
-    if (Array.isArray(liveArticles)) {
-      setArticleNotifications(liveArticles as any);
-    }
+  const articleNotifications = useMemo(() => {
+    return Array.isArray(liveArticles) ? (liveArticles as any) : [];
   }, [liveArticles]);
 
   // Close all menus/dropdowns on route navigation
@@ -630,7 +629,7 @@ export default function Header({
         let pool = allSearchArticles;
         if (!pool || pool.length === 0) {
           pool = await fetchAllSearchableArticlesAsync();
-          setAllSearchArticles(pool);
+          setAsyncSearchArticles(pool);
         }
         if (searchRequestIdRef.current !== requestId) return;
 

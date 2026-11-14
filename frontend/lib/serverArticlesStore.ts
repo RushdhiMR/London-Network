@@ -21,10 +21,20 @@ interface ArticlesB2State {
 
 const globalForArticlesStore = globalThis as unknown as {
   __serverArticlesCache?: ArticleRecord[];
+  __serverArticlesCacheTime?: number;
+  __serverArticlesInFlight?: Promise<ArticleRecord[]> | null;
   __articlesB2StateCache?: ArticlesB2State | null;
   __articlesB2StateCacheTime?: number;
   __articlesB2StateInFlight?: Promise<ArticlesB2State | null> | null;
 };
+
+const SERVER_CACHE_TTL_MS = 2500; // 2.5 seconds server cache to deduplicate concurrent requests
+
+export function invalidateServerArticlesCache() {
+  globalForArticlesStore.__serverArticlesCache = undefined;
+  globalForArticlesStore.__serverArticlesCacheTime = 0;
+  globalForArticlesStore.__serverArticlesInFlight = null;
+}
 
 const B2_CACHE_TTL_MS = 2500; // 2.5 seconds in-memory cache for cloud overrides
 
@@ -215,7 +225,9 @@ function readJsonArticles(): ArticleRecord[] {
 }
 
 function writeJsonArticles(articles: ArticleRecord[]) {
+  invalidateServerArticlesCache();
   globalForArticlesStore.__serverArticlesCache = articles;
+  globalForArticlesStore.__serverArticlesCacheTime = Date.now();
 
   // Try writing to primary DB path
   let writeSuccess = false;
@@ -308,8 +320,24 @@ export interface ArticleRecord {
   [key: string]: any;
 }
 
-export async function readArticlesStore(): Promise<ArticleRecord[]> {
-  if (isMysqlAvailable()) {
+export async function readArticlesStore(forceFresh = false): Promise<ArticleRecord[]> {
+  const now = Date.now();
+  if (
+    !forceFresh &&
+    Array.isArray(globalForArticlesStore.__serverArticlesCache) &&
+    globalForArticlesStore.__serverArticlesCache.length > 0 &&
+    now - (globalForArticlesStore.__serverArticlesCacheTime || 0) < SERVER_CACHE_TTL_MS
+  ) {
+    return globalForArticlesStore.__serverArticlesCache;
+  }
+
+  if (!forceFresh && globalForArticlesStore.__serverArticlesInFlight) {
+    return globalForArticlesStore.__serverArticlesInFlight;
+  }
+
+  const fetchPromise = (async () => {
+    try {
+      if (isMysqlAvailable()) {
     try {
       const db = getDbPool();
       const [rows]: any = await db.query(`
@@ -465,10 +493,12 @@ export async function readArticlesStore(): Promise<ArticleRecord[]> {
           }
         });
         globalForArticlesStore.__serverArticlesCache = finalCombined;
+        globalForArticlesStore.__serverArticlesCacheTime = Date.now();
         return finalCombined;
       }
 
       globalForArticlesStore.__serverArticlesCache = sqlArticles;
+      globalForArticlesStore.__serverArticlesCacheTime = Date.now();
       return sqlArticles;
     }
   } catch (err) {
@@ -487,6 +517,7 @@ export async function readArticlesStore(): Promise<ArticleRecord[]> {
       if (b2State) {
         const merged = applyB2StateToArticles(baseArticles, b2State);
         globalForArticlesStore.__serverArticlesCache = merged;
+        globalForArticlesStore.__serverArticlesCacheTime = Date.now();
         return merged;
       }
     } catch (e) {
@@ -494,7 +525,16 @@ export async function readArticlesStore(): Promise<ArticleRecord[]> {
     }
   }
 
+  globalForArticlesStore.__serverArticlesCache = baseArticles;
+  globalForArticlesStore.__serverArticlesCacheTime = Date.now();
   return baseArticles;
+    } finally {
+      globalForArticlesStore.__serverArticlesInFlight = null;
+    }
+  })();
+
+  globalForArticlesStore.__serverArticlesInFlight = fetchPromise;
+  return fetchPromise;
 }
 
 export async function writeArticlesStore(articles: ArticleRecord[]): Promise<void> {
@@ -507,6 +547,7 @@ export async function writeArticlesStore(articles: ArticleRecord[]): Promise<voi
 }
 
 export async function upsertArticleStore(article: ArticleRecord): Promise<ArticleRecord[]> {
+  invalidateServerArticlesCache();
   const isPendingOrPublished = article.status === "Pending review" || article.status === "Published";
   const sanitizedArticle: ArticleRecord = {
     ...article,
@@ -846,7 +887,7 @@ export async function upsertArticleStore(article: ArticleRecord): Promise<Articl
     }
   }
 
-  return readArticlesStore();
+  return readArticlesStore(true);
 }
 
 export async function updateArticleStatusStore(
@@ -856,6 +897,7 @@ export async function updateArticleStatusStore(
   rejectionReason?: string,
   rejectedAt?: string
 ): Promise<ArticleRecord[]> {
+  invalidateServerArticlesCache();
   const cleanT = (t: any) =>
     String(t || "")
       .toLowerCase()
@@ -965,10 +1007,11 @@ export async function updateArticleStatusStore(
     }
   }
 
-  return readArticlesStore();
+  return readArticlesStore(true);
 }
 
 export async function deleteArticleStore(id: string | number, title?: string, slug?: string): Promise<ArticleRecord[]> {
+  invalidateServerArticlesCache();
   const cleanT = (t: any) =>
     String(t || "")
       .toLowerCase()
@@ -1038,7 +1081,7 @@ export async function deleteArticleStore(id: string | number, title?: string, sl
     }
   }
 
-  return readArticlesStore();
+  return readArticlesStore(true);
 }
 
 export async function recordArticleViewStore(
