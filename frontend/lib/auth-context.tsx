@@ -11,6 +11,7 @@ export interface User {
   avatar?: string;
   bio?: string;
   quote?: string;
+  awards?: any[];
 }
 
 interface AuthContextType {

@@ -28,7 +28,8 @@ import {
   AlertCircle,
   Calendar,
   MessageSquare,
-  ArrowRight
+  ArrowRight,
+  Award
 } from "lucide-react";
 import { saveUserProfile, getUserProfile, resolveUserAvatar, isUploadedAvatar } from "@/lib/userProfiles";
 import { useLiveArticles, moveArticleToTrashOnServer, deletePermanentlyOnServer, setCachedArticles } from "@/lib/articlesSync";
@@ -2092,6 +2093,26 @@ export default function WriterDashboardPage() {
                 <p className="text-[11px] text-gray-400 font-normal mt-1.5 leading-normal">
                   Displayed on your author profile card and Awards & Recognition tab.
                 </p>
+              </div>
+
+              {/* Field 10: AWARDS & CERTIFICATES */}
+              <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
+                <div>
+                  <span className="block text-xs font-bold text-gray-800">
+                    Awards & Certificates
+                  </span>
+                  <span className="text-[11px] text-gray-400">
+                    Showcase your certifications & awards on your author profile
+                  </span>
+                </div>
+                <Link
+                  href={`/author/${(currentUser?.name || "author").toLowerCase().replace(/[^a-z0-9]+/g, "-")}?tab=awards`}
+                  onClick={() => setIsProfileSettingsOpen(false)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#D31220] hover:text-white hover:bg-[#D31220] border border-red-200 rounded-lg transition-colors cursor-pointer"
+                >
+                  <Award size={14} />
+                  <span>Manage Awards</span>
+                </Link>
               </div>
 
               {/* Action Buttons */}

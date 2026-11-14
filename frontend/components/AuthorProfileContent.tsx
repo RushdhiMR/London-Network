@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MapPin, Mail, Link2, Bell, ChevronRight, Award, BookOpen, ShieldCheck, Check, Calendar } from "lucide-react";
+import { MapPin, Mail, Link2, Bell, ChevronRight, Award, BookOpen, ShieldCheck, Check, Calendar, Plus, Trash2, Edit3, X, Upload } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useLiveArticles } from "@/lib/articlesSync";
@@ -29,6 +29,17 @@ export interface SidebarItem {
   views: string;
 }
 
+export interface AwardItem {
+  id?: string;
+  image?: string;
+  title: string;
+  institution?: string;
+  category?: string;
+  location?: string;
+  desc: string;
+  year?: string;
+}
+
 interface AuthorProfileContentProps {
   slug: string;
   author: {
@@ -50,6 +61,7 @@ interface AuthorProfileContentProps {
     expertise?: string[];
     expertiseRatings?: Record<string, number>;
     quote?: string;
+    awards?: AwardItem[];
   };
   initialArticles: ArticleItem[];
   mostReadSidebar?: SidebarItem[];
@@ -62,6 +74,85 @@ interface WriterCardItem {
   avatar: string;
   slug: string;
 }
+
+
+const PRESET_AWARD_IMAGES = [
+  { label: "Journalism Trophy", src: "/awards/award_1_british_journalism.webp" },
+  { label: "Golden Globe", src: "/awards/award_2_global_media.webp" },
+  { label: "Plaque of Excellence", src: "/awards/award_3_political_reporting.webp" },
+  { label: "Star Trophy", src: "/awards/award_4_media_leadership.webp" },
+  { label: "Framed Certificate", src: "/awards/award_5_special_recognition.webp" },
+  { label: "Press Credentials", src: "/awards/award_6_press_association.webp" },
+  { label: "Fellowship Diploma", src: "/awards/award_7_european_fellowship.webp" },
+  { label: "Book / Media List", src: "/awards/award_8_top_media_lists.webp" },
+];
+
+const DEFAULT_SARAH_AWARDS: AwardItem[] = [
+  {
+    image: "/awards/award_1_british_journalism.webp",
+    title: "British Journalism Awards 2024",
+    institution: "Excellence in Political Reporting",
+    category: "Excellence in Political Reporting",
+    location: "London, United Kingdom",
+    desc: "Recognised for in-depth reporting on UK government and Parliament."
+  },
+  {
+    image: "/awards/award_2_global_media.webp",
+    title: "Global Media Awards 2023",
+    institution: "Best International Political Coverage",
+    category: "Best International Political Coverage",
+    location: "Europe",
+    desc: "Awarded for outstanding coverage of EU-UK relations and global diplomacy."
+  },
+  {
+    image: "/awards/award_3_political_reporting.webp",
+    title: "Political Reporting Excellence 2022",
+    institution: "Outstanding Political Journalism",
+    category: "Outstanding Political Journalism",
+    location: "United Kingdom",
+    desc: "Honoured for consistent and accurate reporting on national policy and governance."
+  },
+  {
+    image: "/awards/award_4_media_leadership.webp",
+    title: "Media Leadership Awards 2021",
+    institution: "Rising Star in Political Journalism",
+    category: "Rising Star in Political Journalism",
+    location: "London, United Kingdom",
+    desc: "Recognised for impactful storytelling and public interest journalism."
+  },
+  {
+    image: "/awards/award_5_special_recognition.webp",
+    title: "Special Recognition 2020",
+    institution: "Contribution to Democratic Discourse",
+    category: "Contribution to Democratic Discourse",
+    location: "United Kingdom",
+    desc: "Acknowledged for reporting that strengthened public understanding of democratic institutions."
+  },
+  {
+    image: "/awards/award_6_press_association.webp",
+    title: "International Press Association 2019",
+    institution: "Commitment to Ethical Journalism",
+    category: "Commitment to Ethical Journalism",
+    location: "Global",
+    desc: "Recognised for upholding the highest standards of independent and responsible journalism."
+  },
+  {
+    image: "/awards/award_7_european_fellowship.webp",
+    title: "European Media Forum Fellowship",
+    institution: "Journalism Fellowship 2018",
+    category: "Journalism Fellowship 2018",
+    location: "Brussels, Belgium",
+    desc: "Selected for excellence in European political reporting."
+  },
+  {
+    image: "/awards/award_8_top_media_lists.webp",
+    title: "Featured in Top Media Lists",
+    institution: "Top 100 Influential Journalists 2020–2024",
+    category: "Top 100 Influential Journalists 2020–2024",
+    location: "United Kingdom",
+    desc: "Listed among influential journalists covering UK politics and international affairs."
+  }
+];
 
 export default function AuthorProfileContent({
   slug,
@@ -92,6 +183,18 @@ export default function AuthorProfileContent({
   const [quoteInput, setQuoteInput] = useState("");
   const [isSavingQuote, setIsSavingQuote] = useState(false);
   const [quoteSuccessMsg, setQuoteSuccessMsg] = useState("");
+
+  // Award modal & form state
+  const [isAddAwardModalOpen, setIsAddAwardModalOpen] = useState(false);
+  const [editingAwardIndex, setEditingAwardIndex] = useState<number | null>(null);
+  const [awardTitle, setAwardTitle] = useState("");
+  const [awardInstitution, setAwardInstitution] = useState("");
+  const [awardLocation, setAwardLocation] = useState("");
+  const [awardImage, setAwardImage] = useState("/awards/award_1_british_journalism.webp");
+  const [awardDesc, setAwardDesc] = useState("");
+  const [isSavingAward, setIsSavingAward] = useState(false);
+  const [awardSuccessMsg, setAwardSuccessMsg] = useState("");
+  const [awardFormError, setAwardFormError] = useState("");
   const { articles: liveArticles } = useLiveArticles();
   const auth = useAuth();
 
@@ -438,6 +541,18 @@ export default function AuthorProfileContent({
         : undefined;
       const finalQuote = savedQuote || authQuote || author.quote || (slugClean.includes("sarah") ? "Journalism has the power to inform, hold power to account and create a more open and informed society." : "");
 
+      const savedAwards = (savedProfile as any)?.awards;
+      const authAwards = (auth.user && isAuthorUserMatch)
+        ? (auth.user as any).awards
+        : undefined;
+      const finalAwards = (Array.isArray(savedAwards) && savedAwards.length > 0)
+        ? savedAwards
+        : (Array.isArray(authAwards) && authAwards.length > 0)
+          ? authAwards
+          : (Array.isArray(author.awards) && author.awards.length > 0)
+            ? author.awards
+            : (slugClean.includes("sarah") ? DEFAULT_SARAH_AWARDS : []);
+
       setAuthorProfile({
         name: finalName,
         role: finalRole,
@@ -457,6 +572,7 @@ export default function AuthorProfileContent({
         expertise: initialExpertise,
         expertiseRatings: initialRatings,
         quote: finalQuote,
+        awards: finalAwards,
       });
 
       // Also hydrate latest experience, coverage areas, about, approach, joined date, bio & avatar from backend DB API for any visitor
@@ -486,6 +602,7 @@ export default function AuthorProfileContent({
               } catch {}
             }
             const dbQuote = dbUser.quote;
+            const dbAwards = dbUser.awards;
             setAuthorProfile((prev) => ({
               ...prev,
               ...(dbUser.name && !dbUser.name.toLowerCase().includes("reader") ? { name: dbUser.name } : {}),
@@ -502,6 +619,7 @@ export default function AuthorProfileContent({
               ...(dbApproach ? { journalisticApproach: dbApproach } : {}),
               ...(formattedJoined ? { joinedDate: formattedJoined } : {}),
               ...(dbQuote ? { quote: dbQuote } : {}),
+              ...(Array.isArray(dbAwards) && dbAwards.length > 0 ? { awards: dbAwards } : {}),
             }));
           }
         })
@@ -638,6 +756,182 @@ export default function AuthorProfileContent({
       ((auth.user.role || "").toLowerCase() === "admin")
     );
   }, [auth.authenticated, auth.user, authorProfile.name, authorProfile.email, author.name, author.email, slug]);
+
+  const displayedAwards: AwardItem[] = useMemo(() => {
+    if (authorProfile.awards && authorProfile.awards.length > 0) {
+      return authorProfile.awards;
+    }
+    const isSarah = (authorProfile.name || "").toLowerCase().includes("sarah") || slugClean.includes("sarah");
+    if (isSarah) {
+      return DEFAULT_SARAH_AWARDS;
+    }
+    return [];
+  }, [authorProfile.awards, authorProfile.name, slugClean]);
+
+  const handleOpenAddAward = () => {
+    setEditingAwardIndex(null);
+    setAwardTitle("");
+    setAwardInstitution("");
+    setAwardLocation(authorProfile.location || "London, United Kingdom");
+    setAwardImage("/awards/award_1_british_journalism.webp");
+    setAwardDesc("");
+    setAwardFormError("");
+    setAwardSuccessMsg("");
+    setIsAddAwardModalOpen(true);
+  };
+
+  const handleOpenEditAward = (index: number) => {
+    const list = displayedAwards;
+    const a = list[index];
+    if (!a) return;
+    setEditingAwardIndex(index);
+    setAwardTitle(a.title || "");
+    setAwardInstitution(a.institution || a.category || "");
+    setAwardLocation(a.location || "");
+    setAwardImage(a.image || "/awards/award_1_british_journalism.webp");
+    setAwardDesc(a.desc || "");
+    setAwardFormError("");
+    setAwardSuccessMsg("");
+    setIsAddAwardModalOpen(true);
+  };
+
+  const handleAwardImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setAwardFormError("Image size must be under 5MB.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === "string") {
+          setAwardImage(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveAward = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!awardTitle.trim()) {
+      setAwardFormError("Award or certificate title is required.");
+      return;
+    }
+    if (!awardInstitution.trim()) {
+      setAwardFormError("Offering institution name is required.");
+      return;
+    }
+    if (!awardDesc.trim()) {
+      setAwardFormError("A description paragraph (~30 words) is required.");
+      return;
+    }
+
+    setAwardFormError("");
+    setIsSavingAward(true);
+
+    const newAwardItem: AwardItem = {
+      id: editingAwardIndex !== null && displayedAwards[editingAwardIndex]?.id
+        ? displayedAwards[editingAwardIndex].id
+        : `award-${Date.now()}`,
+      title: awardTitle.trim(),
+      institution: awardInstitution.trim(),
+      category: awardInstitution.trim(),
+      location: awardLocation.trim() || authorProfile.location || "London, United Kingdom",
+      image: awardImage.trim() || "/awards/award_1_british_journalism.webp",
+      desc: awardDesc.trim(),
+    };
+
+    let updatedAwards: AwardItem[];
+    const baseList = authorProfile.awards && authorProfile.awards.length > 0
+      ? [...authorProfile.awards]
+      : (slugClean.includes("sarah") ? [...DEFAULT_SARAH_AWARDS] : []);
+
+    if (editingAwardIndex !== null && editingAwardIndex >= 0 && editingAwardIndex < baseList.length) {
+      updatedAwards = [...baseList];
+      updatedAwards[editingAwardIndex] = newAwardItem;
+    } else {
+      updatedAwards = [newAwardItem, ...baseList];
+    }
+
+    setAuthorProfile((prev) => ({
+      ...prev,
+      awards: updatedAwards,
+    }));
+
+    try {
+      const targetEmail = authorProfile.email || auth.user?.email;
+      if (targetEmail) {
+        await fetch("/api/auth/profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: targetEmail,
+            awards: updatedAwards,
+          }),
+        });
+
+        const storageKey = `london_user_profile_${targetEmail.toLowerCase().trim()}`;
+        try {
+          const existing = JSON.parse(localStorage.getItem(storageKey) || "{}");
+          localStorage.setItem(storageKey, JSON.stringify({ ...existing, awards: updatedAwards }));
+        } catch {}
+
+        if (auth.refreshUser) {
+          auth.refreshUser().catch(() => {});
+        }
+        window.dispatchEvent(new CustomEvent("author-profile-sync", { detail: { email: targetEmail, awards: updatedAwards } }));
+      }
+
+      setAwardSuccessMsg("🎉 Award / Certificate saved successfully!");
+      setTimeout(() => {
+        setIsAddAwardModalOpen(false);
+        setEditingAwardIndex(null);
+        setAwardSuccessMsg("");
+      }, 900);
+    } catch (err) {
+      console.warn("Could not save award to backend:", err);
+      setIsAddAwardModalOpen(false);
+      setEditingAwardIndex(null);
+    } finally {
+      setIsSavingAward(false);
+    }
+  };
+
+  const handleDeleteAward = async (indexToDelete: number) => {
+    if (!window.confirm("Are you sure you want to remove this award / certificate?")) return;
+    const baseList = authorProfile.awards && authorProfile.awards.length > 0
+      ? [...authorProfile.awards]
+      : (slugClean.includes("sarah") ? [...DEFAULT_SARAH_AWARDS] : []);
+    const updatedAwards = baseList.filter((_, idx) => idx !== indexToDelete);
+
+    setAuthorProfile((prev) => ({ ...prev, awards: updatedAwards }));
+
+    try {
+      const targetEmail = authorProfile.email || auth.user?.email;
+      if (targetEmail) {
+        await fetch("/api/auth/profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: targetEmail,
+            awards: updatedAwards,
+          }),
+        });
+        const storageKey = `london_user_profile_${targetEmail.toLowerCase().trim()}`;
+        try {
+          const existing = JSON.parse(localStorage.getItem(storageKey) || "{}");
+          localStorage.setItem(storageKey, JSON.stringify({ ...existing, awards: updatedAwards }));
+        } catch {}
+        if (auth.refreshUser) {
+          auth.refreshUser().catch(() => {});
+        }
+        window.dispatchEvent(new CustomEvent("author-profile-sync", { detail: { email: targetEmail, awards: updatedAwards } }));
+      }
+    } catch (err) {
+      console.warn("Could not delete award:", err);
+    }
+  };
 
   const handleSaveQuote = async () => {
     const trimmed = quoteInput.trim();
@@ -1444,108 +1738,109 @@ export default function AuthorProfileContent({
 
             {activeTab === "awards" && (
               <div className="space-y-4">
-                <div className="pb-3 border-b border-slate-200">
-                  <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider font-sans">
-                    AWARDS & RECOGNITION
-                  </h2>
-                  <p className="text-xs text-slate-500 font-sans mt-1 leading-relaxed">
-                    {(authorProfile.name || "").toLowerCase().includes("sarah") || slugClean.includes("sarah")
-                      ? "Sarah Mitchell has been recognised for her outstanding journalism, in-depth political reporting and contributions to public understanding of key global issues."
-                      : `${authorProfile.name} has been recognised for outstanding journalism, in-depth reporting and contributions to public understanding of key global issues.`}
-                  </p>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-200">
+                  <div>
+                    <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider font-sans">
+                      AWARDS & RECOGNITION
+                    </h2>
+                    <p className="text-xs text-slate-500 font-sans mt-1 leading-relaxed">
+                      {(authorProfile.name || "").toLowerCase().includes("sarah") || slugClean.includes("sarah")
+                        ? "Sarah Mitchell has been recognised for her outstanding journalism, in-depth political reporting and contributions to public understanding of key global issues."
+                        : `${authorProfile.name} has been recognised for outstanding journalism, in-depth reporting and contributions to public understanding of key global issues.`}
+                    </p>
+                  </div>
+
+                  {isOwner && (
+                    <button
+                      type="button"
+                      onClick={handleOpenAddAward}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#BF1E2D] hover:bg-[#991B1B] text-white text-xs font-bold rounded-lg shadow-xs transition-colors shrink-0 cursor-pointer font-sans"
+                      title="Add a new award or certificate to your profile"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Award / Certificate</span>
+                    </button>
+                  )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                  {[
-                    {
-                      image: "/awards/award_1_british_journalism.webp",
-                      title: "British Journalism Awards 2024",
-                      category: "Excellence in Political Reporting",
-                      location: "London, United Kingdom",
-                      desc: "Recognised for in-depth reporting on UK government and Parliament."
-                    },
-                    {
-                      image: "/awards/award_2_global_media.webp",
-                      title: "Global Media Awards 2023",
-                      category: "Best International Political Coverage",
-                      location: "Europe",
-                      desc: "Awarded for outstanding coverage of EU-UK relations and global diplomacy."
-                    },
-                    {
-                      image: "/awards/award_3_political_reporting.webp",
-                      title: "Political Reporting Excellence 2022",
-                      category: "Outstanding Political Journalism",
-                      location: "United Kingdom",
-                      desc: "Honoured for consistent and accurate reporting on national policy and governance."
-                    },
-                    {
-                      image: "/awards/award_4_media_leadership.webp",
-                      title: "Media Leadership Awards 2021",
-                      category: "Rising Star in Political Journalism",
-                      location: "London, United Kingdom",
-                      desc: "Recognised for impactful storytelling and public interest journalism."
-                    },
-                    {
-                      image: "/awards/award_5_special_recognition.webp",
-                      title: "Special Recognition 2020",
-                      category: "Contribution to Democratic Discourse",
-                      location: "United Kingdom",
-                      desc: "Acknowledged for reporting that strengthened public understanding of democratic institutions."
-                    },
-                    {
-                      image: "/awards/award_6_press_association.webp",
-                      title: "International Press Association 2019",
-                      category: "Commitment to Ethical Journalism",
-                      location: "Global",
-                      desc: "Recognised for upholding the highest standards of independent and responsible journalism."
-                    },
-                    {
-                      image: "/awards/award_7_european_fellowship.webp",
-                      title: "European Media Forum Fellowship",
-                      category: "Journalism Fellowship 2018",
-                      location: "Brussels, Belgium",
-                      desc: "Selected for excellence in European political reporting."
-                    },
-                    {
-                      image: "/awards/award_8_top_media_lists.webp",
-                      title: "Featured in Top Media Lists",
-                      category: "Top 100 Influential Journalists 2020–2024",
-                      location: "United Kingdom",
-                      desc: "Listed among influential journalists covering UK politics and international affairs."
-                    }
-                  ].map((award, idx) => (
-                    <div
-                      key={idx}
-                      className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition-shadow flex flex-col"
-                    >
-                      <div className="relative aspect-[16/10] w-full overflow-hidden bg-slate-900 shrink-0">
-                        <img
-                          src={award.image}
-                          alt={award.title}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <div className="p-3 flex flex-col flex-1">
-                        <h4 className="text-xs font-bold text-slate-900 leading-snug line-clamp-2">
-                          {award.title}
-                        </h4>
-                        <p className="text-[11px] text-slate-500 font-medium leading-tight mt-1 line-clamp-1">
-                          {award.category}
-                        </p>
-                        <div className="flex items-center gap-1 text-[10.5px] text-slate-400 mt-1.5 mb-2">
-                          <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                          <span className="truncate">{award.location}</span>
+                {displayedAwards.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    {displayedAwards.map((award, idx) => (
+                      <div
+                        key={idx}
+                        className="group relative bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition-shadow flex flex-col"
+                      >
+                        <div className="relative aspect-[16/10] w-full overflow-hidden bg-slate-900 shrink-0">
+                          <img
+                            src={award.image || "/awards/award_1_british_journalism.webp"}
+                            alt={award.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                          {isOwner && (
+                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-black/60 backdrop-blur-xs p-1 rounded-md">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditAward(idx)}
+                                className="p-1 hover:bg-white/20 text-white rounded cursor-pointer transition-colors"
+                                title="Edit Award"
+                              >
+                                <Edit3 className="w-3 h-3" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAward(idx)}
+                                className="p-1 hover:bg-red-600/80 text-white rounded cursor-pointer transition-colors"
+                                title="Delete Award"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
                         </div>
-                        <p className="text-[11px] text-slate-600 leading-relaxed line-clamp-3 mt-auto">
-                          {award.desc}
-                        </p>
+                        <div className="p-3 flex flex-col flex-1">
+                          <h4 className="text-xs font-bold text-slate-900 leading-snug line-clamp-2">
+                            {award.title}
+                          </h4>
+                          <div className="w-3.5 h-[2px] bg-[#BF1E2D] my-1.5" />
+                          <p className="text-[11px] text-slate-700 font-semibold leading-tight line-clamp-1">
+                            {award.institution || award.category}
+                          </p>
+                          <div className="flex items-center gap-1 text-[10.5px] text-slate-400 mt-1 mb-2">
+                            <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span className="truncate">{award.location || "London, United Kingdom"}</span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 leading-relaxed line-clamp-3 mt-auto">
+                            {award.desc}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="border border-dashed border-slate-200 rounded-xl p-8 text-center bg-slate-50/50">
+                    <Award className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">
+                      No Awards or Certificates Added Yet
+                    </h4>
+                    <p className="text-xs text-slate-500 max-w-sm mx-auto mb-4">
+                      {isOwner
+                        ? "Showcase your professional achievements, certificates, fellowships, and awards on your author profile."
+                        : `${authorProfile.name} has not published any awards or certificates yet.`}
+                    </p>
+                    {isOwner && (
+                      <button
+                        type="button"
+                        onClick={handleOpenAddAward}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#BF1E2D] hover:bg-[#991B1B] text-white text-xs font-bold rounded-lg shadow-xs transition-colors cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Your First Award or Certificate</span>
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
-
           </div>
 
           {/* RIGHT SIDEBAR (~32% WIDTH) */}
@@ -2011,6 +2306,208 @@ export default function AuthorProfileContent({
       </div>
 
       <Footer />
+          {/* ADD / EDIT AWARD & CERTIFICATE MODAL */}
+      {isAddAwardModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150 font-sans">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-200 text-left my-8">
+            {/* Header */}
+            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Award className="w-5 h-5 text-[#BF1E2D]" />
+                <div>
+                  <h3 className="text-sm font-bold tracking-tight">
+                    {editingAwardIndex !== null ? "Edit Award or Certificate" : "Add Award or Certificate"}
+                  </h3>
+                  <p className="text-[11px] text-slate-300">
+                    Display credentials & recognitions on your public author profile
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAddAwardModalOpen(false);
+                  setEditingAwardIndex(null);
+                  setAwardFormError("");
+                }}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSaveAward} className="p-6 space-y-4">
+              {awardFormError && (
+                <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg font-medium">
+                  {awardFormError}
+                </div>
+              )}
+              {awardSuccessMsg && (
+                <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-lg font-medium">
+                  {awardSuccessMsg}
+                </div>
+              )}
+
+              {/* 1. Title */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Award or Certificate Title <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={awardTitle}
+                  onChange={(e) => setAwardTitle(e.target.value)}
+                  placeholder="e.g. British Journalism Awards 2024"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-900 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all"
+                />
+              </div>
+
+              {/* 2. Institution */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Offering Institution / Organization <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={awardInstitution}
+                  onChange={(e) => setAwardInstitution(e.target.value)}
+                  placeholder="e.g. Society of Editors / International Press Association"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-900 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all"
+                />
+              </div>
+
+              {/* 3. Location (Optional) */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Location / Region (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={awardLocation}
+                  onChange={(e) => setAwardLocation(e.target.value)}
+                  placeholder="e.g. London, United Kingdom / Europe / Global"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-900 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all"
+                />
+              </div>
+
+              {/* 4. Image: Upload or Presets */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Award / Certificate Image
+                </label>
+                
+                {/* Live Image Preview */}
+                <div className="relative aspect-[16/10] w-full max-h-36 rounded-lg overflow-hidden bg-slate-900 border border-slate-200 mb-2.5">
+                  <img
+                    src={awardImage || "/awards/award_1_british_journalism.webp"}
+                    alt="Preview"
+                    className="w-full h-full object-cover"
+                  />
+                  <span className="absolute bottom-1.5 left-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded font-mono">
+                    Live Preview
+                  </span>
+                </div>
+
+                {/* Upload Button */}
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg cursor-pointer transition-colors border border-slate-200">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Upload Custom Image</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAwardImageUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                {/* Quick presets */}
+                <div>
+                  <span className="text-[10px] text-slate-400 font-medium block mb-1.5">Or choose a prestigious preset:</span>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {PRESET_AWARD_IMAGES.map((preset, pIdx) => (
+                      <button
+                        key={pIdx}
+                        type="button"
+                        onClick={() => setAwardImage(preset.src)}
+                        className={`relative aspect-[16/10] rounded border overflow-hidden transition-all cursor-pointer ${
+                          awardImage === preset.src ? "ring-2 ring-[#BF1E2D] border-transparent" : "border-slate-200 opacity-70 hover:opacity-100"
+                        }`}
+                        title={preset.label}
+                      >
+                        <img src={preset.src} alt={preset.label} className="w-full h-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* 5. 30 Word Paragraph */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                    Description / Summary <span className="text-red-500">*</span>
+                  </label>
+                  <span
+                    className={`text-[10.5px] font-mono font-semibold ${
+                      (awardDesc.trim() ? awardDesc.trim().split(/\s+/).filter(Boolean).length : 0) > 35
+                        ? "text-amber-600"
+                        : "text-slate-500"
+                    }`}
+                  >
+                    {awardDesc.trim() ? awardDesc.trim().split(/\s+/).filter(Boolean).length : 0} / ~30 words
+                  </span>
+                </div>
+                <textarea
+                  required
+                  rows={3}
+                  value={awardDesc}
+                  onChange={(e) => setAwardDesc(e.target.value)}
+                  placeholder="Write a concise ~30 word paragraph describing your award, distinction, or certification details..."
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-900 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all resize-y leading-relaxed"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Recommended: ~30 words highlighting your key journalistic or institutional recognition.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddAwardModalOpen(false);
+                    setEditingAwardIndex(null);
+                  }}
+                  disabled={isSavingAward}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingAward}
+                  className="px-5 py-2 bg-[#BF1E2D] hover:bg-[#991B1B] text-white text-xs font-bold rounded-lg shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  {isSavingAward ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>{editingAwardIndex !== null ? "Update Award" : "Save Award"}</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </main>
   );
 }

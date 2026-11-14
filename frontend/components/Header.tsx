@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Search, ChevronDown, User, Mail, Menu, X, PenTool, LogOut, Settings, BookOpen, ShieldCheck, Bell, Globe } from "lucide-react";
+import { Search, ChevronDown, User, Mail, Menu, X, PenTool, LogOut, Settings, BookOpen, ShieldCheck, Bell, Globe, Award } from "lucide-react";
 import { saveUserProfile, getUserProfile, resolveUserAvatar, isUploadedAvatar } from "@/lib/userProfiles";
 import { uploadImageToBackblaze } from "@/lib/imageUtils";
 import { useLiveArticles } from "@/lib/articlesSync";
@@ -1993,6 +1993,28 @@ export default function Header({
                   Displayed on your author profile card and Awards & Recognition quote section.
                 </p>
               </div>
+
+              {/* Field 5: AWARDS & CERTIFICATES */}
+              {((currentUser?.role || "").toLowerCase() === "writer" || (currentUser?.role || "").toLowerCase() === "admin") && (
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                  <div>
+                    <span className="block text-[11px] font-bold text-slate-800">
+                      Awards & Certificates
+                    </span>
+                    <span className="text-[10.5px] text-slate-400">
+                      Manage awards, honors & credentials on your author profile
+                    </span>
+                  </div>
+                  <Link
+                    href={`/author/${(currentUser?.name || "author").toLowerCase().replace(/[^a-z0-9]+/g, "-")}?tab=awards`}
+                    onClick={() => setIsProfileSettingsOpen(false)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#BF1E2D] hover:text-white hover:bg-[#BF1E2D] border border-red-200 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <Award size={13} />
+                    <span>Manage Awards</span>
+                  </Link>
+                </div>
+              )}
 
               {/* Action Buttons */}
               <div className="flex items-center gap-3 pt-4">
