@@ -896,7 +896,7 @@ export default function Header({
               alt="London BigBen Network"
               width={263}
               height={45}
-              className="h-7 sm:h-9 md:h-10 w-auto max-w-[165px] sm:max-w-none object-contain transition-transform group-hover:scale-[1.02]"
+              className="h-[33px] sm:h-10 md:h-11 w-auto max-w-[205px] sm:max-w-none object-contain transition-transform group-hover:scale-[1.02]"
               priority
               unoptimized
             />
