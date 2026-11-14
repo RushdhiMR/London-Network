@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { convertToWebP, uploadImageToBackblaze } from "@/lib/imageUtils";
@@ -305,6 +305,42 @@ export default function WriterDashboardPage() {
 
   // Initial Posts state
   const [posts, setPosts] = useState<ArticlePost[]>([]);
+
+  // Contributor Quota & Weekly Countdown State
+  const [countdown, setCountdown] = useState(() => {
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const daysUntilSunday = (7 - dayOfWeek) % 7;
+    const nextSunday = new Date(now);
+    nextSunday.setDate(now.getDate() + (daysUntilSunday === 0 && now.getHours() >= 23 && now.getMinutes() >= 59 ? 7 : daysUntilSunday));
+    nextSunday.setHours(23, 59, 59, 999);
+    const diff = Math.max(0, nextSunday.getTime() - now.getTime());
+    return {
+      days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+      hours: Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+      minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
+      seconds: Math.floor((diff % (1000 * 60)) / 1000),
+    };
+  });
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date();
+      const dayOfWeek = now.getDay();
+      const daysUntilSunday = (7 - dayOfWeek) % 7;
+      const nextSunday = new Date(now);
+      nextSunday.setDate(now.getDate() + (daysUntilSunday === 0 && now.getHours() >= 23 && now.getMinutes() >= 59 ? 7 : daysUntilSunday));
+      nextSunday.setHours(23, 59, 59, 999);
+      const diff = Math.max(0, nextSunday.getTime() - now.getTime());
+      setCountdown({
+        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+        minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
+        seconds: Math.floor((diff % (1000 * 60)) / 1000),
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
   const { articles: liveArticles, loading } = useLiveArticles();
   const [serverArticlesWithTrash, setServerArticlesWithTrash] = useState<ArticlePost[]>([]);
 
@@ -596,8 +632,22 @@ export default function WriterDashboardPage() {
         role: "Writer",
         avatar: resolvedAvatar,
         bio: savedProfile?.bio,
-        linkedin: savedProfile?.linkedin
+        linkedin: savedProfile?.linkedin,
+        title: (savedProfile as any)?.title || (auth.user as any)?.title,
+        writerType: (savedProfile as any)?.writerType || (auth.user as any)?.writerType || "Staff",
       };
+
+      fetch(`/api/auth/profile?email=${encodeURIComponent(emailToLookup)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+          if (d?.success && d.user) {
+            const dbType = d.user.writerType || d.user.writer_type;
+            if (dbType) {
+              setCurrentUser(prev => prev ? ({ ...prev, writerType: dbType }) : prev);
+            }
+          }
+        })
+        .catch(() => {});
 
       setCurrentUser(finalUser);
       setIsAuthenticated(true);
@@ -918,6 +968,57 @@ export default function WriterDashboardPage() {
     return matchesTab && matchesSearch;
   });
 
+  
+  const isContributor = ((currentUser as any)?.writerType || (auth.user as any)?.writerType || "").toLowerCase() === "contributor";
+
+  const userVisiblePosts = useMemo(() => {
+    return posts.filter(isPostVisibleInStudio);
+  }, [posts, currentUser, auth.user]);
+
+  const weeklySubmitted = useMemo(() => {
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    const dayOfWeek = now.getDay();
+    const diffToMonday = (dayOfWeek + 6) % 7;
+    startOfWeek.setDate(now.getDate() - diffToMonday);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    return userVisiblePosts.filter((p: any) => {
+      const st = (p.status || "").toLowerCase().trim();
+      const isCountable = st === "published" || st === "approved" || st.includes("pending") || st.includes("review") || st.includes("submitted");
+      if (!isCountable) return false;
+      try {
+        const rawDate = p.date || (p as any).published_at || (p as any).createdAt || (p as any).created_at;
+        if (!rawDate) return false;
+        const d = new Date(rawDate);
+        return !isNaN(d.getTime()) && d >= startOfWeek;
+      } catch {
+        return false;
+      }
+    }).length;
+  }, [userVisiblePosts]);
+
+  const monthlySubmitted = useMemo(() => {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    return userVisiblePosts.filter((p: any) => {
+      const st = (p.status || "").toLowerCase().trim();
+      const isCountable = st === "published" || st === "approved" || st.includes("pending") || st.includes("review") || st.includes("submitted");
+      if (!isCountable) return false;
+      try {
+        const rawDate = p.date || (p as any).published_at || (p as any).createdAt || (p as any).created_at;
+        if (!rawDate) return false;
+        const d = new Date(rawDate);
+        return !isNaN(d.getTime()) && d >= startOfMonth;
+      } catch {
+        return false;
+      }
+    }).length;
+  }, [userVisiblePosts]);
+
+  const isReminderDue = countdown.days <= 2 && weeklySubmitted < 5;
+
   if (isLoading || auth.loading) {
     return <PageSkeletonLoader />;
   }
@@ -1182,6 +1283,12 @@ export default function WriterDashboardPage() {
             </div>
           );
         })()}
+
+        {/* WORKSPACE AREA: POSTS + CONTRIBUTOR QUOTA SIDEBAR */}
+        <div className="flex flex-col lg:flex-row items-start gap-6">
+
+          {/* Left Column: Posts Workspace */}
+          <div className="flex-1 w-full min-w-0">
 
         {/* Toolbar: Navigation Filter Tabs & Integrated Search */}
         <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs mb-6">
@@ -1533,6 +1640,162 @@ export default function WriterDashboardPage() {
                 </span>
               </div>
             </div>
+          )}
+
+        </div>
+          </div>
+
+          {/* Right Column: Contributor Quota & Weekly Deadline Sidebar */}
+          {isContributor && (
+            <aside className="w-full lg:w-80 shrink-0 space-y-4 font-sans">
+              {/* Countdown Timer Header */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+                <div className="grid grid-cols-4 gap-2 text-center divide-x divide-slate-100">
+                  <div className="px-1">
+                    <span className="block text-2xl font-bold font-mono text-slate-900 tracking-tight">
+                      {String(countdown.days).padStart(2, "0")}
+                    </span>
+                    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">
+                      DAYS
+                    </span>
+                  </div>
+                  <div className="px-1">
+                    <span className="block text-2xl font-bold font-mono text-slate-900 tracking-tight">
+                      {String(countdown.hours).padStart(2, "0")}
+                    </span>
+                    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">
+                      HOURS
+                    </span>
+                  </div>
+                  <div className="px-1">
+                    <span className="block text-2xl font-bold font-mono text-slate-900 tracking-tight">
+                      {String(countdown.minutes).padStart(2, "0")}
+                    </span>
+                    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">
+                      MINS
+                    </span>
+                  </div>
+                  <div className="px-1">
+                    <span className="block text-2xl font-bold font-mono text-slate-900 tracking-tight">
+                      {String(countdown.seconds).padStart(2, "0")}
+                    </span>
+                    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">
+                      SECS
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2-Day Deadline Urgent Reminder Alert */}
+              {isReminderDue && (
+                <div className="p-4 bg-gradient-to-br from-amber-500 to-rose-600 text-white rounded-2xl shadow-md space-y-2 animate-in fade-in">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-white shrink-0 animate-bounce" />
+                    <span className="text-xs font-black uppercase tracking-wider">
+                      Deadline Reminder (2 Days Left)
+                    </span>
+                  </div>
+                  <p className="text-xs text-white/95 leading-snug font-medium">
+                    Your weekly publishing cycle ends in <strong>{countdown.days}d {countdown.hours}h {countdown.minutes}m</strong>. You have submitted <strong>{weeklySubmitted} / 5</strong> required articles.
+                  </p>
+                  <div className="pt-2 border-t border-white/20 flex items-center justify-between text-[11px]">
+                    <span className="font-bold text-white">
+                      ⚠️ {Math.max(0, 5 - weeklySubmitted)} article{Math.max(0, 5 - weeklySubmitted) > 1 ? "s" : ""} remaining
+                    </span>
+                    <Link
+                      href="/writer/create"
+                      className="px-2.5 py-1 bg-white text-rose-700 font-bold rounded-lg hover:bg-white/90 transition-all text-[11px] shadow-xs"
+                    >
+                      + Write Now
+                    </Link>
+                  </div>
+                </div>
+              )}
+
+              {/* Weekly Requirement Card */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                    WEEKLY REQUIREMENT
+                  </span>
+                  <span className="text-xs font-mono font-bold text-slate-900">
+                    {weeklySubmitted} / 5 Submitted
+                  </span>
+                </div>
+                <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden mt-3 mb-2.5">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      weeklySubmitted >= 5 ? "bg-[#00C853]" : "bg-emerald-500"
+                    }`}
+                    style={{ width: `${Math.min(100, Math.round((weeklySubmitted / 5) * 100))}%` }}
+                  />
+                </div>
+                <div className="text-[11px] font-semibold">
+                  {weeklySubmitted >= 5 ? (
+                    <span className="text-emerald-600 flex items-center gap-1">
+                      ✓ Weekly requirement satisfied
+                    </span>
+                  ) : (
+                    <span className="text-amber-600 flex items-center gap-1">
+                      ⚠️ {5 - weeklySubmitted} article{5 - weeklySubmitted > 1 ? "s" : ""} needed before week ends
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Monthly Requirement Card */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                    MONTHLY REQUIREMENT
+                  </span>
+                  <span className="text-xs font-mono font-bold text-slate-900">
+                    {monthlySubmitted} / 20 Submitted
+                  </span>
+                </div>
+                <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden mt-3 mb-2.5">
+                  <div
+                    className="h-full rounded-full bg-[#00C853] transition-all duration-500"
+                    style={{ width: `${Math.min(100, Math.round((monthlySubmitted / 20) * 100))}%` }}
+                  />
+                </div>
+                <div className="text-[11px] font-semibold">
+                  {monthlySubmitted >= 20 ? (
+                    <span className="text-emerald-600 flex items-center gap-1">
+                      ✓ Monthly quota fulfilled
+                    </span>
+                  ) : (
+                    <span className="text-slate-500">
+                      {monthlySubmitted} / 20 monthly articles submitted
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Contributor Policy & Requirements */}
+              <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 shadow-xs text-left">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900 mb-2.5">
+                  <span className="w-4 h-4 rounded-full border border-slate-700 flex items-center justify-center text-[10px] font-serif font-bold">
+                    i
+                  </span>
+                  <span>Contributor Policy & Requirements</span>
+                </div>
+                <ul className="text-[11px] text-slate-600 space-y-2 leading-relaxed">
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-slate-400 mt-0.5">•</span>
+                    <span>You must publish a minimum of <strong>5 articles per week</strong> (every 7 days).</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-slate-400 mt-0.5">•</span>
+                    <span>You must publish a minimum of <strong>20 articles per month</strong> (every 30 days).</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-slate-400 mt-0.5">•</span>
+                    <span>If you fail to meet these minimums, your account will be <strong>automatically suspended</strong> and login will be blocked.</span>
+                  </li>
+                </ul>
+              </div>
+            </aside>
           )}
 
         </div>
