@@ -994,9 +994,6 @@ export default function WriterDashboardPage() {
                     (e.target as HTMLElement).style.display = "none";
                   }}
                 />
-                <span className="font-sans font-extrabold text-xs md:text-sm tracking-tight text-gray-900">
-                  LONDON BIGBEN
-                </span>
               </Link>
 
               <span className="px-2 py-0.5 rounded-full text-[9px] font-bold font-mono tracking-wider text-[#D31220] bg-red-50/80 border border-red-100 uppercase">
