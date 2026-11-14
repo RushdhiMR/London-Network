@@ -15,6 +15,7 @@ export default function RegisterPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [fullName, setFullName] = useState("");
+  const [professionalTitle, setProfessionalTitle] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -150,6 +151,15 @@ export default function RegisterPage() {
       return;
     }
 
+    const cleanTitle = professionalTitle.trim();
+    if (cleanTitle) {
+      const titleWords = cleanTitle.split(/\s+/).filter(Boolean);
+      if (titleWords.length > 3) {
+        setErrorMessage("Professional title must be 3 words only (e.g. Political Correspondent).");
+        return;
+      }
+    }
+
     setIsSubmitting(true);
 
     const parsedCoverageAreas = coverageAreasInput
@@ -178,6 +188,7 @@ export default function RegisterPage() {
           location: cleanLocation,
           expertise: validExpertise.length > 0 ? validExpertise : undefined,
           quote: quote.trim() || undefined,
+          title: cleanTitle || undefined,
         }),
       });
 
@@ -190,10 +201,11 @@ export default function RegisterPage() {
 
       const registeredUser = data.user;
 
-      if (yearsOfExperience || finalCoverage || cleanLocation || validExpertise.length > 0 || quote.trim()) {
+      if (yearsOfExperience || finalCoverage || cleanLocation || validExpertise.length > 0 || quote.trim() || cleanTitle) {
         saveUserProfile({
           name: registeredUser.name,
           email: registeredUser.email,
+          ...(cleanTitle ? { title: cleanTitle } : {}),
           ...(yearsOfExperience ? { yearsOfExperience: parseInt(yearsOfExperience, 10) } : {}),
           ...(finalCoverage ? { coverageAreas: finalCoverage } : {}),
           ...(cleanCity ? { city: cleanCity } : {}),
@@ -350,6 +362,38 @@ export default function RegisterPage() {
                 onChange={(e) => setFullName(e.target.value)}
                 className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/30 focus:bg-white"
                 required
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+                  PROFESSIONAL TITLE <span className="text-slate-400 font-normal lowercase">(for author card, max 3 words)</span>
+                </label>
+                <span className={`text-[10px] font-semibold ${
+                  (professionalTitle.trim() ? professionalTitle.trim().split(/\s+/).filter(Boolean).length : 0) > 3
+                    ? "text-red-500 font-bold"
+                    : "text-slate-400"
+                }`}>
+                  {professionalTitle.trim() ? professionalTitle.trim().split(/\s+/).filter(Boolean).length : 0} / 3 words
+                </span>
+              </div>
+              <input
+                type="text"
+                name="dj_register_title"
+                autoComplete="off"
+                placeholder="e.g. Political Correspondent (max 3 words)"
+                value={professionalTitle}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const words = val.trim().split(/\s+/).filter(Boolean);
+                  if (words.length <= 3 || val.endsWith(" ")) {
+                    setProfessionalTitle(val);
+                  } else {
+                    setProfessionalTitle(words.slice(0, 3).join(" "));
+                  }
+                }}
+                className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/30 focus:bg-white"
               />
             </div>
 

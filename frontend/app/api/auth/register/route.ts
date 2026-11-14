@@ -20,6 +20,7 @@ export async function POST(request: Request) {
       expertise,
       expertiseSlots,
       quote,
+      title,
     } = body;
 
     // 1. Validation
@@ -47,11 +48,22 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!password || password.length < 6) {
+    if (password !== undefined && password.length < 6) {
       return NextResponse.json(
         { error: 'Password must be at least 6 characters long' },
         { status: 400 }
       );
+    }
+
+    const cleanTitle = title ? String(title).trim() : undefined;
+    if (cleanTitle) {
+      const titleWords = cleanTitle.split(/\s+/).filter(Boolean);
+      if (titleWords.length > 3) {
+        return NextResponse.json(
+          { error: 'Professional title must be 3 words only (e.g. Political Correspondent)' },
+          { status: 400 }
+        );
+      }
     }
 
     const userName = name.trim();
@@ -103,6 +115,7 @@ export async function POST(request: Request) {
         location: cleanLocation,
         expertise: parsedExpertise && parsedExpertise.length > 0 ? parsedExpertise : undefined,
         quote: quote ? String(quote).trim() : undefined,
+        title: cleanTitle,
       });
 
       const userPayload = {
@@ -118,6 +131,7 @@ export async function POST(request: Request) {
         location: (newUser as any).location,
         expertise: (newUser as any).expertise,
         quote: (newUser as any).quote,
+        title: (newUser as any).title,
       };
 
       // Set HTTP-Only session cookie and return token for tab session isolation

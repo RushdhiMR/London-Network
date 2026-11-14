@@ -53,6 +53,7 @@ interface AuthorProfileContentProps {
   author: {
     name: string;
     role: string;
+    title?: string;
     avatar: string;
     bio: string;
     location?: string;
@@ -419,6 +420,7 @@ export default function AuthorProfileContent({
       let finalName = author.name || "Author";
       let finalAvatar = author.avatar;
       let finalRole = author.role || "POLITICAL CORRESPONDENT";
+      let finalTitle = author.title || "";
       let finalBio = author.bio;
       let finalLocation = author.location || "London, United Kingdom";
       let finalEmail = author.email || `${slug.replace(/-/g, ".")}@londonbigben.com`;
@@ -439,12 +441,16 @@ export default function AuthorProfileContent({
 
       if (savedProfile) {
         if (savedProfile.name && !savedProfile.name.toLowerCase().includes("reader")) finalName = savedProfile.name;
+        if ((savedProfile as any).title) finalTitle = (savedProfile as any).title;
         if (savedProfile.role && !savedProfile.role.toLowerCase().includes("reader")) finalRole = savedProfile.role;
         if (savedProfile.bio && !savedProfile.bio.toLowerCase().includes("avid reader")) finalBio = savedProfile.bio;
         if (savedProfile.avatar && savedProfile.avatar.length > 5 && !savedProfile.avatar.includes("cart") && !savedProfile.avatar.includes("admin_profile")) {
           finalAvatar = savedProfile.avatar;
         }
         if (savedProfile.email) finalEmail = savedProfile.email;
+      }
+      if (!finalTitle && auth.user && auth.user.name === finalName && (auth.user as any).title) {
+        finalTitle = (auth.user as any).title;
       }
 
       const resolvedAvatar =
@@ -647,6 +653,7 @@ export default function AuthorProfileContent({
       setAuthorProfile({
         name: finalName,
         role: finalRole,
+        title: finalTitle,
         avatar: finalAvatar,
         bio: finalBio,
         location: finalLocation,
@@ -692,6 +699,7 @@ export default function AuthorProfileContent({
                 }
               } catch { }
             }
+            const dbTitle = dbUser.title;
             const dbQuote = dbUser.quote;
             const dbAwards = dbUser.awards;
             const dbMemberships = dbUser.memberships;
@@ -710,6 +718,7 @@ export default function AuthorProfileContent({
               ...(dbAbout ? { aboutTheJournalist: dbAbout } : {}),
               ...(dbApproach ? { journalisticApproach: dbApproach } : {}),
               ...(formattedJoined ? { joinedDate: formattedJoined } : {}),
+              ...(dbTitle ? { title: dbTitle } : {}),
               ...(dbQuote ? { quote: dbQuote } : {}),
               ...(Array.isArray(dbAwards) && dbAwards.length > 0 ? { awards: dbAwards } : {}),
               ...(Array.isArray(dbMemberships) && dbMemberships.length > 0 ? { memberships: dbMemberships } : {}),
@@ -1028,6 +1037,68 @@ export default function AuthorProfileContent({
 
 
   // Professional Memberships State & Handlers
+  // Title Edit State
+  const [isEditingTitleModal, setIsEditingTitleModal] = useState(false);
+  const [editingTitleVal, setEditingTitleVal] = useState("");
+  const [isSavingTitle, setIsSavingTitle] = useState(false);
+  const [titleError, setTitleError] = useState("");
+
+  const handleOpenEditTitle = () => {
+    setEditingTitleVal(authorProfile.title || "");
+    setTitleError("");
+    setIsEditingTitleModal(true);
+  };
+
+  const handleSaveTitle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = editingTitleVal.trim();
+    if (clean) {
+      const words = clean.split(/\s+/).filter(Boolean);
+      if (words.length > 3) {
+        setTitleError("Title must be 3 words only (e.g. Political Correspondent).");
+        return;
+      }
+    }
+    setIsSavingTitle(true);
+    setTitleError("");
+
+    setAuthorProfile((prev) => ({ ...prev, title: clean }));
+
+    try {
+      const targetEmail = authorProfile.email || auth.user?.email;
+      if (targetEmail) {
+        await fetch("/api/auth/profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: targetEmail, title: clean }),
+        });
+
+        const storageKey = `london_user_profile_${targetEmail.toLowerCase().trim()}`;
+        try {
+          const existing = JSON.parse(localStorage.getItem(storageKey) || "{}");
+          localStorage.setItem(storageKey, JSON.stringify({ ...existing, title: clean }));
+        } catch {}
+      }
+
+      const storageKeyOld = `author_profile_${slugClean}`;
+      try {
+        const existingOld = JSON.parse(localStorage.getItem(storageKeyOld) || "{}");
+        localStorage.setItem(storageKeyOld, JSON.stringify({ ...existingOld, title: clean }));
+      } catch {}
+
+      if (auth.refreshUser) {
+        auth.refreshUser().catch(() => {});
+      }
+      window.dispatchEvent(new CustomEvent("author-profile-sync", { detail: { email: targetEmail, title: clean } }));
+
+      setIsEditingTitleModal(false);
+    } catch (err: any) {
+      setTitleError(err?.message || "Failed to save title.");
+    } finally {
+      setIsSavingTitle(false);
+    }
+  };
+  
   const [isAddMembershipModalOpen, setIsAddMembershipModalOpen] = useState(false);
   const [editingMembershipIndex, setEditingMembershipIndex] = useState<number | null>(null);
   const [membershipName, setMembershipName] = useState("");
@@ -1703,14 +1774,26 @@ export default function AuthorProfileContent({
 
             {/* Author Details */}
             <div className="flex-1 min-w-0">
-              <span className="text-[11px] font-bold text-[#D31220] uppercase tracking-wider block mb-1">
-                {authorProfile.role || "POLITICAL CORRESPONDENT"}
-              </span>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[11px] font-bold text-[#D31220] uppercase tracking-wider block">
+                  {authorProfile.title ? authorProfile.title.toUpperCase() : (authorProfile.role || "POLITICAL CORRESPONDENT")}
+                </span>
+                {isOwner && (
+                  <button
+                    type="button"
+                    onClick={handleOpenEditTitle}
+                    className="p-1 rounded text-slate-400 hover:text-[#D31220] hover:bg-red-50 transition-colors cursor-pointer"
+                    title="Edit professional title (max 3 words)"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
               <h1 className="text-3xl sm:text-4xl font-serif font-bold text-slate-900 leading-tight mb-1">
                 {authorProfile.name}
               </h1>
               <p className="text-xs sm:text-sm text-slate-600 font-sans font-medium mb-3">
-                {authorProfile.role ? authorProfile.role.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : "Political Correspondent"} | London BigBen Network
+                {(authorProfile.title || authorProfile.role || "Political Correspondent").split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')} | London BigBen Network
               </p>
 
               {/* Location & Email */}
@@ -3153,6 +3236,93 @@ export default function AuthorProfileContent({
                   ) : (
                     <span>{editingMembershipIndex !== null ? "Update Membership" : "Add Membership"}</span>
                   )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+    
+      {/* EDIT PROFESSIONAL TITLE MODAL */}
+      {isEditingTitleModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 font-sans animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-sm w-full shadow-2xl overflow-hidden border border-slate-200 text-left">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-red-50 border border-red-200 flex items-center justify-center text-[#BF1E2D]">
+                  <Edit3 className="w-3.5 h-3.5" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-900">
+                  Edit Professional Title
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditingTitleModal(false)}
+                className="w-7 h-7 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveTitle} className="p-5 space-y-4">
+              {titleError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+                  <span>{titleError}</span>
+                </div>
+              )}
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                    Professional Title <span className="text-red-500">*</span>
+                  </label>
+                  <span className={`text-[10px] font-semibold ${
+                    (editingTitleVal.trim() ? editingTitleVal.trim().split(/\s+/).filter(Boolean).length : 0) > 3
+                      ? "text-red-600 font-bold"
+                      : "text-slate-400"
+                  }`}>
+                    {editingTitleVal.trim() ? editingTitleVal.trim().split(/\s+/).filter(Boolean).length : 0} / 3 words
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  value={editingTitleVal}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const words = val.trim().split(/\s+/).filter(Boolean);
+                    if (words.length <= 3 || val.endsWith(" ")) {
+                      setEditingTitleVal(val);
+                    } else {
+                      setEditingTitleVal(words.slice(0, 3).join(" "));
+                    }
+                  }}
+                  placeholder="e.g. Political Correspondent (max 3 words)"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all font-sans"
+                  required
+                  autoFocus
+                />
+                <p className="text-[10.5px] text-slate-400 mt-1.5 leading-normal">
+                  Shown in uppercase red right above your name (3 words only).
+                </p>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditingTitleModal(false)}
+                  className="px-3.5 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingTitle}
+                  className="px-4 py-2 bg-[#BF1E2D] hover:bg-[#a61a27] text-white rounded-xl text-xs font-bold transition-all shadow-xs disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                >
+                  {isSavingTitle ? "Saving..." : "Save Title"}
                 </button>
               </div>
             </form>

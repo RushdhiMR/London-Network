@@ -17,6 +17,7 @@ export interface JWTPayload {
   role: 'reader' | 'writer' | 'admin';
   provider: string;
   avatar?: string | null;
+  title?: string | null;
   quote?: string | null;
   awards?: any[] | null;
   memberships?: any[] | null;

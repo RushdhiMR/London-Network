@@ -97,7 +97,7 @@ export default function Header({
   const searchDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const headerSearchRef = useRef<HTMLDivElement>(null);
   const mobileSearchRef = useRef<HTMLDivElement>(null);
-  const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role?: string; avatar?: string; bio?: string; linkedin?: string; quote?: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role?: string; avatar?: string; bio?: string; linkedin?: string; quote?: string; title?: string } | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   const [isMobileUserDropdownOpen, setIsMobileUserDropdownOpen] = useState(false);
@@ -346,6 +346,7 @@ export default function Header({
 
   // Profile Form state
   const [profileName, setProfileName] = useState("");
+  const [profileTitle, setProfileTitle] = useState("");
   const [profileBio, setProfileBio] = useState("");
   const [profileLinkedin, setProfileLinkedin] = useState("");
   const [profileAvatar, setProfileAvatar] = useState("");
@@ -431,6 +432,7 @@ export default function Header({
   useEffect(() => {
     if (currentUser) {
       setProfileName(currentUser.name || "rushdhi");
+      setProfileTitle((currentUser as any)?.title || "");
       setProfileBio(currentUser.bio || "Writer User");
       setProfileLinkedin(currentUser.linkedin || "https://www.linkedin.com/in/your-profile");
       setProfileAvatar(currentUser.avatar && isUploadedAvatar(currentUser.avatar) ? currentUser.avatar : "");
@@ -486,6 +488,7 @@ export default function Header({
       bio: profileBio.trim(),
       linkedin: profileLinkedin.trim(),
       quote: profileQuote.trim() || undefined,
+      title: profileTitle.trim() || undefined,
       avatar: finalAvatar
     };
 
@@ -502,6 +505,7 @@ export default function Header({
           bio: updatedUser.bio,
           linkedin: updatedUser.linkedin,
           quote: updatedUser.quote,
+          title: updatedUser.title,
         }),
       }).catch(() => {});
     } catch (e) {}
@@ -556,6 +560,7 @@ export default function Header({
         bio: savedProfile?.bio,
         linkedin: savedProfile?.linkedin,
         quote: (savedProfile as any)?.quote || (auth.user as any)?.quote,
+        title: (savedProfile as any)?.title || (auth.user as any)?.title,
       });
     } else {
       setCurrentUser(null);
@@ -1937,6 +1942,38 @@ export default function Header({
                   className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-[#005691] focus:ring-1 focus:ring-blue-100 transition-all"
                 />
               </div>
+
+                            {/* Field: PROFESSIONAL TITLE */}
+              {((currentUser?.role || "").toLowerCase() === "writer" || (currentUser?.role || "").toLowerCase() === "admin") && (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
+                      PROFESSIONAL TITLE
+                    </label>
+                    <span className={`text-[10px] font-semibold ${(profileTitle.trim() ? profileTitle.trim().split(/\s+/).filter(Boolean).length : 0) > 3 ? "text-red-600 font-bold" : "text-slate-400"}`}>
+                      {profileTitle.trim() ? profileTitle.trim().split(/\s+/).filter(Boolean).length : 0} / 3 words
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="e.g. Political Correspondent (max 3 words)"
+                    value={profileTitle}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const words = val.trim().split(/\s+/).filter(Boolean);
+                      if (words.length <= 3 || val.endsWith(" ")) {
+                        setProfileTitle(val);
+                      } else {
+                        setProfileTitle(words.slice(0, 3).join(" "));
+                      }
+                    }}
+                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-[#005691] focus:ring-1 focus:ring-blue-100 transition-all"
+                  />
+                  <p className="text-[10.5px] text-slate-400 mt-1">
+                    Displayed in uppercase red above your name on your author profile (max 3 words).
+                  </p>
+                </div>
+              )}
 
               {/* Field 2: BIO */}
               <div>

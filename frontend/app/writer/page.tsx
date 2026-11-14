@@ -127,6 +127,7 @@ export default function WriterDashboardPage() {
 
   // Profile Form state
   const [profileName, setProfileName] = useState("");
+  const [profileTitle, setProfileTitle] = useState("");
   const [profileBio, setProfileBio] = useState("");
   const [profileLinkedin, setProfileLinkedin] = useState("");
   const [profileAvatar, setProfileAvatar] = useState("");
@@ -149,6 +150,7 @@ export default function WriterDashboardPage() {
   useEffect(() => {
     if (currentUser) {
       setProfileName(currentUser.name || "rushdhi");
+      setProfileTitle((currentUser as any)?.title || "");
       setProfileBio((currentUser as any).bio || "Writer User");
       setProfileLinkedin((currentUser as any).linkedin || "https://www.linkedin.com/in/your-profile");
       setProfileAvatar(currentUser.avatar && isUploadedAvatar(currentUser.avatar) ? currentUser.avatar : "");
@@ -258,6 +260,7 @@ export default function WriterDashboardPage() {
       journalisticApproach: clampedApproach,
       journalistic_approach: clampedApproach,
       quote: profileQuote.trim() || undefined,
+      title: profileTitle.trim() || undefined,
       city: cleanCity || undefined,
       country: cleanCountry || undefined,
       location: cleanLocation,
@@ -284,6 +287,7 @@ export default function WriterDashboardPage() {
           aboutTheJournalist: updatedUser.aboutTheJournalist,
           journalisticApproach: updatedUser.journalisticApproach,
           quote: updatedUser.quote,
+          title: updatedUser.title,
           city: updatedUser.city,
           country: updatedUser.country,
           location: updatedUser.location,
@@ -1865,6 +1869,36 @@ export default function WriterDashboardPage() {
                   onChange={(e) => setProfileName(e.target.value)}
                   className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all"
                 />
+              </div>
+
+                            {/* Field: PROFESSIONAL TITLE */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                    PROFESSIONAL TITLE <span className="text-gray-400 font-normal lowercase">(max 3 words)</span>
+                  </label>
+                  <span className={`text-[10px] font-semibold ${(profileTitle.trim() ? profileTitle.trim().split(/\s+/).filter(Boolean).length : 0) > 3 ? "text-red-600 font-bold" : "text-gray-400"}`}>
+                    {profileTitle.trim() ? profileTitle.trim().split(/\s+/).filter(Boolean).length : 0} / 3 words
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  placeholder="e.g. Political Correspondent (max 3 words)"
+                  value={profileTitle}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const words = val.trim().split(/\s+/).filter(Boolean);
+                    if (words.length <= 3 || val.endsWith(" ")) {
+                      setProfileTitle(val);
+                    } else {
+                      setProfileTitle(words.slice(0, 3).join(" "));
+                    }
+                  }}
+                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all"
+                />
+                <p className="text-[11px] text-gray-400 font-normal mt-1.5 leading-normal">
+                  Displayed in uppercase red above your name on your public author profile card.
+                </p>
               </div>
 
               {/* Field 2: BIO */}

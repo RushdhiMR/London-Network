@@ -4,6 +4,7 @@ export interface UserProfileData {
   avatar?: string;
   bio?: string;
   role?: string;
+  title?: string;
   linkedin?: string;
   quote?: string;
   [key: string]: any;

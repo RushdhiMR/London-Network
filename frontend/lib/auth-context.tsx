@@ -10,6 +10,7 @@ export interface User {
   provider: string;
   avatar?: string;
   bio?: string;
+  title?: string;
   quote?: string;
   awards?: any[];
   memberships?: any[];

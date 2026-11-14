@@ -31,6 +31,7 @@ export interface UserRow {
   expertiseRatings?: Record<string, number> | null;
   expertise_ratings?: Record<string, number> | null;
   quote?: string | null;
+  title?: string | null;
   joinedDate?: string | null;
   joined_date?: string | null;
   email_verified: boolean | number;
@@ -233,6 +234,7 @@ interface DeletedUserProfile {
   linkedin?: string | null;
   role?: string;
   quote?: string | null;
+  title?: string | null;
   deleted_at: string;
 }
 
@@ -664,6 +666,7 @@ export const DB = {
     expertiseRatings?: Record<string, number> | null;
     expertise_ratings?: Record<string, number> | null;
     quote?: string | null;
+    title?: string | null;
   }): Promise<UserRow> {
     const norm = (userData.email || '').trim().toLowerCase();
     const role = userData.role || 'reader';
@@ -738,6 +741,7 @@ export const DB = {
       expertiseRatings: restoredRatings,
       expertise_ratings: restoredRatings,
       quote: userData.quote ? String(userData.quote).trim() : (savedProfile?.quote || null),
+      title: userData.title ? String(userData.title).trim() : (savedProfile?.title || null),
       // Restore additional profile fields if saved
       ...(savedProfile?.bio ? { bio: savedProfile.bio } : {}),
       ...(savedProfile?.linkedin ? { linkedin: savedProfile.linkedin } : {}),
@@ -1191,6 +1195,7 @@ export const DB = {
     expertiseRatings?: Record<string, number> | null;
     expertise_ratings?: Record<string, number> | null;
     quote?: string | null;
+    title?: string | null;
     awards?: any[] | null;
     memberships?: any[] | null;
   }): Promise<any> {
@@ -1230,6 +1235,7 @@ export const DB = {
         ...(expSlots !== undefined ? { expertise: expSlots } : {}),
         ...(expRatings !== undefined ? { expertiseRatings: expRatings, expertise_ratings: expRatings } : {}),
         ...(data.quote !== undefined ? { quote: data.quote ? String(data.quote).trim() : null } : {}),
+        ...(data.title !== undefined ? { title: data.title ? String(data.title).trim() : null } : {}),
         ...(data.awards !== undefined ? { awards: Array.isArray(data.awards) ? data.awards : [] } : {}),
         ...(data.memberships !== undefined ? { memberships: Array.isArray(data.memberships) ? data.memberships : [] } : {}),
         updated_at: new Date().toISOString()
@@ -1255,6 +1261,7 @@ export const DB = {
         ...(expSlots !== undefined ? { expertise: expSlots } : {}),
         ...(expRatings !== undefined ? { expertiseRatings: expRatings, expertise_ratings: expRatings } : {}),
         ...(data.quote !== undefined ? { quote: data.quote ? String(data.quote).trim() : null } : {}),
+        ...(data.title !== undefined ? { title: data.title ? String(data.title).trim() : null } : {}),
         ...(data.awards !== undefined ? { awards: Array.isArray(data.awards) ? data.awards : [] } : {}),
         ...(data.memberships !== undefined ? { memberships: Array.isArray(data.memberships) ? data.memberships : [] } : {}),
         created_at: new Date().toISOString(),

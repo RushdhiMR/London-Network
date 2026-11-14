@@ -118,6 +118,7 @@ export async function POST(request: Request) {
       expertiseRatings,
       expertise_ratings,
       quote,
+      title,
       awards,
       memberships,
     } = body;
@@ -201,6 +202,16 @@ export async function POST(request: Request) {
     const rawRatings = expertiseRatings ?? expertise_ratings;
     const allowedRatings = isAdmin && rawRatings && typeof rawRatings === 'object' ? rawRatings : undefined;
 
+    if (title !== undefined && title !== null) {
+      const titleWords = String(title).trim().split(/\s+/).filter(Boolean);
+      if (titleWords.length > 3) {
+        return NextResponse.json(
+          { error: 'Professional title must be 3 words only (e.g. Political Correspondent)' },
+          { status: 400 }
+        );
+      }
+    }
+
     const updated = await DB.updateUserProfile({
       email,
       name,
@@ -216,6 +227,7 @@ export async function POST(request: Request) {
       country: country !== undefined ? (country ? String(country).trim() : null) : undefined,
       location: location !== undefined ? (location ? String(location).trim() : null) : undefined,
       expertise: parsedExpertise,
+      ...(title !== undefined ? { title: title ? String(title).trim() : null } : {}),
       ...(quote !== undefined ? { quote: quote ? String(quote).trim() : null } : {}),
       ...(awards !== undefined ? { awards: Array.isArray(awards) ? awards : [] } : {}),
       ...(memberships !== undefined ? { memberships: Array.isArray(memberships) ? memberships : [] } : {}),
