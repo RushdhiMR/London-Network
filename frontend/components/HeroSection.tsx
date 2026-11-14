@@ -398,7 +398,7 @@ export default function HeroSection() {
                   className="flex items-center gap-3 p-1.5 rounded hover:bg-gray-50 transition-colors group cursor-pointer"
                 >
                   {/* Item Image */}
-                  <div className="relative w-14 h-11 lg:w-14 lg:h-11 xl:w-16 xl:h-12 flex-shrink-0 bg-gray-100 overflow-hidden border border-gray-200">
+                  <div className="relative w-20 h-14 sm:w-[84px] sm:h-[58px] lg:w-[70px] lg:h-[50px] xl:w-[78px] xl:h-[55px] flex-shrink-0 bg-gray-100 overflow-hidden border border-gray-200">
                     <img 
                       src={item.image} 
                       alt={item.title}
