@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MapPin, Mail, Link2, Bell, ChevronRight, Award, BookOpen, ShieldCheck, Check, Calendar, Plus, Trash2, Edit3, X, Upload, AlertCircle } from "lucide-react";
+import { MapPin, Mail, Link2, Bell, ChevronRight, Award, BookOpen, ShieldCheck, Check, Calendar, Plus, Trash2, Edit3, X, Upload, AlertCircle, Search } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useLiveArticles } from "@/lib/articlesSync";
@@ -126,6 +126,50 @@ export const DEFAULT_SARAH_MEMBERSHIPS: MembershipItem[] = [
     memberSince: "2017",
   },
 ];
+
+export interface InstituteOption {
+  name: string;
+  aliases: string[];
+  logo: string;
+  defaultRole?: "Member" | "Fellow" | "Associate";
+}
+
+export const RECOGNIZED_INSTITUTES: InstituteOption[] = [
+  {
+    name: "Society of Editors (UK)",
+    aliases: ["society of editors", "se", "editors uk", "society of editors uk", "editors"],
+    logo: "/awards/memberships/membership_se.webp",
+    defaultRole: "Member",
+  },
+  {
+    name: "International Press Association (IPA)",
+    aliases: ["international press association", "ipa", "international press", "press association"],
+    logo: "/awards/memberships/membership_ipa.webp",
+    defaultRole: "Member",
+  },
+  {
+    name: "European Media Forum",
+    aliases: ["european media forum", "emf", "european media", "media forum"],
+    logo: "/awards/memberships/membership_emf.webp",
+    defaultRole: "Fellow",
+  },
+  {
+    name: "Political Journalists Association (UK)",
+    aliases: ["political journalists association", "pja", "political journalists", "political journalists association uk"],
+    logo: "/awards/memberships/membership_pja.webp",
+    defaultRole: "Member",
+  },
+];
+
+export function findMatchingInstitute(query: string): InstituteOption | undefined {
+  const q = query.trim().toLowerCase();
+  if (!q) return undefined;
+  return RECOGNIZED_INSTITUTES.find((inst) => {
+    if (inst.name.toLowerCase() === q) return true;
+    if (inst.name.toLowerCase().includes(q) || q.includes(inst.name.toLowerCase())) return true;
+    return inst.aliases?.some((alias) => alias === q || q.includes(alias) || alias.includes(q));
+  });
+}
 
 export const PRESET_MEMBERSHIP_LOGOS = [
   { label: "Society of Editors (UK)", src: "/awards/memberships/membership_se.webp" },
@@ -982,7 +1026,7 @@ export default function AuthorProfileContent({
     }
   };
 
-  
+
   // Professional Memberships State & Handlers
   const [isAddMembershipModalOpen, setIsAddMembershipModalOpen] = useState(false);
   const [editingMembershipIndex, setEditingMembershipIndex] = useState<number | null>(null);
@@ -993,6 +1037,40 @@ export default function AuthorProfileContent({
   const [isSavingMembership, setIsSavingMembership] = useState(false);
   const [membershipSuccessMsg, setMembershipSuccessMsg] = useState("");
   const [membershipFormError, setMembershipFormError] = useState("");
+  const [isInstituteSearchOpen, setIsInstituteSearchOpen] = useState(false);
+  const instituteSearchRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (instituteSearchRef.current && !instituteSearchRef.current.contains(e.target as Node)) {
+        setIsInstituteSearchOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleInstituteNameChange = (val: string) => {
+    setMembershipName(val);
+    setIsInstituteSearchOpen(true);
+
+    const matched = findMatchingInstitute(val);
+    if (matched) {
+      setMembershipLogo(matched.logo);
+      if (matched.defaultRole && editingMembershipIndex === null) {
+        setMembershipRoleType(matched.defaultRole);
+      }
+    }
+  };
+
+  const handleSelectInstitute = (inst: InstituteOption) => {
+    setMembershipName(inst.name);
+    setMembershipLogo(inst.logo);
+    if (inst.defaultRole && editingMembershipIndex === null) {
+      setMembershipRoleType(inst.defaultRole);
+    }
+    setIsInstituteSearchOpen(false);
+  };
 
   const displayedMemberships = useMemo<MembershipItem[]>(() => {
     if (Array.isArray(authorProfile.memberships) && authorProfile.memberships.length > 0) {
@@ -1021,7 +1099,7 @@ export default function AuthorProfileContent({
     setEditingMembershipIndex(idx);
     setMembershipName(item.name || "");
     setMembershipLogo(item.logo || "/awards/memberships/membership_se.webp");
-    
+
     if (item.role && item.role.toLowerCase().startsWith("fellow")) {
       setMembershipRoleType("Fellow");
     } else if (item.role && item.role.toLowerCase().startsWith("associate")) {
@@ -1029,7 +1107,7 @@ export default function AuthorProfileContent({
     } else {
       setMembershipRoleType("Member");
     }
-    
+
     const yearMatch = item.role?.match(/\d{4}/) || item.memberSince?.match(/\d{4}/);
     setMembershipYear(item.memberSince || (yearMatch ? yearMatch[0] : new Date().getFullYear().toString()));
     setMembershipFormError("");
@@ -1768,8 +1846,8 @@ export default function AuthorProfileContent({
               key={tab.id}
               onClick={() => handleTabChange(tab.id as any)}
               className={`pb-3 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap relative ${activeTab === tab.id
-                  ? "text-[#D31220] border-b-2 border-[#D31220]"
-                  : "text-slate-600 hover:text-slate-900"
+                ? "text-[#D31220] border-b-2 border-[#D31220]"
+                : "text-slate-600 hover:text-slate-900"
                 }`}
             >
               {tab.label}
@@ -2110,8 +2188,8 @@ export default function AuthorProfileContent({
 
               {followToast && (
                 <div className={`mb-3 p-2.5 rounded-lg text-xs font-medium flex items-start gap-2 animate-in fade-in ${followToast.type === 'success'
-                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                    : 'bg-slate-100 text-slate-700 border border-slate-200'
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                  : 'bg-slate-100 text-slate-700 border border-slate-200'
                   }`}>
                   <Check className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
                   <span>{followToast.message}</span>
@@ -2122,8 +2200,8 @@ export default function AuthorProfileContent({
                 onClick={handleFollowClick}
                 disabled={followLoading}
                 className={`w-full py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs disabled:opacity-75 ${isFollowing
-                    ? "bg-slate-800 text-white hover:bg-slate-900"
-                    : "bg-[#BF1E2D] hover:bg-[#a61a27] text-white"
+                  ? "bg-slate-800 text-white hover:bg-slate-900"
+                  : "bg-[#BF1E2D] hover:bg-[#a61a27] text-white"
                   }`}
               >
                 {followLoading ? (
@@ -2729,8 +2807,8 @@ export default function AuthorProfileContent({
                   </label>
                   <span
                     className={`text-[10.5px] font-mono font-semibold ${(awardDesc.trim() ? awardDesc.trim().split(/\s+/).filter(Boolean).length : 0) > 35
-                        ? "text-amber-600"
-                        : "text-slate-500"
+                      ? "text-amber-600"
+                      : "text-slate-500"
                       }`}
                   >
                     {awardDesc.trim() ? awardDesc.trim().split(/\s+/).filter(Boolean).length : 0} / ~30 words
@@ -2782,7 +2860,7 @@ export default function AuthorProfileContent({
         </div>
       )}
 
-    
+
       {/* ADD / EDIT PROFESSIONAL MEMBERSHIP MODAL */}
       {isAddMembershipModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150 font-sans">
@@ -2827,19 +2905,100 @@ export default function AuthorProfileContent({
                 </div>
               )}
 
-              {/* Field 1: Institute / Organization Name */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Institute / Association Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={membershipName}
-                  onChange={(e) => setMembershipName(e.target.value)}
-                  placeholder="e.g. Society of Editors (UK) or National Union of Journalists"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all font-sans"
-                  required
-                />
+              {/* Field 1: Institute / Organization Name with Auto-Suggest Search */}
+              <div ref={instituteSearchRef} className="relative">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                    Institute / Association Name <span className="text-red-500">*</span>
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    Search & auto-detects logo
+                  </span>
+                </div>
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={membershipName}
+                    onChange={(e) => handleInstituteNameChange(e.target.value)}
+                    onFocus={() => setIsInstituteSearchOpen(true)}
+                    placeholder="Search institute name (e.g. European Media Forum, Society of Editors...)"
+                    className="w-full pl-9 pr-8 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all font-sans"
+                    required
+                  />
+                  {membershipName && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMembershipName("");
+                        setIsInstituteSearchOpen(true);
+                      }}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-full cursor-pointer"
+                      title="Clear search"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Auto-suggest search dropdown */}
+                {isInstituteSearchOpen && (
+                  <div className="absolute z-20 left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden py-1 max-h-56 overflow-y-auto animate-in fade-in duration-100">
+                    <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                      <span>Recognized Institutes</span>
+                      <span>Click to select</span>
+                    </div>
+                    {RECOGNIZED_INSTITUTES.filter((inst) => {
+                      if (!membershipName.trim()) return true;
+                      const q = membershipName.trim().toLowerCase();
+                      return (
+                        inst.name.toLowerCase().includes(q) ||
+                        inst.aliases?.some((a) => a.includes(q))
+                      );
+                    }).length === 0 ? (
+                      <div className="px-3 py-2.5 text-xs text-slate-500 text-center font-sans">
+                        No preset found for &ldquo;{membershipName}&rdquo;. You can still use this name and upload a custom logo below.
+                      </div>
+                    ) : (
+                      RECOGNIZED_INSTITUTES.filter((inst) => {
+                        if (!membershipName.trim()) return true;
+                        const q = membershipName.trim().toLowerCase();
+                        return (
+                          inst.name.toLowerCase().includes(q) ||
+                          inst.aliases?.some((a) => a.includes(q))
+                        );
+                      }).map((inst, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleSelectInstitute(inst)}
+                          className={`w-full px-3 py-2 flex items-center gap-2.5 text-left transition-colors cursor-pointer group ${
+                            membershipName.toLowerCase().trim() === inst.name.toLowerCase().trim()
+                              ? "bg-red-50/70"
+                              : "hover:bg-slate-50"
+                          }`}
+                        >
+                          <img
+                            src={inst.logo}
+                            alt={inst.name}
+                            className="w-7 h-7 rounded object-contain border border-slate-200 bg-white shrink-0 shadow-xs"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <span className="text-xs font-bold text-slate-900 group-hover:text-[#BF1E2D] block truncate">
+                              {inst.name}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block">
+                              Auto-fills logo & details
+                            </span>
+                          </div>
+                          <span className="text-[10.5px] font-semibold text-[#BF1E2D] opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                            Select
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Field 2: Institute Logo */}
@@ -2882,15 +3041,17 @@ export default function AuthorProfileContent({
                         type="button"
                         onClick={() => {
                           setMembershipLogo(preset.src);
-                          if (!membershipName.trim()) {
-                            setMembershipName(preset.label);
+                          setMembershipName(preset.label);
+                          setIsInstituteSearchOpen(false);
+                          const matched = findMatchingInstitute(preset.label);
+                          if (matched?.defaultRole && editingMembershipIndex === null) {
+                            setMembershipRoleType(matched.defaultRole);
                           }
                         }}
-                        className={`relative p-1.5 rounded-lg border flex flex-col items-center justify-center bg-white transition-all cursor-pointer ${
-                          membershipLogo === preset.src
+                        className={`relative p-1.5 rounded-lg border flex flex-col items-center justify-center bg-white transition-all cursor-pointer ${membershipLogo === preset.src
                             ? "ring-2 ring-[#BF1E2D] border-transparent bg-red-50/20"
                             : "border-slate-200 hover:border-slate-300 opacity-80 hover:opacity-100"
-                        }`}
+                          }`}
                         title={preset.label}
                       >
                         <img src={preset.src} alt={preset.label} className="w-6 h-6 object-contain" />
