@@ -1728,21 +1728,21 @@ export default function Header({
               )}
             </div>
           ) : (
-            <div className="flex items-center gap-2 pt-1 pb-2 border-b border-gray-100">
+            <div className="grid grid-cols-2 gap-2.5 pt-1 pb-2 border-b border-gray-100">
               <Link
                 href={loginHref}
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-900 text-center font-bold text-xs py-2.5 rounded-md border border-gray-300 flex items-center justify-center gap-1.5 transition-colors"
+                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-900 text-center font-bold text-xs py-2.5 rounded-md border border-gray-300 flex items-center justify-center gap-1.5 transition-colors"
               >
-                <User size={15} className="text-[#BF1E2D]" />
-                <span>Sign In</span>
+                <User size={15} className="text-[#BF1E2D] shrink-0" />
+                <span className="truncate">Sign In</span>
               </Link>
               <Link
                 href="/register"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="flex-1 bg-slate-900 hover:bg-black text-white text-center font-bold text-xs py-2.5 rounded-md flex items-center justify-center gap-1.5 transition-colors"
+                className="w-full bg-slate-900 hover:bg-black text-white text-center font-bold text-xs py-2.5 rounded-md flex items-center justify-center gap-1.5 transition-colors"
               >
-                <span>Register Account</span>
+                <span className="truncate">Register Account</span>
               </Link>
             </div>
           )}
