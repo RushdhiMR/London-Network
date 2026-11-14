@@ -97,7 +97,7 @@ export default function Header({
   const searchDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const headerSearchRef = useRef<HTMLDivElement>(null);
   const mobileSearchRef = useRef<HTMLDivElement>(null);
-  const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role?: string; avatar?: string; bio?: string; linkedin?: string; quote?: string; title?: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role?: string; avatar?: string; bio?: string; linkedin?: string; quote?: string; title?: string; writerType?: string } | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   const [isMobileUserDropdownOpen, setIsMobileUserDropdownOpen] = useState(false);
@@ -347,6 +347,7 @@ export default function Header({
   // Profile Form state
   const [profileName, setProfileName] = useState("");
   const [profileTitle, setProfileTitle] = useState("");
+  const [profileWriterType, setProfileWriterType] = useState<"Staff" | "Contributor">("Staff");
   const [profileBio, setProfileBio] = useState("");
   const [profileLinkedin, setProfileLinkedin] = useState("");
   const [profileAvatar, setProfileAvatar] = useState("");
@@ -433,6 +434,7 @@ export default function Header({
     if (currentUser) {
       setProfileName(currentUser.name || "rushdhi");
       setProfileTitle((currentUser as any)?.title || "");
+      setProfileWriterType(((currentUser as any)?.writerType === "Contributor" ? "Contributor" : "Staff"));
       setProfileBio(currentUser.bio || "Writer User");
       setProfileLinkedin(currentUser.linkedin || "https://www.linkedin.com/in/your-profile");
       setProfileAvatar(currentUser.avatar && isUploadedAvatar(currentUser.avatar) ? currentUser.avatar : "");
@@ -489,6 +491,7 @@ export default function Header({
       linkedin: profileLinkedin.trim(),
       quote: profileQuote.trim() || undefined,
       title: profileTitle.trim() || undefined,
+      writerType: profileWriterType,
       avatar: finalAvatar
     };
 
@@ -506,6 +509,7 @@ export default function Header({
           linkedin: updatedUser.linkedin,
           quote: updatedUser.quote,
           title: updatedUser.title,
+          writerType: updatedUser.writerType,
         }),
       }).catch(() => {});
     } catch (e) {}
@@ -561,6 +565,7 @@ export default function Header({
         linkedin: savedProfile?.linkedin,
         quote: (savedProfile as any)?.quote || (auth.user as any)?.quote,
         title: (savedProfile as any)?.title || (auth.user as any)?.title,
+        writerType: (savedProfile as any)?.writerType || (auth.user as any)?.writerType || "Staff",
       });
     } else {
       setCurrentUser(null);
@@ -1971,6 +1976,69 @@ export default function Header({
                   />
                   <p className="text-[10.5px] text-slate-400 mt-1">
                     Displayed in uppercase red above your name on your author profile (max 3 words).
+                  </p>
+                </div>
+              )}
+
+                            {/* Field: WRITER ACCOUNT TYPE */}
+              {((currentUser?.role || "").toLowerCase() === "writer" || (currentUser?.role || "").toLowerCase() === "admin") && (
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">
+                    WRITER ACCOUNT TYPE
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label
+                      onClick={() => setProfileWriterType("Staff")}
+                      className={`p-3 rounded-xl border flex flex-col justify-between transition-all cursor-pointer ${
+                        profileWriterType === "Staff"
+                          ? "border-[#005691] bg-blue-50/20 ring-1 ring-blue-100"
+                          : "border-slate-200 hover:border-slate-300 bg-white"
+                      }`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <input
+                          type="radio"
+                          name="hdr_writer_type"
+                          checked={profileWriterType === "Staff"}
+                          onChange={() => setProfileWriterType("Staff")}
+                          className="mt-0.5 text-[#005691] focus:ring-[#005691]"
+                        />
+                        <div>
+                          <span className="text-xs font-bold text-slate-900 block">Staff</span>
+                          <span className="text-[10px] text-slate-500 block leading-tight mt-0.5">
+                            Unlimited submissions
+                          </span>
+                        </div>
+                      </div>
+                    </label>
+
+                    <label
+                      onClick={() => setProfileWriterType("Contributor")}
+                      className={`p-3 rounded-xl border flex flex-col justify-between transition-all cursor-pointer ${
+                        profileWriterType === "Contributor"
+                          ? "border-[#005691] bg-blue-50/20 ring-1 ring-blue-100"
+                          : "border-slate-200 hover:border-slate-300 bg-white"
+                      }`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <input
+                          type="radio"
+                          name="hdr_writer_type"
+                          checked={profileWriterType === "Contributor"}
+                          onChange={() => setProfileWriterType("Contributor")}
+                          className="mt-0.5 text-[#005691] focus:ring-[#005691]"
+                        />
+                        <div>
+                          <span className="text-xs font-bold text-slate-900 block">Contributor</span>
+                          <span className="text-[10px] text-slate-500 block leading-tight mt-0.5">
+                            20 articles/month (5/wk)
+                          </span>
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                  <p className="text-[10.5px] text-slate-400 mt-1">
+                    Contributors must submit 20 articles per month (5 per week) to maintain account standing.
                   </p>
                 </div>
               )}

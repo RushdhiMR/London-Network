@@ -128,6 +128,7 @@ export default function WriterDashboardPage() {
   // Profile Form state
   const [profileName, setProfileName] = useState("");
   const [profileTitle, setProfileTitle] = useState("");
+  const [profileWriterType, setProfileWriterType] = useState<"Staff" | "Contributor">("Staff");
   const [profileBio, setProfileBio] = useState("");
   const [profileLinkedin, setProfileLinkedin] = useState("");
   const [profileAvatar, setProfileAvatar] = useState("");
@@ -151,6 +152,7 @@ export default function WriterDashboardPage() {
     if (currentUser) {
       setProfileName(currentUser.name || "rushdhi");
       setProfileTitle((currentUser as any)?.title || "");
+      setProfileWriterType(((currentUser as any)?.writerType === "Contributor" ? "Contributor" : "Staff"));
       setProfileBio((currentUser as any).bio || "Writer User");
       setProfileLinkedin((currentUser as any).linkedin || "https://www.linkedin.com/in/your-profile");
       setProfileAvatar(currentUser.avatar && isUploadedAvatar(currentUser.avatar) ? currentUser.avatar : "");
@@ -261,6 +263,7 @@ export default function WriterDashboardPage() {
       journalistic_approach: clampedApproach,
       quote: profileQuote.trim() || undefined,
       title: profileTitle.trim() || undefined,
+      writerType: profileWriterType,
       city: cleanCity || undefined,
       country: cleanCountry || undefined,
       location: cleanLocation,
@@ -288,6 +291,7 @@ export default function WriterDashboardPage() {
           journalisticApproach: updatedUser.journalisticApproach,
           quote: updatedUser.quote,
           title: updatedUser.title,
+          writerType: updatedUser.writerType,
           city: updatedUser.city,
           country: updatedUser.country,
           location: updatedUser.location,
@@ -1898,6 +1902,67 @@ export default function WriterDashboardPage() {
                 />
                 <p className="text-[11px] text-gray-400 font-normal mt-1.5 leading-normal">
                   Displayed in uppercase red above your name on your public author profile card.
+                </p>
+              </div>
+
+                            {/* Field: WRITER ACCOUNT TYPE */}
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                  WRITER ACCOUNT TYPE
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <label
+                    onClick={() => setProfileWriterType("Staff")}
+                    className={`p-3 rounded-xl border flex flex-col justify-between transition-all cursor-pointer ${
+                      profileWriterType === "Staff"
+                        ? "border-[#D31220] bg-red-50/20 ring-1 ring-red-100"
+                        : "border-gray-200 hover:border-gray-300 bg-white"
+                    }`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <input
+                        type="radio"
+                        name="w_writer_type"
+                        checked={profileWriterType === "Staff"}
+                        onChange={() => setProfileWriterType("Staff")}
+                        className="mt-0.5 text-[#D31220] focus:ring-[#D31220]"
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-gray-900 block">Staff</span>
+                        <span className="text-[10.5px] text-gray-500 block leading-snug mt-0.5">
+                          Unlimited article submissions anytime
+                        </span>
+                      </div>
+                    </div>
+                  </label>
+
+                  <label
+                    onClick={() => setProfileWriterType("Contributor")}
+                    className={`p-3 rounded-xl border flex flex-col justify-between transition-all cursor-pointer ${
+                      profileWriterType === "Contributor"
+                        ? "border-[#D31220] bg-red-50/20 ring-1 ring-red-100"
+                        : "border-gray-200 hover:border-gray-300 bg-white"
+                    }`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <input
+                        type="radio"
+                        name="w_writer_type"
+                        checked={profileWriterType === "Contributor"}
+                        onChange={() => setProfileWriterType("Contributor")}
+                        className="mt-0.5 text-[#D31220] focus:ring-[#D31220]"
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-gray-900 block">Contributor</span>
+                        <span className="text-[10.5px] text-gray-500 block leading-snug mt-0.5">
+                          Must submit 20 articles/month (5/week)
+                        </span>
+                      </div>
+                    </div>
+                  </label>
+                </div>
+                <p className="text-[11px] text-gray-400 font-normal mt-1.5 leading-normal">
+                  Staff submit anytime without limits. Contributors must submit 20 articles/month (5/week) or risk account suspension.
                 </p>
               </div>
 

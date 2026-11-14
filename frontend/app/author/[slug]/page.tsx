@@ -12,6 +12,7 @@ interface AuthorPageProps {
 const authorsDatabase: Record<string, {
   name: string;
   role: string;
+  writerType?: string;
   avatar: string;
   bio: string;
   location?: string;
@@ -30,6 +31,7 @@ const authorsDatabase: Record<string, {
   "sarah-mitchell": {
     name: "Sarah Mitchell",
     role: "POLITICAL CORRESPONDENT",
+    writerType: "Staff",
     avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=800&q=80&fit=crop",
     bio: "Sarah Mitchell is a political correspondent at London BigBen Network, covering UK government, Parliament, policy and international relations. She has more than a decade of experience reporting on political developments across the UK and Europe, with a focus on governance, policy reform and global diplomacy.",
     city: "London",

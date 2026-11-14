@@ -11,6 +11,7 @@ export interface User {
   avatar?: string;
   bio?: string;
   title?: string;
+  writerType?: string;
   quote?: string;
   awards?: any[];
   memberships?: any[];

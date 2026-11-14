@@ -18,6 +18,7 @@ export interface JWTPayload {
   provider: string;
   avatar?: string | null;
   title?: string | null;
+  writerType?: string | null;
   quote?: string | null;
   awards?: any[] | null;
   memberships?: any[] | null;

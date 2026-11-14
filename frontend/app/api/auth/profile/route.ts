@@ -119,6 +119,7 @@ export async function POST(request: Request) {
       expertise_ratings,
       quote,
       title,
+      writerType,
       awards,
       memberships,
     } = body;
@@ -228,6 +229,7 @@ export async function POST(request: Request) {
       location: location !== undefined ? (location ? String(location).trim() : null) : undefined,
       expertise: parsedExpertise,
       ...(title !== undefined ? { title: title ? String(title).trim() : null } : {}),
+      ...(writerType !== undefined ? { writerType: writerType === "Contributor" ? "Contributor" : "Staff" } : {}),
       ...(quote !== undefined ? { quote: quote ? String(quote).trim() : null } : {}),
       ...(awards !== undefined ? { awards: Array.isArray(awards) ? awards : [] } : {}),
       ...(memberships !== undefined ? { memberships: Array.isArray(memberships) ? memberships : [] } : {}),

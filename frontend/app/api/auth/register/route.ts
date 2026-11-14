@@ -21,6 +21,7 @@ export async function POST(request: Request) {
       expertiseSlots,
       quote,
       title,
+      writerType,
     } = body;
 
     // 1. Validation
@@ -116,6 +117,7 @@ export async function POST(request: Request) {
         expertise: parsedExpertise && parsedExpertise.length > 0 ? parsedExpertise : undefined,
         quote: quote ? String(quote).trim() : undefined,
         title: cleanTitle,
+        writerType: writerType === "Contributor" ? "Contributor" : "Staff",
       });
 
       const userPayload = {
@@ -132,6 +134,7 @@ export async function POST(request: Request) {
         expertise: (newUser as any).expertise,
         quote: (newUser as any).quote,
         title: (newUser as any).title,
+        writerType: (newUser as any).writerType || "Staff",
       };
 
       // Set HTTP-Only session cookie and return token for tab session isolation

@@ -16,6 +16,7 @@ export default function RegisterPage() {
 
   const [fullName, setFullName] = useState("");
   const [professionalTitle, setProfessionalTitle] = useState("");
+  const [writerType, setWriterType] = useState<"Staff" | "Contributor">("Staff");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -189,6 +190,7 @@ export default function RegisterPage() {
           expertise: validExpertise.length > 0 ? validExpertise : undefined,
           quote: quote.trim() || undefined,
           title: cleanTitle || undefined,
+          writerType: writerType === "Contributor" ? "Contributor" : "Staff",
         }),
       });
 
@@ -206,6 +208,7 @@ export default function RegisterPage() {
           name: registeredUser.name,
           email: registeredUser.email,
           ...(cleanTitle ? { title: cleanTitle } : {}),
+          writerType: writerType === "Contributor" ? "Contributor" : "Staff",
           ...(yearsOfExperience ? { yearsOfExperience: parseInt(yearsOfExperience, 10) } : {}),
           ...(finalCoverage ? { coverageAreas: finalCoverage } : {}),
           ...(cleanCity ? { city: cleanCity } : {}),
@@ -411,6 +414,64 @@ export default function RegisterPage() {
                 className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all bg-slate-50/30 focus:bg-white"
                 required
               />
+            </div>
+
+                        {/* Field: WRITER ACCOUNT TYPE */}
+            <div className="pt-1">
+              <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                WRITER ACCOUNT TYPE <span className="text-slate-400 font-normal lowercase">(choose your publishing role)</span>
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <label
+                  onClick={() => setWriterType("Staff")}
+                  className={`p-3 rounded-xl border flex flex-col justify-between transition-all cursor-pointer ${
+                    writerType === "Staff"
+                      ? "border-[#BF1E2D] bg-red-50/20 ring-1 ring-red-100"
+                      : "border-slate-200 hover:border-slate-300 bg-slate-50/30"
+                  }`}
+                >
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="radio"
+                      name="register_writer_type"
+                      checked={writerType === "Staff"}
+                      onChange={() => setWriterType("Staff")}
+                      className="mt-0.5 text-[#BF1E2D] focus:ring-[#BF1E2D]"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-slate-900 block">Staff</span>
+                      <p className="text-[10.5px] text-slate-500 mt-0.5 leading-snug">
+                        Can submit articles anytime unlimited.
+                      </p>
+                    </div>
+                  </div>
+                </label>
+
+                <label
+                  onClick={() => setWriterType("Contributor")}
+                  className={`p-3 rounded-xl border flex flex-col justify-between transition-all cursor-pointer ${
+                    writerType === "Contributor"
+                      ? "border-[#BF1E2D] bg-red-50/20 ring-1 ring-red-100"
+                      : "border-slate-200 hover:border-slate-300 bg-slate-50/30"
+                  }`}
+                >
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="radio"
+                      name="register_writer_type"
+                      checked={writerType === "Contributor"}
+                      onChange={() => setWriterType("Contributor")}
+                      className="mt-0.5 text-[#BF1E2D] focus:ring-[#BF1E2D]"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-slate-900 block">Contributor</span>
+                      <p className="text-[10.5px] text-slate-500 mt-0.5 leading-snug">
+                        Must submit <strong>20 articles/month</strong> (5/week) to maintain account.
+                      </p>
+                    </div>
+                  </div>
+                </label>
+              </div>
             </div>
 
             <div>
