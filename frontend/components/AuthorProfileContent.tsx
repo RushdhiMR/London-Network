@@ -2664,7 +2664,7 @@ export default function AuthorProfileContent({
                             <img
                               src={m.logo || "/awards/memberships/membership_se.webp"}
                               alt={m.name}
-                              className="w-7 h-7 rounded object-contain shrink-0 border border-slate-200 bg-white"
+                              className="w-9 h-9 sm:w-10 sm:h-10 rounded object-contain shrink-0 border border-slate-200 bg-white"
                             />
                             <div className="min-w-0">
                               <h4 className="text-xs font-bold text-slate-900 truncate">
