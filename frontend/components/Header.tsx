@@ -2016,6 +2016,28 @@ export default function Header({
                 </div>
               )}
 
+              {/* Field 6: PROFESSIONAL MEMBERSHIPS */}
+              {((currentUser?.role || "").toLowerCase() === "writer" || (currentUser?.role || "").toLowerCase() === "admin") && (
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                  <div>
+                    <span className="block text-[11px] font-bold text-slate-800">
+                      Professional Memberships
+                    </span>
+                    <span className="text-[10.5px] text-slate-400">
+                      Add & manage institute affiliations & memberships
+                    </span>
+                  </div>
+                  <Link
+                    href={`/author/${(currentUser?.name || "author").toLowerCase().replace(/[^a-z0-9]+/g, "-")}?tab=awards#memberships`}
+                    onClick={() => setIsProfileSettingsOpen(false)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#BF1E2D] hover:text-white hover:bg-[#BF1E2D] border border-red-200 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <BookOpen size={13} />
+                    <span>Manage Memberships</span>
+                  </Link>
+                </div>
+              )}
+
               {/* Action Buttons */}
               <div className="flex items-center gap-3 pt-4">
                 <button

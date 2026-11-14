@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MapPin, Mail, Link2, Bell, ChevronRight, Award, BookOpen, ShieldCheck, Check, Calendar, Plus, Trash2, Edit3, X, Upload } from "lucide-react";
+import { MapPin, Mail, Link2, Bell, ChevronRight, Award, BookOpen, ShieldCheck, Check, Calendar, Plus, Trash2, Edit3, X, Upload, AlertCircle } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useLiveArticles } from "@/lib/articlesSync";
@@ -27,6 +27,14 @@ export interface SidebarItem {
   href: string;
   title: string;
   views: string;
+}
+
+export interface MembershipItem {
+  id?: string;
+  logo: string;
+  name: string;
+  role?: string;
+  memberSince?: string;
 }
 
 export interface AwardItem {
@@ -62,6 +70,7 @@ interface AuthorProfileContentProps {
     expertiseRatings?: Record<string, number>;
     quote?: string;
     awards?: AwardItem[];
+    memberships?: MembershipItem[];
   };
   initialArticles: ArticleItem[];
   mostReadSidebar?: SidebarItem[];
@@ -85,6 +94,44 @@ const PRESET_AWARD_IMAGES = [
   { label: "Press Credentials", src: "/awards/award_6_press_association.webp" },
   { label: "Fellowship Diploma", src: "/awards/award_7_european_fellowship.webp" },
   { label: "Book / Media List", src: "/awards/award_8_top_media_lists.webp" },
+];
+
+export const DEFAULT_SARAH_MEMBERSHIPS: MembershipItem[] = [
+  {
+    id: "sarah-mem-1",
+    logo: "/awards/memberships/membership_se.webp",
+    name: "Society of Editors (UK)",
+    role: "Member since 2018",
+    memberSince: "2018",
+  },
+  {
+    id: "sarah-mem-2",
+    logo: "/awards/memberships/membership_ipa.webp",
+    name: "International Press Association (IPA)",
+    role: "Member since 2019",
+    memberSince: "2019",
+  },
+  {
+    id: "sarah-mem-3",
+    logo: "/awards/memberships/membership_emf.webp",
+    name: "European Media Forum",
+    role: "Fellow since 2018",
+    memberSince: "2018",
+  },
+  {
+    id: "sarah-mem-4",
+    logo: "/awards/memberships/membership_pja.webp",
+    name: "Political Journalists Association (UK)",
+    role: "Member since 2017",
+    memberSince: "2017",
+  },
+];
+
+export const PRESET_MEMBERSHIP_LOGOS = [
+  { label: "Society of Editors (UK)", src: "/awards/memberships/membership_se.webp" },
+  { label: "International Press Association (IPA)", src: "/awards/memberships/membership_ipa.webp" },
+  { label: "European Media Forum", src: "/awards/memberships/membership_emf.webp" },
+  { label: "Political Journalists Association (UK)", src: "/awards/memberships/membership_pja.webp" },
 ];
 
 const DEFAULT_SARAH_AWARDS: AwardItem[] = [
@@ -230,7 +277,7 @@ export default function AuthorProfileContent({
     try {
       const stored = localStorage.getItem(`followed_author_${slug}`) === "true";
       setIsFollowing(stored);
-    } catch (e) {}
+    } catch (e) { }
 
     if (auth.authenticated && auth.user?.email) {
       const checkFollowStatus = async () => {
@@ -245,7 +292,7 @@ export default function AuthorProfileContent({
                 await executeFollow(true);
                 return;
               }
-            } catch (err) {}
+            } catch (err) { }
           }
 
           const userEmail = auth.user?.email || "";
@@ -259,7 +306,7 @@ export default function AuthorProfileContent({
               localStorage.setItem(`followed_author_${slug}`, String(data.isFollowing));
             }
           }
-        } catch (err) {}
+        } catch (err) { }
       };
       checkFollowStatus();
     }
@@ -270,7 +317,7 @@ export default function AuthorProfileContent({
     setIsFollowing(targetState);
     try {
       localStorage.setItem(`followed_author_${slug}`, String(targetState));
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       const res = await fetch("/api/author/follow", {
@@ -311,7 +358,7 @@ export default function AuthorProfileContent({
       try {
         localStorage.setItem("pending_follow_author", JSON.stringify({ slug, name: authorProfile.name }));
         localStorage.setItem("dj_toast", `Please sign in to follow ${authorProfile.name} and receive notifications for their articles.`);
-      } catch (e) {}
+      } catch (e) { }
       router.push(`/login?redirect=${encodeURIComponent(`/author/${slug}`)}`);
       return;
     }
@@ -343,8 +390,8 @@ export default function AuthorProfileContent({
       const savedProfile = isRushdhiPage
         ? (getUserProfile("rushdhiwriter@gmail.com") || getUserProfile("writer@digitaljournal.com") || getAuthorFullProfileByNameOrEmail("rushdhi"))
         : isMubaPage
-        ? (getUserProfile("rura@gmail.com") || getUserProfile("muba") || getUserProfile("muba-kity") || getAuthorFullProfileByNameOrEmail("muba_kity"))
-        : (getUserProfile(slugClean) || (finalEmail ? getUserProfile(finalEmail) : null) || getAuthorFullProfileByNameOrEmail(slugClean));
+          ? (getUserProfile("rura@gmail.com") || getUserProfile("muba") || getUserProfile("muba-kity") || getAuthorFullProfileByNameOrEmail("muba_kity"))
+          : (getUserProfile(slugClean) || (finalEmail ? getUserProfile(finalEmail) : null) || getAuthorFullProfileByNameOrEmail(slugClean));
 
       if (savedProfile) {
         if (savedProfile.name && !savedProfile.name.toLowerCase().includes("reader")) finalName = savedProfile.name;
@@ -599,10 +646,11 @@ export default function AuthorProfileContent({
                 if (!isNaN(d.getTime())) {
                   formattedJoined = d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
                 }
-              } catch {}
+              } catch { }
             }
             const dbQuote = dbUser.quote;
             const dbAwards = dbUser.awards;
+            const dbMemberships = dbUser.memberships;
             setAuthorProfile((prev) => ({
               ...prev,
               ...(dbUser.name && !dbUser.name.toLowerCase().includes("reader") ? { name: dbUser.name } : {}),
@@ -620,10 +668,11 @@ export default function AuthorProfileContent({
               ...(formattedJoined ? { joinedDate: formattedJoined } : {}),
               ...(dbQuote ? { quote: dbQuote } : {}),
               ...(Array.isArray(dbAwards) && dbAwards.length > 0 ? { awards: dbAwards } : {}),
+              ...(Array.isArray(dbMemberships) && dbMemberships.length > 0 ? { memberships: dbMemberships } : {}),
             }));
           }
         })
-        .catch(() => {});
+        .catch(() => { });
 
       setIsLoaded(true);
     } catch (e) {
@@ -875,10 +924,10 @@ export default function AuthorProfileContent({
         try {
           const existing = JSON.parse(localStorage.getItem(storageKey) || "{}");
           localStorage.setItem(storageKey, JSON.stringify({ ...existing, awards: updatedAwards }));
-        } catch {}
+        } catch { }
 
         if (auth.refreshUser) {
-          auth.refreshUser().catch(() => {});
+          auth.refreshUser().catch(() => { });
         }
         window.dispatchEvent(new CustomEvent("author-profile-sync", { detail: { email: targetEmail, awards: updatedAwards } }));
       }
@@ -922,14 +971,217 @@ export default function AuthorProfileContent({
         try {
           const existing = JSON.parse(localStorage.getItem(storageKey) || "{}");
           localStorage.setItem(storageKey, JSON.stringify({ ...existing, awards: updatedAwards }));
-        } catch {}
+        } catch { }
         if (auth.refreshUser) {
-          auth.refreshUser().catch(() => {});
+          auth.refreshUser().catch(() => { });
         }
         window.dispatchEvent(new CustomEvent("author-profile-sync", { detail: { email: targetEmail, awards: updatedAwards } }));
       }
     } catch (err) {
       console.warn("Could not delete award:", err);
+    }
+  };
+
+  
+  // Professional Memberships State & Handlers
+  const [isAddMembershipModalOpen, setIsAddMembershipModalOpen] = useState(false);
+  const [editingMembershipIndex, setEditingMembershipIndex] = useState<number | null>(null);
+  const [membershipName, setMembershipName] = useState("");
+  const [membershipLogo, setMembershipLogo] = useState("/awards/memberships/membership_se.webp");
+  const [membershipRoleType, setMembershipRoleType] = useState<"Member" | "Fellow" | "Associate">("Member");
+  const [membershipYear, setMembershipYear] = useState(() => new Date().getFullYear().toString());
+  const [isSavingMembership, setIsSavingMembership] = useState(false);
+  const [membershipSuccessMsg, setMembershipSuccessMsg] = useState("");
+  const [membershipFormError, setMembershipFormError] = useState("");
+
+  const displayedMemberships = useMemo<MembershipItem[]>(() => {
+    if (Array.isArray(authorProfile.memberships) && authorProfile.memberships.length > 0) {
+      return authorProfile.memberships;
+    }
+    if (slugClean.includes("sarah")) {
+      return DEFAULT_SARAH_MEMBERSHIPS;
+    }
+    return [];
+  }, [authorProfile.memberships, slugClean]);
+
+  const handleOpenAddMembership = () => {
+    setEditingMembershipIndex(null);
+    setMembershipName("");
+    setMembershipLogo("/awards/memberships/membership_se.webp");
+    setMembershipRoleType("Member");
+    setMembershipYear(new Date().getFullYear().toString());
+    setMembershipFormError("");
+    setMembershipSuccessMsg("");
+    setIsAddMembershipModalOpen(true);
+  };
+
+  const handleOpenEditMembership = (idx: number) => {
+    const item = displayedMemberships[idx];
+    if (!item) return;
+    setEditingMembershipIndex(idx);
+    setMembershipName(item.name || "");
+    setMembershipLogo(item.logo || "/awards/memberships/membership_se.webp");
+    
+    if (item.role && item.role.toLowerCase().startsWith("fellow")) {
+      setMembershipRoleType("Fellow");
+    } else if (item.role && item.role.toLowerCase().startsWith("associate")) {
+      setMembershipRoleType("Associate");
+    } else {
+      setMembershipRoleType("Member");
+    }
+    
+    const yearMatch = item.role?.match(/\d{4}/) || item.memberSince?.match(/\d{4}/);
+    setMembershipYear(item.memberSince || (yearMatch ? yearMatch[0] : new Date().getFullYear().toString()));
+    setMembershipFormError("");
+    setMembershipSuccessMsg("");
+    setIsAddMembershipModalOpen(true);
+  };
+
+  const handleMembershipLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setMembershipFormError("Logo file is too large. Max 2MB allowed.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (typeof event.target?.result === "string") {
+        setMembershipLogo(event.target.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveMembership = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!membershipName.trim()) {
+      setMembershipFormError("Institute or Association name is required.");
+      return;
+    }
+
+    setMembershipFormError("");
+    setIsSavingMembership(true);
+
+    const yearVal = membershipYear.trim() || new Date().getFullYear().toString();
+    const roleString = `${membershipRoleType} since ${yearVal}`;
+
+    const newMemItem: MembershipItem = {
+      id: editingMembershipIndex !== null && displayedMemberships[editingMembershipIndex]?.id
+        ? displayedMemberships[editingMembershipIndex].id
+        : `mem-${Date.now()}`,
+      name: membershipName.trim(),
+      logo: membershipLogo.trim() || "/awards/memberships/membership_se.webp",
+      role: roleString,
+      memberSince: yearVal,
+    };
+
+    let updatedMemberships: MembershipItem[];
+    const baseList = authorProfile.memberships && authorProfile.memberships.length > 0
+      ? [...authorProfile.memberships]
+      : (slugClean.includes("sarah") ? [...DEFAULT_SARAH_MEMBERSHIPS] : []);
+
+    if (editingMembershipIndex !== null && editingMembershipIndex >= 0 && editingMembershipIndex < baseList.length) {
+      updatedMemberships = [...baseList];
+      updatedMemberships[editingMembershipIndex] = newMemItem;
+    } else {
+      updatedMemberships = [newMemItem, ...baseList];
+    }
+
+    setAuthorProfile((prev) => ({
+      ...prev,
+      memberships: updatedMemberships,
+    }));
+
+    try {
+      const targetEmail = authorProfile.email || auth.user?.email;
+      if (targetEmail) {
+        await fetch("/api/auth/profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: targetEmail,
+            memberships: updatedMemberships,
+          }),
+        });
+
+        const storageKey = `london_user_profile_${targetEmail.toLowerCase().trim()}`;
+        try {
+          const existing = JSON.parse(localStorage.getItem(storageKey) || "{}");
+          localStorage.setItem(storageKey, JSON.stringify({ ...existing, memberships: updatedMemberships }));
+        } catch { }
+      }
+
+      const storageKeyOld = `author_profile_${slugClean}`;
+      try {
+        const existingOld = JSON.parse(localStorage.getItem(storageKeyOld) || "{}");
+        localStorage.setItem(storageKeyOld, JSON.stringify({ ...existingOld, memberships: updatedMemberships }));
+      } catch { }
+
+      if (auth.refreshUser) {
+        auth.refreshUser().catch(() => { });
+      }
+      window.dispatchEvent(new CustomEvent("author-profile-sync", { detail: { email: targetEmail, memberships: updatedMemberships } }));
+
+      setMembershipSuccessMsg(editingMembershipIndex !== null ? "Membership updated successfully!" : "Professional membership added successfully!");
+      setTimeout(() => {
+        setIsAddMembershipModalOpen(false);
+        setMembershipSuccessMsg("");
+      }, 700);
+    } catch (err: any) {
+      setMembershipFormError(err?.message || "Failed to save membership. Please try again.");
+    } finally {
+      setIsSavingMembership(false);
+    }
+  };
+
+  const handleDeleteMembership = async (indexToDelete: number) => {
+    if (!window.confirm("Are you sure you want to remove this professional membership?")) {
+      return;
+    }
+
+    const baseList = authorProfile.memberships && authorProfile.memberships.length > 0
+      ? [...authorProfile.memberships]
+      : (slugClean.includes("sarah") ? [...DEFAULT_SARAH_MEMBERSHIPS] : []);
+
+    const updatedMemberships = baseList.filter((_, idx) => idx !== indexToDelete);
+
+    setAuthorProfile((prev) => ({
+      ...prev,
+      memberships: updatedMemberships,
+    }));
+
+    try {
+      const targetEmail = authorProfile.email || auth.user?.email;
+      if (targetEmail) {
+        await fetch("/api/auth/profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: targetEmail,
+            memberships: updatedMemberships,
+          }),
+        });
+
+        const storageKey = `london_user_profile_${targetEmail.toLowerCase().trim()}`;
+        try {
+          const existing = JSON.parse(localStorage.getItem(storageKey) || "{}");
+          localStorage.setItem(storageKey, JSON.stringify({ ...existing, memberships: updatedMemberships }));
+        } catch { }
+      }
+
+      const storageKeyOld = `author_profile_${slugClean}`;
+      try {
+        const existingOld = JSON.parse(localStorage.getItem(storageKeyOld) || "{}");
+        localStorage.setItem(storageKeyOld, JSON.stringify({ ...existingOld, memberships: updatedMemberships }));
+      } catch { }
+
+      if (auth.refreshUser) {
+        auth.refreshUser().catch(() => { });
+      }
+      window.dispatchEvent(new CustomEvent("author-profile-sync", { detail: { email: targetEmail, memberships: updatedMemberships } }));
+    } catch (err) {
+      console.error("Error deleting membership:", err);
     }
   };
 
@@ -963,7 +1215,7 @@ export default function AuthorProfileContent({
             name: nameToUse,
             quote: trimmed,
           }),
-        }).catch(() => {});
+        }).catch(() => { });
       }
 
       if (auth.user) {
@@ -1355,10 +1607,10 @@ export default function AuthorProfileContent({
       {/* AUTHOR BIO & STATS HERO SECTION */}
       <section className="max-w-[1400px] mx-auto px-4 md:px-8 pt-2 pb-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
+
           {/* Left Column (Headshot + Details & Socials) ~ 8 cols */}
           <div className="lg:col-span-8 flex flex-col sm:flex-row gap-6 items-start">
-            
+
             {/* Author Headshot Photo */}
             <div className="w-full sm:w-[210px] md:w-[230px] h-[250px] sm:h-[260px] rounded-xl overflow-hidden bg-slate-100 border border-slate-200/90 flex-shrink-0 shadow-xs">
               <img
@@ -1413,7 +1665,7 @@ export default function AuthorProfileContent({
                   title="X (Twitter)"
                 >
                   <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
                   </svg>
                 </a>
 
@@ -1426,7 +1678,7 @@ export default function AuthorProfileContent({
                   title="LinkedIn"
                 >
                   <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-                    <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 8.76a1.46 1.46 0 1 0 0-2.92 1.46 1.46 0 0 0 0 2.92M7.86 18.5V10.13H5.07V18.5h2.79z"/>
+                    <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 8.76a1.46 1.46 0 1 0 0-2.92 1.46 1.46 0 0 0 0 2.92M7.86 18.5V10.13H5.07V18.5h2.79z" />
                   </svg>
                 </a>
 
@@ -1445,7 +1697,7 @@ export default function AuthorProfileContent({
 
           {/* Right Column (Stats Box + Areas of Coverage) ~ 4 cols */}
           <div className="lg:col-span-4 flex flex-col gap-4">
-            
+
             {/* Stats Box */}
             <div className="bg-[#F8F9FA] border border-slate-200/90 rounded-2xl p-4 sm:p-5">
               <div className="grid grid-cols-3 divide-x divide-slate-200 text-center">
@@ -1515,11 +1767,10 @@ export default function AuthorProfileContent({
             <button
               key={tab.id}
               onClick={() => handleTabChange(tab.id as any)}
-              className={`pb-3 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap relative ${
-                activeTab === tab.id
+              className={`pb-3 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap relative ${activeTab === tab.id
                   ? "text-[#D31220] border-b-2 border-[#D31220]"
                   : "text-slate-600 hover:text-slate-900"
-              }`}
+                }`}
             >
               {tab.label}
             </button>
@@ -1530,10 +1781,10 @@ export default function AuthorProfileContent({
       {/* MAIN CONTENT AREA */}
       <div className="max-w-[1400px] mx-auto px-4 md:px-8 pb-16">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-start">
-          
+
           {/* LEFT COLUMN (~68% WIDTH) */}
           <div className="lg:col-span-8">
-            
+
             {activeTab === "articles" && (
               <div>
                 {/* Section Header */}
@@ -1845,7 +2096,7 @@ export default function AuthorProfileContent({
 
           {/* RIGHT SIDEBAR (~32% WIDTH) */}
           <div className="lg:col-span-4 space-y-6">
-            
+
             {/* FOLLOW AUTHOR CARD */}
             <div className="border border-slate-200 rounded-xl p-5 bg-[#FAFBFB] shadow-xs">
               <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-1 font-sans">
@@ -1858,11 +2109,10 @@ export default function AuthorProfileContent({
               </p>
 
               {followToast && (
-                <div className={`mb-3 p-2.5 rounded-lg text-xs font-medium flex items-start gap-2 animate-in fade-in ${
-                  followToast.type === 'success' 
-                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' 
+                <div className={`mb-3 p-2.5 rounded-lg text-xs font-medium flex items-start gap-2 animate-in fade-in ${followToast.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                     : 'bg-slate-100 text-slate-700 border border-slate-200'
-                }`}>
+                  }`}>
                   <Check className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
                   <span>{followToast.message}</span>
                 </div>
@@ -1871,11 +2121,10 @@ export default function AuthorProfileContent({
               <button
                 onClick={handleFollowClick}
                 disabled={followLoading}
-                className={`w-full py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs disabled:opacity-75 ${
-                  isFollowing
+                className={`w-full py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs disabled:opacity-75 ${isFollowing
                     ? "bg-slate-800 text-white hover:bg-slate-900"
                     : "bg-[#BF1E2D] hover:bg-[#a61a27] text-white"
-                }`}
+                  }`}
               >
                 {followLoading ? (
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -2119,49 +2368,76 @@ export default function AuthorProfileContent({
             ) : activeTab === "awards" ? (
               <>
                 {/* PROFESSIONAL MEMBERSHIPS CARD */}
-                <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-xs">
-                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider font-sans pb-3 mb-3 border-b border-slate-100">
-                    PROFESSIONAL MEMBERSHIPS
-                  </h3>
+                <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-xs" id="memberships">
+                  <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+                    <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider font-sans">
+                      PROFESSIONAL MEMBERSHIPS
+                    </h3>
+                    {isOwner && (
+                      <button
+                        onClick={handleOpenAddMembership}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-[#BF1E2D] hover:text-[#991522] uppercase tracking-wider transition-colors cursor-pointer"
+                        title="Add Professional Membership"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add</span>
+                      </button>
+                    )}
+                  </div>
                   <div className="space-y-3.5">
-                    {[
-                      {
-                        logo: "/awards/memberships/membership_se.webp",
-                        name: "Society of Editors (UK)",
-                        role: "Member since 2018"
-                      },
-                      {
-                        logo: "/awards/memberships/membership_ipa.webp",
-                        name: "International Press Association (IPA)",
-                        role: "Member since 2019"
-                      },
-                      {
-                        logo: "/awards/memberships/membership_emf.webp",
-                        name: "European Media Forum",
-                        role: "Fellow since 2018"
-                      },
-                      {
-                        logo: "/awards/memberships/membership_pja.webp",
-                        name: "Political Journalists Association (UK)",
-                        role: "Member since 2017"
-                      }
-                    ].map((m, idx) => (
-                      <div key={idx} className="flex items-center gap-3">
-                        <img
-                          src={m.logo}
-                          alt={m.name}
-                          className="w-7 h-7 rounded object-contain shrink-0 border border-slate-200"
-                        />
-                        <div className="min-w-0">
-                          <h4 className="text-xs font-bold text-slate-900 truncate">
-                            {m.name}
-                          </h4>
-                          <p className="text-[11px] text-slate-500 truncate">
-                            {m.role}
-                          </p>
-                        </div>
+                    {displayedMemberships.length === 0 ? (
+                      <div className="text-center py-4 text-slate-400 text-xs font-sans">
+                        No professional memberships added yet.
+                        {isOwner && (
+                          <button
+                            onClick={handleOpenAddMembership}
+                            className="block mx-auto mt-2 text-[#BF1E2D] font-semibold text-xs hover:underline cursor-pointer"
+                          >
+                            + Add your first membership
+                          </button>
+                        )}
                       </div>
-                    ))}
+                    ) : (
+                      displayedMemberships.map((m, idx) => (
+                        <div key={m.id || idx} className="group relative flex items-center justify-between gap-3 p-1 -m-1 rounded-lg hover:bg-slate-50 transition-colors">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <img
+                              src={m.logo || "/awards/memberships/membership_se.webp"}
+                              alt={m.name}
+                              className="w-7 h-7 rounded object-contain shrink-0 border border-slate-200 bg-white"
+                            />
+                            <div className="min-w-0">
+                              <h4 className="text-xs font-bold text-slate-900 truncate">
+                                {m.name}
+                              </h4>
+                              <p className="text-[11px] text-slate-500 truncate">
+                                {m.role || (m.memberSince ? `Member since ${m.memberSince}` : `Member since ${new Date().getFullYear()}`)}
+                              </p>
+                            </div>
+                          </div>
+                          {isOwner && (
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditMembership(idx)}
+                                className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer"
+                                title="Edit membership"
+                              >
+                                <Edit3 className="w-3 h-3" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteMembership(idx)}
+                                className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                title="Delete membership"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
 
@@ -2245,8 +2521,8 @@ export default function AuthorProfileContent({
                           {authorProfile.quote && authorProfile.quote.trim()
                             ? authorProfile.quote.trim()
                             : isOwner
-                            ? "You haven't written a personal quote yet. Click 'Write Your Quote' above to add one in your own words."
-                            : "Journalism has the power to inform, hold power to account and create a more open and informed society."}
+                              ? "You haven't written a personal quote yet. Click 'Write Your Quote' above to add one in your own words."
+                              : "Journalism has the power to inform, hold power to account and create a more open and informed society."}
                         </p>
                         <span className="text-xs text-slate-500 font-sans mt-3 block">
                           — {authorProfile.name}
@@ -2306,7 +2582,7 @@ export default function AuthorProfileContent({
       </div>
 
       <Footer />
-          {/* ADD / EDIT AWARD & CERTIFICATE MODAL */}
+      {/* ADD / EDIT AWARD & CERTIFICATE MODAL */}
       {isAddAwardModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150 font-sans">
           <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-200 text-left my-8">
@@ -2398,7 +2674,7 @@ export default function AuthorProfileContent({
                 <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                   Award / Certificate Image
                 </label>
-                
+
                 {/* Live Image Preview */}
                 <div className="relative aspect-[16/10] w-full max-h-36 rounded-lg overflow-hidden bg-slate-900 border border-slate-200 mb-2.5">
                   <img
@@ -2434,9 +2710,8 @@ export default function AuthorProfileContent({
                         key={pIdx}
                         type="button"
                         onClick={() => setAwardImage(preset.src)}
-                        className={`relative aspect-[16/10] rounded border overflow-hidden transition-all cursor-pointer ${
-                          awardImage === preset.src ? "ring-2 ring-[#BF1E2D] border-transparent" : "border-slate-200 opacity-70 hover:opacity-100"
-                        }`}
+                        className={`relative aspect-[16/10] rounded border overflow-hidden transition-all cursor-pointer ${awardImage === preset.src ? "ring-2 ring-[#BF1E2D] border-transparent" : "border-slate-200 opacity-70 hover:opacity-100"
+                          }`}
                         title={preset.label}
                       >
                         <img src={preset.src} alt={preset.label} className="w-full h-full object-cover" />
@@ -2453,11 +2728,10 @@ export default function AuthorProfileContent({
                     Description / Summary <span className="text-red-500">*</span>
                   </label>
                   <span
-                    className={`text-[10.5px] font-mono font-semibold ${
-                      (awardDesc.trim() ? awardDesc.trim().split(/\s+/).filter(Boolean).length : 0) > 35
+                    className={`text-[10.5px] font-mono font-semibold ${(awardDesc.trim() ? awardDesc.trim().split(/\s+/).filter(Boolean).length : 0) > 35
                         ? "text-amber-600"
                         : "text-slate-500"
-                    }`}
+                      }`}
                   >
                     {awardDesc.trim() ? awardDesc.trim().split(/\s+/).filter(Boolean).length : 0} / ~30 words
                   </span>
@@ -2500,6 +2774,223 @@ export default function AuthorProfileContent({
                     </>
                   ) : (
                     <span>{editingAwardIndex !== null ? "Update Award" : "Save Award"}</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+    
+      {/* ADD / EDIT PROFESSIONAL MEMBERSHIP MODAL */}
+      {isAddMembershipModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150 font-sans">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-200 text-left my-8">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-red-50 border border-red-200 flex items-center justify-center text-[#BF1E2D]">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 tracking-tight">
+                    {editingMembershipIndex !== null ? "Edit Professional Membership" : "Add Professional Membership"}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Add your institute affiliation, logo, and member since date
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddMembershipModalOpen(false)}
+                className="w-7 h-7 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body / Form */}
+            <form onSubmit={handleSaveMembership} className="p-6 space-y-4">
+              {membershipFormError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+                  <span>{membershipFormError}</span>
+                </div>
+              )}
+
+              {membershipSuccessMsg && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
+                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{membershipSuccessMsg}</span>
+                </div>
+              )}
+
+              {/* Field 1: Institute / Organization Name */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Institute / Association Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={membershipName}
+                  onChange={(e) => setMembershipName(e.target.value)}
+                  placeholder="e.g. Society of Editors (UK) or National Union of Journalists"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all font-sans"
+                  required
+                />
+              </div>
+
+              {/* Field 2: Institute Logo */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Institute Logo
+                </label>
+
+                {/* Live Preview */}
+                <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl mb-2.5">
+                  <div className="w-10 h-10 rounded-lg bg-white border border-slate-300 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
+                    <img
+                      src={membershipLogo || "/awards/memberships/membership_se.webp"}
+                      alt="Logo preview"
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = "/awards/memberships/membership_se.webp";
+                      }}
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-bold text-slate-800 truncate">
+                      {membershipName || "Institute Name"}
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      {membershipRoleType} since {membershipYear || new Date().getFullYear()}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Preset Logo Selection */}
+                <div className="mb-2">
+                  <span className="text-[10px] text-slate-500 font-semibold block mb-1">
+                    Or select a recognized media institute:
+                  </span>
+                  <div className="grid grid-cols-4 gap-2">
+                    {PRESET_MEMBERSHIP_LOGOS.map((preset, pIdx) => (
+                      <button
+                        key={pIdx}
+                        type="button"
+                        onClick={() => {
+                          setMembershipLogo(preset.src);
+                          if (!membershipName.trim()) {
+                            setMembershipName(preset.label);
+                          }
+                        }}
+                        className={`relative p-1.5 rounded-lg border flex flex-col items-center justify-center bg-white transition-all cursor-pointer ${
+                          membershipLogo === preset.src
+                            ? "ring-2 ring-[#BF1E2D] border-transparent bg-red-50/20"
+                            : "border-slate-200 hover:border-slate-300 opacity-80 hover:opacity-100"
+                        }`}
+                        title={preset.label}
+                      >
+                        <img src={preset.src} alt={preset.label} className="w-6 h-6 object-contain" />
+                        <span className="text-[9px] text-slate-600 truncate max-w-full mt-1 text-center font-medium">
+                          {preset.label.split("(")[0].trim().slice(0, 12)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Custom Upload */}
+                <div className="flex items-center gap-2">
+                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-700 cursor-pointer shadow-xs transition-colors">
+                    <Upload className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Upload Custom Logo</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleMembershipLogoUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  <span className="text-[10.5px] text-slate-400">PNG, WEBP, JPG up to 2MB</span>
+                </div>
+              </div>
+
+              {/* Field 3: Membership Status & Date */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                {/* Role Type */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Membership Type
+                  </label>
+                  <select
+                    value={membershipRoleType}
+                    onChange={(e) => setMembershipRoleType(e.target.value as any)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:bg-white focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all font-sans cursor-pointer"
+                  >
+                    <option value="Member">Member</option>
+                    <option value="Fellow">Fellow</option>
+                    <option value="Associate">Associate</option>
+                  </select>
+                </div>
+
+                {/* Member Since (Year / Date) */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                      Member Since <span className="text-red-500">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setMembershipYear(new Date().getFullYear().toString())}
+                      className="text-[10px] text-[#BF1E2D] hover:underline font-semibold cursor-pointer"
+                      title="Set to current year"
+                    >
+                      Use Today ({new Date().getFullYear()})
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={membershipYear}
+                    onChange={(e) => setMembershipYear(e.target.value)}
+                    placeholder="e.g. 2024 or Nov 2026"
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-[#BF1E2D] focus:ring-1 focus:ring-red-100 transition-all font-sans"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Auto update note */}
+              <div className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-lg text-[10.5px] text-slate-500 flex items-center justify-between">
+                <span>Display format:</span>
+                <span className="font-semibold text-slate-700">
+                  {membershipRoleType} since {membershipYear.trim() || new Date().getFullYear()}
+                </span>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsAddMembershipModalOpen(false)}
+                  className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingMembership}
+                  className="px-5 py-2 bg-[#BF1E2D] hover:bg-[#a61a27] text-white rounded-xl text-xs font-bold tracking-wide transition-all shadow-xs disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                >
+                  {isSavingMembership ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>{editingMembershipIndex !== null ? "Update Membership" : "Add Membership"}</span>
                   )}
                 </button>
               </div>

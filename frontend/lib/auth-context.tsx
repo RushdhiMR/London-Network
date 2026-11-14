@@ -12,6 +12,7 @@ export interface User {
   bio?: string;
   quote?: string;
   awards?: any[];
+  memberships?: any[];
 }
 
 interface AuthContextType {

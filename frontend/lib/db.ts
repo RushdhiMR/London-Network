@@ -1192,6 +1192,7 @@ export const DB = {
     expertise_ratings?: Record<string, number> | null;
     quote?: string | null;
     awards?: any[] | null;
+    memberships?: any[] | null;
   }): Promise<any> {
     const cleanEmail = (data.email || '').trim().toLowerCase();
     if (!cleanEmail) return null;
@@ -1230,6 +1231,7 @@ export const DB = {
         ...(expRatings !== undefined ? { expertiseRatings: expRatings, expertise_ratings: expRatings } : {}),
         ...(data.quote !== undefined ? { quote: data.quote ? String(data.quote).trim() : null } : {}),
         ...(data.awards !== undefined ? { awards: Array.isArray(data.awards) ? data.awards : [] } : {}),
+        ...(data.memberships !== undefined ? { memberships: Array.isArray(data.memberships) ? data.memberships : [] } : {}),
         updated_at: new Date().toISOString()
       };
       updatedUser = jsonDb.users[existingIdx];
@@ -1254,6 +1256,7 @@ export const DB = {
         ...(expRatings !== undefined ? { expertiseRatings: expRatings, expertise_ratings: expRatings } : {}),
         ...(data.quote !== undefined ? { quote: data.quote ? String(data.quote).trim() : null } : {}),
         ...(data.awards !== undefined ? { awards: Array.isArray(data.awards) ? data.awards : [] } : {}),
+        ...(data.memberships !== undefined ? { memberships: Array.isArray(data.memberships) ? data.memberships : [] } : {}),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };

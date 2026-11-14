@@ -19,6 +19,7 @@ export interface JWTPayload {
   avatar?: string | null;
   quote?: string | null;
   awards?: any[] | null;
+  memberships?: any[] | null;
 }
 
 /**

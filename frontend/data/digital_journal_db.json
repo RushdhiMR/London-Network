@@ -31,7 +31,7 @@
       "email_verified": 1,
       "is_default_admin": 0,
       "created_at": "2026-08-31T20:21:25.000Z",
-      "updated_at": "2026-11-13T10:19:28.000Z",
+      "updated_at": "2026-11-14T07:11:22.970Z",
       "password_hash": "$2b$10$4K1JuH59arBNxHZRbCmSC.qoP2.hSpKTvB9HXYeLgHEYWKBfHzVEy",
       "expertiseRatings": {
         "UK Politics": 43,
@@ -56,6 +56,26 @@
         "EU-UK Relations",
         "Policy Analysis",
         "Political Interviews"
+      ],
+      "awards": [
+        {
+          "id": "award-1794627737561",
+          "title": "The Best Developer",
+          "institution": "Jade Times",
+          "category": "Jade Times",
+          "location": "London, United Kingdom",
+          "image": "/awards/award_2_global_media.webp",
+          "desc": "don't change anything that i didn't say. just fix this.\ndon't change anything that i didn't say. just fix this.\ndon't change anything that i didn't say. just fix this.\ndon't change anything that i didn't say. just fix this.\ndon't change anything that i didn't say. just fix this.\ndon't change anything that i didn't say. just fix this.\ndon't change anything that i didn't say. just fix this.\ndon't change anything that i didn't say. just fix this."
+        }
+      ],
+      "memberships": [
+        {
+          "id": "mem-test-1",
+          "name": "Society of Editors (UK)",
+          "logo": "/awards/memberships/membership_se.webp",
+          "role": "Member since 2026",
+          "memberSince": "2026"
+        }
       ]
     },
     {
@@ -197,8 +217,8 @@
       "date": "Nov 10, 2026",
       "published_at": "2026-11-10T01:38:50.000Z",
       "publishedAt": "2026-11-10T01:38:50.000Z",
-      "updated_at": "2026-11-11T03:49:27.000Z",
-      "updatedAt": "2026-11-11T03:49:27.000Z",
+      "updated_at": "2026-11-14T03:42:19.000Z",
+      "updatedAt": "2026-11-14T03:42:19.000Z",
       "created_at": "2026-11-09T11:57:43.000Z",
       "createdAt": "2026-11-09T11:57:43.000Z",
       "readDuration": "5 min read",
@@ -326,8 +346,8 @@
       "date": "Nov 9, 2026",
       "published_at": "2026-11-09T06:14:51.000Z",
       "publishedAt": "2026-11-09T06:14:51.000Z",
-      "updated_at": "2026-11-11T03:49:46.000Z",
-      "updatedAt": "2026-11-11T03:49:46.000Z",
+      "updated_at": "2026-11-14T03:44:19.000Z",
+      "updatedAt": "2026-11-14T03:44:19.000Z",
       "created_at": "2026-09-02T05:11:02.000Z",
       "createdAt": "2026-09-02T05:11:02.000Z",
       "readDuration": "5 min read",
@@ -456,8 +476,8 @@
       "date": "Nov 4, 2026",
       "published_at": "2026-11-04T14:26:39.000Z",
       "publishedAt": "2026-11-04T14:26:39.000Z",
-      "updated_at": "2026-11-11T03:49:55.000Z",
-      "updatedAt": "2026-11-11T03:49:55.000Z",
+      "updated_at": "2026-11-14T03:46:23.000Z",
+      "updatedAt": "2026-11-14T03:46:23.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -587,14 +607,14 @@
       "date": "Oct 19, 2026",
       "published_at": "2026-10-19T14:47:34.000Z",
       "publishedAt": "2026-10-19T14:47:34.000Z",
-      "updated_at": "2026-11-11T03:50:04.000Z",
-      "updatedAt": "2026-11-11T03:50:04.000Z",
+      "updated_at": "2026-11-14T03:48:31.000Z",
+      "updatedAt": "2026-11-14T03:48:31.000Z",
       "created_at": "2026-09-01T13:13:59.000Z",
       "createdAt": "2026-09-01T13:13:59.000Z",
       "readDuration": "5 min read",
-      "reads": 29,
-      "views": 29,
-      "reads_count": 29,
+      "reads": 30,
+      "views": 30,
+      "reads_count": 30,
       "placement": "Home Page A+ Section",
       "authorName": "Muba_kity",
       "author": "Muba_kity",
@@ -680,9 +700,7 @@
       },
       "targetedRecipients": [
         "rushdhiriyaj2005@gmail.com"
-      ],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      ]
     },
     {
       "id": 118,
@@ -717,8 +735,8 @@
       "date": "Oct 19, 2026",
       "published_at": "2026-10-19T03:34:24.000Z",
       "publishedAt": "2026-10-19T03:34:24.000Z",
-      "updated_at": "2026-11-11T03:50:14.000Z",
-      "updatedAt": "2026-11-11T03:50:14.000Z",
+      "updated_at": "2026-11-14T03:50:34.000Z",
+      "updatedAt": "2026-11-14T03:50:34.000Z",
       "created_at": "2026-10-07T19:00:50.000Z",
       "createdAt": "2026-10-07T19:00:50.000Z",
       "readDuration": "4 MIN READ",
@@ -812,9 +830,7 @@
       },
       "targetedRecipients": [
         "rushdhiriyaj2005@gmail.com"
-      ],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      ]
     },
     {
       "id": 69,
@@ -849,8 +865,8 @@
       "date": "Oct 14, 2026",
       "published_at": "2026-10-14T12:34:43.000Z",
       "publishedAt": "2026-10-14T12:34:43.000Z",
-      "updated_at": "2026-11-11T03:50:29.000Z",
-      "updatedAt": "2026-11-11T03:50:29.000Z",
+      "updated_at": "2026-11-14T03:52:27.000Z",
+      "updatedAt": "2026-11-14T03:52:27.000Z",
       "created_at": "2026-09-03T16:07:13.000Z",
       "createdAt": "2026-09-03T16:07:13.000Z",
       "readDuration": "5 min read",
@@ -972,8 +988,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T13:59:57.000Z",
       "publishedAt": "2026-10-08T13:59:57.000Z",
-      "updated_at": "2026-11-11T03:50:40.000Z",
-      "updatedAt": "2026-11-11T03:50:40.000Z",
+      "updated_at": "2026-11-14T03:54:30.000Z",
+      "updatedAt": "2026-11-14T03:54:30.000Z",
       "created_at": "2026-10-08T09:58:39.000Z",
       "createdAt": "2026-10-08T09:58:39.000Z",
       "readDuration": "10 min read",
@@ -1061,9 +1077,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 20,
@@ -1098,8 +1112,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:52.000Z",
       "publishedAt": "2026-10-08T09:25:52.000Z",
-      "updated_at": "2026-11-11T03:50:50.000Z",
-      "updatedAt": "2026-11-11T03:50:50.000Z",
+      "updated_at": "2026-11-14T03:56:43.000Z",
+      "updatedAt": "2026-11-14T03:56:43.000Z",
       "created_at": "2026-09-01T14:00:22.000Z",
       "createdAt": "2026-09-01T14:00:22.000Z",
       "readDuration": "5 min read",
@@ -1221,8 +1235,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:51.000Z",
       "publishedAt": "2026-10-08T09:25:51.000Z",
-      "updated_at": "2026-11-11T03:51:15.000Z",
-      "updatedAt": "2026-11-11T03:51:15.000Z",
+      "updated_at": "2026-11-14T03:58:39.000Z",
+      "updatedAt": "2026-11-14T03:58:39.000Z",
       "created_at": "2026-08-31T13:43:06.000Z",
       "createdAt": "2026-08-31T13:43:06.000Z",
       "readDuration": "5 min read",
@@ -1344,8 +1358,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:49.000Z",
       "publishedAt": "2026-10-08T09:25:49.000Z",
-      "updated_at": "2026-11-11T03:51:42.000Z",
-      "updatedAt": "2026-11-11T03:51:42.000Z",
+      "updated_at": "2026-11-14T04:00:41.000Z",
+      "updatedAt": "2026-11-14T04:00:41.000Z",
       "created_at": "2026-09-01T22:55:43.000Z",
       "createdAt": "2026-09-01T22:55:43.000Z",
       "readDuration": "5 min read",
@@ -1473,8 +1487,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:48.000Z",
       "publishedAt": "2026-10-08T09:25:48.000Z",
-      "updated_at": "2026-11-11T03:53:10.000Z",
-      "updatedAt": "2026-11-11T03:53:10.000Z",
+      "updated_at": "2026-11-14T04:02:52.000Z",
+      "updatedAt": "2026-11-14T04:02:52.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -1599,8 +1613,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:48.000Z",
       "publishedAt": "2026-10-08T09:25:48.000Z",
-      "updated_at": "2026-11-11T03:54:19.000Z",
-      "updatedAt": "2026-11-11T03:54:19.000Z",
+      "updated_at": "2026-11-14T04:05:20.000Z",
+      "updatedAt": "2026-11-14T04:05:20.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -1722,8 +1736,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:46.000Z",
       "publishedAt": "2026-10-08T09:25:46.000Z",
-      "updated_at": "2026-11-11T03:55:49.000Z",
-      "updatedAt": "2026-11-11T03:55:49.000Z",
+      "updated_at": "2026-11-14T04:07:18.000Z",
+      "updatedAt": "2026-11-14T04:07:18.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -1841,8 +1855,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:45.000Z",
       "publishedAt": "2026-10-08T09:25:45.000Z",
-      "updated_at": "2026-11-11T03:57:49.000Z",
-      "updatedAt": "2026-11-11T03:57:49.000Z",
+      "updated_at": "2026-11-14T04:09:21.000Z",
+      "updatedAt": "2026-11-14T04:09:21.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -1964,8 +1978,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:43.000Z",
       "publishedAt": "2026-10-08T09:25:43.000Z",
-      "updated_at": "2026-11-11T03:58:44.000Z",
-      "updatedAt": "2026-11-11T03:58:44.000Z",
+      "updated_at": "2026-11-14T04:11:29.000Z",
+      "updatedAt": "2026-11-14T04:11:29.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -2090,8 +2104,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:43.000Z",
       "publishedAt": "2026-10-08T09:25:43.000Z",
-      "updated_at": "2026-11-11T03:59:26.000Z",
-      "updatedAt": "2026-11-11T03:59:26.000Z",
+      "updated_at": "2026-11-14T04:13:43.000Z",
+      "updatedAt": "2026-11-14T04:13:43.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -2215,8 +2229,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:42.000Z",
       "publishedAt": "2026-10-08T09:25:42.000Z",
-      "updated_at": "2026-11-11T04:00:14.000Z",
-      "updatedAt": "2026-11-11T04:00:14.000Z",
+      "updated_at": "2026-11-14T04:15:55.000Z",
+      "updatedAt": "2026-11-14T04:15:55.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -2341,8 +2355,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:40.000Z",
       "publishedAt": "2026-10-08T09:25:40.000Z",
-      "updated_at": "2026-11-11T04:01:13.000Z",
-      "updatedAt": "2026-11-11T04:01:13.000Z",
+      "updated_at": "2026-11-14T04:18:18.000Z",
+      "updatedAt": "2026-11-14T04:18:18.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -2466,8 +2480,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:39.000Z",
       "publishedAt": "2026-10-08T09:25:39.000Z",
-      "updated_at": "2026-11-11T04:02:02.000Z",
-      "updatedAt": "2026-11-11T04:02:02.000Z",
+      "updated_at": "2026-11-14T04:20:37.000Z",
+      "updatedAt": "2026-11-14T04:20:37.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -2589,8 +2603,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:38.000Z",
       "publishedAt": "2026-10-08T09:25:38.000Z",
-      "updated_at": "2026-11-11T04:03:00.000Z",
-      "updatedAt": "2026-11-11T04:03:00.000Z",
+      "updated_at": "2026-11-14T04:22:56.000Z",
+      "updatedAt": "2026-11-14T04:22:56.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -2716,8 +2730,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:37.000Z",
       "publishedAt": "2026-10-08T09:25:37.000Z",
-      "updated_at": "2026-11-11T04:04:26.000Z",
-      "updatedAt": "2026-11-11T04:04:26.000Z",
+      "updated_at": "2026-11-14T04:24:49.000Z",
+      "updatedAt": "2026-11-14T04:24:49.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -2844,8 +2858,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:36.000Z",
       "publishedAt": "2026-10-08T09:25:36.000Z",
-      "updated_at": "2026-11-11T04:05:18.000Z",
-      "updatedAt": "2026-11-11T04:05:18.000Z",
+      "updated_at": "2026-11-14T04:27:14.000Z",
+      "updatedAt": "2026-11-14T04:27:14.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -2971,8 +2985,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:35.000Z",
       "publishedAt": "2026-10-08T09:25:35.000Z",
-      "updated_at": "2026-11-11T04:06:12.000Z",
-      "updatedAt": "2026-11-11T04:06:12.000Z",
+      "updated_at": "2026-11-14T04:29:22.000Z",
+      "updatedAt": "2026-11-14T04:29:22.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -3097,8 +3111,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:33.000Z",
       "publishedAt": "2026-10-08T09:25:33.000Z",
-      "updated_at": "2026-11-11T04:07:10.000Z",
-      "updatedAt": "2026-11-11T04:07:10.000Z",
+      "updated_at": "2026-11-14T04:31:50.000Z",
+      "updatedAt": "2026-11-14T04:31:50.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -3220,8 +3234,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:32.000Z",
       "publishedAt": "2026-10-08T09:25:32.000Z",
-      "updated_at": "2026-11-11T04:08:22.000Z",
-      "updatedAt": "2026-11-11T04:08:22.000Z",
+      "updated_at": "2026-11-14T04:33:51.000Z",
+      "updatedAt": "2026-11-14T04:33:51.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -3343,8 +3357,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:31.000Z",
       "publishedAt": "2026-10-08T09:25:31.000Z",
-      "updated_at": "2026-11-11T04:09:24.000Z",
-      "updatedAt": "2026-11-11T04:09:24.000Z",
+      "updated_at": "2026-11-14T04:35:51.000Z",
+      "updatedAt": "2026-11-14T04:35:51.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -3466,8 +3480,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:30.000Z",
       "publishedAt": "2026-10-08T09:25:30.000Z",
-      "updated_at": "2026-11-11T04:11:48.000Z",
-      "updatedAt": "2026-11-11T04:11:48.000Z",
+      "updated_at": "2026-11-14T04:38:06.000Z",
+      "updatedAt": "2026-11-14T04:38:06.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -3590,8 +3604,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:27.000Z",
       "publishedAt": "2026-10-08T09:25:27.000Z",
-      "updated_at": "2026-11-11T04:12:38.000Z",
-      "updatedAt": "2026-11-11T04:12:38.000Z",
+      "updated_at": "2026-11-14T04:40:50.000Z",
+      "updatedAt": "2026-11-14T04:40:50.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -3714,8 +3728,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:25.000Z",
       "publishedAt": "2026-10-08T09:25:25.000Z",
-      "updated_at": "2026-11-11T04:30:03.000Z",
-      "updatedAt": "2026-11-11T04:30:03.000Z",
+      "updated_at": "2026-11-14T04:43:00.000Z",
+      "updatedAt": "2026-11-14T04:43:00.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -3836,8 +3850,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:24.000Z",
       "publishedAt": "2026-10-08T09:25:24.000Z",
-      "updated_at": "2026-11-11T04:30:09.000Z",
-      "updatedAt": "2026-11-11T04:30:09.000Z",
+      "updated_at": "2026-11-14T04:44:53.000Z",
+      "updatedAt": "2026-11-14T04:44:53.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -3956,8 +3970,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:21.000Z",
       "publishedAt": "2026-10-08T09:25:21.000Z",
-      "updated_at": "2026-11-11T04:30:12.000Z",
-      "updatedAt": "2026-11-11T04:30:12.000Z",
+      "updated_at": "2026-11-14T04:46:44.000Z",
+      "updatedAt": "2026-11-14T04:46:44.000Z",
       "created_at": "2026-09-01T16:43:24.000Z",
       "createdAt": "2026-09-01T16:43:24.000Z",
       "readDuration": "5 min read",
@@ -4045,9 +4059,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 77,
@@ -4078,8 +4090,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:20.000Z",
       "publishedAt": "2026-10-08T09:25:20.000Z",
-      "updated_at": "2026-11-11T04:30:16.000Z",
-      "updatedAt": "2026-11-11T04:30:16.000Z",
+      "updated_at": "2026-11-14T04:48:54.000Z",
+      "updatedAt": "2026-11-14T04:48:54.000Z",
       "created_at": "2026-09-13T16:43:24.000Z",
       "createdAt": "2026-09-13T16:43:24.000Z",
       "readDuration": "5 min read",
@@ -4167,9 +4179,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 78,
@@ -4203,8 +4213,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:19.000Z",
       "publishedAt": "2026-10-08T09:25:19.000Z",
-      "updated_at": "2026-11-11T04:34:15.000Z",
-      "updatedAt": "2026-11-11T04:34:15.000Z",
+      "updated_at": "2026-11-14T04:50:59.000Z",
+      "updatedAt": "2026-11-14T04:50:59.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -4322,8 +4332,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:17.000Z",
       "publishedAt": "2026-10-08T09:25:17.000Z",
-      "updated_at": "2026-11-11T04:44:47.000Z",
-      "updatedAt": "2026-11-11T04:44:47.000Z",
+      "updated_at": "2026-11-14T04:53:02.000Z",
+      "updatedAt": "2026-11-14T04:53:02.000Z",
       "created_at": "2026-09-02T05:46:46.000Z",
       "createdAt": "2026-09-02T05:46:46.000Z",
       "readDuration": "5 min read",
@@ -4411,9 +4421,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 26,
@@ -4441,8 +4449,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:16.000Z",
       "publishedAt": "2026-10-08T09:25:16.000Z",
-      "updated_at": "2026-11-11T05:53:36.000Z",
-      "updatedAt": "2026-11-11T05:53:36.000Z",
+      "updated_at": "2026-11-14T04:55:06.000Z",
+      "updatedAt": "2026-11-14T04:55:06.000Z",
       "created_at": "2026-09-01T22:29:13.000Z",
       "createdAt": "2026-09-01T22:29:13.000Z",
       "readDuration": "5 min read",
@@ -4559,8 +4567,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:14.000Z",
       "publishedAt": "2026-10-08T09:25:14.000Z",
-      "updated_at": "2026-11-11T05:56:58.000Z",
-      "updatedAt": "2026-11-11T05:56:58.000Z",
+      "updated_at": "2026-11-14T04:56:56.000Z",
+      "updatedAt": "2026-11-14T04:56:56.000Z",
       "created_at": "2026-09-02T04:46:59.000Z",
       "createdAt": "2026-09-02T04:46:59.000Z",
       "readDuration": "5 min read",
@@ -4679,8 +4687,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:13.000Z",
       "publishedAt": "2026-10-08T09:25:13.000Z",
-      "updated_at": "2026-11-11T05:59:56.000Z",
-      "updatedAt": "2026-11-11T05:59:56.000Z",
+      "updated_at": "2026-11-14T04:58:55.000Z",
+      "updatedAt": "2026-11-14T04:58:55.000Z",
       "created_at": "2026-09-01T15:29:51.000Z",
       "createdAt": "2026-09-01T15:29:51.000Z",
       "readDuration": "5 min read",
@@ -4799,8 +4807,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:11.000Z",
       "publishedAt": "2026-10-08T09:25:11.000Z",
-      "updated_at": "2026-11-11T06:03:31.000Z",
-      "updatedAt": "2026-11-11T06:03:31.000Z",
+      "updated_at": "2026-11-14T05:01:16.000Z",
+      "updatedAt": "2026-11-14T05:01:16.000Z",
       "created_at": "2026-09-01T16:33:21.000Z",
       "createdAt": "2026-09-01T16:33:21.000Z",
       "readDuration": "5 min read",
@@ -4888,9 +4896,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 7,
@@ -4922,8 +4928,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:09.000Z",
       "publishedAt": "2026-10-08T09:25:09.000Z",
-      "updated_at": "2026-11-11T06:06:04.000Z",
-      "updatedAt": "2026-11-11T06:06:04.000Z",
+      "updated_at": "2026-11-14T05:03:38.000Z",
+      "updatedAt": "2026-11-14T05:03:38.000Z",
       "created_at": "2026-08-31T13:43:06.000Z",
       "createdAt": "2026-08-31T13:43:06.000Z",
       "readDuration": "5 min read",
@@ -5043,8 +5049,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:08.000Z",
       "publishedAt": "2026-10-08T09:25:08.000Z",
-      "updated_at": "2026-11-11T06:09:10.000Z",
-      "updatedAt": "2026-11-11T06:09:10.000Z",
+      "updated_at": "2026-11-14T05:05:47.000Z",
+      "updatedAt": "2026-11-14T05:05:47.000Z",
       "created_at": "2026-09-11T18:39:42.000Z",
       "createdAt": "2026-09-11T18:39:42.000Z",
       "readDuration": "4 MIN READ",
@@ -5163,8 +5169,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:06.000Z",
       "publishedAt": "2026-10-08T09:25:06.000Z",
-      "updated_at": "2026-11-11T06:12:40.000Z",
-      "updatedAt": "2026-11-11T06:12:40.000Z",
+      "updated_at": "2026-11-14T05:07:35.000Z",
+      "updatedAt": "2026-11-14T05:07:35.000Z",
       "created_at": "2026-09-14T10:46:58.000Z",
       "createdAt": "2026-09-14T10:46:58.000Z",
       "readDuration": "5 min read",
@@ -5252,9 +5258,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 105,
@@ -5285,8 +5289,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:04.000Z",
       "publishedAt": "2026-10-08T09:25:04.000Z",
-      "updated_at": "2026-11-11T06:15:43.000Z",
-      "updatedAt": "2026-11-11T06:15:43.000Z",
+      "updated_at": "2026-11-14T05:09:35.000Z",
+      "updatedAt": "2026-11-14T05:09:35.000Z",
       "created_at": "2026-09-14T10:40:16.000Z",
       "createdAt": "2026-09-14T10:40:16.000Z",
       "readDuration": "5 min read",
@@ -5374,9 +5378,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 103,
@@ -5406,8 +5408,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:03.000Z",
       "publishedAt": "2026-10-08T09:25:03.000Z",
-      "updated_at": "2026-11-11T06:18:56.000Z",
-      "updatedAt": "2026-11-11T06:18:56.000Z",
+      "updated_at": "2026-11-14T05:13:10.000Z",
+      "updatedAt": "2026-11-14T05:13:10.000Z",
       "created_at": "2026-09-14T10:28:52.000Z",
       "createdAt": "2026-09-14T10:28:52.000Z",
       "readDuration": "5 min read",
@@ -5495,9 +5497,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 22,
@@ -5528,8 +5528,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:25:00.000Z",
       "publishedAt": "2026-10-08T09:25:00.000Z",
-      "updated_at": "2026-11-11T06:21:57.000Z",
-      "updatedAt": "2026-11-11T06:21:57.000Z",
+      "updated_at": "2026-11-14T05:16:36.000Z",
+      "updatedAt": "2026-11-14T05:16:36.000Z",
       "created_at": "2026-09-01T15:09:18.000Z",
       "createdAt": "2026-09-01T15:09:18.000Z",
       "readDuration": "5 min read",
@@ -5659,8 +5659,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:24:52.000Z",
       "publishedAt": "2026-10-08T09:24:52.000Z",
-      "updated_at": "2026-11-11T06:25:22.000Z",
-      "updatedAt": "2026-11-11T06:25:22.000Z",
+      "updated_at": "2026-11-14T05:19:58.000Z",
+      "updatedAt": "2026-11-14T05:19:58.000Z",
       "created_at": "2026-09-15T18:47:05.000Z",
       "createdAt": "2026-09-15T18:47:05.000Z",
       "readDuration": "5 min read",
@@ -5752,9 +5752,7 @@
       },
       "targetedRecipients": [
         "rushdhiriyaj2005@gmail.com"
-      ],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      ]
     },
     {
       "id": 104,
@@ -5795,8 +5793,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:24:52.000Z",
       "publishedAt": "2026-10-08T09:24:52.000Z",
-      "updated_at": "2026-11-11T06:28:52.000Z",
-      "updatedAt": "2026-11-11T06:28:52.000Z",
+      "updated_at": "2026-11-14T05:22:00.000Z",
+      "updatedAt": "2026-11-14T05:22:00.000Z",
       "created_at": "2026-09-14T10:35:17.000Z",
       "createdAt": "2026-09-14T10:35:17.000Z",
       "readDuration": "5 min read",
@@ -5888,9 +5886,7 @@
       },
       "targetedRecipients": [
         "rushdhiriyaj2005@gmail.com"
-      ],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      ]
     },
     {
       "id": 116,
@@ -5920,8 +5916,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:24:49.000Z",
       "publishedAt": "2026-10-08T09:24:49.000Z",
-      "updated_at": "2026-11-11T06:32:25.000Z",
-      "updatedAt": "2026-11-11T06:32:25.000Z",
+      "updated_at": "2026-11-14T05:24:07.000Z",
+      "updatedAt": "2026-11-14T05:24:07.000Z",
       "created_at": "2026-10-06T19:52:25.000Z",
       "createdAt": "2026-10-06T19:52:25.000Z",
       "readDuration": "7 min read",
@@ -6009,9 +6005,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 102,
@@ -6044,8 +6038,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:24:47.000Z",
       "publishedAt": "2026-10-08T09:24:47.000Z",
-      "updated_at": "2026-11-11T06:35:53.000Z",
-      "updatedAt": "2026-11-11T06:35:53.000Z",
+      "updated_at": "2026-11-14T05:26:14.000Z",
+      "updatedAt": "2026-11-14T05:26:14.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -6167,8 +6161,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:24:44.000Z",
       "publishedAt": "2026-10-08T09:24:44.000Z",
-      "updated_at": "2026-11-11T06:39:21.000Z",
-      "updatedAt": "2026-11-11T06:39:21.000Z",
+      "updated_at": "2026-11-14T05:28:13.000Z",
+      "updatedAt": "2026-11-14T05:28:13.000Z",
       "created_at": "2026-09-01T14:17:55.000Z",
       "createdAt": "2026-09-01T14:17:55.000Z",
       "readDuration": "5 min read",
@@ -6288,8 +6282,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:24:40.000Z",
       "publishedAt": "2026-10-08T09:24:40.000Z",
-      "updated_at": "2026-11-11T06:42:17.000Z",
-      "updatedAt": "2026-11-11T06:42:17.000Z",
+      "updated_at": "2026-11-14T05:30:17.000Z",
+      "updatedAt": "2026-11-14T05:30:17.000Z",
       "created_at": "2026-09-02T07:08:37.000Z",
       "createdAt": "2026-09-02T07:08:37.000Z",
       "readDuration": "5 min read",
@@ -6305,9 +6299,7 @@
       "seo": {
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 109,
@@ -6341,8 +6333,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:24:36.000Z",
       "publishedAt": "2026-10-08T09:24:36.000Z",
-      "updated_at": "2026-11-11T06:46:45.000Z",
-      "updatedAt": "2026-11-11T06:46:45.000Z",
+      "updated_at": "2026-11-14T05:32:17.000Z",
+      "updatedAt": "2026-11-14T05:32:17.000Z",
       "created_at": "2026-09-17T15:13:24.000Z",
       "createdAt": "2026-09-17T15:13:24.000Z",
       "readDuration": "5 min read",
@@ -6434,9 +6426,7 @@
       },
       "targetedRecipients": [
         "rushdhiriyaj2005@gmail.com"
-      ],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      ]
     },
     {
       "id": 110,
@@ -6470,8 +6460,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:24:33.000Z",
       "publishedAt": "2026-10-08T09:24:33.000Z",
-      "updated_at": "2026-11-11T06:53:58.000Z",
-      "updatedAt": "2026-11-11T06:53:58.000Z",
+      "updated_at": "2026-11-14T05:34:16.000Z",
+      "updatedAt": "2026-11-14T05:34:16.000Z",
       "created_at": "2026-09-17T15:23:46.000Z",
       "createdAt": "2026-09-17T15:23:46.000Z",
       "readDuration": "5 min read",
@@ -6565,9 +6555,7 @@
       "targetedRecipients": [
         "mubassharamuzammil12345@gmail.com",
         "rushdhiriyaj2005@mail.com"
-      ],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      ]
     },
     {
       "id": 111,
@@ -6601,8 +6589,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:24:31.000Z",
       "publishedAt": "2026-10-08T09:24:31.000Z",
-      "updated_at": "2026-11-11T06:59:49.000Z",
-      "updatedAt": "2026-11-11T06:59:49.000Z",
+      "updated_at": "2026-11-14T05:37:39.000Z",
+      "updatedAt": "2026-11-14T05:37:39.000Z",
       "created_at": "2026-09-18T10:22:37.000Z",
       "createdAt": "2026-09-18T10:22:37.000Z",
       "readDuration": "5 min read",
@@ -6724,8 +6712,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:24:28.000Z",
       "publishedAt": "2026-10-08T09:24:28.000Z",
-      "updated_at": "2026-11-11T07:10:59.000Z",
-      "updatedAt": "2026-11-11T07:10:59.000Z",
+      "updated_at": "2026-11-14T05:41:31.000Z",
+      "updatedAt": "2026-11-14T05:41:31.000Z",
       "created_at": "2026-09-24T10:41:07.000Z",
       "createdAt": "2026-09-24T10:41:07.000Z",
       "readDuration": "5 min read",
@@ -6819,9 +6807,7 @@
       "targetedRecipients": [
         "rushdhiriyaj2005@gmail.com",
         "nestosuper2024@gmail.com"
-      ],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      ]
     },
     {
       "id": 112,
@@ -6862,8 +6848,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:24:25.000Z",
       "publishedAt": "2026-10-08T09:24:25.000Z",
-      "updated_at": "2026-11-11T07:16:32.000Z",
-      "updatedAt": "2026-11-11T07:16:32.000Z",
+      "updated_at": "2026-11-14T05:45:23.000Z",
+      "updatedAt": "2026-11-14T05:45:23.000Z",
       "created_at": "2026-09-18T10:26:17.000Z",
       "createdAt": "2026-09-18T10:26:17.000Z",
       "readDuration": "5 min read",
@@ -6995,8 +6981,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:24:23.000Z",
       "publishedAt": "2026-10-08T09:24:23.000Z",
-      "updated_at": "2026-11-11T07:26:46.000Z",
-      "updatedAt": "2026-11-11T07:26:46.000Z",
+      "updated_at": "2026-11-14T05:48:56.000Z",
+      "updatedAt": "2026-11-14T05:48:56.000Z",
       "created_at": "2026-09-01T13:47:12.000Z",
       "createdAt": "2026-09-01T13:47:12.000Z",
       "readDuration": "5 min read",
@@ -7130,8 +7116,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:24:21.000Z",
       "publishedAt": "2026-10-08T09:24:21.000Z",
-      "updated_at": "2026-11-11T07:32:24.000Z",
-      "updatedAt": "2026-11-11T07:32:24.000Z",
+      "updated_at": "2026-11-14T05:52:38.000Z",
+      "updatedAt": "2026-11-14T05:52:38.000Z",
       "created_at": "2026-08-31T13:43:06.000Z",
       "createdAt": "2026-08-31T13:43:06.000Z",
       "readDuration": "5 min read",
@@ -7262,8 +7248,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:24:20.000Z",
       "publishedAt": "2026-10-08T09:24:20.000Z",
-      "updated_at": "2026-11-11T07:37:55.000Z",
-      "updatedAt": "2026-11-11T07:37:55.000Z",
+      "updated_at": "2026-11-14T05:56:23.000Z",
+      "updatedAt": "2026-11-14T05:56:23.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "5 min read",
@@ -7386,8 +7372,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:24:18.000Z",
       "publishedAt": "2026-10-08T09:24:18.000Z",
-      "updated_at": "2026-11-11T08:23:13.000Z",
-      "updatedAt": "2026-11-11T08:23:13.000Z",
+      "updated_at": "2026-11-14T06:00:07.000Z",
+      "updatedAt": "2026-11-14T06:00:07.000Z",
       "created_at": "2026-09-29T09:52:06.000Z",
       "createdAt": "2026-09-29T09:52:06.000Z",
       "readDuration": "5 min read",
@@ -7475,9 +7461,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 115,
@@ -7507,8 +7491,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T09:24:15.000Z",
       "publishedAt": "2026-10-08T09:24:15.000Z",
-      "updated_at": "2026-11-11T08:27:55.000Z",
-      "updatedAt": "2026-11-11T08:27:55.000Z",
+      "updated_at": "2026-11-14T06:05:13.000Z",
+      "updatedAt": "2026-11-14T06:05:13.000Z",
       "created_at": "2026-10-06T19:45:00.000Z",
       "createdAt": "2026-10-06T19:45:00.000Z",
       "readDuration": "5 min read",
@@ -7596,9 +7580,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 18,
@@ -7634,8 +7616,8 @@
       "date": "Oct 8, 2026",
       "published_at": "2026-10-08T03:55:54.000Z",
       "publishedAt": "2026-10-08T03:55:54.000Z",
-      "updated_at": "2026-11-11T08:33:52.000Z",
-      "updatedAt": "2026-11-11T08:33:52.000Z",
+      "updated_at": "2026-11-14T06:15:03.000Z",
+      "updatedAt": "2026-11-14T06:15:03.000Z",
       "created_at": "2026-09-01T13:40:27.000Z",
       "createdAt": "2026-09-01T13:40:27.000Z",
       "readDuration": "5 min read",
@@ -7755,8 +7737,8 @@
       "date": "Oct 7, 2026",
       "published_at": "2026-10-06T20:14:53.000Z",
       "publishedAt": "2026-10-06T20:14:53.000Z",
-      "updated_at": "2026-11-11T08:38:16.000Z",
-      "updatedAt": "2026-11-11T08:38:16.000Z",
+      "updated_at": "2026-11-14T06:20:14.000Z",
+      "updatedAt": "2026-11-14T06:20:14.000Z",
       "created_at": "2026-10-06T20:14:53.000Z",
       "createdAt": "2026-10-06T20:14:53.000Z",
       "readDuration": "5 min read",
@@ -7844,9 +7826,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 15,
@@ -7884,8 +7864,8 @@
       "date": "Sep 19, 2026",
       "published_at": "2026-09-19T11:15:16.000Z",
       "publishedAt": "2026-09-19T11:15:16.000Z",
-      "updated_at": "2026-11-11T08:43:23.000Z",
-      "updatedAt": "2026-11-11T08:43:23.000Z",
+      "updated_at": "2026-11-14T06:25:27.000Z",
+      "updatedAt": "2026-11-14T06:25:27.000Z",
       "created_at": "2026-09-01T12:19:29.000Z",
       "createdAt": "2026-09-01T12:19:29.000Z",
       "readDuration": "5 min read",
@@ -7973,9 +7953,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 108,
@@ -8006,8 +7984,8 @@
       "date": "Sep 16, 2026",
       "published_at": "2026-09-16T09:02:53.000Z",
       "publishedAt": "2026-09-16T09:02:53.000Z",
-      "updated_at": "2026-11-11T08:48:52.000Z",
-      "updatedAt": "2026-11-11T08:48:52.000Z",
+      "updated_at": "2026-11-14T06:31:54.000Z",
+      "updatedAt": "2026-11-14T06:31:54.000Z",
       "created_at": "2026-09-16T09:02:53.000Z",
       "createdAt": "2026-09-16T09:02:53.000Z",
       "readDuration": "5 min read",
@@ -8121,8 +8099,8 @@
       "date": "Sep 13, 2026",
       "published_at": "2026-09-13T11:23:11.000Z",
       "publishedAt": "2026-09-13T11:23:11.000Z",
-      "updated_at": "2026-11-11T08:54:17.000Z",
-      "updatedAt": "2026-11-11T08:54:17.000Z",
+      "updated_at": "2026-11-14T06:37:21.000Z",
+      "updatedAt": "2026-11-14T06:37:21.000Z",
       "created_at": "2026-09-13T16:53:11.000Z",
       "createdAt": "2026-09-13T16:53:11.000Z",
       "readDuration": "4 MIN READ",
@@ -8239,8 +8217,8 @@
       "date": "Sep 11, 2026",
       "published_at": "2026-09-10T19:07:54.000Z",
       "publishedAt": "2026-09-10T19:07:54.000Z",
-      "updated_at": "2026-11-11T09:00:10.000Z",
-      "updatedAt": "2026-11-11T09:00:10.000Z",
+      "updated_at": "2026-11-14T06:40:54.000Z",
+      "updatedAt": "2026-11-14T06:40:54.000Z",
       "created_at": "2026-09-03T06:58:11.000Z",
       "createdAt": "2026-09-03T06:58:11.000Z",
       "readDuration": "5 min read",
@@ -8328,9 +8306,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 10,
@@ -8369,8 +8345,8 @@
       "date": "Sep 10, 2026",
       "published_at": "2026-09-10T13:43:47.000Z",
       "publishedAt": "2026-09-10T13:43:47.000Z",
-      "updated_at": "2026-11-11T09:06:13.000Z",
-      "updatedAt": "2026-11-11T09:06:13.000Z",
+      "updated_at": "2026-11-14T06:45:09.000Z",
+      "updatedAt": "2026-11-14T06:45:09.000Z",
       "created_at": "2026-08-31T13:43:06.000Z",
       "createdAt": "2026-08-31T13:43:06.000Z",
       "readDuration": "5 min read",
@@ -8488,8 +8464,8 @@
       "date": "Sep 10, 2026",
       "published_at": "2026-09-10T09:52:29.000Z",
       "publishedAt": "2026-09-10T09:52:29.000Z",
-      "updated_at": "2026-11-11T09:12:08.000Z",
-      "updatedAt": "2026-11-11T09:12:08.000Z",
+      "updated_at": "2026-11-14T06:50:29.000Z",
+      "updatedAt": "2026-11-14T06:50:29.000Z",
       "created_at": "2026-09-02T06:48:11.000Z",
       "createdAt": "2026-09-02T06:48:11.000Z",
       "readDuration": "5 min read",
@@ -8505,9 +8481,7 @@
       "seo": {
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 33,
@@ -8538,8 +8512,8 @@
       "date": "Sep 10, 2026",
       "published_at": "2026-09-10T09:52:04.000Z",
       "publishedAt": "2026-09-10T09:52:04.000Z",
-      "updated_at": "2026-11-11T09:18:43.000Z",
-      "updatedAt": "2026-11-11T09:18:43.000Z",
+      "updated_at": "2026-11-14T06:56:50.000Z",
+      "updatedAt": "2026-11-14T06:56:50.000Z",
       "created_at": "2026-09-02T06:56:44.000Z",
       "createdAt": "2026-09-02T06:56:44.000Z",
       "readDuration": "5 min read",
@@ -8555,9 +8529,7 @@
       "seo": {
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 36,
@@ -8588,8 +8560,8 @@
       "date": "Sep 10, 2026",
       "published_at": "2026-09-10T09:45:51.000Z",
       "publishedAt": "2026-09-10T09:45:51.000Z",
-      "updated_at": "2026-11-11T09:25:01.000Z",
-      "updatedAt": "2026-11-11T09:25:01.000Z",
+      "updated_at": "2026-11-14T07:06:48.000Z",
+      "updatedAt": "2026-11-14T07:06:48.000Z",
       "created_at": "2026-09-02T07:11:24.000Z",
       "createdAt": "2026-09-02T07:11:24.000Z",
       "readDuration": "5 min read",
@@ -8605,9 +8577,7 @@
       "seo": {
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 12,
@@ -8850,9 +8820,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 14,
@@ -9445,9 +9413,7 @@
       "seo": {
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 71,
@@ -10102,9 +10068,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 37,
@@ -10224,9 +10188,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 34,
@@ -10347,9 +10309,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 74,
@@ -10589,9 +10549,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 57,
@@ -10711,9 +10669,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 56,
@@ -10834,9 +10790,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 55,
@@ -10957,9 +10911,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 46,
@@ -12158,9 +12110,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 59,
@@ -12280,9 +12230,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 54,
@@ -12403,9 +12351,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 53,
@@ -13004,9 +12950,7 @@
         },
         "targetedRecipients": []
       },
-      "targetedRecipients": [],
-      "author_name": "Muba_kity",
-      "author_email": "rura@gmail.com"
+      "targetedRecipients": []
     },
     {
       "id": 52,
@@ -13865,8 +13809,8 @@
       "date": "Jul 20, 2026",
       "published_at": "2026-07-20T06:15:00.000Z",
       "publishedAt": "2026-07-20T06:15:00.000Z",
-      "updated_at": "2026-09-19T11:16:24.000Z",
-      "updatedAt": "2026-09-19T11:16:24.000Z",
+      "updated_at": "2026-11-11T19:30:59.000Z",
+      "updatedAt": "2026-11-11T19:30:59.000Z",
       "created_at": "2026-08-31T12:59:08.000Z",
       "createdAt": "2026-08-31T12:59:08.000Z",
       "readDuration": "3 MIN READ",
@@ -13879,7 +13823,9 @@
       "authorEmail": "writer@digitaljournal.com",
       "authorAvatar": "/author_bluesuit.jpg",
       "authorBio": "Pramod Jain reports on global supply chains and cloud systems.",
-      "seo": null,
+      "seo": {
+        "targetedRecipients": []
+      },
       "targetedRecipients": []
     }
   ],
