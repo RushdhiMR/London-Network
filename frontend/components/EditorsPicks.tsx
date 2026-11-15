@@ -258,10 +258,6 @@ export default function EditorsPicks() {
                 Market Watch
               </h2>
             </div>
-            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60 uppercase tracking-wider">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Live
-            </span>
           </div>
 
           {/* Tab Navigation */}
