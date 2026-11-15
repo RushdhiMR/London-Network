@@ -647,7 +647,7 @@ export default function WriterDashboardPage() {
             }
           }
         })
-        .catch(() => {});
+        .catch(() => { });
 
       setCurrentUser(finalUser);
       setIsAuthenticated(true);
@@ -968,7 +968,7 @@ export default function WriterDashboardPage() {
     return matchesTab && matchesSearch;
   });
 
-  
+
   const isContributor = ((currentUser as any)?.writerType || (auth.user as any)?.writerType || "").toLowerCase() === "contributor";
 
   const userVisiblePosts = useMemo(() => {
@@ -1257,8 +1257,8 @@ export default function WriterDashboardPage() {
                     key={card.label}
                     onClick={() => setActiveTab(card.tab)}
                     className={`text-left p-4 rounded-2xl bg-white border transition-all cursor-pointer shadow-2xs hover:shadow-xs group ${isSelected
-                        ? `border-[#D31220]/60 ring-2 ring-[#D31220]/20 bg-red-50/10`
-                        : "border-slate-200/80 hover:border-slate-300"
+                      ? `border-[#D31220]/60 ring-2 ring-[#D31220]/20 bg-red-50/10`
+                      : "border-slate-200/80 hover:border-slate-300"
                       }`}
                   >
                     <div className="flex items-center justify-between mb-3">
@@ -1290,336 +1290,336 @@ export default function WriterDashboardPage() {
           {/* Left Column: Posts Workspace */}
           <div className="flex-1 w-full min-w-0">
 
-        {/* Toolbar: Navigation Filter Tabs & Integrated Search */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs mb-6">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            {/* Toolbar: Navigation Filter Tabs & Integrated Search */}
+            <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs mb-6">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
 
-            {/* Filter Tabs */}
-            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1 lg:pb-0">
-              {(["Published", "Drafts", "Pending review", "Rejected", "Trash"] as const).map((tab) => {
-                const isActive = activeTab === tab;
-                const count = posts.filter((p) => {
-                  if (!isPostVisibleInStudio(p)) return false;
-                  const st = (p.status || "").toLowerCase().trim();
-                  if (tab === "Drafts") return st === "draft" || st === "drafts";
-                  if (tab === "Pending review") return st.includes("pending") || st.includes("review") || st.includes("submitted");
-                  if (tab === "Rejected") return st.includes("reject");
-                  if (tab === "Trash") return st === "trash" || st === "trashed";
-                  return st === "published" || st === "approved";
-                }).length;
+                {/* Filter Tabs */}
+                <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1 lg:pb-0">
+                  {(["Published", "Drafts", "Pending review", "Rejected", "Trash"] as const).map((tab) => {
+                    const isActive = activeTab === tab;
+                    const count = posts.filter((p) => {
+                      if (!isPostVisibleInStudio(p)) return false;
+                      const st = (p.status || "").toLowerCase().trim();
+                      if (tab === "Drafts") return st === "draft" || st === "drafts";
+                      if (tab === "Pending review") return st.includes("pending") || st.includes("review") || st.includes("submitted");
+                      if (tab === "Rejected") return st.includes("reject");
+                      if (tab === "Trash") return st === "trash" || st === "trashed";
+                      return st === "published" || st === "approved";
+                    }).length;
 
-                return (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${isActive
-                        ? "bg-[#D31220] text-white shadow-sm shadow-red-950/20"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 bg-slate-50/60 border border-slate-200/70"
-                      }`}
-                  >
-                    <span>{tab}</span>
-                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full transition-all ${isActive
-                        ? "bg-white/20 text-white"
-                        : tab === "Pending review" && count > 0
-                          ? "bg-amber-100 text-amber-700"
-                          : tab === "Rejected" && count > 0
-                            ? "bg-rose-100 text-rose-700"
-                            : "bg-slate-200/80 text-slate-600"
-                      }`}>
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+                    return (
+                      <button
+                        key={tab}
+                        onClick={() => setActiveTab(tab)}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${isActive
+                          ? "bg-[#D31220] text-white shadow-sm shadow-red-950/20"
+                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 bg-slate-50/60 border border-slate-200/70"
+                          }`}
+                      >
+                        <span>{tab}</span>
+                        <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full transition-all ${isActive
+                          ? "bg-white/20 text-white"
+                          : tab === "Pending review" && count > 0
+                            ? "bg-amber-100 text-amber-700"
+                            : tab === "Rejected" && count > 0
+                              ? "bg-rose-100 text-rose-700"
+                              : "bg-slate-200/80 text-slate-600"
+                          }`}>
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
 
-          </div>
-        </div>
-
-        {/* MAIN POSTS CONTENT CONTAINER */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden min-h-[460px] flex flex-col">
-
-          {/* CONTENT AREA: LIST OR EMPTY STATE */}
-          {filteredPosts.length === 0 ? (
-            /* EMPTY STATE */
-            <div className="flex-1 flex flex-col items-center justify-center text-center py-16 px-4">
-              <div className="relative w-40 h-40 flex items-center justify-center mb-4">
-                <svg viewBox="0 0 160 160" className="w-full h-full">
-                  <rect
-                    x="36"
-                    y="30"
-                    width="22"
-                    height="22"
-                    rx="5"
-                    transform="rotate(-15 36 30)"
-                    fill="#1E293B"
-                  />
-                  <circle cx="120" cy="36" r="3.5" fill="#1E293B" />
-                  <path
-                    d="M 94 66 C 122 66, 138 88, 134 116"
-                    fill="none"
-                    stroke="#FBCFE8"
-                    strokeWidth="3.5"
-                    strokeLinecap="round"
-                  />
-                  <circle cx="126" cy="116" r="11" fill="#00C853" />
-                  <rect
-                    x="58"
-                    y="52"
-                    width="48"
-                    height="48"
-                    rx="14"
-                    fill="#D31220"
-                  />
-                  <line
-                    x1="82"
-                    y1="66"
-                    x2="82"
-                    y2="86"
-                    stroke="#FFFFFF"
-                    strokeWidth="3.5"
-                    strokeLinecap="round"
-                  />
-                  <line
-                    x1="72"
-                    y1="76"
-                    x2="92"
-                    y2="76"
-                    stroke="#FFFFFF"
-                    strokeWidth="3.5"
-                    strokeLinecap="round"
-                  />
-                  <circle cx="85" cy="115" r="3" fill="#94A3B8" />
-                  <path
-                    d="M 52 118 A 20 20 0 0 1 92 118 Z"
-                    fill="#FBBF24"
-                  />
-                </svg>
               </div>
-
-              <h3 className="text-base font-bold text-slate-900 mb-1">
-                {searchQuery ? "No matching articles found" : "No articles in this section yet"}
-              </h3>
-              <p className="text-xs text-slate-500 mb-5 max-w-sm">
-                {searchQuery
-                  ? `No posts matched "${searchQuery}". Try a different keyword or reset filters.`
-                  : "Compose new stories or import existing drafts to start publishing on London BigBen."}
-              </p>
-
-              {searchQuery ? (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className="text-xs font-bold text-[#D31220] hover:underline cursor-pointer"
-                >
-                  Clear search query
-                </button>
-              ) : (
-                <Link
-                  href="/writer/create"
-                  onClick={() => localStorage.removeItem("dj_editing_post")}
-                  className="bg-[#D31220] hover:bg-[#b91522] text-white font-bold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-sm shadow-red-950/20 cursor-pointer"
-                >
-                  <Plus size={15} />
-                  <span>Create New Post</span>
-                </Link>
-              )}
             </div>
-          ) : (
-            /* POSTS TABLE WITH THUMBNAILS AND RICH ROW DETAILS */
-            <div className="flex-1 flex flex-col justify-between">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-slate-50/80 border-b border-slate-200/80 text-slate-500 font-bold uppercase tracking-wider text-[10.5px]">
-                      <th className="py-3.5 pl-5 pr-4">Article</th>
-                      <th className="py-3.5 px-4">Category</th>
-                      <th className="py-3.5 px-4">Status</th>
-                      <th className="py-3.5 px-4">Date</th>
-                      <th className="py-3.5 pr-5 pl-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredPosts.map((post) => {
-                      const articleImg = post.imageUrl || "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=300&h=200&fit=crop";
-                      const statusNorm = (post.status || "").toLowerCase().trim();
-                      const isPublished = statusNorm === "published" || statusNorm === "approved";
-                      const isPending = statusNorm.includes("pending") || statusNorm.includes("review") || statusNorm.includes("submitted");
-                      const isDraft = statusNorm === "draft" || statusNorm === "drafts";
-                      const isRejected = statusNorm.includes("reject");
-                      const isTrash = statusNorm === "trash" || statusNorm === "trashed";
 
-                      return (
-                        <tr key={post.id} className="hover:bg-slate-50/80 transition-colors group">
-                          {/* Article Column: Thumbnail + Title + Excerpt + Metadata */}
-                          <td className="py-3.5 pl-5 pr-4 max-w-lg">
-                            <div className="flex items-center gap-3.5">
-                              <div className="w-14 h-14 sm:w-16 sm:h-14 rounded-xl overflow-hidden bg-slate-100 border border-slate-200/80 flex-shrink-0 relative group-hover:shadow-xs transition-all">
-                                <img
-                                  src={articleImg}
-                                  alt={post.title}
-                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=300&h=200&fit=crop";
-                                  }}
-                                />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="font-bold text-sm text-slate-900 group-hover:text-[#D31220] transition-colors line-clamp-1 leading-snug">
-                                  {post.title}
-                                </p>
-                                <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">
-                                  {post.summary || "No summary provided for this article."}
-                                </p>
-                                <div className="flex items-center gap-2.5 mt-1.5 flex-wrap">
-                                  <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-slate-400">
-                                    <Clock size={11} className="text-slate-400" />
-                                    {post.readTime || post.readDuration || "5 min read"}
-                                  </span>
-                                  {post.authorName && (
-                                    <span className="text-[10.5px] text-slate-400 font-medium">
-                                      • By {post.authorName}
-                                    </span>
+            {/* MAIN POSTS CONTENT CONTAINER */}
+            <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden min-h-[460px] flex flex-col">
+
+              {/* CONTENT AREA: LIST OR EMPTY STATE */}
+              {filteredPosts.length === 0 ? (
+                /* EMPTY STATE */
+                <div className="flex-1 flex flex-col items-center justify-center text-center py-16 px-4">
+                  <div className="relative w-40 h-40 flex items-center justify-center mb-4">
+                    <svg viewBox="0 0 160 160" className="w-full h-full">
+                      <rect
+                        x="36"
+                        y="30"
+                        width="22"
+                        height="22"
+                        rx="5"
+                        transform="rotate(-15 36 30)"
+                        fill="#1E293B"
+                      />
+                      <circle cx="120" cy="36" r="3.5" fill="#1E293B" />
+                      <path
+                        d="M 94 66 C 122 66, 138 88, 134 116"
+                        fill="none"
+                        stroke="#FBCFE8"
+                        strokeWidth="3.5"
+                        strokeLinecap="round"
+                      />
+                      <circle cx="126" cy="116" r="11" fill="#00C853" />
+                      <rect
+                        x="58"
+                        y="52"
+                        width="48"
+                        height="48"
+                        rx="14"
+                        fill="#D31220"
+                      />
+                      <line
+                        x1="82"
+                        y1="66"
+                        x2="82"
+                        y2="86"
+                        stroke="#FFFFFF"
+                        strokeWidth="3.5"
+                        strokeLinecap="round"
+                      />
+                      <line
+                        x1="72"
+                        y1="76"
+                        x2="92"
+                        y2="76"
+                        stroke="#FFFFFF"
+                        strokeWidth="3.5"
+                        strokeLinecap="round"
+                      />
+                      <circle cx="85" cy="115" r="3" fill="#94A3B8" />
+                      <path
+                        d="M 52 118 A 20 20 0 0 1 92 118 Z"
+                        fill="#FBBF24"
+                      />
+                    </svg>
+                  </div>
+
+                  <h3 className="text-base font-bold text-slate-900 mb-1">
+                    {searchQuery ? "No matching articles found" : "No articles in this section yet"}
+                  </h3>
+                  <p className="text-xs text-slate-500 mb-5 max-w-sm">
+                    {searchQuery
+                      ? `No posts matched "${searchQuery}". Try a different keyword or reset filters.`
+                      : "Compose new stories or import existing drafts to start publishing on London BigBen."}
+                  </p>
+
+                  {searchQuery ? (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="text-xs font-bold text-[#D31220] hover:underline cursor-pointer"
+                    >
+                      Clear search query
+                    </button>
+                  ) : (
+                    <Link
+                      href="/writer/create"
+                      onClick={() => localStorage.removeItem("dj_editing_post")}
+                      className="bg-[#D31220] hover:bg-[#b91522] text-white font-bold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-sm shadow-red-950/20 cursor-pointer"
+                    >
+                      <Plus size={15} />
+                      <span>Create New Post</span>
+                    </Link>
+                  )}
+                </div>
+              ) : (
+                /* POSTS TABLE WITH THUMBNAILS AND RICH ROW DETAILS */
+                <div className="flex-1 flex flex-col justify-between">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-50/80 border-b border-slate-200/80 text-slate-500 font-bold uppercase tracking-wider text-[10.5px]">
+                          <th className="py-3.5 pl-5 pr-4">Article</th>
+                          <th className="py-3.5 px-4">Category</th>
+                          <th className="py-3.5 px-4">Status</th>
+                          <th className="py-3.5 px-4">Date</th>
+                          <th className="py-3.5 pr-5 pl-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredPosts.map((post) => {
+                          const articleImg = post.imageUrl || "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=300&h=200&fit=crop";
+                          const statusNorm = (post.status || "").toLowerCase().trim();
+                          const isPublished = statusNorm === "published" || statusNorm === "approved";
+                          const isPending = statusNorm.includes("pending") || statusNorm.includes("review") || statusNorm.includes("submitted");
+                          const isDraft = statusNorm === "draft" || statusNorm === "drafts";
+                          const isRejected = statusNorm.includes("reject");
+                          const isTrash = statusNorm === "trash" || statusNorm === "trashed";
+
+                          return (
+                            <tr key={post.id} className="hover:bg-slate-50/80 transition-colors group">
+                              {/* Article Column: Thumbnail + Title + Excerpt + Metadata */}
+                              <td className="py-3.5 pl-5 pr-4 max-w-lg">
+                                <div className="flex items-center gap-3.5">
+                                  <div className="w-14 h-14 sm:w-16 sm:h-14 rounded-xl overflow-hidden bg-slate-100 border border-slate-200/80 flex-shrink-0 relative group-hover:shadow-xs transition-all">
+                                    <img
+                                      src={articleImg}
+                                      alt={post.title}
+                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=300&h=200&fit=crop";
+                                      }}
+                                    />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-bold text-sm text-slate-900 group-hover:text-[#D31220] transition-colors line-clamp-1 leading-snug">
+                                      {post.title}
+                                    </p>
+                                    <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">
+                                      {post.summary || "No summary provided for this article."}
+                                    </p>
+                                    <div className="flex items-center gap-2.5 mt-1.5 flex-wrap">
+                                      <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-slate-400">
+                                        <Clock size={11} className="text-slate-400" />
+                                        {post.readTime || post.readDuration || "5 min read"}
+                                      </span>
+                                      {post.authorName && (
+                                        <span className="text-[10.5px] text-slate-400 font-medium">
+                                          • By {post.authorName}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {isRejected && (
+                                      <div className="mt-2 p-2 bg-rose-50/80 border border-rose-200/80 rounded-lg flex items-start gap-1.5 max-w-lg">
+                                        <AlertCircle size={13} className="text-rose-600 shrink-0 mt-0.5" />
+                                        <div className="text-[11px] text-rose-950 leading-relaxed">
+                                          <span className="font-bold text-rose-800">Rejection Reason: </span>
+                                          <span className={post.rejectionReason && post.rejectionReason.trim() ? "font-medium text-slate-800" : "italic text-rose-700/80"}>
+                                            {post.rejectionReason && post.rejectionReason.trim() ? post.rejectionReason.trim() : "No rejection reason provided."}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* Category Column */}
+                              <td className="py-3.5 px-4 whitespace-nowrap">
+                                <span className="px-2.5 py-1 bg-slate-100 text-slate-700 font-bold text-[10px] rounded-md tracking-wider uppercase border border-slate-200/80 font-mono inline-block">
+                                  {post.category || "GENERAL"}
+                                </span>
+                              </td>
+
+                              {/* Status Column */}
+                              <td className="py-3.5 px-4 whitespace-nowrap">
+                                <span className={`px-2.5 py-1 rounded-full text-[10.5px] font-semibold flex items-center gap-1.5 w-fit ${isPublished
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200/80"
+                                  : isPending
+                                    ? "bg-amber-50 text-amber-700 border border-amber-200/80"
+                                    : isDraft
+                                      ? "bg-slate-100 text-slate-700 border border-slate-200"
+                                      : isRejected
+                                        ? "bg-rose-50 text-rose-700 border border-rose-200/80"
+                                        : "bg-red-50 text-red-700 border border-red-200/80"
+                                  }`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${isPublished ? "bg-emerald-500 ring-2 ring-emerald-400/30" :
+                                    isPending ? "bg-amber-500 ring-2 ring-amber-400/30" :
+                                      isDraft ? "bg-slate-400" :
+                                        isRejected ? "bg-rose-500 ring-2 ring-rose-400/30" : "bg-red-500"
+                                    }`}></span>
+                                  {post.status}
+                                </span>
+                              </td>
+
+                              {/* Date Column */}
+                              <td className="py-3.5 px-4 whitespace-nowrap text-slate-500 font-medium text-xs">
+                                <span className="inline-flex items-center gap-1.5">
+                                  <Calendar size={12} className="text-slate-400" />
+                                  {post.date}
+                                </span>
+                              </td>
+
+                              {/* Actions Column */}
+                              <td className="py-3.5 pr-5 pl-4 whitespace-nowrap text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {/* Preview Button */}
+                                  {(isPublished || isPending) && (
+                                    <button
+                                      onClick={() => setPreviewArticle(post)}
+                                      className="px-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-100/90 hover:bg-[#D31220] hover:text-white border border-slate-200 hover:border-[#D31220] rounded-lg transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-2xs font-mono"
+                                      title="Preview article"
+                                    >
+                                      <Eye size={13} />
+                                      <span>Preview</span>
+                                    </button>
+                                  )}
+
+                                  {/* Reason Button for Rejection */}
+                                  {(isRejected || post.rejectionReason) && (
+                                    <button
+                                      onClick={() => setSelectedReasonPost(post)}
+                                      className="px-2.5 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                                      title="View rejection reason"
+                                    >
+                                      <AlertCircle size={13} />
+                                      <span>Reason</span>
+                                    </button>
+                                  )}
+
+                                  {/* Edit Button */}
+                                  {!isTrash && (
+                                    <button
+                                      onClick={() => handleEditPost(post)}
+                                      className="px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200/80 border border-slate-200 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                                      title="Edit post"
+                                    >
+                                      <PenTool size={13} />
+                                      <span>Edit</span>
+                                    </button>
+                                  )}
+
+                                  {/* Trash Tab Actions (Restore & Delete) */}
+                                  {isTrash ? (
+                                    <>
+                                      <button
+                                        onClick={() => handleRestorePost(post.id)}
+                                        className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                                        title="Restore post"
+                                      >
+                                        <RotateCcw size={15} />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeletePermanently(post.id)}
+                                        className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                        title="Delete permanently"
+                                      >
+                                        <Trash2 size={15} />
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleMoveToTrash(post.id)}
+                                      className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                      title="Move to trash"
+                                    >
+                                      <Trash2 size={15} />
+                                    </button>
                                   )}
                                 </div>
-                                {isRejected && (
-                                  <div className="mt-2 p-2 bg-rose-50/80 border border-rose-200/80 rounded-lg flex items-start gap-1.5 max-w-lg">
-                                    <AlertCircle size={13} className="text-rose-600 shrink-0 mt-0.5" />
-                                    <div className="text-[11px] text-rose-950 leading-relaxed">
-                                      <span className="font-bold text-rose-800">Rejection Reason: </span>
-                                      <span className={post.rejectionReason && post.rejectionReason.trim() ? "font-medium text-slate-800" : "italic text-rose-700/80"}>
-                                        {post.rejectionReason && post.rejectionReason.trim() ? post.rejectionReason.trim() : "No rejection reason provided."}
-                                      </span>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </td>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
 
-                          {/* Category Column */}
-                          <td className="py-3.5 px-4 whitespace-nowrap">
-                            <span className="px-2.5 py-1 bg-slate-100 text-slate-700 font-bold text-[10px] rounded-md tracking-wider uppercase border border-slate-200/80 font-mono inline-block">
-                              {post.category || "GENERAL"}
-                            </span>
-                          </td>
+                  {/* Table Footer */}
+                  <div className="px-5 py-3.5 bg-slate-50/60 border-t border-slate-200/80 flex items-center justify-between text-xs text-slate-500">
+                    <span className="font-medium">
+                      Showing <strong className="text-slate-800 font-bold">{filteredPosts.length}</strong> {filteredPosts.length === 1 ? 'article' : 'articles'}
+                    </span>
+                    <span className="text-[11px] font-semibold text-slate-400">
+                      London BigBen Editorial Studio
+                    </span>
+                  </div>
+                </div>
+              )}
 
-                          {/* Status Column */}
-                          <td className="py-3.5 px-4 whitespace-nowrap">
-                            <span className={`px-2.5 py-1 rounded-full text-[10.5px] font-semibold flex items-center gap-1.5 w-fit ${isPublished
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200/80"
-                                : isPending
-                                  ? "bg-amber-50 text-amber-700 border border-amber-200/80"
-                                  : isDraft
-                                    ? "bg-slate-100 text-slate-700 border border-slate-200"
-                                    : isRejected
-                                      ? "bg-rose-50 text-rose-700 border border-rose-200/80"
-                                      : "bg-red-50 text-red-700 border border-red-200/80"
-                              }`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${isPublished ? "bg-emerald-500 ring-2 ring-emerald-400/30" :
-                                  isPending ? "bg-amber-500 ring-2 ring-amber-400/30" :
-                                    isDraft ? "bg-slate-400" :
-                                      isRejected ? "bg-rose-500 ring-2 ring-rose-400/30" : "bg-red-500"
-                                }`}></span>
-                              {post.status}
-                            </span>
-                          </td>
-
-                          {/* Date Column */}
-                          <td className="py-3.5 px-4 whitespace-nowrap text-slate-500 font-medium text-xs">
-                            <span className="inline-flex items-center gap-1.5">
-                              <Calendar size={12} className="text-slate-400" />
-                              {post.date}
-                            </span>
-                          </td>
-
-                          {/* Actions Column */}
-                          <td className="py-3.5 pr-5 pl-4 whitespace-nowrap text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              {/* Preview Button */}
-                              {(isPublished || isPending) && (
-                                <button
-                                  onClick={() => setPreviewArticle(post)}
-                                  className="px-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-100/90 hover:bg-[#D31220] hover:text-white border border-slate-200 hover:border-[#D31220] rounded-lg transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-2xs font-mono"
-                                  title="Preview article"
-                                >
-                                  <Eye size={13} />
-                                  <span>Preview</span>
-                                </button>
-                              )}
-
-                              {/* Reason Button for Rejection */}
-                              {(isRejected || post.rejectionReason) && (
-                                <button
-                                  onClick={() => setSelectedReasonPost(post)}
-                                  className="px-2.5 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5"
-                                  title="View rejection reason"
-                                >
-                                  <AlertCircle size={13} />
-                                  <span>Reason</span>
-                                </button>
-                              )}
-
-                              {/* Edit Button */}
-                              {!isTrash && (
-                                <button
-                                  onClick={() => handleEditPost(post)}
-                                  className="px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200/80 border border-slate-200 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5"
-                                  title="Edit post"
-                                >
-                                  <PenTool size={13} />
-                                  <span>Edit</span>
-                                </button>
-                              )}
-
-                              {/* Trash Tab Actions (Restore & Delete) */}
-                              {isTrash ? (
-                                <>
-                                  <button
-                                    onClick={() => handleRestorePost(post.id)}
-                                    className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
-                                    title="Restore post"
-                                  >
-                                    <RotateCcw size={15} />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeletePermanently(post.id)}
-                                    className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                                    title="Delete permanently"
-                                  >
-                                    <Trash2 size={15} />
-                                  </button>
-                                </>
-                              ) : (
-                                <button
-                                  onClick={() => handleMoveToTrash(post.id)}
-                                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                                  title="Move to trash"
-                                >
-                                  <Trash2 size={15} />
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Table Footer */}
-              <div className="px-5 py-3.5 bg-slate-50/60 border-t border-slate-200/80 flex items-center justify-between text-xs text-slate-500">
-                <span className="font-medium">
-                  Showing <strong className="text-slate-800 font-bold">{filteredPosts.length}</strong> {filteredPosts.length === 1 ? 'article' : 'articles'}
-                </span>
-                <span className="text-[11px] font-semibold text-slate-400">
-                  London BigBen Editorial Studio
-                </span>
-              </div>
             </div>
-          )}
-
-        </div>
           </div>
 
           {/* Right Column: Contributor Quota & Weekly Deadline Sidebar */}
@@ -2120,7 +2120,7 @@ export default function WriterDashboardPage() {
                 />
               </div>
 
-                            {/* Field: PROFESSIONAL TITLE */}
+              {/* Field: PROFESSIONAL TITLE */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">
@@ -2150,7 +2150,7 @@ export default function WriterDashboardPage() {
                 </p>
               </div>
 
-                            {/* Field: WRITER ACCOUNT TYPE */}
+              {/* Field: WRITER ACCOUNT TYPE */}
               <div>
                 <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
                   WRITER ACCOUNT TYPE
@@ -2158,11 +2158,10 @@ export default function WriterDashboardPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <label
                     onClick={() => setProfileWriterType("Staff")}
-                    className={`p-3 rounded-xl border flex flex-col justify-between transition-all cursor-pointer ${
-                      profileWriterType === "Staff"
+                    className={`p-3 rounded-xl border flex flex-col justify-between transition-all cursor-pointer ${profileWriterType === "Staff"
                         ? "border-[#D31220] bg-red-50/20 ring-1 ring-red-100"
                         : "border-gray-200 hover:border-gray-300 bg-white"
-                    }`}
+                      }`}
                   >
                     <div className="flex items-start gap-2">
                       <input
@@ -2183,11 +2182,10 @@ export default function WriterDashboardPage() {
 
                   <label
                     onClick={() => setProfileWriterType("Contributor")}
-                    className={`p-3 rounded-xl border flex flex-col justify-between transition-all cursor-pointer ${
-                      profileWriterType === "Contributor"
+                    className={`p-3 rounded-xl border flex flex-col justify-between transition-all cursor-pointer ${profileWriterType === "Contributor"
                         ? "border-[#D31220] bg-red-50/20 ring-1 ring-red-100"
                         : "border-gray-200 hover:border-gray-300 bg-white"
-                    }`}
+                      }`}
                   >
                     <div className="flex items-start gap-2">
                       <input
