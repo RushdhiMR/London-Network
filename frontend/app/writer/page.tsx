@@ -1333,29 +1333,6 @@ export default function WriterDashboardPage() {
               })}
             </div>
 
-            {/* Search Box */}
-            <div className="flex items-center gap-3 self-stretch lg:self-auto">
-              <div className="relative flex-1 sm:w-80">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="text"
-                  placeholder="Search articles by title, category, summary..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-8 py-2 bg-slate-50/80 border border-slate-200/90 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-[#D31220] focus:ring-2 focus:ring-red-100 transition-all font-medium"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
-                    title="Clear search"
-                  >
-                    <X size={13} />
-                  </button>
-                )}
-              </div>
-            </div>
-
           </div>
         </div>
 
