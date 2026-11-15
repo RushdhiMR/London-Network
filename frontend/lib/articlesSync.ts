@@ -983,19 +983,8 @@ export async function deletePermanentlyOnServer(id: string | number, title?: str
 }
 
 export function useLiveArticles() {
-  const [articles, setArticles] = useState<ArticleItem[]>(() => {
-    if (cachedServerArticles && cachedServerArticles.length > 0) {
-      return cachedServerArticles;
-    }
-    if (typeof window !== "undefined") {
-      const cached = getCachedArticles();
-      if (cached && cached.length > 0) return cached;
-    }
-    return [];
-  });
-  const [loading, setLoading] = useState<boolean>(() => {
-    return !(cachedServerArticles && cachedServerArticles.length > 0);
-  });
+  const [articles, setArticles] = useState<ArticleItem[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -1016,6 +1005,18 @@ export function useLiveArticles() {
       }
     };
     liveArticlesSubscribers.add(subscriber);
+
+    // Fast-path on client mount: seed from in-memory cache or localStorage
+    if (cachedServerArticles && cachedServerArticles.length > 0) {
+      setArticles(cachedServerArticles);
+      setLoading(false);
+    } else {
+      const local = getCachedArticles();
+      if (local && local.length > 0) {
+        setArticles(local);
+        setLoading(false);
+      }
+    }
 
     fetchArticlesFromServer().then((fresh) => {
       if (isMounted && Array.isArray(fresh)) {

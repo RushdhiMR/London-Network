@@ -384,7 +384,7 @@ export default function Header({
     if (asyncSearchArticles.length > 0) {
       return asyncSearchArticles;
     }
-    return getAllSearchableArticles();
+    return [];
   }, [liveArticles, asyncSearchArticles]);
 
   const articleNotifications = useMemo(() => {
