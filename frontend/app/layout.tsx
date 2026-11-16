@@ -83,6 +83,14 @@ export default function RootLayout({
     <html lang="en" prefix="og: http://ogp.me/ns#" className="w-full max-w-full">
       <head>
         <link rel="image_src" href={`${siteUrl}/og-image.png`} />
+        <meta property="og:image" content={`${siteUrl}/og-image.png`} />
+        <meta property="og:image:secure_url" content={`${siteUrl}/og-image.png`} />
+        <meta property="og:image:type" content="image/png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt" content="London BigBen Network Logo" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:image" content={`${siteUrl}/og-image.png`} />
         {/* Comprehensive Google Translate toolbar suppressor - CSS */}
         <style>{`
           body > .skiptranslate:not(#google_translate_element),

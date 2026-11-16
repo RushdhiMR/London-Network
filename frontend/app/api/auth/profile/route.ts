@@ -1,7 +1,7 @@
 import { requireAuth } from "@/lib/rbac";
 import { NextResponse } from 'next/server';
 import { DB } from '@/lib/db';
-import { readArticlesStore, writeArticlesStore } from '@/lib/serverArticlesStore';
+import { readArticlesStore, readJsonArticles, writeJsonArticles } from '@/lib/serverArticlesStore';
 import { isB2Configured, uploadToB2 } from '@/lib/backblaze';
 
 export async function GET(request: Request) {
@@ -10,6 +10,34 @@ export async function GET(request: Request) {
     const email = searchParams.get('email');
     const name = searchParams.get('name');
     const list = searchParams.get('list');
+
+    if (email) {
+      const cleanEmail = email.toLowerCase().trim();
+      let matchedUser = await DB.getUserByEmail(cleanEmail);
+      if (!matchedUser) {
+        const slugPart = cleanEmail.split('@')[0].replace(/[^a-z0-9]/g, '');
+        const allUsers = await DB.getAllUsers();
+        matchedUser = allUsers.find((u: any) => {
+          const uEmail = (u.email || '').toLowerCase().trim();
+          const uName = (u.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          const uEmailPrefix = uEmail.split('@')[0].replace(/[^a-z0-9]/g, '');
+          return uEmail === cleanEmail ||
+                 (slugPart.length > 2 && (uName.includes(slugPart) || slugPart.includes(uName))) ||
+                 (slugPart.length > 2 && (uEmailPrefix.includes(slugPart) || slugPart.includes(uEmailPrefix)));
+        }) || null;
+      }
+      if (matchedUser) {
+        const { password_hash, password, ...safeUser } = matchedUser as any;
+        return NextResponse.json({
+          success: true,
+          user: safeUser
+        });
+      }
+      return NextResponse.json({
+        success: false,
+        message: 'User not found'
+      }, { status: 404 });
+    }
 
     const allUsers = await DB.getAllUsers();
 
@@ -65,6 +93,15 @@ export async function GET(request: Request) {
     if (email) {
       const cleanEmail = email.toLowerCase().trim();
       matchedUser = allUsers.find((u: any) => (u.email || '').toLowerCase().trim() === cleanEmail);
+      if (!matchedUser && cleanEmail.includes('@londonbigben.com')) {
+        const slugPart = cleanEmail.split('@')[0].replace(/[^a-z0-9]/g, '');
+        matchedUser = allUsers.find((u: any) => {
+          const uName = (u.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          const uEmailPrefix = (u.email || '').split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+          return (uName && (uName.includes(slugPart) || slugPart.includes(uName))) ||
+                 (uEmailPrefix && (uEmailPrefix.includes(slugPart) || slugPart.includes(uEmailPrefix)));
+        });
+      }
     } else if (name) {
       const cleanName = name.toLowerCase().trim();
       matchedUser = allUsers.find((u: any) => (u.name || '').toLowerCase().trim() === cleanName || (u.name || '').toLowerCase().includes(cleanName));
@@ -129,13 +166,28 @@ export async function POST(request: Request) {
     }
 
     const currentUser = authRes.user;
+    const currentUserEmail = (currentUser.email || '').toLowerCase().trim();
+    const currentUserName = (currentUser.name || '').toLowerCase().trim();
     const targetEmail = email.toLowerCase().trim();
-    const isSelf = currentUser.email.toLowerCase().trim() === targetEmail;
+
+    // Check if target matches current user (direct email, or slug-based email/name)
+    const targetSlug = targetEmail.split('@')[0].replace(/[^a-z0-9]/g, '');
+    const currentNameSlug = currentUserName.replace(/[^a-z0-9]/g, '');
+    const isSlugMatch = Boolean(
+      currentNameSlug.length > 2 &&
+      (targetSlug.includes(currentNameSlug) || currentNameSlug.includes(targetSlug))
+    );
+
+    const isSelf = currentUserEmail === targetEmail || isSlugMatch;
     const isAdmin = (currentUser.role || '').toLowerCase() === 'admin';
 
     if (!isSelf && !isAdmin) {
       return NextResponse.json({ error: 'Forbidden: You can only update your own profile.' }, { status: 403 });
     }
+
+    const effectiveEmail = (isSelf && (targetEmail.includes('@londonbigben.com') || targetEmail === currentNameSlug))
+      ? currentUserEmail
+      : targetEmail;
 
     const targetRole = isAdmin && requestedRole ? requestedRole : currentUser.role;
 
@@ -214,7 +266,7 @@ export async function POST(request: Request) {
     }
 
     const updated = await DB.updateUserProfile({
-      email,
+      email: effectiveEmail,
       name,
       avatar: finalAvatar,
       bio,
@@ -236,37 +288,39 @@ export async function POST(request: Request) {
       ...(allowedRatings ? { expertiseRatings: allowedRatings } : {}),
     });
 
-    // Also update server articles store so all published articles by this writer reflect the new name & avatar in real-time
-    try {
-      const articles = await readArticlesStore();
-      let updatedArticles = false;
-      const cleanEmail = email.toLowerCase().trim();
-      const cleanName = (name || '').toLowerCase().trim();
+    // Only update articles if name, avatar or bio actually changed
+    if (name || finalAvatar || bio) {
+      try {
+        const jsonArticles = readJsonArticles();
+        let updatedArticles = false;
+        const cleanEmail = effectiveEmail.toLowerCase().trim();
+        const cleanName = (name || '').toLowerCase().trim();
 
-      const newArticles = articles.map(art => {
-        const artEmail = (art.authorEmail || '').toLowerCase().trim();
-        const artName = (art.authorName || art.author || '').toLowerCase().trim();
+        const newArticles = jsonArticles.map(art => {
+          const artEmail = (art.authorEmail || '').toLowerCase().trim();
+          const artName = (art.authorName || art.author || '').toLowerCase().trim();
 
-        const matches = (artEmail && artEmail === cleanEmail) ||
-          (cleanName && (artName === cleanName || (cleanName.includes('rushdhi') && artName.includes('rushdhi'))));
+          const matches = (artEmail && artEmail === cleanEmail) ||
+            (cleanName && (artName === cleanName || (cleanName.includes('rushdhi') && artName.includes('rushdhi'))));
 
-        if (matches) {
-          updatedArticles = true;
-          return {
-            ...art,
-            ...(name ? { authorName: name, author: name } : {}),
-            ...(finalAvatar ? { authorAvatar: finalAvatar } : {}),
-            ...(bio ? { authorBio: bio } : {})
-          };
+          if (matches) {
+            updatedArticles = true;
+            return {
+              ...art,
+              ...(name ? { authorName: name, author: name } : {}),
+              ...(finalAvatar ? { authorAvatar: finalAvatar } : {}),
+              ...(bio ? { authorBio: bio } : {})
+            };
+          }
+          return art;
+        });
+
+        if (updatedArticles) {
+          writeJsonArticles(newArticles);
         }
-        return art;
-      });
-
-      if (updatedArticles) {
-        await writeArticlesStore(newArticles);
+      } catch (e) {
+        console.warn('Failed to sync articles with updated profile:', e);
       }
-    } catch (e) {
-      console.warn('Failed to sync articles with updated profile:', e);
     }
 
     const { password_hash, password: _p, ...safeUpdated } = (updated || {}) as any;

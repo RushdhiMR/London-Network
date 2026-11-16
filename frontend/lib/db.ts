@@ -429,6 +429,10 @@ async function ensureMysqlTable(db: mysql.Pool) {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
+    try { await db.query(`ALTER TABLE users ADD COLUMN avatar VARCHAR(1000) NULL`); } catch {}
+    try { await db.query(`ALTER TABLE users ADD COLUMN bio TEXT NULL`); } catch {}
+    try { await db.query(`ALTER TABLE users ADD COLUMN writerType VARCHAR(50) DEFAULT 'Staff'`); } catch {}
+
     await db.query(`
       CREATE TABLE IF NOT EXISTS deleted_users (
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -539,7 +543,16 @@ export const DB = {
           [norm]
         );
         if (Array.isArray(rows) && rows.length > 0) {
-          return rows[0] as UserRow;
+          const row = rows[0] as UserRow;
+          const jsonDb = readJsonDb();
+          const jsonUser = jsonDb.users.find(u => (u.email || '').trim().toLowerCase() === norm || u.id === row.id);
+          return {
+            ...jsonUser,
+            ...row,
+            avatar: (row as any).avatar || jsonUser?.avatar,
+            bio: (row as any).bio || jsonUser?.bio,
+            writerType: (row as any).writerType || (row as any).writer_type || jsonUser?.writerType || (jsonUser as any)?.writer_type || "Staff",
+          } as UserRow;
         }
       } catch (e) {
         recordMysqlFailure();
@@ -565,7 +578,16 @@ export const DB = {
           [numId]
         );
         if (Array.isArray(rows) && rows.length > 0) {
-          return rows[0] as UserRow;
+          const row = rows[0] as UserRow;
+          const jsonDb = readJsonDb();
+          const jsonUser = jsonDb.users.find(u => u.id === row.id || (u.email || '').trim().toLowerCase() === (row.email || '').trim().toLowerCase());
+          return {
+            ...jsonUser,
+            ...row,
+            avatar: (row as any).avatar || jsonUser?.avatar,
+            bio: (row as any).bio || jsonUser?.bio,
+            writerType: (row as any).writerType || (row as any).writer_type || jsonUser?.writerType || (jsonUser as any)?.writer_type || "Staff",
+          } as UserRow;
         }
       } catch (e) {
         recordMysqlFailure();
@@ -1242,7 +1264,6 @@ export const DB = {
         ...(data.quote !== undefined ? { quote: data.quote ? String(data.quote).trim() : null } : {}),
         ...(data.title !== undefined ? { title: data.title ? String(data.title).trim() : null } : {}),
         ...(data.writerType !== undefined ? { writerType: data.writerType ? String(data.writerType).trim() : "Staff" } : {}),
-        ...(data.writerType !== undefined ? { writerType: data.writerType ? String(data.writerType).trim() : "Staff" } : {}),
         ...(data.awards !== undefined ? { awards: Array.isArray(data.awards) ? data.awards : [] } : {}),
         ...(data.memberships !== undefined ? { memberships: Array.isArray(data.memberships) ? data.memberships : [] } : {}),
         updated_at: new Date().toISOString()
@@ -1269,6 +1290,7 @@ export const DB = {
         ...(expRatings !== undefined ? { expertiseRatings: expRatings, expertise_ratings: expRatings } : {}),
         ...(data.quote !== undefined ? { quote: data.quote ? String(data.quote).trim() : null } : {}),
         ...(data.title !== undefined ? { title: data.title ? String(data.title).trim() : null } : {}),
+        ...(data.writerType !== undefined ? { writerType: data.writerType ? String(data.writerType).trim() : "Staff" } : {}),
         ...(data.awards !== undefined ? { awards: Array.isArray(data.awards) ? data.awards : [] } : {}),
         ...(data.memberships !== undefined ? { memberships: Array.isArray(data.memberships) ? data.memberships : [] } : {}),
         created_at: new Date().toISOString(),
@@ -1279,27 +1301,35 @@ export const DB = {
     writeJsonDb(jsonDb);
 
     // Also update in MySQL if pool is available
-    try {
-      const db = getDbPool();
-      const sqlUpdates: string[] = [];
-      const sqlValues: any[] = [];
-      if (data.name) {
-        sqlUpdates.push('name = ?');
-        sqlValues.push(data.name);
+    if (isMysqlAvailable()) {
+      try {
+        const db = getDbPool();
+        const sqlUpdates: string[] = [];
+        const sqlValues: any[] = [];
+        if (data.name) {
+          sqlUpdates.push('name = ?');
+          sqlValues.push(data.name);
+        }
+        if (data.avatar) {
+          sqlUpdates.push('avatar = ?');
+          sqlValues.push(data.avatar);
+        }
+        if (data.role) {
+          sqlUpdates.push('role = ?');
+          sqlValues.push(data.role);
+        }
+        if (data.writerType) {
+          sqlUpdates.push('writerType = ?');
+          sqlValues.push(data.writerType);
+        }
+        if (sqlUpdates.length > 0) {
+          sqlValues.push(cleanEmail);
+          await db.query(`UPDATE users SET ${sqlUpdates.join(', ')} WHERE LOWER(email) = LOWER(?)`, sqlValues);
+        }
+      } catch (e) {
+        recordMysqlFailure();
       }
-      if (data.avatar) {
-        sqlUpdates.push('avatar = ?');
-        sqlValues.push(data.avatar);
-      }
-      if (data.role) {
-        sqlUpdates.push('role = ?');
-        sqlValues.push(data.role);
-      }
-      if (sqlUpdates.length > 0) {
-        sqlValues.push(cleanEmail);
-        await db.query(`UPDATE users SET ${sqlUpdates.join(', ')} WHERE LOWER(email) = LOWER(?)`, sqlValues);
-      }
-    } catch (e) {}
+    }
 
     return updatedUser;
   },

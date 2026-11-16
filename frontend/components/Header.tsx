@@ -544,28 +544,45 @@ export default function Header({
 
   useEffect(() => {
     if (auth.user) {
-      const savedProfile = getUserProfile(auth.user.email);
+      const userEmail = auth.user.email;
+      const savedProfile = getUserProfile(userEmail);
       const normalizedRole = (auth.user.role || "").toLowerCase();
       const displayRole = normalizedRole === 'admin' ? 'Admin' : normalizedRole === 'writer' ? 'Writer' : 'Reader';
       const rawAvatar = savedProfile?.avatar || auth.user.avatar;
-      const resolvedAvatar = resolveUserAvatar({
-        name: savedProfile?.name || auth.user.name,
-        email: auth.user.email,
-        role: displayRole,
-        avatar: isUploadedAvatar(rawAvatar) ? rawAvatar : undefined,
-      });
+      const initialAvatar = isUploadedAvatar(rawAvatar) ? rawAvatar! : "";
 
       setCurrentUser({
         name: savedProfile?.name || auth.user.name,
-        email: auth.user.email,
+        email: userEmail,
         role: displayRole,
-        avatar: isUploadedAvatar(resolvedAvatar) ? resolvedAvatar : "",
+        avatar: initialAvatar,
         bio: savedProfile?.bio,
         linkedin: savedProfile?.linkedin,
         quote: (savedProfile as any)?.quote || (auth.user as any)?.quote,
         title: (savedProfile as any)?.title || (auth.user as any)?.title,
         writerType: (savedProfile as any)?.writerType || (auth.user as any)?.writerType || "Staff",
       });
+
+      // Hydrate profile avatar strictly from database for this user if not already available
+      if (userEmail && !initialAvatar) {
+        fetch(`/api/auth/profile?email=${encodeURIComponent(userEmail)}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            if (data?.success && data.user) {
+              const dbAvatar = data.user.avatar && isUploadedAvatar(data.user.avatar) ? data.user.avatar : "";
+              setCurrentUser((prev) => {
+                if (!prev || prev.email.toLowerCase().trim() !== userEmail.toLowerCase().trim()) return prev;
+                return {
+                  ...prev,
+                  name: data.user.name || prev.name,
+                  avatar: dbAvatar || (isUploadedAvatar(prev.avatar) ? prev.avatar : ""),
+                  bio: data.user.bio || prev.bio,
+                };
+              });
+            }
+          })
+          .catch(() => {});
+      }
     } else {
       setCurrentUser(null);
     }
@@ -1074,7 +1091,7 @@ export default function Header({
                   aria-label="User Account Menu"
                 >
                   <div className="relative w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full overflow-hidden border border-gray-300 shadow-xs bg-gray-100 flex-shrink-0">
-                    {currentUser.avatar ? (
+                    {currentUser.avatar && isUploadedAvatar(currentUser.avatar) ? (
                       <img
                         src={currentUser.avatar}
                         alt={currentUser.name || "rushdhi"}
@@ -1600,7 +1617,7 @@ export default function Header({
               >
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div className="relative w-10 h-10 rounded-full bg-[#BF1E2D] text-white font-bold flex items-center justify-center text-sm shadow-xs uppercase overflow-hidden shrink-0 border border-gray-200">
-                    {currentUser.avatar && (currentUser.avatar.startsWith("/") || currentUser.avatar.startsWith("data:") || currentUser.avatar.startsWith("http")) ? (
+                    {currentUser.avatar && isUploadedAvatar(currentUser.avatar) ? (
                       <img src={currentUser.avatar} alt={currentUser.name} className="w-full h-full object-cover" />
                     ) : (
                       <span>{(currentUser.name || "U").charAt(0)}</span>
@@ -1947,200 +1964,19 @@ export default function Header({
                 />
               </div>
 
-                            {/* Field: PROFESSIONAL TITLE */}
-              {((currentUser?.role || "").toLowerCase() === "writer" || (currentUser?.role || "").toLowerCase() === "admin") && (
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
-                      PROFESSIONAL TITLE
-                    </label>
-                    <span className={`text-[10px] font-semibold ${(profileTitle.trim() ? profileTitle.trim().split(/\s+/).filter(Boolean).length : 0) > 3 ? "text-red-600 font-bold" : "text-slate-400"}`}>
-                      {profileTitle.trim() ? profileTitle.trim().split(/\s+/).filter(Boolean).length : 0} / 3 words
-                    </span>
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="e.g. Political Correspondent (max 3 words)"
-                    value={profileTitle}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      const words = val.trim().split(/\s+/).filter(Boolean);
-                      if (words.length <= 3 || val.endsWith(" ")) {
-                        setProfileTitle(val);
-                      } else {
-                        setProfileTitle(words.slice(0, 3).join(" "));
-                      }
-                    }}
-                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-[#005691] focus:ring-1 focus:ring-blue-100 transition-all"
-                  />
-                  <p className="text-[10.5px] text-slate-400 mt-1">
-                    Displayed in uppercase red above your name on your author profile (max 3 words).
-                  </p>
-                </div>
-              )}
-
-                            {/* Field: WRITER ACCOUNT TYPE */}
-              {((currentUser?.role || "").toLowerCase() === "writer" || (currentUser?.role || "").toLowerCase() === "admin") && (
-                <div>
-                  <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">
-                    WRITER ACCOUNT TYPE
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <label
-                      onClick={() => setProfileWriterType("Staff")}
-                      className={`p-3 rounded-xl border flex flex-col justify-between transition-all cursor-pointer ${
-                        profileWriterType === "Staff"
-                          ? "border-[#005691] bg-blue-50/20 ring-1 ring-blue-100"
-                          : "border-slate-200 hover:border-slate-300 bg-white"
-                      }`}
-                    >
-                      <div className="flex items-start gap-2">
-                        <input
-                          type="radio"
-                          name="hdr_writer_type"
-                          checked={profileWriterType === "Staff"}
-                          onChange={() => setProfileWriterType("Staff")}
-                          className="mt-0.5 text-[#005691] focus:ring-[#005691]"
-                        />
-                        <div>
-                          <span className="text-xs font-bold text-slate-900 block">Staff</span>
-                          <span className="text-[10px] text-slate-500 block leading-tight mt-0.5">
-                            Unlimited submissions
-                          </span>
-                        </div>
-                      </div>
-                    </label>
-
-                    <label
-                      onClick={() => setProfileWriterType("Contributor")}
-                      className={`p-3 rounded-xl border flex flex-col justify-between transition-all cursor-pointer ${
-                        profileWriterType === "Contributor"
-                          ? "border-[#005691] bg-blue-50/20 ring-1 ring-blue-100"
-                          : "border-slate-200 hover:border-slate-300 bg-white"
-                      }`}
-                    >
-                      <div className="flex items-start gap-2">
-                        <input
-                          type="radio"
-                          name="hdr_writer_type"
-                          checked={profileWriterType === "Contributor"}
-                          onChange={() => setProfileWriterType("Contributor")}
-                          className="mt-0.5 text-[#005691] focus:ring-[#005691]"
-                        />
-                        <div>
-                          <span className="text-xs font-bold text-slate-900 block">Contributor</span>
-                          <span className="text-[10px] text-slate-500 block leading-tight mt-0.5">
-                            20 articles/month (5/wk)
-                          </span>
-                        </div>
-                      </div>
-                    </label>
-                  </div>
-                  <p className="text-[10.5px] text-slate-400 mt-1">
-                    Contributors must submit 20 articles per month (5 per week) to maintain account standing.
-                  </p>
-                </div>
-              )}
-
               {/* Field 2: BIO */}
               <div>
                 <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">
                   BIO
                 </label>
                 <textarea
-                  rows={3}
+                  rows={4}
                   value={profileBio}
                   onChange={(e) => setProfileBio(e.target.value)}
-                  placeholder="New London BigBen subscriber via Google."
+                  placeholder="Tell readers about yourself..."
                   className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-[#005691] focus:ring-1 focus:ring-blue-100 transition-all leading-relaxed"
                 />
               </div>
-
-              {/* Field 3: LINKEDIN PROFILE */}
-              <div>
-                <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">
-                  LINKEDIN PROFILE
-                </label>
-                <div className="relative rounded-xl border-2 border-[#005691] px-3.5 py-2.5 flex items-center gap-2.5 bg-white shadow-2xs focus-within:ring-2 focus-within:ring-blue-100 transition-all">
-                  <svg
-                    className="w-5 h-5 text-[#005691] fill-[#005691] flex-shrink-0"
-                    viewBox="0 0 24 24"
-                  >
-                    <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z" />
-                  </svg>
-                  <input
-                    type="url"
-                    placeholder="https://www.linkedin.com/in/your-profile"
-                    value={profileLinkedin}
-                    onChange={(e) => setProfileLinkedin(e.target.value)}
-                    className="w-full bg-transparent text-xs sm:text-sm font-medium text-slate-900 placeholder-slate-400 focus:outline-none"
-                  />
-                </div>
-                <p className="text-[11px] text-slate-400 font-normal mt-1.5 leading-normal">
-                  Shown on your article bylines so readers can connect with you.
-                </p>
-              </div>
-
-              {/* Field 4: PERSONAL QUOTE / STATEMENT */}
-              <div>
-                <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">
-                  PERSONAL QUOTE / STATEMENT
-                </label>
-                <textarea
-                  rows={2}
-                  value={profileQuote}
-                  onChange={(e) => setProfileQuote(e.target.value)}
-                  placeholder="e.g. Journalism has the power to inform, hold power to account and create a more open and informed society."
-                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-[#005691] focus:ring-1 focus:ring-blue-100 transition-all leading-relaxed resize-y"
-                />
-                <p className="text-[11px] text-slate-400 font-normal mt-1.5 leading-normal">
-                  Displayed on your author profile card and Awards & Recognition quote section.
-                </p>
-              </div>
-
-              {/* Field 5: AWARDS & CERTIFICATES */}
-              {((currentUser?.role || "").toLowerCase() === "writer" || (currentUser?.role || "").toLowerCase() === "admin") && (
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                  <div>
-                    <span className="block text-[11px] font-bold text-slate-800">
-                      Awards & Certificates
-                    </span>
-                    <span className="text-[10.5px] text-slate-400">
-                      Manage awards, honors & credentials on your author profile
-                    </span>
-                  </div>
-                  <Link
-                    href={`/author/${(currentUser?.name || "author").toLowerCase().replace(/[^a-z0-9]+/g, "-")}?tab=awards`}
-                    onClick={() => setIsProfileSettingsOpen(false)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#BF1E2D] hover:text-white hover:bg-[#BF1E2D] border border-red-200 rounded-lg transition-colors cursor-pointer"
-                  >
-                    <Award size={13} />
-                    <span>Manage Awards</span>
-                  </Link>
-                </div>
-              )}
-
-              {/* Field 6: PROFESSIONAL MEMBERSHIPS */}
-              {((currentUser?.role || "").toLowerCase() === "writer" || (currentUser?.role || "").toLowerCase() === "admin") && (
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                  <div>
-                    <span className="block text-[11px] font-bold text-slate-800">
-                      Professional Memberships
-                    </span>
-                    <span className="text-[10.5px] text-slate-400">
-                      Add & manage institute affiliations & memberships
-                    </span>
-                  </div>
-                  <Link
-                    href={`/author/${(currentUser?.name || "author").toLowerCase().replace(/[^a-z0-9]+/g, "-")}?tab=awards#memberships`}
-                    onClick={() => setIsProfileSettingsOpen(false)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#BF1E2D] hover:text-white hover:bg-[#BF1E2D] border border-red-200 rounded-lg transition-colors cursor-pointer"
-                  >
-                    <BookOpen size={13} />
-                    <span>Manage Memberships</span>
-                  </Link>
-                </div>
-              )}
 
               {/* Action Buttons */}
               <div className="flex items-center gap-3 pt-4">

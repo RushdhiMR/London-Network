@@ -16,6 +16,21 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  webpack: (config, { dev }) => {
+    if (dev) {
+      config.watchOptions = {
+        ...config.watchOptions,
+        ignored: [
+          "**/node_modules/**",
+          "**/.git/**",
+          "**/data/**",
+          "**/digital_journal_db.json",
+          "**/*.tmp*",
+        ],
+      };
+    }
+    return config;
+  },
 };
 
 export default nextConfig;

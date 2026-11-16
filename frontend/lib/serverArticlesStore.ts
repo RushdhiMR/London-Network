@@ -177,7 +177,7 @@ function applyB2StateToArticles(baseArticles: ArticleRecord[], b2State: Articles
   return result;
 }
 
-function readJsonArticles(): ArticleRecord[] {
+export function readJsonArticles(): ArticleRecord[] {
   // Check in-memory store for active lambda container
   if (Array.isArray(globalForArticlesStore.__serverArticlesCache) && globalForArticlesStore.__serverArticlesCache.length > 0) {
     return globalForArticlesStore.__serverArticlesCache;
@@ -224,7 +224,7 @@ function readJsonArticles(): ArticleRecord[] {
   return [];
 }
 
-function writeJsonArticles(articles: ArticleRecord[]) {
+export function writeJsonArticles(articles: ArticleRecord[]) {
   invalidateServerArticlesCache();
   globalForArticlesStore.__serverArticlesCache = articles;
   globalForArticlesStore.__serverArticlesCacheTime = Date.now();
@@ -391,7 +391,7 @@ export async function readArticlesStore(forceFresh = false): Promise<ArticleReco
         const authorName = (rawAuthor && rawAuthor.toLowerCase() !== 'system administrator' && rawAuthor.toLowerCase() !== 'administrator' && rawAuthor.toLowerCase() !== 'admin')
           ? rawAuthor
           : (r.author_rel_name || 'Rushdhi MR');
-        const authorAvatar = r.author_avatar || r.author_rel_avatar || '/author_bluesuit.jpg';
+        const authorAvatar = (r.author_avatar && !r.author_avatar.includes('author_bluesuit') && !r.author_avatar.includes('author_woman')) ? r.author_avatar : (r.author_rel_avatar && !r.author_rel_avatar.includes('author_bluesuit') ? r.author_rel_avatar : null);
         const authorBio = r.author_bio || r.author_rel_bio || `${authorName} is a journalist for Digital Journal.`;
         const cat = r.category_name || (r.category_id ? String(r.category_id) : 'News');
 
@@ -652,7 +652,7 @@ export async function upsertArticleStore(article: ArticleRecord): Promise<Articl
     const seoJson = Object.keys(finalSeo).length > 0 ? JSON.stringify(finalSeo) : (sanitizedArticle.seo ? JSON.stringify(sanitizedArticle.seo) : null);
 
     let authorName = sanitizedArticle.authorName || sanitizedArticle.author;
-    let authorAvatar = sanitizedArticle.authorAvatar || '/author_bluesuit.jpg';
+    let authorAvatar = (sanitizedArticle.authorAvatar && !sanitizedArticle.authorAvatar.includes('author_bluesuit')) ? sanitizedArticle.authorAvatar : (sanitizedArticle.author_avatar && !sanitizedArticle.author_avatar.includes('author_bluesuit') ? sanitizedArticle.author_avatar : null);
     let authorBio = sanitizedArticle.authorBio;
     let authorEmail = sanitizedArticle.authorEmail || sanitizedArticle.author_email;
     let rawUpsertImg = (sanitizedArticle.imageUrl || sanitizedArticle.image || sanitizedArticle.image_url || '/ai_hero.png').trim();
@@ -733,7 +733,7 @@ export async function upsertArticleStore(article: ArticleRecord): Promise<Articl
             if (existingRow[0].author_name) authorName = existingRow[0].author_name;
           }
           if (!authorBio && existingRow[0].author_bio) authorBio = existingRow[0].author_bio;
-          if ((!authorAvatar || authorAvatar === '/author_bluesuit.jpg') && existingRow[0].author_avatar) authorAvatar = existingRow[0].author_avatar;
+          if (!authorAvatar && existingRow[0].author_avatar && !existingRow[0].author_avatar.includes('author_bluesuit')) authorAvatar = existingRow[0].author_avatar;
         }
       } catch (e) {}
     }

@@ -116,6 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             provider: data.user.provider || "local",
             avatar: data.user.avatar,
             bio: data.user.bio,
+            writerType: data.user.writerType || data.user.writer_type || "Staff",
           };
 
           // Save refreshed user to this tab's session

@@ -13,7 +13,6 @@ export const revalidate = 0;
 
 function revalidatePublicPages(article?: ArticleRecord) {
   try {
-    revalidatePath('/', 'layout');
     revalidatePath('/');
     revalidatePath('/api/articles');
     revalidatePath('/search');
@@ -157,34 +156,36 @@ export async function POST(request: Request) {
 
     // Notify author followers automatically whenever an article is published live
     if (articleRecord.status === 'Published') {
-      try {
-        const authorName = (articleRecord.authorName || (articleRecord as any).author || '').trim();
-        const authorSlug = (articleRecord as any).authorSlug || (articleRecord as any).author_slug || (authorName ? authorName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : '');
-        const { DB } = await import('@/lib/db');
-        const followersByName = authorName ? await DB.getAuthorFollowers(authorName) : [];
-        const followersBySlug = authorSlug ? await DB.getAuthorFollowers(authorSlug) : [];
-        const allFollowers = Array.from(new Set([...followersByName, ...followersBySlug]));
+      (async () => {
+        try {
+          const authorName = (articleRecord.authorName || (articleRecord as any).author || '').trim();
+          const authorSlug = (articleRecord as any).authorSlug || (articleRecord as any).author_slug || (authorName ? authorName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : '');
+          const { DB } = await import('@/lib/db');
+          const followersByName = authorName ? await DB.getAuthorFollowers(authorName) : [];
+          const followersBySlug = authorSlug ? await DB.getAuthorFollowers(authorSlug) : [];
+          const allFollowers = Array.from(new Set([...followersByName, ...followersBySlug]));
 
-        if (allFollowers.length > 0) {
-          const { sendArticleDistributionEmail } = await import('@/lib/email');
-          await Promise.allSettled(
-            allFollowers.map((recipient) =>
-              sendArticleDistributionEmail(recipient, {
-                title: articleRecord.title,
-                summary: articleRecord.summary || articleRecord.description || '',
-                category: articleRecord.category || 'News',
-                authorName: authorName || 'London BigBen Journalist',
-                slug: articleRecord.slug || '',
-                imageUrl: articleRecord.imageUrl || (articleRecord as any).image,
-                readTime: articleRecord.readTime || (articleRecord as any).readDuration
-              })
-            )
-          );
-          console.log(`[Follower Notification] Sent article notification to ${allFollowers.length} follower(s) of ${authorName}.`);
+          if (allFollowers.length > 0) {
+            const { sendArticleDistributionEmail } = await import('@/lib/email');
+            await Promise.allSettled(
+              allFollowers.map((recipient) =>
+                sendArticleDistributionEmail(recipient, {
+                  title: articleRecord.title,
+                  summary: articleRecord.summary || articleRecord.description || '',
+                  category: articleRecord.category || 'News',
+                  authorName: authorName || 'London BigBen Journalist',
+                  slug: articleRecord.slug || '',
+                  imageUrl: articleRecord.imageUrl || (articleRecord as any).image,
+                  readTime: articleRecord.readTime || (articleRecord as any).readDuration
+                })
+              )
+            );
+            console.log(`[Follower Notification] Sent article notification to ${allFollowers.length} follower(s) of ${authorName}.`);
+          }
+        } catch (notifyErr) {
+          console.warn('[api/articles] Follower notification notice:', notifyErr);
         }
-      } catch (notifyErr) {
-        console.warn('[api/articles] Follower notification notice:', notifyErr);
-      }
+      })();
     }
 
     return NextResponse.json({
@@ -227,7 +228,7 @@ export async function PUT(request: Request) {
     const currentArticles = await readArticlesStore();
     const cleanT = (t: any) => String(t || '').trim().toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ');
     const targetTitle = updates.title ? cleanT(updates.title) : '';
-    const existing = currentArticles.find((a) => 
+    const existing = currentArticles.find((a) =>
       (id && String(a.id) === String(id)) ||
       (id && a.slug === id) ||
       (updates.slug && a.slug === updates.slug) ||

@@ -48,6 +48,7 @@ export async function GET(request: Request) {
         provider: freshUser.provider,
         avatar: (freshUser as any).avatar || null,
         bio: (freshUser as any).bio || null,
+        writerType: (freshUser as any).writerType || (freshUser as any).writer_type || "Staff",
       },
     });
   } catch (error: any) {

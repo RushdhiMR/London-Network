@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import SEOAssistantPanel from "@/components/SEOAssistantPanel";
 import { useAuth } from "@/lib/auth-context";
 import { generateAutoSEO, extractFocusKeyword, extractCardSummary } from "@/lib/seo";
-import { getUserProfile, resolveUserAvatar, getAuthorAvatarByNameOrEmail } from "@/lib/userProfiles";
+import { getUserProfile, resolveUserAvatar, getAuthorAvatarByNameOrEmail, isUploadedAvatar } from "@/lib/userProfiles";
 import { saveArticleToServer, fetchArticlesFromServer } from "@/lib/articlesSync";
 import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
 import PageSkeletonLoader from "@/components/PageSkeletonLoader";
@@ -338,7 +338,7 @@ export default function CreatePostPage() {
       name: auth.user.name,
       email: auth.user.email,
       role: auth.user.role,
-      avatar: auth.user.avatar || "/author_bluesuit.jpg"
+      avatar: isUploadedAvatar(auth.user?.avatar) ? auth.user!.avatar : ""
     };
 
     setCurrentUser(effectiveUser);
@@ -1843,9 +1843,6 @@ function isWorldOrWorldSub(cat: string): boolean {
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("dj_articles_updated"));
       }
-      try {
-        router.refresh();
-      } catch (e) {}
     } catch (err) {
       console.warn("Error saving post:", err);
     }
@@ -1857,31 +1854,15 @@ function isWorldOrWorldSub(cat: string): boolean {
     setIsSubmitting(false);
     setSubmittingAction(null);
     if (status === "Pending review") {
-      if (typeof window !== "undefined") {
-        window.location.href = "/writer?tab=pending";
-      } else {
-        router.push("/writer?tab=pending");
-      }
+      router.push("/writer?tab=pending");
     } else if (status === "Published") {
       if (isAdmin) {
-        if (typeof window !== "undefined") {
-          window.location.href = "/";
-        } else {
-          router.push("/");
-        }
+        router.push("/");
       } else {
-        if (typeof window !== "undefined") {
-          window.location.href = "/writer?tab=published";
-        } else {
-          router.push("/writer?tab=published");
-        }
+        router.push("/writer?tab=published");
       }
     } else {
-      if (typeof window !== "undefined") {
-        window.location.href = "/writer?tab=drafts";
-      } else {
-        router.push("/writer?tab=drafts");
-      }
+      router.push("/writer?tab=drafts");
     }
   };
 
@@ -2304,19 +2285,11 @@ function isWorldOrWorldSub(cat: string): boolean {
         localStorage.removeItem("dj_editing_post");
       } catch (e) {}
 
-      if (typeof window !== "undefined") {
-        window.location.href = "/admin";
-      } else {
-        router.push("/admin");
-      }
+      router.push("/admin");
     } catch (e) {
       console.warn("Reject submission error:", e);
       setIsRejectModalOpen(false);
-      if (typeof window !== "undefined") {
-        window.location.href = "/admin";
-      } else {
-        router.push("/admin");
-      }
+      router.push("/admin");
     } finally {
       setIsSubmitting(false);
     }

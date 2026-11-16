@@ -9,7 +9,7 @@ import BottomCategoryGrid from "@/components/BottomCategoryGrid";
 import { CheckCircle2, Bookmark, Share2, ArrowLeft, Send, Trash2, ThumbsUp, Heart, Reply, CornerDownRight, Smile, Plus, X, Image as ImageIcon, Edit3 } from "lucide-react";
 import { generateAutoSEO } from "@/lib/seo";
 import { getCategoryData } from "@/lib/categoryData";
-import { getUserProfile, getAuthorAvatarByNameOrEmail, getAuthorFullProfileByNameOrEmail, resolveUserAvatar, safeSaveBookmarksToStorage, safeGetBookmarksFromStorage } from "@/lib/userProfiles";
+import { getUserProfile, getAuthorAvatarByNameOrEmail, getAuthorFullProfileByNameOrEmail, resolveUserAvatar, isUploadedAvatar, safeSaveBookmarksToStorage, safeGetBookmarksFromStorage } from "@/lib/userProfiles";
 import { useLiveArticles, useLiveAdSlots, formatAdDimensions, isDuplicateAdImage, isTrendingNow, articleBelongsToCategory, articleMatchesMainCategory } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
 import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
@@ -513,15 +513,8 @@ function ArticlePageContentInner({
       avatar = rawAvatar;
     }
 
-    // 4. Fallback based on known staff names
-    if (!avatar) {
-      const lower = name.toLowerCase();
-      if (lower.includes("jennifer") || lower.includes("friesen") || lower.includes("sarah") || lower.includes("mitchell")) avatar = "/author_woman.jpg";
-      else if (lower.includes("april") || lower.includes("hicke")) avatar = "/author_glasses.jpg";
-      else if (lower.includes("pramod") || lower.includes("jain")) avatar = "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=250&h=250&fit=crop";
-      else if (lower.includes("chris") || lower.includes("hogg")) avatar = "/author_beard.jpg";
-      else avatar = "/author_bluesuit.jpg";
-    }
+// 4. If author did not upload a profile image, leave empty so initials placeholder renders
+    if (avatar && !isUploadedAvatar(avatar)) avatar = "";
 
     // 5. Author Bio: Priority from author's saved profile settings, then fallback / article bio
     const isGenericBio = (b?: string): boolean => {

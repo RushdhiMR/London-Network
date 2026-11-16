@@ -93,6 +93,8 @@ export async function POST(request: Request) {
         role: existingUser.role, // Kept from DB
         provider: updatedProvider,
         avatar: existingUser.avatar || avatar,
+        bio: (existingUser as any).bio,
+        writerType: (existingUser as any).writerType || (existingUser as any).writer_type || 'Staff',
         quote: (existingUser as any).quote,
       };
     } else {

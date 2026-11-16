@@ -3,12 +3,12 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MapPin, Mail, Link2, Bell, ChevronRight, Award, BookOpen, ShieldCheck, Check, Calendar, Plus, Trash2, Edit3, X, Upload, AlertCircle, Search } from "lucide-react";
+import { MapPin, Mail, User, Link2, Bell, ChevronRight, Award, BookOpen, ShieldCheck, Check, Calendar, Plus, Trash2, Edit3, X, Upload, AlertCircle, Search } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useLiveArticles } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
-import { getUserProfile, saveUserProfile, getAuthorAvatarByNameOrEmail, getAuthorFullProfileByNameOrEmail, resolveUserAvatar } from "@/lib/userProfiles";
+import { getUserProfile, saveUserProfile, getAuthorAvatarByNameOrEmail, getAuthorFullProfileByNameOrEmail, resolveUserAvatar, isUploadedAvatar } from "@/lib/userProfiles";
 import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
 
 export interface ArticleItem {
@@ -455,13 +455,25 @@ export default function AuthorProfileContent({
       if (!finalTitle && auth.user && auth.user.name === finalName && (auth.user as any).title) {
         finalTitle = (auth.user as any).title;
       }
-      if ((auth.user as any)?.writerType && auth.user?.name === finalName) {
+      if ((auth.user as any)?.writerType && (auth.user?.name === finalName || isMubaPage || isRushdhiPage)) {
         finalWriterType = (auth.user as any).writerType;
       }
+      try {
+        const localAuthor = JSON.parse(localStorage.getItem(`author_profile_${slugClean}`) || "{}");
+        if (localAuthor && localAuthor.writerType) {
+          finalWriterType = localAuthor.writerType;
+        }
+      } catch {}
+      try {
+        const localUser = JSON.parse(localStorage.getItem("user") || "{}");
+        if (localUser && localUser.writerType && (isMubaPage || isRushdhiPage || localUser.name === finalName)) {
+          finalWriterType = localUser.writerType;
+        }
+      } catch {}
 
       const resolvedAvatar =
         (savedProfile?.avatar && !savedProfile.avatar.includes("cart") && !savedProfile.avatar.includes("admin_profile") ? savedProfile.avatar : null) ||
-        (auth.user && auth.user.avatar && !auth.user.avatar.includes("cart") && (auth.user.name === finalName || isRushdhiPage) ? auth.user.avatar : null) ||
+        (auth.user && auth.user.avatar && !auth.user.avatar.includes("cart") && auth.user.name === finalName ? auth.user.avatar : null) ||
         getAuthorAvatarByNameOrEmail(finalName, isRushdhiPage ? "rushdhiwriter@gmail.com" : undefined);
 
       if (resolvedAvatar && resolvedAvatar.length > 5 && !resolvedAvatar.includes("cart") && !resolvedAvatar.includes("admin_profile")) {
@@ -681,7 +693,9 @@ export default function AuthorProfileContent({
       });
 
       // Also hydrate latest experience, coverage areas, about, approach, joined date, bio & avatar from backend DB API for any visitor
-      const lookupEmail = finalEmail || (isMubaPage ? "rura@gmail.com" : (isRushdhiPage ? "rushdhiwriter@gmail.com" : ""));
+      const lookupEmail = (!finalEmail || finalEmail.includes("@londonbigben.com"))
+        ? (isMubaPage ? "rura@gmail.com" : (isRushdhiPage ? "rushdhiwriter@gmail.com" : (auth.user?.email || finalEmail)))
+        : finalEmail;
       const lookupParam = lookupEmail ? `email=${encodeURIComponent(lookupEmail)}` : `name=${encodeURIComponent(finalName)}`;
       fetch(`/api/auth/profile?${lookupParam}`)
         .then((res) => (res.ok ? res.json() : null))
@@ -713,6 +727,7 @@ export default function AuthorProfileContent({
             const dbMemberships = dbUser.memberships;
             setAuthorProfile((prev) => ({
               ...prev,
+              ...(dbUser.email ? { email: dbUser.email } : {}),
               ...(dbUser.name && !dbUser.name.toLowerCase().includes("reader") ? { name: dbUser.name } : {}),
               ...(dbUser.bio && !dbUser.bio.toLowerCase().includes("avid reader") ? { bio: dbUser.bio } : {}),
               ...(dbUser.avatar && dbUser.avatar.length > 5 && !dbUser.avatar.includes("cart") && !dbUser.avatar.includes("admin_profile") ? { avatar: dbUser.avatar } : {}),
@@ -780,8 +795,7 @@ export default function AuthorProfileContent({
           const resolvedAv =
             (item.avatar && item.avatar.length > 5 && !item.avatar.includes("cart") ? item.avatar : null) ||
             resolveUserAvatar({ name: cleanName, email: item.email }) ||
-            getAuthorAvatarByNameOrEmail(cleanName, item.email) ||
-            "/author_bluesuit.jpg";
+            getAuthorAvatarByNameOrEmail(cleanName, item.email) || "";
 
           const key = cleanSlug;
           const existing = mergedMap.get(key);
@@ -799,7 +813,7 @@ export default function AuthorProfileContent({
             mergedMap.set(key, {
               ...existing,
               role: item.role && item.role !== "Staff Journalist" ? item.role : existing.role,
-              avatar: existing.avatar !== "/author_bluesuit.jpg" ? existing.avatar : resolvedAv,
+              avatar: existing.avatar ? existing.avatar : resolvedAv,
               articlesCount: Math.max(existing.articlesCount, artCount),
             });
           }
@@ -1052,45 +1066,129 @@ export default function AuthorProfileContent({
   const [editingWriterTypeVal, setEditingWriterTypeVal] = useState("Staff");
   const [isSavingWriterType, setIsSavingWriterType] = useState(false);
 
-  const handleSaveWriterType = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveWriterType = async (e?: React.FormEvent | React.MouseEvent) => {
+    if (e && typeof e.preventDefault === "function") e.preventDefault();
     const cleanType = editingWriterTypeVal === "Contributor" ? "Contributor" : "Staff";
     setIsSavingWriterType(true);
 
+    const slugLower = (slug || "").toLowerCase();
+    const cleanSlug = slugLower.replace(/-/g, " ").trim();
+    const targetEmail =
+      (authorProfile.email && !authorProfile.email.includes("@londonbigben.com"))
+        ? authorProfile.email
+        : (auth.user?.email ||
+           (slugLower.includes("muba") || (authorProfile.name || "").toLowerCase().includes("muba")
+             ? "rura@gmail.com"
+             : (slugLower.includes("rushdhi") ? "rushdhiwriter@gmail.com" : (authorProfile.email || "rura@gmail.com"))));
+
+    // 1. Instantly update UI on page
     setAuthorProfile((prev) => ({ ...prev, writerType: cleanType }));
 
+    if (auth.user) {
+      (auth.user as any).writerType = cleanType;
+    }
+
+    // 2. Instantly persist to client storages across all keys
     try {
-      const targetEmail = authorProfile.email || auth.user?.email;
-      if (targetEmail) {
-        await fetch("/api/auth/profile", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: targetEmail, writerType: cleanType }),
+      saveUserProfile({
+        name: authorProfile.name || auth.user?.name || "Writer",
+        email: targetEmail,
+        writerType: cleanType,
+      });
+      if (slugLower.includes("muba")) {
+        saveUserProfile({
+          name: authorProfile.name || "Muba_kity",
+          email: "rura@gmail.com",
+          writerType: cleanType,
         });
-
-        const storageKey = `london_user_profile_${targetEmail.toLowerCase().trim()}`;
-        try {
-          const existing = JSON.parse(localStorage.getItem(storageKey) || "{}");
-          localStorage.setItem(storageKey, JSON.stringify({ ...existing, writerType: cleanType }));
-        } catch {}
       }
+    } catch {}
 
-      const storageKeyOld = `author_profile_${slugClean}`;
+    const storageKey = `london_user_profile_${targetEmail.toLowerCase().trim()}`;
+    try {
+      const existing = JSON.parse(localStorage.getItem(storageKey) || "{}");
+      localStorage.setItem(storageKey, JSON.stringify({ ...existing, writerType: cleanType }));
+    } catch {}
+
+    const storageKeyOld = `author_profile_${cleanSlug}`;
+    try {
+      const existingOld = JSON.parse(localStorage.getItem(storageKeyOld) || "{}");
+      localStorage.setItem(storageKeyOld, JSON.stringify({ ...existingOld, writerType: cleanType }));
+    } catch {}
+
+    try {
+      const activeProfStr = localStorage.getItem("dj_user_profile");
+      if (activeProfStr) {
+        const p = JSON.parse(activeProfStr);
+        p.writerType = cleanType;
+        localStorage.setItem("dj_user_profile", JSON.stringify(p));
+      }
+    } catch {}
+
+    if (typeof window !== "undefined") {
       try {
-        const existingOld = JSON.parse(localStorage.getItem(storageKeyOld) || "{}");
-        localStorage.setItem(storageKeyOld, JSON.stringify({ ...existingOld, writerType: cleanType }));
+        const tabSessionStr = sessionStorage.getItem("dj_tab_session");
+        if (tabSessionStr) {
+          const parsed = JSON.parse(tabSessionStr);
+          if (parsed.user) {
+            parsed.user.writerType = cleanType;
+          } else {
+            parsed.writerType = cleanType;
+          }
+          sessionStorage.setItem("dj_tab_session", JSON.stringify(parsed));
+        }
       } catch {}
+
+      try {
+        const localUserStr = localStorage.getItem("user");
+        if (localUserStr) {
+          const parsed = JSON.parse(localUserStr);
+          parsed.writerType = cleanType;
+          localStorage.setItem("user", JSON.stringify(parsed));
+        }
+      } catch {}
+    }
+
+    // 3. Immediately close modal so the user sees the update instantly
+    setIsSavingWriterType(false);
+    setIsEditingWriterTypeModal(false);
+
+    // 4. Send persistence to server DB
+    try {
+      const token =
+        (typeof auth.getToken === "function" ? auth.getToken() : null) ||
+        (typeof window !== "undefined"
+          ? (sessionStorage.getItem("dj_tab_token") ||
+             (() => {
+               try {
+                 const s = sessionStorage.getItem("dj_tab_session");
+                 if (s) {
+                   const p = JSON.parse(s);
+                   return p.token || null;
+                 }
+               } catch {}
+               return null;
+             })() ||
+             localStorage.getItem("token"))
+          : null);
+
+      await fetch("/api/auth/profile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}`, "x-tab-session": token } : {})
+        },
+        credentials: "include",
+        body: JSON.stringify({ email: targetEmail, writerType: cleanType }),
+      });
 
       if (auth.refreshUser) {
         auth.refreshUser().catch(() => {});
       }
       window.dispatchEvent(new CustomEvent("author-profile-sync", { detail: { email: targetEmail, writerType: cleanType } }));
-
-      setIsEditingWriterTypeModal(false);
+      window.dispatchEvent(new CustomEvent("dj_profile_updated", { detail: { email: targetEmail, writerType: cleanType } }));
     } catch (err) {
-      console.warn("Could not save writer type:", err);
-    } finally {
-      setIsSavingWriterType(false);
+      console.warn("Backend writer type API save error:", err);
     }
   };
   
@@ -1121,11 +1219,36 @@ export default function AuthorProfileContent({
     setAuthorProfile((prev) => ({ ...prev, title: clean }));
 
     try {
-      const targetEmail = authorProfile.email || auth.user?.email;
+      const targetEmail =
+        (authorProfile.email && !authorProfile.email.includes("@londonbigben.com"))
+          ? authorProfile.email
+          : (auth.user?.email || (authorProfile.name?.toLowerCase().includes("muba") ? "rura@gmail.com" : authorProfile.email));
+
+      const token =
+        (typeof auth.getToken === "function" ? auth.getToken() : null) ||
+        (typeof window !== "undefined"
+          ? (sessionStorage.getItem("dj_tab_token") ||
+             (() => {
+               try {
+                 const s = sessionStorage.getItem("dj_tab_session");
+                 if (s) {
+                   const p = JSON.parse(s);
+                   return p.token || null;
+                 }
+               } catch {}
+               return null;
+             })() ||
+             localStorage.getItem("token"))
+          : null);
+
       if (targetEmail) {
         await fetch("/api/auth/profile", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}`, "x-tab-session": token } : {})
+          },
+          credentials: "include",
           body: JSON.stringify({ email: targetEmail, title: clean }),
         });
 
@@ -1817,15 +1940,18 @@ export default function AuthorProfileContent({
           <div className="lg:col-span-8 flex flex-col sm:flex-row gap-6 items-start">
 
             {/* Author Headshot Photo */}
-            <div className="w-full sm:w-[210px] md:w-[230px] h-[250px] sm:h-[260px] rounded-xl overflow-hidden bg-slate-100 border border-slate-200/90 flex-shrink-0 shadow-xs">
-              <img
-                src={authorProfile.avatar}
-                alt={authorProfile.name}
-                className="w-full h-full object-cover object-top"
-                onError={(e) => {
-                  e.currentTarget.src = "/author_bluesuit.jpg";
-                }}
-              />
+            <div className="w-full sm:w-[210px] md:w-[230px] h-[250px] sm:h-[260px] rounded-xl overflow-hidden bg-slate-100 border border-slate-200/90 flex-shrink-0 shadow-xs flex items-center justify-center">
+              {authorProfile.avatar && isUploadedAvatar(authorProfile.avatar) ? (
+                <img
+                  src={authorProfile.avatar}
+                  alt={authorProfile.name}
+                  className="w-full h-full object-cover object-top"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-300">
+                  <User size={64} className="text-slate-300" />
+                </div>
+              )}
             </div>
 
             {/* Author Details */}
@@ -2809,14 +2935,17 @@ export default function AuthorProfileContent({
                       className="flex items-center justify-between py-3 group hover:bg-slate-50/80 -mx-2 px-2 rounded-lg transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <img
-                          src={w.avatar}
-                          alt={w.name}
-                          className="w-10 h-10 rounded-full object-cover border border-slate-200 flex-shrink-0"
-                          onError={(e) => {
-                            e.currentTarget.src = "/author_bluesuit.jpg";
-                          }}
-                        />
+                        {w.avatar && isUploadedAvatar(w.avatar) ? (
+                          <img
+                            src={w.avatar}
+                            alt={w.name}
+                            className="w-10 h-10 rounded-full object-cover border border-slate-200 flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0 text-slate-400">
+                            <User size={18} />
+                          </div>
+                        )}
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-slate-900 group-hover:text-[#D31220] transition-colors truncate">
                             {w.name}
@@ -3531,7 +3660,8 @@ export default function AuthorProfileContent({
                   Cancel
                 </button>
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={handleSaveWriterType}
                   disabled={isSavingWriterType}
                   className="px-4 py-2 bg-[#BF1E2D] hover:bg-[#a61a27] text-white rounded-xl text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
                 >

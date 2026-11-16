@@ -109,9 +109,7 @@ export function saveUserProfile(user: UserProfileData) {
             articlesList.forEach((art) => {
               const matchesEmail = art.authorEmail && art.authorEmail.toLowerCase().trim() === emailKey;
               const matchesName = user.name && art.authorName && art.authorName.toLowerCase().trim() === user.name.toLowerCase().trim();
-              const matchesRushdhi = emailKey.includes("rushdhi") && (art.authorName || "").toLowerCase().includes("rushdhi");
-
-              if (matchesEmail || matchesName || matchesRushdhi) {
+              if (matchesEmail || matchesName) {
                 art.authorAvatar = user.avatar;
                 if (user.name) art.authorName = user.name;
                 updated = true;
@@ -241,85 +239,64 @@ export function getAuthorAvatarByNameOrEmail(name?: string, email?: string): str
   if (!cleanName && !cleanEmail) return null;
 
   const isNameMatch = (target: string): boolean => {
-    if (!target) return false;
-    const s1 = cleanName ? cleanName.replace(/[^a-z0-9]/g, "").toLowerCase() : "";
+    if (!target || !cleanName) return false;
+    const s1 = cleanName.replace(/[^a-z0-9]/g, "").toLowerCase();
     const s2 = target.replace(/[^a-z0-9]/g, "").toLowerCase();
-    if (!s2) return false;
-    if (s1 && (s1 === s2 || s1.includes(s2) || s2.includes(s1))) return true;
-    if ((s1.includes("rushdhi") || cleanEmail.includes("rushdhi")) && (s2.includes("rushdhi") || target.toLowerCase().includes("rushdhi"))) return true;
-    return false;
+    if (!s1 || !s2 || s1.length < 3) return false;
+    return s1 === s2;
   };
 
   try {
-    // 1. Check active writer / user session
-    for (const key of ["dj_writer_user", "dj_user", "dj_active_user", "dj_user_profile"]) {
-      const userStr = localStorage.getItem(key);
-      if (userStr) {
-        try {
-          const u = JSON.parse(userStr);
-          if (u.avatar && u.avatar.length > 5 && !u.avatar.includes("cart") && !u.avatar.includes("admin_profile")) {
-            const uName = (u.name || "").toLowerCase().trim();
-            const uEmail = (u.email || "").toLowerCase().trim();
-            if ((cleanEmail && uEmail === cleanEmail) || isNameMatch(uName) || isNameMatch(uEmail)) {
+    // 1. Strict match on active session ONLY if email matches exactly
+    if (cleanEmail) {
+      for (const key of ["dj_writer_user", "dj_user", "dj_active_user", "dj_user_profile"]) {
+        const userStr = localStorage.getItem(key);
+        if (userStr) {
+          try {
+            const u = JSON.parse(userStr);
+            const uEmail = (u?.email || "").toLowerCase().trim();
+            if (uEmail && uEmail === cleanEmail && isUploadedAvatar(u?.avatar)) {
               return u.avatar;
             }
-          }
-        } catch (e) {}
+          } catch (e) {}
+        }
       }
     }
 
-    // 2. Check central profiles DB
+    // 2. Central profiles DB
     const existingDbStr = localStorage.getItem("dj_user_profiles_db");
     if (existingDbStr) {
       try {
         const profilesDb: Record<string, UserProfileData> = JSON.parse(existingDbStr);
-        if (cleanEmail && profilesDb[cleanEmail]?.avatar && profilesDb[cleanEmail].avatar!.length > 5 && !profilesDb[cleanEmail].avatar!.includes("cart")) {
+        if (cleanEmail && isUploadedAvatar(profilesDb[cleanEmail]?.avatar)) {
           return profilesDb[cleanEmail].avatar!;
         }
-        for (const p of Object.values(profilesDb)) {
-          if (!p || !p.avatar || p.avatar.length <= 5 || p.avatar.includes("cart")) continue;
-          const pName = (p.name || "").toLowerCase().trim();
-          const pEmail = (p.email || "").toLowerCase().trim();
-          if ((cleanEmail && pEmail === cleanEmail) || isNameMatch(pName) || isNameMatch(pEmail)) {
-            return p.avatar;
+        if (cleanName) {
+          for (const p of Object.values(profilesDb)) {
+            if (!p || !isUploadedAvatar(p.avatar)) continue;
+            const pEmail = (p.email || "").toLowerCase().trim();
+            if (cleanEmail && pEmail === cleanEmail) return p.avatar!;
+            if (isNameMatch(p.name || "")) return p.avatar!;
           }
         }
       } catch (e) {}
     }
 
-    // 3. Check registered users list
+    // 3. Registered users list
     const regStr = localStorage.getItem("dj_registered_users");
     if (regStr) {
       try {
         const regList: any[] = JSON.parse(regStr);
         for (const u of regList) {
-          if (!u || !u.avatar || u.avatar.length <= 5 || u.avatar.includes("cart")) continue;
-          const uName = (u.name || "").toLowerCase().trim();
+          if (!u || !isUploadedAvatar(u.avatar)) continue;
           const uEmail = (u.email || "").toLowerCase().trim();
-          if ((cleanEmail && uEmail === cleanEmail) || isNameMatch(uName) || isNameMatch(uEmail)) {
-            return u.avatar;
-          }
+          if (cleanEmail && uEmail === cleanEmail) return u.avatar;
+          if (cleanName && isNameMatch(u.name || "")) return u.avatar;
         }
       } catch (e) {}
     }
 
-    // 4. Check device Google accounts
-    const deviceStr = localStorage.getItem("dj_device_google_accounts");
-    if (deviceStr) {
-      try {
-        const deviceList: any[] = JSON.parse(deviceStr);
-        for (const d of deviceList) {
-          if (!d || !d.avatar || d.avatar.length <= 5 || d.avatar.includes("cart")) continue;
-          const dName = (d.name || "").toLowerCase().trim();
-          const dEmail = (d.email || "").toLowerCase().trim();
-          if ((cleanEmail && dEmail === cleanEmail) || isNameMatch(dName) || isNameMatch(dEmail)) {
-            return d.avatar;
-          }
-        }
-      } catch (e) {}
-    }
-
-    // 5. Check submitted/live articles for author's uploaded authorAvatar
+    // 4. Check submitted/live articles for author's uploaded authorAvatar
     for (const key of ["dj_writer_submitted_articles", "dj_live_articles_cache"]) {
       const artStr = localStorage.getItem(key);
       if (artStr) {
@@ -327,11 +304,11 @@ export function getAuthorAvatarByNameOrEmail(name?: string, email?: string): str
           const artList: any[] = JSON.parse(artStr);
           for (const art of artList) {
             const avatar = art.authorAvatar || art.author_avatar || art.authorImage;
-            if (!avatar || avatar.length <= 5 || avatar.includes("cart")) continue;
-            const aName = (art.authorName || art.author_name || art.author || "").toLowerCase().trim();
+            if (!avatar || !isUploadedAvatar(avatar)) continue;
             const aEmail = (art.authorEmail || art.author_email || "").toLowerCase().trim();
             if (cleanEmail && aEmail === cleanEmail) return avatar;
-            if (isNameMatch(aName)) return avatar;
+            const aName = (art.authorName || art.author_name || art.author || "").toLowerCase().trim();
+            if (cleanName && isNameMatch(aName)) return avatar;
           }
         } catch (e) {}
       }
@@ -343,9 +320,6 @@ export function getAuthorAvatarByNameOrEmail(name?: string, email?: string): str
   return null;
 }
 
-/**
- * Retrieves the full profile details (name, avatar, bio, role) set by a writer across profile stores.
- */
 export function getAuthorFullProfileByNameOrEmail(name?: string, email?: string): UserProfileData | null {
   if (typeof window === "undefined") return null;
 
@@ -359,8 +333,7 @@ export function getAuthorFullProfileByNameOrEmail(name?: string, email?: string)
     const s2 = target.replace(/[^a-z0-9]/g, "").toLowerCase();
     if (!s2) return false;
     if (s1 && (s1 === s2 || s1.includes(s2) || s2.includes(s1))) return true;
-    if ((s1.includes("rushdhi") || cleanEmail.includes("rushdhi")) && (s2.includes("rushdhi") || target.toLowerCase().includes("rushdhi"))) return true;
-    return false;
+    return s1 === s2;
   };
 
   try {

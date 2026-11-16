@@ -67,7 +67,7 @@ export default function WriterDashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const auth = useAuth();
-  const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role?: string; avatar?: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role?: string; avatar?: string; bio?: string; writerType?: string; title?: string } | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [lockPasscode, setLockPasscode] = useState("");
@@ -619,12 +619,8 @@ export default function WriterDashboardPage() {
 
       const emailToLookup = auth.user.email;
       const savedProfile = getUserProfile(emailToLookup);
-      const resolvedAvatar = resolveUserAvatar({
-        name: savedProfile?.name || auth.user.name,
-        email: emailToLookup,
-        role: "Writer",
-        avatar: savedProfile?.avatar,
-      });
+      const rawAv = savedProfile?.avatar || auth.user.avatar;
+      const resolvedAvatar = isUploadedAvatar(rawAv) ? rawAv! : "";
 
       const finalUser = {
         name: savedProfile?.name || auth.user.name,
@@ -634,17 +630,26 @@ export default function WriterDashboardPage() {
         bio: savedProfile?.bio,
         linkedin: savedProfile?.linkedin,
         title: (savedProfile as any)?.title || (auth.user as any)?.title,
-        writerType: (savedProfile as any)?.writerType || (auth.user as any)?.writerType || "Staff",
+        writerType: (auth.user as any)?.writerType || (savedProfile as any)?.writerType || "Staff",
       };
 
+      // Always fetch fresh profile from DB to get latest writerType & avatar
       fetch(`/api/auth/profile?email=${encodeURIComponent(emailToLookup)}`)
         .then(r => r.ok ? r.json() : null)
         .then(d => {
           if (d?.success && d.user) {
+            const dbAvatar = d.user.avatar && isUploadedAvatar(d.user.avatar) ? d.user.avatar : "";
             const dbType = d.user.writerType || d.user.writer_type;
-            if (dbType) {
-              setCurrentUser(prev => prev ? ({ ...prev, writerType: dbType }) : prev);
-            }
+            setCurrentUser(prev => {
+              if (!prev || prev.email.toLowerCase().trim() !== emailToLookup.toLowerCase().trim()) return prev;
+              return {
+                ...prev,
+                ...(dbAvatar ? { avatar: dbAvatar } : {}),
+                ...(dbType ? { writerType: dbType } : {}),
+                name: d.user.name || prev.name,
+                bio: d.user.bio || prev.bio,
+              };
+            });
           }
         })
         .catch(() => { });
@@ -656,6 +661,22 @@ export default function WriterDashboardPage() {
 
     initAuth();
   }, [auth.loading, auth.authenticated, auth.user, router]);
+
+  // Synchronize writerType in real-time if changed in author profile
+  useEffect(() => {
+    const handleProfileSync = (e: any) => {
+      const detail = e?.detail;
+      if (detail && detail.writerType) {
+        setCurrentUser(prev => prev ? { ...prev, writerType: detail.writerType } : prev);
+      }
+    };
+    window.addEventListener("author-profile-sync", handleProfileSync);
+    window.addEventListener("dj_profile_updated", handleProfileSync);
+    return () => {
+      window.removeEventListener("author-profile-sync", handleProfileSync);
+      window.removeEventListener("dj_profile_updated", handleProfileSync);
+    };
+  }, []);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -694,7 +715,7 @@ export default function WriterDashboardPage() {
         name: auth.user?.name || "rushdhi",
         email: auth.user?.email || "rushdhi@digitaljournal.com",
         role: "Writer",
-        avatar: auth.user?.avatar || "/author_bluesuit.jpg"
+        avatar: isUploadedAvatar(auth.user?.avatar) ? auth.user!.avatar : ""
       };
       setCurrentUser(writerAcc);
       setIsAuthenticated(true);
@@ -969,7 +990,38 @@ export default function WriterDashboardPage() {
   });
 
 
-  const isContributor = ((currentUser as any)?.writerType || (auth.user as any)?.writerType || "").toLowerCase() === "contributor";
+  const isContributor = useMemo(() => {
+    const rawType = (
+      (currentUser as any)?.writerType ||
+      (auth.user as any)?.writerType ||
+      (() => {
+        if (typeof window === "undefined") return "";
+        try {
+          const tabSession = sessionStorage.getItem("dj_tab_session");
+          if (tabSession) {
+            const p = JSON.parse(tabSession);
+            return p.user?.writerType || p.writerType || "";
+          }
+        } catch { }
+        try {
+          const u = JSON.parse(localStorage.getItem("user") || "{}");
+          return u.writerType || "";
+        } catch { }
+        try {
+          const targetEmail = currentUser?.email || auth.user?.email;
+          if (targetEmail) {
+            const prof = getUserProfile(targetEmail);
+            if ((prof as any)?.writerType) return (prof as any).writerType;
+            const londonProf = JSON.parse(localStorage.getItem(`london_user_profile_${targetEmail.toLowerCase().trim()}`) || "{}");
+            if (londonProf.writerType) return londonProf.writerType;
+          }
+        } catch { }
+        return "";
+      })() ||
+      ""
+    );
+    return rawType.toLowerCase().trim() === "contributor";
+  }, [currentUser, auth.user]);
 
   const userVisiblePosts = useMemo(() => {
     return posts.filter(isPostVisibleInStudio);
@@ -1622,8 +1674,8 @@ export default function WriterDashboardPage() {
             </div>
           </div>
 
-          {/* Right Column: Contributor Quota & Weekly Deadline Sidebar */}
-          {isContributor && (
+          {/* Right Column: Contributor Quota & Weekly Deadline Sidebar (shows inside Published page for Contributor accounts only) */}
+          {isContributor && activeTab === "Published" && (
             <aside className="w-full lg:w-80 shrink-0 space-y-3.5 font-sans">
               {/* Countdown Timer Header */}
               <div className="bg-white border border-slate-200/90 rounded-xl p-4 shadow-xs">
@@ -1674,7 +1726,7 @@ export default function WriterDashboardPage() {
                       </span>
                     </div>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                      2 Days Left
+                      {countdown.days === 0 ? "Ends Today" : `${countdown.days} Day${countdown.days > 1 ? "s" : ""} Left`}
                     </span>
                   </div>
 
@@ -2120,362 +2172,18 @@ export default function WriterDashboardPage() {
                 />
               </div>
 
-              {/* Field: PROFESSIONAL TITLE */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                    PROFESSIONAL TITLE <span className="text-gray-400 font-normal lowercase">(max 3 words)</span>
-                  </label>
-                  <span className={`text-[10px] font-semibold ${(profileTitle.trim() ? profileTitle.trim().split(/\s+/).filter(Boolean).length : 0) > 3 ? "text-red-600 font-bold" : "text-gray-400"}`}>
-                    {profileTitle.trim() ? profileTitle.trim().split(/\s+/).filter(Boolean).length : 0} / 3 words
-                  </span>
-                </div>
-                <input
-                  type="text"
-                  placeholder="e.g. Political Correspondent (max 3 words)"
-                  value={profileTitle}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    const words = val.trim().split(/\s+/).filter(Boolean);
-                    if (words.length <= 3 || val.endsWith(" ")) {
-                      setProfileTitle(val);
-                    } else {
-                      setProfileTitle(words.slice(0, 3).join(" "));
-                    }
-                  }}
-                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all"
-                />
-                <p className="text-[11px] text-gray-400 font-normal mt-1.5 leading-normal">
-                  Displayed in uppercase red above your name on your public author profile card.
-                </p>
-              </div>
-
-              {/* Field: WRITER ACCOUNT TYPE */}
-              <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
-                  WRITER ACCOUNT TYPE
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <label
-                    onClick={() => setProfileWriterType("Staff")}
-                    className={`p-3 rounded-xl border flex flex-col justify-between transition-all cursor-pointer ${profileWriterType === "Staff"
-                        ? "border-[#D31220] bg-red-50/20 ring-1 ring-red-100"
-                        : "border-gray-200 hover:border-gray-300 bg-white"
-                      }`}
-                  >
-                    <div className="flex items-start gap-2">
-                      <input
-                        type="radio"
-                        name="w_writer_type"
-                        checked={profileWriterType === "Staff"}
-                        onChange={() => setProfileWriterType("Staff")}
-                        className="mt-0.5 text-[#D31220] focus:ring-[#D31220]"
-                      />
-                      <div>
-                        <span className="text-xs font-bold text-gray-900 block">Staff</span>
-                        <span className="text-[10.5px] text-gray-500 block leading-snug mt-0.5">
-                          Unlimited article submissions anytime
-                        </span>
-                      </div>
-                    </div>
-                  </label>
-
-                  <label
-                    onClick={() => setProfileWriterType("Contributor")}
-                    className={`p-3 rounded-xl border flex flex-col justify-between transition-all cursor-pointer ${profileWriterType === "Contributor"
-                        ? "border-[#D31220] bg-red-50/20 ring-1 ring-red-100"
-                        : "border-gray-200 hover:border-gray-300 bg-white"
-                      }`}
-                  >
-                    <div className="flex items-start gap-2">
-                      <input
-                        type="radio"
-                        name="w_writer_type"
-                        checked={profileWriterType === "Contributor"}
-                        onChange={() => setProfileWriterType("Contributor")}
-                        className="mt-0.5 text-[#D31220] focus:ring-[#D31220]"
-                      />
-                      <div>
-                        <span className="text-xs font-bold text-gray-900 block">Contributor</span>
-                        <span className="text-[10.5px] text-gray-500 block leading-snug mt-0.5">
-                          Must submit 20 articles/month (5/week)
-                        </span>
-                      </div>
-                    </div>
-                  </label>
-                </div>
-                <p className="text-[11px] text-gray-400 font-normal mt-1.5 leading-normal">
-                  Staff submit anytime without limits. Contributors must submit 20 articles/month (5/week) or risk account suspension.
-                </p>
-              </div>
-
               {/* Field 2: BIO */}
               <div>
                 <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
                   BIO
                 </label>
                 <textarea
-                  rows={3}
+                  rows={4}
                   value={profileBio}
                   onChange={(e) => setProfileBio(e.target.value)}
                   placeholder="Tell readers about yourself..."
                   className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all leading-relaxed"
                 />
-              </div>
-
-              {/* Field 3: LINKEDIN PROFILE */}
-              <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
-                  LINKEDIN PROFILE
-                </label>
-                <div className="relative">
-                  <svg
-                    className="w-4 h-4 text-[#0A66C2] absolute left-3.5 top-1/2 -translate-y-1/2 flex-shrink-0"
-                    fill="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z" />
-                  </svg>
-                  <input
-                    type="url"
-                    placeholder="https://www.linkedin.com/in/your-profile"
-                    value={profileLinkedin}
-                    onChange={(e) => setProfileLinkedin(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm font-medium text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all"
-                  />
-                </div>
-                <p className="text-[11px] text-gray-400 font-normal mt-1.5 leading-normal">
-                  Shown on your article bylines so readers can connect with you.
-                </p>
-              </div>
-
-              {/* Field 4: YEARS OF EXPERIENCE */}
-              <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
-                  YEARS OF EXPERIENCE
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="75"
-                  placeholder="e.g. 12"
-                  value={profileExperience}
-                  onChange={(e) => setProfileExperience(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all"
-                />
-                <p className="text-[11px] text-gray-400 font-normal mt-1.5 leading-normal">
-                  Displayed on your public author profile card.
-                </p>
-              </div>
-
-              {/* City and Country */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
-                    CITY <span className="text-gray-400 font-normal lowercase">(Writer Details)</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. London"
-                    value={profileCity}
-                    onChange={(e) => setProfileCity(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
-                    COUNTRY <span className="text-gray-400 font-normal lowercase">(Writer Details)</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. United Kingdom"
-                    value={profileCountry}
-                    onChange={(e) => setProfileCountry(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* 6 Slots of Expertise */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                    AREAS OF EXPERTISE <span className="text-gray-400 font-normal lowercase">(6 slots)</span>
-                  </label>
-                  <span className="text-[10px] text-slate-400 font-sans italic">Ratings evaluated by Admin only</span>
-                </div>
-                <div className="space-y-2">
-                  {[0, 1, 2, 3, 4, 5].map((slotIdx) => {
-                    const topic = profileExpertiseSlots[slotIdx] || "";
-                    const rating = profileExpertiseRatings[topic] ?? [95, 90, 85, 80, 85, 90][slotIdx];
-                    return (
-                      <div key={slotIdx} className="flex items-center gap-2">
-                        <div className="relative flex-1">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 font-mono">
-                            #{slotIdx + 1}
-                          </span>
-                          <input
-                            type="text"
-                            placeholder={
-                              [
-                                "e.g. UK Politics",
-                                "e.g. Parliamentary Affairs",
-                                "e.g. International Relations",
-                                "e.g. EU-UK Relations",
-                                "e.g. Policy Analysis",
-                                "e.g. Political Interviews",
-                              ][slotIdx]
-                            }
-                            value={topic}
-                            onChange={(e) => {
-                              const updated = [...profileExpertiseSlots];
-                              updated[slotIdx] = e.target.value;
-                              setProfileExpertiseSlots(updated);
-                            }}
-                            className="w-full pl-8 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium text-gray-900 focus:outline-none focus:border-[#D31220]"
-                          />
-                        </div>
-                        <div className="w-24 flex items-center justify-end gap-1.5 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-mono text-slate-600 shrink-0 select-none">
-                          <span className="text-[9px] uppercase font-bold text-slate-400">Admin:</span>
-                          <span className="font-bold text-[#BF1E2D]">{rating}%</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <p className="text-[10.5px] text-gray-400 font-normal mt-1.5 leading-normal">
-                  You can customize your 6 expertise topics. Official proficiency ratings (%) are evaluated and updated by Admin only.
-                </p>
-              </div>
-
-              {/* Field 5: AREAS OF COVERAGE */}
-              <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
-                  AREAS OF COVERAGE <span className="text-gray-400 font-normal lowercase">(comma-separated)</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. UK Politics, Parliament, Government Policy"
-                  value={profileCoverageAreas}
-                  onChange={(e) => setProfileCoverageAreas(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all"
-                />
-                {profileCoverageAreas.trim() && (
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {profileCoverageAreas.split(",").map((t) => t.trim()).filter(Boolean).map((tag, i) => (
-                      <span key={i} className="px-2.5 py-0.5 bg-gray-100 border border-gray-200 rounded-full text-[11px] text-gray-700 font-medium">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Field 6: ABOUT THE JOURNALIST (Max 200 Words) */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                    ABOUT THE JOURNALIST <span className="text-gray-400 font-normal lowercase">(paragraphs, max 200 words)</span>
-                  </label>
-                  <span className={`text-[10px] font-semibold ${(profileAboutJournalist.trim() ? profileAboutJournalist.trim().split(/\s+/).length : 0) > 200 ? "text-red-600" : "text-gray-400"
-                    }`}>
-                    {profileAboutJournalist.trim() ? profileAboutJournalist.trim().split(/\s+/).length : 0} / 200 words
-                  </span>
-                </div>
-                <textarea
-                  rows={4}
-                  placeholder="Write 2-3 paragraphs about your journalistic background, beats covered, and career highlights (max 200 words)..."
-                  value={profileAboutJournalist}
-                  onChange={(e) => {
-                    const words = e.target.value.trim().split(/\s+/).filter(Boolean);
-                    if (words.length <= 200 || e.target.value.length < profileAboutJournalist.length) {
-                      setProfileAboutJournalist(e.target.value);
-                    }
-                  }}
-                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all resize-y"
-                />
-              </div>
-
-              {/* Field 7: JOURNALISTIC APPROACH (Max 50 Words) */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                    JOURNALISTIC APPROACH <span className="text-gray-400 font-normal lowercase">(max 50 words)</span>
-                  </label>
-                  <span className={`text-[10px] font-semibold ${(profileJournalisticApproach.trim() ? profileJournalisticApproach.trim().split(/\s+/).length : 0) > 50 ? "text-red-600" : "text-gray-400"
-                    }`}>
-                    {profileJournalisticApproach.trim() ? profileJournalisticApproach.trim().split(/\s+/).length : 0} / 50 words
-                  </span>
-                </div>
-                <textarea
-                  rows={2}
-                  placeholder="Briefly describe your reporting principles and commitment to readers (max 50 words)..."
-                  value={profileJournalisticApproach}
-                  onChange={(e) => {
-                    const words = e.target.value.trim().split(/\s+/).filter(Boolean);
-                    if (words.length <= 50 || e.target.value.length < profileJournalisticApproach.length) {
-                      setProfileJournalisticApproach(e.target.value);
-                    }
-                  }}
-                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all resize-y"
-                />
-              </div>
-
-              {/* Field 8: PERSONAL QUOTE / STATEMENT */}
-              <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
-                  PERSONAL QUOTE / STATEMENT
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="e.g. Journalism has the power to inform, hold power to account and create a more open and informed society."
-                  value={profileQuote}
-                  onChange={(e) => setProfileQuote(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-[#D31220] focus:ring-1 focus:ring-red-100 transition-all resize-y leading-relaxed"
-                />
-                <p className="text-[11px] text-gray-400 font-normal mt-1.5 leading-normal">
-                  Displayed on your author profile card and Awards & Recognition tab.
-                </p>
-              </div>
-
-              {/* Field 10: AWARDS & CERTIFICATES */}
-              <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
-                <div>
-                  <span className="block text-xs font-bold text-gray-800">
-                    Awards & Certificates
-                  </span>
-                  <span className="text-[11px] text-gray-400">
-                    Showcase your certifications & awards on your author profile
-                  </span>
-                </div>
-                <Link
-                  href={`/author/${(currentUser?.name || "author").toLowerCase().replace(/[^a-z0-9]+/g, "-")}?tab=awards`}
-                  onClick={() => setIsProfileSettingsOpen(false)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#D31220] hover:text-white hover:bg-[#D31220] border border-red-200 rounded-lg transition-colors cursor-pointer"
-                >
-                  <Award size={14} />
-                  <span>Manage Awards</span>
-                </Link>
-              </div>
-
-              {/* Field 11: PROFESSIONAL MEMBERSHIPS */}
-              <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
-                <div>
-                  <span className="block text-xs font-bold text-gray-800">
-                    Professional Memberships
-                  </span>
-                  <span className="text-[11px] text-gray-400">
-                    Add & manage institute affiliations & memberships
-                  </span>
-                </div>
-                <Link
-                  href={`/author/${(currentUser?.name || "author").toLowerCase().replace(/[^a-z0-9]+/g, "-")}?tab=awards#memberships`}
-                  onClick={() => setIsProfileSettingsOpen(false)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#D31220] hover:text-white hover:bg-[#D31220] border border-red-200 rounded-lg transition-colors cursor-pointer"
-                >
-                  <BookOpen size={14} />
-                  <span>Manage Memberships</span>
-                </Link>
               </div>
 
               {/* Action Buttons */}

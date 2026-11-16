@@ -3003,14 +3003,6 @@ export default function AdminDashboardPage() {
 
       await saveArticleToServer(rejectedItem as any);
 
-      try {
-        await fetch("/api/articles", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(rejectedItem)
-        });
-      } catch (e) { }
-
       resetArticlesFetchCache();
 
       const subsStr = localStorage.getItem("dj_writer_submitted_articles");
@@ -5516,19 +5508,6 @@ export default function AdminDashboardPage() {
 
               <div className="flex items-center gap-3 flex-shrink-0">
                 <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTab("trending_words");
-                    setTrendingSubTab("article_section");
-                  }}
-                  className="flex items-center gap-2 bg-[#EBF0F7] shadow-[4px_4px_10px_#c8d2df,-4px_-4px_10px_#ffffff] active:shadow-[inset_2px_2px_5px_#c8d2df,inset_-2px_-2px_5px_#ffffff] border border-white/80 text-[#D31220] hover:text-red-700 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer uppercase tracking-wider font-mono"
-                  title="Configure 6 Trending Topics for Article Sidebar"
-                >
-                  <TrendingUp className="w-3.5 h-3.5 text-[#D31220]" />
-                  <span>TRENDING TOPICS ({articleTrendingTopics.filter(t => t && t.trim()).length}/6)</span>
-                </button>
-
-                <button
                   onClick={handleBackupArticlesZIP}
                   className="flex items-center gap-2 bg-[#EBF0F7] shadow-[4px_4px_10px_#c8d2df,-4px_-4px_10px_#ffffff] active:shadow-[inset_2px_2px_5px_#c8d2df,inset_-2px_-2px_5px_#ffffff] border border-white/80 text-orange-700 hover:text-orange-800 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer uppercase tracking-wider font-mono"
                 >
@@ -5549,41 +5528,6 @@ export default function AdminDashboardPage() {
             {/* SUB-TAB 1: PUBLISHED POSTS */}
             {postSubTab === "published" && (
               <div className="space-y-6">
-                {/* ARTICLE SECTION TRENDING TOPICS BANNER */}
-                <div className="bg-[#EBF0F7] rounded-3xl border border-white/80 p-4 shadow-[6px_6px_14px_#c8d2df,-6px_-6px_14px_#ffffff] flex flex-wrap items-center justify-between gap-3 font-sans">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-[#D31220]/10 border border-[#D31220]/20 flex items-center justify-center text-[#D31220] flex-shrink-0">
-                      <TrendingUp className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-900 tracking-tight">
-                          Article Section Trending Topics (6 Slots)
-                        </span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-[#D31220] text-white">
-                          {articleTrendingTopics.filter(t => t && t.trim()).length}/6 Active
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-500 truncate max-w-xl font-medium mt-0.5">
-                        {articleTrendingTopics.filter(t => t && t.trim()).length > 0
-                          ? articleTrendingTopics.filter(t => t && t.trim()).map((t, i) => `${i + 1}. ${t}`).join("  •  ")
-                          : "No trending topics set"}
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveTab("trending_words");
-                      setTrendingSubTab("article_section");
-                    }}
-                    className="px-4 py-2 bg-[#D31220] hover:bg-[#b91522] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer font-sans shadow-sm"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add / Manage Trending Topics</span>
-                  </button>
-                </div>
-
                 {/* FILTER & SEARCH TOOLBAR CARD */}
                 <div className="bg-[#EBF0F7] rounded-3xl border border-white/80 p-5 shadow-[8px_8px_18px_#c8d2df,-8px_-8px_18px_#ffffff] font-mono text-xs flex flex-wrap items-center justify-between gap-4">
                   <div className="flex flex-wrap items-center gap-4">
