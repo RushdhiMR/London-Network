@@ -1,48 +1,86 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isB2Configured, uploadToB2, listB2Backups, deleteB2Object } from "@/lib/backblaze";
+import { isB2Configured, uploadToB2, deleteB2Object } from "@/lib/backblaze";
 import { DB } from "@/lib/db";
 import { requireRole } from "@/lib/rbac";
+import {
+  getBackupsOverview,
+  createArticleBackup,
+  readManifest,
+  writeManifest
+} from "@/lib/articleBackupService";
+import path from "path";
+import fs from "fs";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const rbac = await requireRole(request, 'admin');
+  const rbac = await requireRole(request, "admin");
   if (!rbac.authorized) {
     return rbac.response;
   }
 
   try {
-    if (!isB2Configured()) {
-      return NextResponse.json({
-        success: true,
-        storage: "local",
-        backups: []
-      });
-    }
+    const overview = await getBackupsOverview();
 
-    const b2Backups = await listB2Backups();
     return NextResponse.json({
       success: true,
-      storage: "backblaze",
-      backups: b2Backups
+      storage: isB2Configured() ? "backblaze" : "local",
+      backups: overview.backups,
+      lastBackupDate: overview.lastBackupDate,
+      lastSuccessfulBackup: overview.lastSuccessfulBackup,
+      nextScheduledBackup: overview.nextScheduledBackup,
+      retention: "Rolling 5-Day Retention",
+      totalBackups: overview.totalBackups
     });
   } catch (error: any) {
     console.error("GET /api/admin/backups error:", error);
     return NextResponse.json(
-      { success: false, error: error?.message || "Failed to list Backblaze backups" },
+      { success: false, error: error?.message || "Failed to list backups" },
       { status: 500 }
     );
   }
 }
 
 export async function POST(request: NextRequest) {
-  const rbac = await requireRole(request, 'admin');
+  const rbac = await requireRole(request, "admin");
   if (!rbac.authorized) {
     return rbac.response;
   }
 
   try {
     const body = await request.json().catch(() => ({}));
+    const action = body.action || "articles_zip";
 
-    // Gather all active datasets directly from database if available or request body
+    // 1. Primary Action: Article ZIP Backup (with 5-day rolling retention)
+    if (action === "articles_zip" || action === "manual_zip" || !body.datasets) {
+      const origin = request.nextUrl.origin || process.env.FRONTEND_URL || "https://londonbigben.com";
+      const result = await createArticleBackup({
+        isManual: true,
+        force: true,
+        siteOrigin: origin
+      });
+
+      if (!result.success) {
+        return NextResponse.json(
+          { success: false, error: result.error || result.message },
+          { status: 500 }
+        );
+      }
+
+      const overview = await getBackupsOverview();
+
+      return NextResponse.json({
+        success: true,
+        message: result.message,
+        backup: result.backup,
+        backups: overview.backups,
+        lastBackupDate: overview.lastBackupDate,
+        nextScheduledBackup: overview.nextScheduledBackup,
+        storage: result.backup?.storage || "local"
+      });
+    }
+
+    // 2. Legacy / Secondary Action: Full Database JSON Snapshot
     const users = await DB.getAllSubscribers().catch(() => []);
     const contactSubmissions = await DB.getAllContactSubmissions().catch(() => []);
 
@@ -101,7 +139,12 @@ export async function POST(request: NextRequest) {
       date: `${now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}, ${now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`,
       fileSize: `${sizeMb === "0.00" ? "< 0.1" : sizeMb} MB`,
       url: b2UploadRes?.url || "",
-      storage: b2UploadRes?.success ? "backblaze" : "local"
+      storage: b2UploadRes?.success ? "backblaze" : "local",
+      status: "Successful" as const,
+      sizeBytes: buffer.length,
+      articlesCount: Array.isArray(body.articles) ? body.articles.length : 0,
+      timestamp: now.getTime(),
+      type: "manual" as const
     };
 
     return NextResponse.json({
@@ -114,14 +157,14 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error("POST /api/admin/backups error:", error);
     return NextResponse.json(
-      { success: false, error: error?.message || "Failed to create Backblaze backup" },
+      { success: false, error: error?.message || "Failed to create backup" },
       { status: 500 }
     );
   }
 }
 
 export async function DELETE(request: NextRequest) {
-  const rbac = await requireRole(request, 'admin');
+  const rbac = await requireRole(request, "admin");
   if (!rbac.authorized) {
     return rbac.response;
   }
@@ -137,18 +180,41 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    // 1. Delete from B2 if configured
     if (isB2Configured()) {
-      await deleteB2Object(filename);
+      await deleteB2Object(filename.endsWith(".zip") ? `article-backups/${filename}` : filename);
     }
+
+    // 2. Delete from local backups directory
+    const candidateDirs = [
+      path.join(process.cwd(), "data", "backups"),
+      path.join(process.cwd(), "frontend", "data", "backups")
+    ];
+    for (const d of candidateDirs) {
+      const fPath = path.join(d, filename);
+      if (fs.existsSync(fPath)) {
+        try {
+          fs.unlinkSync(fPath);
+        } catch {}
+      }
+    }
+
+    // 3. Update manifest
+    const manifest = readManifest();
+    manifest.backups = manifest.backups.filter((b) => b.filename !== filename);
+    writeManifest(manifest);
+
+    const overview = await getBackupsOverview();
 
     return NextResponse.json({
       success: true,
-      message: `Backup ${filename} deleted from Backblaze B2.`
+      message: `Backup ${filename} deleted successfully.`,
+      backups: overview.backups
     });
   } catch (error: any) {
     console.error("DELETE /api/admin/backups error:", error);
     return NextResponse.json(
-      { success: false, error: error?.message || "Failed to delete backup from Backblaze B2" },
+      { success: false, error: error?.message || "Failed to delete backup" },
       { status: 500 }
     );
   }

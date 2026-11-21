@@ -91,13 +91,11 @@ export default function TeamPage() {
     };
     window.addEventListener("focus", handleSync);
     window.addEventListener("visibilitychange", handleSync);
-    window.addEventListener("storage", handleSync);
 
     return () => {
       isMounted = false;
       window.removeEventListener("focus", handleSync);
       window.removeEventListener("visibilitychange", handleSync);
-      window.removeEventListener("storage", handleSync);
     };
   }, []);
 

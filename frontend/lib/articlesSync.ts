@@ -291,17 +291,23 @@ export function isLatestNews(post: any): boolean {
 export function isHomePageAPlus2(post: any): boolean {
   if (!post) return false;
   const pl = (typeof post === "string" ? post : (post.placement || "")).toLowerCase().trim();
-  if (pl.includes("section 3") || pl.includes("a+ 3") || pl.includes("a+3")) return false;
+  if (pl.includes("section 3") || pl.includes("a+ 3") || pl.includes("a+3") || pl.includes("a_plus_3")) return false;
   if (pl.includes("trending") || pl.includes("editor") || pl.includes("latest") || pl.includes("category")) return false;
   return (
     pl === "home page a+ section 2" ||
+    pl === "home_page_a_plus_2" ||
     pl === "a+ section 2" ||
+    pl === "a+ 2" ||
     pl === "a+2" ||
+    pl === "a_plus_2" ||
     pl.includes("a+ section 2") ||
     pl.includes("section 2") ||
+    pl.includes("section_2") ||
+    pl.includes("a_plus_2") ||
     pl === "middle dark spotlight banner" ||
     pl.includes("main news 2") ||
     pl.includes("main news section 2") ||
+    pl.includes("main_news_2") ||
     pl === "main news 2"
   );
 }
@@ -682,9 +688,13 @@ export async function saveArticleToServer(article: ArticleItem): Promise<Article
     updated_at: nowIso,
     updatedAt: nowIso,
     ...(article.status === "Published" ? {
-      published_at: nowIso,
-      publishedAt: nowIso,
-      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      published_at: article.published_at || article.publishedAt || (article as any).approved_at || nowIso,
+      publishedAt: article.publishedAt || article.published_at || (article as any).approvedAt || nowIso,
+      approved_at: (article as any).approved_at || (article as any).approvedAt || article.published_at || nowIso,
+      approvedAt: (article as any).approvedAt || (article as any).approved_at || article.publishedAt || nowIso,
+      admin_published_at: (article as any).admin_published_at || (article as any).adminPublishedAt || article.published_at || nowIso,
+      adminPublishedAt: (article as any).adminPublishedAt || (article as any).admin_published_at || article.publishedAt || nowIso,
+      date: article.date || new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     } : {})
   };
 
@@ -715,29 +725,7 @@ export async function saveArticleToServer(article: ArticleItem): Promise<Article
   }
   setCachedArticles(updated, true);
 
-  // Synchronize submitted articles storage immediately
-  if (typeof window !== "undefined") {
-    try {
-      const subsStr = localStorage.getItem(STORAGE_KEY);
-      let subsList: any[] = [];
-      if (subsStr && subsStr.trim()) {
-        try {
-          const parsed = JSON.parse(subsStr);
-          if (Array.isArray(parsed)) subsList = parsed;
-        } catch {}
-      }
-      if (!Array.isArray(subsList)) subsList = [];
-      subsList = subsList.filter((p: any) => 
-        !(String(p.id) === String(article.id) || 
-        (cleanTitleKey(p.title) && cleanTitleKey(article.title) && cleanTitleKey(p.title) === cleanTitleKey(article.title)) ||
-        (origTitleKey && cleanTitleKey(p.title) === origTitleKey))
-      );
-      subsList.unshift(articleWithTimestamps);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(subsList));
-      window.dispatchEvent(new Event(SYNC_EVENT_NAME));
-      window.dispatchEvent(new Event("dj_articles_updated"));
-    } catch (e) {}
-  }
+  // Immediate memory cache update; storage sync is finalized once server confirms
 
   try {
     const res = await fetch("/api/articles", {

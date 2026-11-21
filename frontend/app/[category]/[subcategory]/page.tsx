@@ -1403,7 +1403,10 @@ async function getNewsContent(slug: string) {
   );
   const authorBio = artSource.authorBio || mappedAuthor?.bio || `${authorName} is a dedicated journalist for London BigBen covering breaking news, enterprise technology, and policy developments.`;
 
-  const date = artSource.date || (artSource.published_at ? new Date(artSource.published_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "Recently Published");
+  const adminPublishIso = artSource.approved_at || artSource.approvedAt || artSource.admin_published_at || artSource.adminPublishedAt || artSource.published_at || artSource.publishedAt;
+  const date = adminPublishIso
+    ? new Date(adminPublishIso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : (artSource.date || "Recently Published");
   const image = artSource.imageUrl || artSource.image || artSource.image_url || "/ai_hero.png";
   const caption = artSource.subheading || artSource.summary || `${title}.`;
 
@@ -1419,6 +1422,12 @@ async function getNewsContent(slug: string) {
     subcategories: Array.isArray(artSource.subcategories) ? artSource.subcategories : (Array.isArray(artSource.subCategories) ? artSource.subCategories : []),
     tags: Array.isArray(artSource.tags) ? artSource.tags : (Array.isArray(artSource.hashtags) ? artSource.hashtags : []),
     rawContent: artSource.content || "",
+    published_at: artSource.published_at,
+    publishedAt: artSource.publishedAt,
+    approved_at: artSource.approved_at,
+    approvedAt: artSource.approvedAt,
+    admin_published_at: artSource.admin_published_at,
+    adminPublishedAt: artSource.adminPublishedAt,
     sections: [
       {
         heading: "",

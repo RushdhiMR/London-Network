@@ -54,22 +54,9 @@ export default function PromoBanner() {
     return bId - aId;
   });
 
-  // Automatically take the latest 5 articles in Main News 2 section (up to 5 slots)
+  // Automatically take the latest articles in Main News 2 section (up to 5 slots)
+  // ONLY articles explicitly designated for Home Page A+ Section 2 should appear here
   let selectedArticles = aPlus2Articles.slice(0, 5);
-
-  // If fewer than 5 articles explicitly tagged, supplement from other latest published articles to provide up to 5 slots
-  if (selectedArticles.length < 5) {
-    const existingIds = new Set(selectedArticles.map((a) => String(a.id)));
-    const supplement = (Array.isArray(articles) ? articles : [])
-      .filter((a) => {
-        if (!a) return false;
-        const st = (a.status || "").toLowerCase().trim();
-        if (st !== "published" && st !== "approved") return false;
-        return !existingIds.has(String(a.id));
-      })
-      .sort((a, b) => getArticleTimestamp(b) - getArticleTimestamp(a));
-    selectedArticles = [...selectedArticles, ...supplement.slice(0, 5 - selectedArticles.length)];
-  }
 
   // Construct slides
   const slides = selectedArticles.map((article) => {

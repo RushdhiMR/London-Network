@@ -2,16 +2,70 @@ import { requireRole } from "@/lib/rbac";
 import { NextRequest, NextResponse } from "next/server";
 import { isB2Configured, uploadToB2 } from "@/lib/backblaze";
 
+function isSafeRemoteImageUrl(urlString: string): boolean {
+  try {
+    const parsed = new URL(urlString);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    const hostname = parsed.hostname.toLowerCase();
+    if (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "0.0.0.0" ||
+      hostname === "::1" ||
+      hostname === "169.254.169.254" ||
+      hostname.endsWith(".internal") ||
+      hostname.endsWith(".local")
+    ) {
+      return false;
+    }
+    // Block private IPv4 subnets
+    if (
+      /^10\./.test(hostname) ||
+      /^192\.168\./.test(hostname) ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)
+    ) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const fetchUrl = searchParams.get("fetchUrl");
   if (fetchUrl) {
+    const rbac = await requireRole(request, "writer", "admin");
+    if (!rbac.authorized) return rbac.response;
+
+    if (!isSafeRemoteImageUrl(fetchUrl)) {
+      return NextResponse.json(
+        { success: false, error: "Invalid or restricted remote URL" },
+        { status: 400 }
+      );
+    }
+
     try {
-      const res = await fetch(fetchUrl);
+      const res = await fetch(fetchUrl, {
+        headers: { "User-Agent": "LondonBigBen-Bot/1.0" },
+      });
+      const mime = res.headers.get("content-type") || "";
+      if (!mime.startsWith("image/")) {
+        return NextResponse.json(
+          { success: false, error: "Remote resource is not a valid image" },
+          { status: 400 }
+        );
+      }
       if (res.ok) {
         const arrayBuffer = await res.arrayBuffer();
+        if (arrayBuffer.byteLength > 15 * 1024 * 1024) {
+          return NextResponse.json(
+            { success: false, error: "Remote image exceeds 15MB limit" },
+            { status: 413 }
+          );
+        }
         const buffer = Buffer.from(arrayBuffer);
-        const mime = res.headers.get("content-type") || "image/jpeg";
         const base64 = `data:${mime};base64,${buffer.toString("base64")}`;
         return NextResponse.json({ success: true, dataUrl: base64 });
       }

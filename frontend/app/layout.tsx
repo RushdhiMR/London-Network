@@ -162,18 +162,17 @@ export default function RootLayout({
                       }
                     }
 
-                    // 3. Prevent cross-tab reload or refresh for background / other open tabs
+                    // 3. Prevent cross-tab reload or refresh for open tabs
                     var reloadTypes = [
                       'reloadPage', 'reload-page', 'serverComponentChanges',
-                      'server-component-reload-page', 'serverOnlyChanges', 'middlewareChanges'
+                      'server-component-reload-page', 'serverOnlyChanges', 'middlewareChanges',
+                      'turbopack-restarted', 'dev-server-restarted', 'reload'
                     ];
                     var currentType = msg.type || msg.action;
                     if (reloadTypes.indexOf(currentType) !== -1 || (msg.action && reloadTypes.indexOf(msg.action) !== -1)) {
-                      if (document.hidden || !document.hasFocus()) {
-                        msg.type = 'ping';
-                        msg.action = 'ping';
-                        modified = true;
-                      }
+                      msg.type = 'ping';
+                      msg.action = 'ping';
+                      modified = true;
                     }
 
                     if (modified) {

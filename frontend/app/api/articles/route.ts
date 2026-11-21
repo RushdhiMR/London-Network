@@ -135,18 +135,29 @@ export async function POST(request: Request) {
     const slug = body.slug || (body.title ? body.title.toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-') : `article-${Date.now()}`);
     const articleId = body.id || `art_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
 
+    const isAdmin = (rbac.user?.role || '').toLowerCase() === 'admin';
+    let targetStatus = body.status || 'Pending review';
+    // Security: Non-admin writers can only submit for review or save drafts; only admins can publish live
+    if (!isAdmin && targetStatus === 'Published') {
+      targetStatus = 'Pending review';
+    }
+
     const nowIso = new Date().toISOString();
     const articleRecord: ArticleRecord = {
       ...body,
       id: articleId,
       slug,
-      status: body.status || 'Pending review',
+      status: targetStatus,
       seo: body.seo || autoSEO,
       updated_at: nowIso,
       updatedAt: nowIso,
-      ...(body.status === 'Published' || !body.status ? {
+      ...(targetStatus === 'Published' ? {
         published_at: body.published_at || body.publishedAt || nowIso,
         publishedAt: body.published_at || body.publishedAt || nowIso,
+        approved_at: body.approved_at || body.approvedAt || body.published_at || nowIso,
+        approvedAt: body.approvedAt || body.approved_at || body.publishedAt || nowIso,
+        admin_published_at: body.admin_published_at || body.adminPublishedAt || body.published_at || nowIso,
+        adminPublishedAt: body.adminPublishedAt || body.admin_published_at || body.publishedAt || nowIso,
         date: body.date || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
       } : {})
     };
@@ -241,8 +252,10 @@ export async function PUT(request: Request) {
 
     const nowIso = new Date().toISOString();
     const targetStatus = status !== undefined ? status : existing?.status || 'Published';
-    const targetPublishedAt = updates.published_at || updates.publishedAt || existing?.published_at || existing?.publishedAt || (targetStatus === 'Published' ? nowIso : undefined);
-    const targetDate = updates.date || existing?.date || (targetStatus === 'Published' ? new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : undefined);
+    const targetApprovedAt = updates.approved_at || updates.approvedAt || (targetStatus === 'Published' ? (existing?.status !== 'Published' ? nowIso : existing?.approved_at || existing?.approvedAt || nowIso) : existing?.approved_at || existing?.approvedAt);
+    const targetAdminPublishedAt = updates.admin_published_at || updates.adminPublishedAt || (targetStatus === 'Published' ? (existing?.status !== 'Published' ? nowIso : existing?.admin_published_at || existing?.adminPublishedAt || nowIso) : existing?.admin_published_at || existing?.adminPublishedAt);
+    const targetPublishedAt = updates.published_at || updates.publishedAt || (targetStatus === 'Published' ? (existing?.status !== 'Published' ? nowIso : existing?.published_at || existing?.publishedAt || nowIso) : existing?.published_at || existing?.publishedAt);
+    const targetDate = updates.date || (targetStatus === 'Published' && existing?.status !== 'Published' ? new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : existing?.date || (targetStatus === 'Published' ? new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : undefined));
     const updatedRecord: ArticleRecord = {
       ...(existing || {}),
       ...updates,
@@ -259,6 +272,10 @@ export async function PUT(request: Request) {
       ...(targetPublishedAt ? {
         published_at: targetPublishedAt,
         publishedAt: targetPublishedAt,
+        approved_at: targetApprovedAt || targetPublishedAt,
+        approvedAt: targetApprovedAt || targetPublishedAt,
+        admin_published_at: targetAdminPublishedAt || targetPublishedAt,
+        adminPublishedAt: targetAdminPublishedAt || targetPublishedAt,
         date: targetDate
       } : {})
     };
@@ -301,6 +318,36 @@ export async function DELETE(request: Request) {
     }
 
     const targetId = id || slug || title || '';
+    const isAdmin = (rbac.user?.role || '').toLowerCase() === 'admin';
+
+    // Security: Writers can only delete their own articles; admins can manage any article
+    if (!isAdmin) {
+      const allArticles = await readArticlesStore();
+      const existing = allArticles.find(
+        (a) =>
+          String(a.id) === String(targetId) ||
+          (slug && a.slug === slug) ||
+          (title && a.title === title)
+      );
+      if (existing) {
+        const writerEmail = (rbac.user?.email || '').toLowerCase().trim();
+        const writerName = (rbac.user?.name || '').toLowerCase().trim();
+        const authorEmail = ((existing as any).author_email || (existing as any).authorEmail || '').toLowerCase().trim();
+        const authorName = (existing.authorName || (existing as any).author || '').toLowerCase().trim();
+
+        const isOwner =
+          (authorEmail && authorEmail === writerEmail) ||
+          (authorName && authorName === writerName);
+
+        if (!isOwner) {
+          return NextResponse.json(
+            { error: 'Forbidden: You do not have permission to delete articles authored by other writers.' },
+            { status: 403 }
+          );
+        }
+      }
+    }
+
     let updatedList;
     if (permanent) {
       updatedList = await deleteArticleStore(targetId, title || undefined, slug || undefined);

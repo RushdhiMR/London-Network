@@ -1,0 +1,42 @@
+{
+  "lastUpdated": "2026-11-21T05:05:49.401Z",
+  "lastSuccessfulBackup": {
+    "id": "bk-1795237572540-8psn",
+    "filename": "london_bigben_articles_daily_2026-11-21.zip",
+    "date": "Nov 21, 2026, 05:05 GMT",
+    "timestamp": 1795237549401,
+    "fileSize": "2.91 MB",
+    "sizeBytes": 3046568,
+    "articlesCount": 61,
+    "status": "Successful",
+    "storage": "local",
+    "type": "daily"
+  },
+  "nextScheduledBackup": "Nov 22, 2026, 00:00 GMT",
+  "backups": [
+    {
+      "id": "bk-1795237572540-8psn",
+      "filename": "london_bigben_articles_daily_2026-11-21.zip",
+      "date": "Nov 21, 2026, 05:05 GMT",
+      "timestamp": 1795237549401,
+      "fileSize": "2.91 MB",
+      "sizeBytes": 3046568,
+      "articlesCount": 61,
+      "status": "Successful",
+      "storage": "local",
+      "type": "daily"
+    },
+    {
+      "id": "bk-1795151078077-ifhs",
+      "filename": "london_bigben_articles_daily_2026-11-20.zip",
+      "date": "Nov 20, 2026, 05:01 GMT",
+      "timestamp": 1795150872676,
+      "fileSize": "2.91 MB",
+      "sizeBytes": 3046566,
+      "articlesCount": 61,
+      "status": "Successful",
+      "storage": "local",
+      "type": "daily"
+    }
+  ]
+}

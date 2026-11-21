@@ -492,14 +492,36 @@ export async function readArticlesStore(forceFresh = false): Promise<ArticleReco
             finalCombined.push(item);
           }
         });
-        globalForArticlesStore.__serverArticlesCache = finalCombined;
+        let currentArticles = finalCombined;
+        if (isB2Configured()) {
+          try {
+            const b2State = await getArticlesB2State();
+            if (b2State) {
+              currentArticles = applyB2StateToArticles(finalCombined, b2State);
+            }
+          } catch (e) {
+            console.warn('[serverArticlesStore] B2 state apply warning:', e);
+          }
+        }
+        globalForArticlesStore.__serverArticlesCache = currentArticles;
         globalForArticlesStore.__serverArticlesCacheTime = Date.now();
-        return finalCombined;
+        return currentArticles;
       }
 
-      globalForArticlesStore.__serverArticlesCache = sqlArticles;
+      let currentSqlArticles = sqlArticles;
+      if (isB2Configured()) {
+        try {
+          const b2State = await getArticlesB2State();
+          if (b2State) {
+            currentSqlArticles = applyB2StateToArticles(sqlArticles, b2State);
+          }
+        } catch (e) {
+          console.warn('[serverArticlesStore] B2 state apply warning:', e);
+        }
+      }
+      globalForArticlesStore.__serverArticlesCache = currentSqlArticles;
       globalForArticlesStore.__serverArticlesCacheTime = Date.now();
-      return sqlArticles;
+      return currentSqlArticles;
     }
   } catch (err) {
     recordMysqlFailure();

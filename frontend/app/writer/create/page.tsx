@@ -217,6 +217,7 @@ export default function CreatePostPage() {
   const [imageAlignment, setImageAlignment] = useState("Center (No Wrap)");
   const [imageFileName, setImageFileName] = useState("No file chosen");
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
 
   // Selected Image Element in Editor for Interactive Resizing & Adjustment
   const [selectedImg, setSelectedImg] = useState<HTMLImageElement | null>(null);
@@ -576,12 +577,13 @@ export default function CreatePostPage() {
 
     selectedImgRef.current = img;
     setSelectedImg(img);
-    const currentWidth = img.offsetWidth || parseInt(img.style.width) || 450;
+    const currentWidth = img.offsetWidth || parseInt(parentFig.style.maxWidth || img.style.width || "450") || 450;
     setSelectedImgWidth(currentWidth);
 
-    if (parentFig.style.float === "left" || img.style.float === "left") {
+    const figFloat = parentFig.style.float || img.style.float || (typeof window !== "undefined" ? window.getComputedStyle(parentFig).float : "");
+    if (figFloat === "left") {
       setSelectedImgAlign("left");
-    } else if (parentFig.style.float === "right" || img.style.float === "right") {
+    } else if (figFloat === "right") {
       setSelectedImgAlign("right");
     } else {
       setSelectedImgAlign("center");
@@ -599,10 +601,10 @@ export default function CreatePostPage() {
     const target = e.target as HTMLElement;
     if (!target) return;
 
-    // Don't deselect if clicking inside the image resize control bar or handles
+    // Don't deselect if clicking inside the image resize control bar or handles or if modal is open
     const resizeBar = document.getElementById("img-resize-toolbar");
     const isHandle = target.getAttribute("data-resize-handle") === "true";
-    if ((resizeBar && resizeBar.contains(target)) || isHandle) return;
+    if ((resizeBar && resizeBar.contains(target)) || isHandle || showImageModal) return;
 
     const img = target.tagName === "IMG"
       ? (target as HTMLImageElement)
@@ -771,23 +773,37 @@ export default function CreatePostPage() {
   const handleStartResizeDrag = (e: React.MouseEvent, handlePos: string) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!selectedImg) return;
+    const img = selectedImg || selectedImgRef.current;
+    if (!img) return;
 
     const startX = e.clientX;
-    const startWidth = selectedImg.offsetWidth;
-    document.body.style.cursor = handlePos.includes("left") || handlePos.includes("right") ? "ew-resize" : "nwse-resize";
+    const startWidth = img.offsetWidth || selectedImgWidth;
+    let cursor = "ew-resize";
+    if (handlePos === "top-left" || handlePos === "bottom-right") {
+      cursor = "nwse-resize";
+    } else if (handlePos === "top-right" || handlePos === "bottom-left") {
+      cursor = "nesw-resize";
+    }
+    document.body.style.cursor = cursor;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       let diffX = moveEvent.clientX - startX;
       if (handlePos.includes("left")) diffX = -diffX;
-      const newWidth = Math.max(120, Math.min(1100, startWidth + diffX));
-      const parentFigure = (selectedImg.closest("figure") as HTMLElement) || selectedImg;
-      parentFigure.style.maxWidth = `${newWidth}px`;
-      parentFigure.style.width = "100%";
-      selectedImg.style.width = "100%";
-      selectedImg.style.display = "block";
+      const newWidth = Math.max(120, Math.min(1200, startWidth + diffX));
+      let parentFigure = img.closest("figure") as HTMLElement | null;
+      if (!parentFigure && editorRef.current) {
+        parentFigure = document.createElement("figure");
+        parentFigure.setAttribute("contenteditable", "false");
+        img.parentNode?.insertBefore(parentFigure, img);
+        parentFigure.appendChild(img);
+      }
+      const targetFig = parentFigure || img;
+      targetFig.style.setProperty("max-width", `${newWidth}px`, "important");
+      targetFig.style.setProperty("width", "100%", "important");
+      img.style.setProperty("width", "100%", "important");
+      img.style.setProperty("display", "block", "important");
       setSelectedImgWidth(newWidth);
-      updateImgBoundingRect();
+      updateImgBoundingRect(img);
     };
 
     const handleMouseUp = () => {
@@ -797,6 +813,7 @@ export default function CreatePostPage() {
       if (editorRef.current) {
         setContent(editorRef.current.innerHTML);
       }
+      setTimeout(() => updateImgBoundingRect(img), 50);
     };
 
     window.addEventListener("mousemove", handleMouseMove);
@@ -804,14 +821,32 @@ export default function CreatePostPage() {
   };
 
   const handleResizeImage = (widthPx: number) => {
-    if (selectedImg) {
-      const parentFigure = (selectedImg.closest("figure") as HTMLElement) || selectedImg;
-      parentFigure.style.maxWidth = `${widthPx}px`;
-      parentFigure.style.width = "100%";
-      selectedImg.style.width = "100%";
-      selectedImg.style.display = "block";
+    const img = selectedImg || selectedImgRef.current;
+    if (img) {
+      let parentFigure = img.closest("figure") as HTMLElement | null;
+      if (!parentFigure && editorRef.current) {
+        parentFigure = document.createElement("figure");
+        parentFigure.setAttribute("contenteditable", "false");
+        img.parentNode?.insertBefore(parentFigure, img);
+        parentFigure.appendChild(img);
+      }
+      const targetFig = parentFigure || img;
+      const maxW = widthPx >= 850 ? "100%" : `${widthPx}px`;
+      targetFig.style.setProperty("max-width", maxW, "important");
+      targetFig.style.setProperty("width", "100%", "important");
+      img.style.setProperty("width", "100%", "important");
+      img.style.setProperty("display", "block", "important");
+
+      // If switching to full width, ensure float is cleared so it displays cleanly across the column
+      if (widthPx >= 850) {
+        targetFig.style.setProperty("float", "none", "important");
+        targetFig.style.setProperty("margin", "1.25rem auto", "important");
+        targetFig.style.setProperty("clear", "both", "important");
+        setSelectedImgAlign("center");
+      }
+
       setSelectedImgWidth(widthPx);
-      setTimeout(updateImgBoundingRect, 50);
+      setTimeout(() => updateImgBoundingRect(img), 50);
       if (editorRef.current) {
         setContent(editorRef.current.innerHTML);
       }
@@ -819,30 +854,51 @@ export default function CreatePostPage() {
   };
 
   const handleSetImageAlignment = (alignment: "left" | "center" | "right") => {
-    if (selectedImg) {
-      const parentFigure = (selectedImg.closest("figure") as HTMLElement) || selectedImg;
+    const img = selectedImg || selectedImgRef.current;
+    if (img) {
+      let parentFigure = img.closest("figure") as HTMLElement | null;
+      if (!parentFigure && editorRef.current) {
+        parentFigure = document.createElement("figure");
+        parentFigure.setAttribute("contenteditable", "false");
+        img.parentNode?.insertBefore(parentFigure, img);
+        parentFigure.appendChild(img);
+      }
+      const targetFig = parentFigure || img;
       setSelectedImgAlign(alignment);
 
       if (alignment === "left") {
-        parentFigure.style.float = "left";
-        parentFigure.style.margin = "0.5rem 1.25rem 0.5rem 0";
-        parentFigure.style.display = "inline-block";
-        selectedImg.style.display = "block";
-        selectedImg.style.width = "100%";
+        targetFig.style.setProperty("float", "left", "important");
+        targetFig.style.setProperty("margin", "0.5rem 1.25rem 0.5rem 0", "important");
+        targetFig.style.setProperty("display", "block", "important");
+        targetFig.style.setProperty("clear", "none", "important");
+        img.style.setProperty("display", "block", "important");
+        img.style.setProperty("width", "100%", "important");
+        const currentMaxW = targetFig.style.maxWidth;
+        if (!currentMaxW || currentMaxW === "100%" || currentMaxW === "900px") {
+          targetFig.style.setProperty("max-width", "50%", "important");
+          setSelectedImgWidth(450);
+        }
       } else if (alignment === "right") {
-        parentFigure.style.float = "right";
-        parentFigure.style.margin = "0.5rem 0 0.5rem 1.25rem";
-        parentFigure.style.display = "inline-block";
-        selectedImg.style.display = "block";
-        selectedImg.style.width = "100%";
+        targetFig.style.setProperty("float", "right", "important");
+        targetFig.style.setProperty("margin", "0.5rem 0 0.5rem 1.25rem", "important");
+        targetFig.style.setProperty("display", "block", "important");
+        targetFig.style.setProperty("clear", "none", "important");
+        img.style.setProperty("display", "block", "important");
+        img.style.setProperty("width", "100%", "important");
+        const currentMaxW = targetFig.style.maxWidth;
+        if (!currentMaxW || currentMaxW === "100%" || currentMaxW === "900px") {
+          targetFig.style.setProperty("max-width", "50%", "important");
+          setSelectedImgWidth(450);
+        }
       } else {
-        parentFigure.style.float = "none";
-        parentFigure.style.margin = "1.25rem auto";
-        parentFigure.style.display = "block";
-        selectedImg.style.display = "block";
-        selectedImg.style.width = "100%";
+        targetFig.style.setProperty("float", "none", "important");
+        targetFig.style.setProperty("margin", "1.25rem auto", "important");
+        targetFig.style.setProperty("display", "block", "important");
+        targetFig.style.setProperty("clear", "both", "important");
+        img.style.setProperty("display", "block", "important");
+        img.style.setProperty("width", "100%", "important");
       }
-      setTimeout(updateImgBoundingRect, 50);
+      setTimeout(() => updateImgBoundingRect(img), 50);
       if (editorRef.current) {
         setContent(editorRef.current.innerHTML);
       }
@@ -850,35 +906,55 @@ export default function CreatePostPage() {
   };
 
   const handleMoveImageUp = () => {
-    if (selectedImg) {
-      const elem = selectedImg.closest("figure") || selectedImg;
-      const prev = elem.previousElementSibling;
-      if (prev) {
-        prev.before(elem);
-        setTimeout(updateImgBoundingRect, 50);
-        if (editorRef.current) setContent(editorRef.current.innerHTML);
+    const img = selectedImg || selectedImgRef.current;
+    if (!img || !editorRef.current) return;
+    const elem = (img.closest("figure") as HTMLElement) || img;
+
+    // If nested inside another container, hoist it to editorRef.current
+    if (elem.parentElement && elem.parentElement !== editorRef.current && editorRef.current.contains(elem.parentElement)) {
+      const parent = elem.parentElement;
+      parent.before(elem);
+      if (!parent.textContent?.trim() && !parent.querySelector("img")) {
+        parent.remove();
       }
+    }
+
+    const prev = elem.previousElementSibling;
+    if (prev) {
+      prev.before(elem);
+      setTimeout(() => updateImgBoundingRect(img), 50);
+      if (editorRef.current) setContent(editorRef.current.innerHTML);
     }
   };
 
   const handleMoveImageDown = () => {
-    if (selectedImg) {
-      const elem = selectedImg.closest("figure") || selectedImg;
-      const next = elem.nextElementSibling;
-      if (next) {
-        next.after(elem);
-        setTimeout(updateImgBoundingRect, 50);
-        if (editorRef.current) setContent(editorRef.current.innerHTML);
+    const img = selectedImg || selectedImgRef.current;
+    if (!img || !editorRef.current) return;
+    const elem = (img.closest("figure") as HTMLElement) || img;
+
+    // If nested inside another container, hoist it to editorRef.current
+    if (elem.parentElement && elem.parentElement !== editorRef.current && editorRef.current.contains(elem.parentElement)) {
+      const parent = elem.parentElement;
+      parent.after(elem);
+      if (!parent.textContent?.trim() && !parent.querySelector("img")) {
+        parent.remove();
       }
+    }
+
+    const next = elem.nextElementSibling;
+    if (next) {
+      next.after(elem);
+      setTimeout(() => updateImgBoundingRect(img), 50);
+      if (editorRef.current) setContent(editorRef.current.innerHTML);
     }
   };
 
   const handleDeleteSelectedImage = () => {
-    if (selectedImg) {
-      const parentFigure = selectedImg.closest("figure") || selectedImg;
+    const img = selectedImg || selectedImgRef.current;
+    if (img) {
+      const parentFigure = (img.closest("figure") as HTMLElement) || img;
       parentFigure.remove();
-      setSelectedImg(null);
-      setImgBoundingRect(null);
+      deselectImageElement();
       if (editorRef.current) {
         setContent(editorRef.current.innerHTML);
       }
@@ -888,9 +964,12 @@ export default function CreatePostPage() {
   const handleEditSelectedImage = (targetImg?: HTMLImageElement | null) => {
     const imgToEdit = targetImg || selectedImg || selectedImgRef.current;
     if (imgToEdit) {
+      selectedImgRef.current = imgToEdit;
+      setSelectedImg(imgToEdit);
       const srcVal = imgToEdit.src || "";
       setModalImageUrl(srcVal);
       setImageUrl(srcVal);
+      setImageFileName(srcVal.split("/").pop()?.split("?")[0] || "Article Image");
       const kw = imgToEdit.getAttribute("data-keywords") || imgToEdit.getAttribute("data-seo-keywords") || "";
       if (kw) {
         setImageKeywords(kw.split(",").map((s) => s.trim()).filter(Boolean));
@@ -929,19 +1008,25 @@ export default function CreatePostPage() {
           setImageCredit("");
         }
 
-        if (fig.style.float === "left") setImageAlignment("Left (Wrap Text)");
-        else if (fig.style.float === "right") setImageAlignment("Right (Wrap Text)");
+        const figFloat = fig.style.float || imgToEdit.style.float || (typeof window !== "undefined" ? window.getComputedStyle(fig).float : "");
+        if (figFloat === "left") setImageAlignment("Left (Wrap Text)");
+        else if (figFloat === "right") setImageAlignment("Right (Wrap Text)");
         else setImageAlignment("Center (No Wrap)");
 
-        if (fig.style.maxWidth === "300px" || (imgToEdit.offsetWidth && imgToEdit.offsetWidth <= 320)) {
+        const figMaxW = fig.style.maxWidth || "";
+        const currentW = imgToEdit.offsetWidth || parseInt(figMaxW) || 0;
+        if (figMaxW === "300px" || figMaxW === "250px" || (currentW > 0 && currentW <= 350)) {
           setImageSize("Small (Width: 300px)");
-        } else if (fig.style.maxWidth === "650px" || fig.style.maxWidth === "450px" || (imgToEdit.offsetWidth && imgToEdit.offsetWidth < 700)) {
+        } else if (figMaxW === "450px" || figMaxW === "480px" || figMaxW === "650px" || (currentW > 350 && currentW < 700)) {
           setImageSize("Medium (Width: 450px)");
         } else {
           setImageSize("Full Width (100%)");
         }
       } else {
         setImageCaption(imgToEdit.alt || "");
+        setImageCredit("");
+        setImageAlignment("Center (No Wrap)");
+        setImageSize("Full Width (100%)");
       }
       setShowImageModal(true);
     }
@@ -989,6 +1074,14 @@ export default function CreatePostPage() {
       setImageUrl(finalUrl);
     }
 
+    const finalKeywords = [...imageKeywords];
+    const pendingKw = imageKeywordInput.trim().replace(/,$/, "").trim();
+    if (pendingKw && finalKeywords.length < 4 && !finalKeywords.includes(pendingKw)) {
+      finalKeywords.push(pendingKw);
+    }
+    setImageKeywords(finalKeywords);
+    setImageKeywordInput("");
+
     let rawCap = imageCaption.trim();
     let rawCred = imageCredit.trim();
 
@@ -1020,20 +1113,26 @@ export default function CreatePostPage() {
     }
 
     const captionInnerHtml = captionText;
-    const kwString = imageKeywords.join(", ");
+    const kwString = finalKeywords.join(", ");
 
-    if (selectedImg) {
+    const imgToUpdate = (selectedImg && editorRef.current?.contains(selectedImg))
+      ? selectedImg
+      : (selectedImgRef.current && editorRef.current?.contains(selectedImgRef.current))
+        ? selectedImgRef.current
+        : null;
+
+    if (imgToUpdate) {
       // UPDATE EXISTING SELECTED IMAGE
-      selectedImg.src = finalUrl;
-      selectedImg.alt = rawCap || kwString || "Article Image";
+      imgToUpdate.src = finalUrl;
+      imgToUpdate.alt = rawCap || kwString || "Article Image";
       if (kwString) {
-        selectedImg.setAttribute("data-keywords", kwString);
-        selectedImg.setAttribute("data-seo-keywords", kwString);
+        imgToUpdate.setAttribute("data-keywords", kwString);
+        imgToUpdate.setAttribute("data-seo-keywords", kwString);
       } else {
-        selectedImg.removeAttribute("data-keywords");
-        selectedImg.removeAttribute("data-seo-keywords");
+        imgToUpdate.removeAttribute("data-keywords");
+        imgToUpdate.removeAttribute("data-seo-keywords");
       }
-      selectedImg.style.cssText = "width: 100%; display: block; border-radius: 0; object-fit: cover;";
+      imgToUpdate.style.cssText = "width: 100%; display: block; border-radius: 0; object-fit: cover; user-select: none;";
 
       let maxWidthVal = "100%";
       let chosenWidthPx = 900;
@@ -1049,25 +1148,26 @@ export default function CreatePostPage() {
       }
 
       let chosenAlign: "left" | "center" | "right" = "center";
-      let alignStyle = `float: none; margin: 1.25rem auto; max-width: ${maxWidthVal}; width: 100%; display: block; clear: both;`;
+      let alignStyle = `float: none !important; margin: 1.25rem auto !important; max-width: ${maxWidthVal} !important; width: 100% !important; display: block !important; clear: both !important;`;
       if (imageAlignment.includes("Left")) {
         chosenAlign = "left";
         const floatMaxWidth = maxWidthVal === "100%" ? "50%" : maxWidthVal;
-        alignStyle = `float: left; margin: 0.5rem 1.25rem 0.5rem 0; max-width: ${floatMaxWidth}; width: 100%; display: block;`;
+        alignStyle = `float: left !important; margin: 0.5rem 1.25rem 0.5rem 0 !important; max-width: ${floatMaxWidth} !important; width: 100% !important; display: block !important; clear: none !important;`;
       } else if (imageAlignment.includes("Right")) {
         chosenAlign = "right";
         const floatMaxWidth = maxWidthVal === "100%" ? "50%" : maxWidthVal;
-        alignStyle = `float: right; margin: 0.5rem 0 0.5rem 1.25rem; max-width: ${floatMaxWidth}; width: 100%; display: block;`;
+        alignStyle = `float: right !important; margin: 0.5rem 0 0.5rem 1.25rem !important; max-width: ${floatMaxWidth} !important; width: 100% !important; display: block !important; clear: none !important;`;
       }
 
-      let fig = selectedImg.closest("figure");
+      let fig = imgToUpdate.closest("figure");
       if (!fig) {
         fig = document.createElement("figure");
         fig.setAttribute("contenteditable", "false");
-        selectedImg.parentNode?.insertBefore(fig, selectedImg);
-        fig.appendChild(selectedImg);
+        imgToUpdate.parentNode?.insertBefore(fig, imgToUpdate);
+        fig.appendChild(imgToUpdate);
       }
 
+      fig.setAttribute("contenteditable", "false");
       fig.style.cssText = `${alignStyle} text-align: left; user-select: none;`;
 
       let figcaption = fig.querySelector("figcaption");
@@ -1082,25 +1182,17 @@ export default function CreatePostPage() {
         figcaption.remove();
       }
 
+      setSelectedImg(imgToUpdate);
+      selectedImgRef.current = imgToUpdate;
       setSelectedImgAlign(chosenAlign);
       setSelectedImgWidth(chosenWidthPx);
 
       if (editorRef.current) {
         setContent(editorRef.current.innerHTML);
-        setTimeout(() => {
-          if (selectedImg && editorRef.current) {
-            const rect = selectedImg.getBoundingClientRect();
-            const parentRect = editorRef.current.getBoundingClientRect();
-            setImgBoundingRect({
-              top: rect.top - parentRect.top,
-              left: rect.left - parentRect.left,
-              width: rect.width,
-              height: rect.height,
-            });
-            setSelectedImgWidth(Math.round(rect.width));
-          }
-        }, 50);
       }
+      setTimeout(() => {
+        updateImgBoundingRect(imgToUpdate);
+      }, 50);
 
       setShowImageModal(false);
       return;
@@ -1112,13 +1204,13 @@ export default function CreatePostPage() {
     else if (imageSize.includes("Medium") || imageSize.includes("450")) maxWidthVal = "450px";
     else maxWidthVal = "100%";
 
-    let alignStyle = `float: none; margin: 1.25rem auto; max-width: ${maxWidthVal}; width: 100%; display: block; clear: both;`;
+    let alignStyle = `float: none !important; margin: 1.25rem auto !important; max-width: ${maxWidthVal} !important; width: 100% !important; display: block !important; clear: both !important;`;
     if (imageAlignment.includes("Left")) {
       const floatMaxWidth = maxWidthVal === "100%" ? "50%" : maxWidthVal;
-      alignStyle = `float: left; margin: 0.5rem 1.25rem 0.5rem 0; max-width: ${floatMaxWidth}; width: 100%; display: block;`;
+      alignStyle = `float: left !important; margin: 0.5rem 1.25rem 0.5rem 0 !important; max-width: ${floatMaxWidth} !important; width: 100% !important; display: block !important; clear: none !important;`;
     } else if (imageAlignment.includes("Right")) {
       const floatMaxWidth = maxWidthVal === "100%" ? "50%" : maxWidthVal;
-      alignStyle = `float: right; margin: 0.5rem 0 0.5rem 1.25rem; max-width: ${floatMaxWidth}; width: 100%; display: block;`;
+      alignStyle = `float: right !important; margin: 0.5rem 0 0.5rem 1.25rem !important; max-width: ${floatMaxWidth} !important; width: 100% !important; display: block !important; clear: none !important;`;
     }
 
     const captionHtml = captionText
@@ -1136,6 +1228,7 @@ export default function CreatePostPage() {
 
       const tempDiv = document.createElement("div");
       tempDiv.innerHTML = imgTag;
+      const insertedFig = tempDiv.querySelector("figure");
       const frag = document.createDocumentFragment();
       let node;
       while ((node = tempDiv.firstChild)) {
@@ -1178,6 +1271,16 @@ export default function CreatePostPage() {
 
       savedSelectionRangeRef.current = null;
       setContent(editorRef.current.innerHTML);
+
+      // Auto-select newly inserted image
+      if (insertedFig) {
+        const newImg = insertedFig.querySelector("img");
+        if (newImg) {
+          setTimeout(() => {
+            selectImageElement(newImg);
+          }, 50);
+        }
+      }
     }
 
     setShowImageModal(false);
@@ -1412,7 +1515,6 @@ export default function CreatePostPage() {
   };
 
   // Modals
-  const [showImageModal, setShowImageModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
 
 
@@ -1569,6 +1671,7 @@ function isWorldOrWorldSub(cat: string): boolean {
   };
 
   const savePost = async (status: "Published" | "Draft" | "Pending review", overrideContent?: string) => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
     let bodyContent = overrideContent !== undefined ? overrideContent : content;
 
@@ -1788,38 +1891,36 @@ function isWorldOrWorldSub(cat: string): boolean {
         await saveArticleToServer(postToSave);
         resetArticlesFetchCache();
 
-        // Trigger targeted email distribution if configured — await before navigation
+        // Trigger targeted email distribution if configured — run in background asynchronously without blocking UI
         if (status === "Published" && (targetedRecipients.length > 0 || broadcastToSubscribers)) {
           const artId = String(postToSave.id);
           if (!distributionSentArticleIds.has(artId)) {
             setDistributionSentArticleIds(prev => new Set(prev).add(artId));
-            try {
-              const distRes = await fetch("/api/admin/articles/send-distribution", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
+            fetch("/api/admin/articles/send-distribution", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              credentials: "include",
+              body: JSON.stringify({
+                article: {
+                  title: postToSave.title,
+                  summary: cardSummary || postToSave.summary || postToSave.subheading || "",
+                  category: postToSave.category || "General",
+                  authorName: postToSave.authorName || "London BigBen Network",
+                  slug: postToSave.slug,
+                  imageUrl: postToSave.imageUrl || "",
+                  readTime: postToSave.readDuration || "5 min read",
                 },
-                credentials: "include",
-                body: JSON.stringify({
-                  article: {
-                    title: postToSave.title,
-                    summary: cardSummary || postToSave.summary || postToSave.subheading || "",
-                    category: postToSave.category || "General",
-                    authorName: postToSave.authorName || "London BigBen Network",
-                    slug: postToSave.slug,
-                    imageUrl: postToSave.imageUrl || "",
-                    readTime: postToSave.readDuration || "5 min read",
-                  },
-                  recipients: targetedRecipients,
-                  broadcastToSubscribers,
-                  baseUrl: typeof window !== "undefined" ? window.location.origin : undefined,
-                }),
-              });
-              const distData = await distRes.json().catch(() => ({ sent: 0, total: 0 }));
-              console.log(`[Distribution] Article email sent: ${distData?.sent || 0}/${distData?.total || 0} recipients`, distData);
-            } catch (distErr) {
-              console.error("[Distribution] Email send error:", distErr);
-            }
+                recipients: targetedRecipients,
+                broadcastToSubscribers,
+                baseUrl: typeof window !== "undefined" ? window.location.origin : undefined,
+              }),
+            }).then(r => r.json()).then(distData => {
+              console.log(`[Distribution] Article email sent: ${distData?.sent || 0}/${distData?.total || 0} recipients`);
+            }).catch(distErr => {
+              console.warn("[Distribution] Email send error:", distErr);
+            });
           }
         }
       } catch (err) {
@@ -1867,6 +1968,7 @@ function isWorldOrWorldSub(cat: string): boolean {
   };
 
   const handleApprovePublish = async () => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
     setSubmittingAction("publish");
     try {
@@ -1958,6 +2060,10 @@ function isWorldOrWorldSub(cat: string): boolean {
         status: "Published",
         published_at: nowIso,
         publishedAt: nowIso,
+        approved_at: nowIso,
+        approvedAt: nowIso,
+        admin_published_at: nowIso,
+        adminPublishedAt: nowIso,
         updated_at: nowIso,
         updatedAt: nowIso,
         date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
@@ -1988,47 +2094,42 @@ function isWorldOrWorldSub(cat: string): boolean {
       await saveArticleToServer(approvedArticle as any);
       resetArticlesFetchCache();
 
-      // Trigger targeted email distribution if configured — await before navigation
+      // Trigger targeted email distribution if configured — run asynchronously in background without blocking UI
       if (targetedRecipients.length > 0 || broadcastToSubscribers) {
         const artId = String(approvedArticle.id);
         if (!distributionSentArticleIds.has(artId)) {
           setDistributionSentArticleIds(prev => new Set(prev).add(artId));
-          try {
-            const distRes = await fetch("/api/admin/articles/send-distribution", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
+          fetch("/api/admin/articles/send-distribution", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            credentials: "include",
+            body: JSON.stringify({
+              article: {
+                title: approvedArticle.title,
+                summary: cardSummary || approvedArticle.summary || approvedArticle.subheading || "",
+                category: approvedArticle.category || "General",
+                authorName: approvedArticle.authorName || "London BigBen Network",
+                slug: approvedArticle.slug,
+                imageUrl: approvedArticle.imageUrl || "",
+                readTime: approvedArticle.readDuration || "5 min read",
               },
-              credentials: "include",
-              body: JSON.stringify({
-                article: {
-                  title: approvedArticle.title,
-                  summary: cardSummary || approvedArticle.summary || approvedArticle.subheading || "",
-                  category: approvedArticle.category || "General",
-                  authorName: approvedArticle.authorName || "London BigBen Network",
-                  slug: approvedArticle.slug,
-                  imageUrl: approvedArticle.imageUrl || "",
-                  readTime: approvedArticle.readDuration || "5 min read",
-                },
-                recipients: targetedRecipients,
-                broadcastToSubscribers,
-                baseUrl: typeof window !== "undefined" ? window.location.origin : undefined,
-              }),
-            });
-            const distData = await distRes.json().catch(() => ({ sent: 0, total: 0 }));
-            console.log(`[Distribution] Article email sent: ${distData?.sent || 0}/${distData?.total || 0} recipients`, distData);
-          } catch (distErr) {
-            console.error("[Distribution] Email send error:", distErr);
-          }
+              recipients: targetedRecipients,
+              broadcastToSubscribers,
+              baseUrl: typeof window !== "undefined" ? window.location.origin : undefined,
+            }),
+          }).then(r => r.json()).then(distData => {
+            console.log(`[Distribution] Article email sent: ${distData?.sent || 0}/${distData?.total || 0} recipients`);
+          }).catch(distErr => {
+            console.warn("[Distribution] Email send error:", distErr);
+          });
         }
       }
 
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("dj_articles_updated"));
       }
-      try {
-        router.refresh();
-      } catch (e) {}
 
       localStorage.setItem("dj_toast", `✓ Article "${liveTitle.slice(0, 35)}..." approved and published!`);
       localStorage.removeItem("dj_editing_post");
@@ -2776,9 +2877,10 @@ function isWorldOrWorldSub(cat: string): boolean {
 
                   <button
                     type="button"
-                    onClick={() => handleResizeImage(250)}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => handleResizeImage(300)}
                     className={`px-2 py-0.5 rounded text-xs font-bold transition-colors cursor-pointer ${
-                      selectedImgWidth <= 300
+                      selectedImgWidth <= 350
                         ? "bg-blue-600 text-white"
                         : "hover:bg-slate-800 text-slate-200"
                     }`}
@@ -2788,9 +2890,10 @@ function isWorldOrWorldSub(cat: string): boolean {
 
                   <button
                     type="button"
-                    onClick={() => handleResizeImage(480)}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => handleResizeImage(450)}
                     className={`px-2 py-0.5 rounded text-xs font-bold transition-colors cursor-pointer ${
-                      selectedImgWidth > 300 && selectedImgWidth < 700
+                      selectedImgWidth > 350 && selectedImgWidth < 700
                         ? "bg-blue-600 text-white"
                         : "hover:bg-slate-800 text-slate-200"
                     }`}
@@ -2800,6 +2903,7 @@ function isWorldOrWorldSub(cat: string): boolean {
 
                   <button
                     type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => handleResizeImage(900)}
                     className={`px-2 py-0.5 rounded text-xs font-bold transition-colors cursor-pointer ${
                       selectedImgWidth >= 700
@@ -2814,6 +2918,7 @@ function isWorldOrWorldSub(cat: string): boolean {
 
                   <button
                     type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => handleSetImageAlignment("left")}
                     className={`p-1 rounded transition-colors cursor-pointer ${
                       selectedImgAlign === "left"
@@ -2827,6 +2932,7 @@ function isWorldOrWorldSub(cat: string): boolean {
 
                   <button
                     type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => handleSetImageAlignment("center")}
                     className={`p-1 rounded transition-colors cursor-pointer ${
                       selectedImgAlign === "center"
@@ -2840,6 +2946,7 @@ function isWorldOrWorldSub(cat: string): boolean {
 
                   <button
                     type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => handleSetImageAlignment("right")}
                     className={`p-1 rounded transition-colors cursor-pointer ${
                       selectedImgAlign === "right"
@@ -2855,6 +2962,7 @@ function isWorldOrWorldSub(cat: string): boolean {
 
                   <button
                     type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => handleEditSelectedImage()}
                     className="p-1 px-2 hover:bg-slate-800 bg-amber-500/20 text-amber-300 hover:text-amber-200 border border-amber-500/30 rounded transition-colors cursor-pointer flex items-center gap-1 font-bold"
                     title="Edit / Replace Image & Caption"
@@ -2867,6 +2975,7 @@ function isWorldOrWorldSub(cat: string): boolean {
 
                   <button
                     type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={handleMoveImageUp}
                     className="p-1 hover:bg-slate-800 rounded text-slate-300 transition-colors cursor-pointer"
                     title="Move Up"
@@ -2876,6 +2985,7 @@ function isWorldOrWorldSub(cat: string): boolean {
 
                   <button
                     type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={handleMoveImageDown}
                     className="p-1 hover:bg-slate-800 rounded text-slate-300 transition-colors cursor-pointer"
                     title="Move Down"
@@ -2887,6 +2997,7 @@ function isWorldOrWorldSub(cat: string): boolean {
 
                   <button
                     type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={handleDeleteSelectedImage}
                     className="p-1 hover:bg-rose-950/80 text-rose-400 hover:text-rose-300 rounded transition-colors cursor-pointer"
                     title="Delete Image"
@@ -3554,12 +3665,19 @@ function isWorldOrWorldSub(cat: string): boolean {
                   value={imageKeywordInput}
                   onChange={(e) => setImageKeywordInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if ((e.key === "Enter" || e.key === ",") && imageKeywordInput.trim() && imageKeywords.length < 4) {
+                    if (e.key === "Enter" || e.key === ",") {
                       e.preventDefault();
                       const kw = imageKeywordInput.trim().replace(/,$/, "").trim();
-                      if (kw && !imageKeywords.includes(kw)) {
+                      if (kw && imageKeywords.length < 4 && !imageKeywords.includes(kw)) {
                         setImageKeywords([...imageKeywords, kw]);
                       }
+                      setImageKeywordInput("");
+                    }
+                  }}
+                  onBlur={() => {
+                    const kw = imageKeywordInput.trim().replace(/,$/, "").trim();
+                    if (kw && imageKeywords.length < 4 && !imageKeywords.includes(kw)) {
+                      setImageKeywords([...imageKeywords, kw]);
                       setImageKeywordInput("");
                     }
                   }}

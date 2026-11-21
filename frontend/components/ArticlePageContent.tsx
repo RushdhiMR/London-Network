@@ -13,6 +13,7 @@ import { getUserProfile, getAuthorAvatarByNameOrEmail, getAuthorFullProfileByNam
 import { useLiveArticles, useLiveAdSlots, formatAdDimensions, isDuplicateAdImage, isTrendingNow, articleBelongsToCategory, articleMatchesMainCategory } from "@/lib/articlesSync";
 import { useAuth } from "@/lib/auth-context";
 import { dispatchPageDataReady } from "@/components/GlobalPageLoader";
+import PageSkeletonLoader from "@/components/PageSkeletonLoader";
 
 interface ArticleReply {
   id: string;
@@ -73,6 +74,12 @@ interface ArticleData {
   rawContent?: string;
   keyPoints?: string[];
   key_points?: string[];
+  published_at?: string;
+  publishedAt?: string;
+  approved_at?: string;
+  approvedAt?: string;
+  admin_published_at?: string;
+  adminPublishedAt?: string;
 }
 
 interface SidebarItem {
@@ -555,7 +562,13 @@ function ArticlePageContentInner({
     date: newsData?.date || "",
     image: newsData?.image || "",
     caption: newsData?.caption || "",
-    sections: newsData?.sections || []
+    sections: newsData?.sections || [],
+    published_at: (newsData as any)?.published_at,
+    publishedAt: (newsData as any)?.publishedAt,
+    approved_at: (newsData as any)?.approved_at,
+    approvedAt: (newsData as any)?.approvedAt,
+    admin_published_at: (newsData as any)?.admin_published_at,
+    adminPublishedAt: (newsData as any)?.adminPublishedAt
   });
   const { articles: liveArticles, loading: liveArticlesLoading } = useLiveArticles();
 
@@ -626,7 +639,13 @@ function ArticlePageContentInner({
         authorBio: authInfo.bio || newsData.authorBio,
         category: (newsData.category && newsData.category.toLowerCase() !== "article" ? newsData.category : "") || (parent?.name && parent.name.toLowerCase() !== "article" ? parent.name : "") || (category && category.toLowerCase() !== "article" ? category : "") || "NEWS",
         subcategories: newsData.subcategories || (subName ? [subName] : []),
-        tags: resolveArticleTags(newsData)
+        tags: resolveArticleTags(newsData),
+        published_at: (newsData as any)?.published_at,
+        publishedAt: (newsData as any)?.publishedAt,
+        approved_at: (newsData as any)?.approved_at,
+        approvedAt: (newsData as any)?.approvedAt,
+        admin_published_at: (newsData as any)?.admin_published_at,
+        adminPublishedAt: (newsData as any)?.adminPublishedAt
       });
     }
   }, [pathname, subcategory, newsData]);
@@ -1295,6 +1314,12 @@ function ArticlePageContentInner({
             })(),
             rawContent: matched.content || "",
             keyPoints: (matched as any).key_points || (matched as any).keyPoints,
+            published_at: (matched as any).published_at || (newsData as any)?.published_at,
+            publishedAt: (matched as any).publishedAt || (newsData as any)?.publishedAt,
+            approved_at: (matched as any).approved_at || (newsData as any)?.approved_at,
+            approvedAt: (matched as any).approvedAt || (newsData as any)?.approvedAt,
+            admin_published_at: (matched as any).admin_published_at || (newsData as any)?.admin_published_at,
+            adminPublishedAt: (matched as any).adminPublishedAt || (newsData as any)?.adminPublishedAt,
             sections: [
               {
                 heading: "",
@@ -2102,19 +2127,7 @@ function ArticlePageContentInner({
 
       {/* Show loading skeleton until live article data is resolved to prevent stale/old article flash */}
       {!isArticleResolved ? (
-        <div className="max-w-[1400px] mx-auto px-4 md:px-6 pt-6 pb-16 font-sans" aria-hidden="true">
-          <div className="animate-pulse">
-            <div className="h-4 bg-gray-100 rounded w-48 mb-6" />
-            <div className="h-8 bg-gray-100 rounded w-3/4 mb-3" />
-            <div className="h-8 bg-gray-100 rounded w-1/2 mb-6" />
-            <div className="h-[420px] bg-gray-100 rounded mb-6" />
-            <div className="space-y-3">
-              <div className="h-4 bg-gray-100 rounded" />
-              <div className="h-4 bg-gray-100 rounded w-5/6" />
-              <div className="h-4 bg-gray-100 rounded w-4/6" />
-            </div>
-          </div>
-        </div>
+        <PageSkeletonLoader />
       ) : (
       <>
 
@@ -2320,11 +2333,61 @@ function ArticlePageContentInner({
               const authorSlug = cleanAuth.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
               const mainCat = (activeNewsData?.category && activeNewsData.category.toLowerCase() !== "article" ? activeNewsData.category : "") || parent?.name || "News";
 
-              let displayDate = (activeNewsData.date || "").trim();
-              if (displayDate && !displayDate.includes("GMT")) {
-                displayDate = `${displayDate} | 14:25 GMT`;
-              } else if (!displayDate) {
-                displayDate = "Recently | 14:25 GMT";
+              const adminPublishTimestamp = (
+                (activeNewsData as any)?.approved_at ||
+                (activeNewsData as any)?.approvedAt ||
+                (activeNewsData as any)?.admin_published_at ||
+                (activeNewsData as any)?.adminPublishedAt ||
+                (activeNewsData as any)?.published_at ||
+                (activeNewsData as any)?.publishedAt ||
+                (newsData as any)?.approved_at ||
+                (newsData as any)?.approvedAt ||
+                (newsData as any)?.admin_published_at ||
+                (newsData as any)?.adminPublishedAt ||
+                (newsData as any)?.published_at ||
+                (newsData as any)?.publishedAt
+              );
+
+              let displayDate = "";
+              if (adminPublishTimestamp) {
+                try {
+                  const d = new Date(adminPublishTimestamp);
+                  if (!isNaN(d.getTime())) {
+                    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                    const month = months[d.getUTCMonth()];
+                    const day = d.getUTCDate();
+                    const year = d.getUTCFullYear();
+                    const hours = String(d.getUTCHours()).padStart(2, "0");
+                    const mins = String(d.getUTCMinutes()).padStart(2, "0");
+                    displayDate = `${month} ${day}, ${year} | ${hours}:${mins} GMT`;
+                  }
+                } catch { }
+              }
+
+              if (!displayDate) {
+                const rawDate = (activeNewsData.date || "").trim();
+                if (rawDate && rawDate.includes("GMT")) {
+                  displayDate = rawDate;
+                } else if (rawDate) {
+                  try {
+                    const d = new Date(rawDate);
+                    if (!isNaN(d.getTime())) {
+                      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                      const month = months[d.getUTCMonth()];
+                      const day = d.getUTCDate();
+                      const year = d.getUTCFullYear();
+                      const hours = String(d.getUTCHours()).padStart(2, "0");
+                      const mins = String(d.getUTCMinutes()).padStart(2, "0");
+                      displayDate = `${month} ${day}, ${year} | ${hours}:${mins} GMT`;
+                    } else {
+                      displayDate = `${rawDate} | 14:25 GMT`;
+                    }
+                  } catch {
+                    displayDate = `${rawDate} | 14:25 GMT`;
+                  }
+                } else {
+                  displayDate = "Recently Published";
+                }
               }
 
               return (

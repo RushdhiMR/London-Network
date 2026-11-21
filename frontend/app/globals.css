@@ -184,21 +184,60 @@ p.has-drop-cap-box::first-letter {
   border-radius: 4px;
 }
 
-/* ARTICLE IMAGES - MUST ALWAYS BE FULL WIDTH OF THE CONTENT COLUMN */
+/* ARTICLE IMAGES - DEFAULT FULL WIDTH UNLESS FLOATED OR SIZED */
 .article-body-poppins figure,
-.article-body-poppins img,
+.article-body-poppins > img,
 .article-content-editor figure,
-.article-content-editor img,
 .prose figure,
-.prose img {
-  width: 100% !important;
-  max-width: 100% !important;
-  float: none !important;
-  clear: both !important;
-  margin-left: 0 !important;
-  margin-right: 0 !important;
+.prose > img {
+  width: 100%;
+  max-width: 100%;
+  float: none;
+  clear: both;
+  margin-left: auto;
+  margin-right: auto;
+  display: block;
+  border-radius: 0;
+}
+
+/* FLOATED & SIZED ARTICLE IMAGES */
+.article-content-editor figure[style*="float: left"],
+.article-body-poppins figure[style*="float: left"],
+.prose figure[style*="float: left"] {
+  float: left !important;
+  clear: none !important;
+  margin: 0.5rem 1.25rem 0.5rem 0 !important;
   display: block !important;
-  border-radius: 0 !important;
+}
+
+.article-content-editor figure[style*="float: right"],
+.article-body-poppins figure[style*="float: right"],
+.prose figure[style*="float: right"] {
+  float: right !important;
+  clear: none !important;
+  margin: 0.5rem 0 0.5rem 1.25rem !important;
+  display: block !important;
+}
+
+.article-content-editor figure[style*="max-width: 300px"],
+.article-body-poppins figure[style*="max-width: 300px"],
+.prose figure[style*="max-width: 300px"] {
+  max-width: 300px !important;
+  width: 100% !important;
+}
+
+.article-content-editor figure[style*="max-width: 450px"],
+.article-body-poppins figure[style*="max-width: 450px"],
+.prose figure[style*="max-width: 450px"] {
+  max-width: 450px !important;
+  width: 100% !important;
+}
+
+.article-content-editor figure[style*="max-width: 50%"],
+.article-body-poppins figure[style*="max-width: 50%"],
+.prose figure[style*="max-width: 50%"] {
+  max-width: 50% !important;
+  width: 100% !important;
 }
 
 .article-body-poppins figure img,
@@ -317,3 +356,23 @@ body.translated-rtl {
     max-width: min(85vw, 1480px) !important;
   }
 }
+
+/* Custom dark scrollbar for admin sidebar */
+.admin-dark-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #334155 #0B111E;
+}
+.admin-dark-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.admin-dark-scrollbar::-webkit-scrollbar-track {
+  background: #0B111E;
+}
+.admin-dark-scrollbar::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 9999px;
+}
+.admin-dark-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+

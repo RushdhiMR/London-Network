@@ -1,6 +1,7 @@
 import { requireRole } from "@/lib/rbac";
 import { NextResponse } from 'next/server';
 import { DB } from '@/lib/db';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 
 export async function GET(request: Request) {
   try {
@@ -21,6 +22,16 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const clientIp = getClientIp(request);
+    const rateCheck = checkRateLimit(`contact-submission:${clientIp}`, 5, 10 * 60 * 1000);
+    if (!rateCheck.allowed) {
+      const waitMinutes = Math.ceil(rateCheck.resetInMs / 60000);
+      return NextResponse.json(
+        { error: `Too many contact submissions. Please wait ${waitMinutes} minute(s) before submitting again.` },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { name, company, email, phone, whatsapp, type, message } = body;
 

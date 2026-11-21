@@ -74,7 +74,8 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCcw,
-  Move
+  Move,
+  Cloud
 } from "lucide-react";
 import { useLiveArticles, updateArticleStatusOnServer, deleteArticleOnServer, fetchArticlesFromServer, saveArticleToServer } from "@/lib/articlesSync";
 import { isEmailAlreadyRegistered, getUserProfile, saveUserProfile, resolveUserAvatar } from "@/lib/userProfiles";
@@ -193,6 +194,10 @@ interface BackupFileItem {
   fileSize: string;
   url?: string;
   storage?: string;
+  status?: string;
+  articlesCount?: number;
+  type?: 'daily' | 'manual';
+  timestamp?: number;
 }
 
 interface TrendingWordItem {
@@ -595,6 +600,10 @@ export default function AdminDashboardPage() {
       status: "Published",
       published_at: new Date().toISOString(),
       publishedAt: new Date().toISOString(),
+      approved_at: new Date().toISOString(),
+      approvedAt: new Date().toISOString(),
+      admin_published_at: new Date().toISOString(),
+      adminPublishedAt: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
@@ -932,6 +941,10 @@ export default function AdminDashboardPage() {
   };
 
   // Database Backups & Cloud Restore Snapshots State
+  const [lastBackupDate, setLastBackupDate] = useState<string>("Loading...");
+  const [nextScheduledBackup, setNextScheduledBackup] = useState<string>("00:00 GMT Daily");
+  const [isBackupLoading, setIsBackupLoading] = useState<boolean>(false);
+  const [isB2Connected, setIsB2Connected] = useState<boolean>(true);
   const [backupFiles, setBackupFiles] = useState<BackupFileItem[]>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -1458,6 +1471,8 @@ export default function AdminDashboardPage() {
       const snapshotPayload = {
         fileName: filename,
         articles,
+        pendingSubmissions,
+        writerSubmissions,
         newsletterSubscribers,
         workspaceUsers,
         contactSubmissions,
@@ -1503,6 +1518,15 @@ export default function AdminDashboardPage() {
   const handleRestoreBackup = (filename: string) => {
     if (confirm(`Are you sure you want to restore database state to snapshot "${filename}"? This will overwrite active database records.`)) {
       showNotification(`✓ Database successfully restored to snapshot "${filename}"!`);
+    }
+  };
+
+  const handleDownloadBackup = (bk: BackupFileItem) => {
+    if (bk.filename && bk.filename.endsWith(".zip")) {
+      window.open(`/api/admin/backups/download?filename=${encodeURIComponent(bk.filename)}`, "_blank");
+      showNotification(`Downloading backup archive "${bk.filename}"...`);
+    } else {
+      handleExportDatabase(bk);
     }
   };
 
@@ -2007,6 +2031,17 @@ export default function AdminDashboardPage() {
         }
       } catch (e) { }
 
+      // Sync Backblaze B2 Cloud Storage Connection
+      try {
+        const resUpload = await fetch("/api/upload");
+        if (resUpload.ok) {
+          const upData = await safeJson(resUpload);
+          if (upData && typeof upData.connected === "boolean") {
+            setIsB2Connected(upData.connected);
+          }
+        }
+      } catch (e) { }
+
       // 1. Synchronize Real Database Users
       try {
         let dbUsersList: any[] = [];
@@ -2496,13 +2531,15 @@ export default function AdminDashboardPage() {
               if (b && b.filename && !bkMap.has(b.filename)) bkMap.set(b.filename, b);
             });
 
-            const mergedBackups = Array.from(bkMap.values());
+            const mergedBackups = Array.from(bkMap.values()).slice(0, 5);
             if (mergedBackups.length > 0) {
               setBackupFiles(mergedBackups);
               try {
                 localStorage.setItem("dj_database_backups", JSON.stringify(mergedBackups));
               } catch (e) { }
             }
+            if (bkData.lastBackupDate) setLastBackupDate(bkData.lastBackupDate);
+            if (bkData.nextScheduledBackup) setNextScheduledBackup(bkData.nextScheduledBackup);
           }
         }
       } catch (err) {
@@ -2823,6 +2860,10 @@ export default function AdminDashboardPage() {
       status: "Published",
       published_at: new Date().toISOString(),
       publishedAt: new Date().toISOString(),
+      approved_at: new Date().toISOString(),
+      approvedAt: new Date().toISOString(),
+      admin_published_at: new Date().toISOString(),
+      adminPublishedAt: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
@@ -3408,11 +3449,51 @@ export default function AdminDashboardPage() {
         return;
       }
 
-      showNotification("Creating ZIP archive of published articles...");
+      setIsBackupLoading(true);
+      showNotification("Generating automated articles ZIP backup (5-day rolling retention)...");
+
+      // 1. Request server-side backup generation & retention update
+      try {
+        const res = await fetch("/api/admin/backups", {
+          method: "POST",
+          headers: getAdminHeaders({ "Content-Type": "application/json" }),
+          credentials: "include",
+          body: JSON.stringify({ action: "articles_zip" })
+        });
+
+        const resData = await res.json().catch(() => ({}));
+
+        if (res.ok && resData.success && resData.backup) {
+          // Trigger browser download via authenticated download API
+          const downloadUrl = `/api/admin/backups/download?filename=${encodeURIComponent(resData.backup.filename)}`;
+          const a = document.createElement("a");
+          a.href = downloadUrl;
+          a.download = resData.backup.filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+
+          if (Array.isArray(resData.backups)) {
+            setBackupFiles(resData.backups.slice(0, 5));
+            try {
+              localStorage.setItem("dj_database_backups", JSON.stringify(resData.backups.slice(0, 5)));
+            } catch (e) {}
+          }
+          if (resData.lastBackupDate) setLastBackupDate(resData.lastBackupDate);
+          if (resData.nextScheduledBackup) setNextScheduledBackup(resData.nextScheduledBackup);
+
+          showNotification(`✓ Article backup "${resData.backup.filename}" generated and downloaded! (Latest 5 backups retained)`);
+          setIsBackupLoading(false);
+          return;
+        }
+      } catch (serverErr) {
+        console.warn("Server backup API notice, switching to client-side fallback:", serverErr);
+      }
+
+      // 2. Client-side fallback if server API is unavailable
       const zip = new JSZip();
       const usedFilenames = new Set<string>();
 
-      // Create a .txt file for each published article
       articles.forEach((art, index) => {
         const rawTitle = art.title || `article_${art.id || index + 1}`;
         let cleanTitle = rawTitle
@@ -3432,24 +3513,19 @@ export default function AdminDashboardPage() {
         }
         usedFilenames.add(filename);
 
-        // Helper to strip HTML tags from content if present
         const rawContent = (art as any).content || art.description || "";
         const cleanContent = typeof rawContent === "string"
           ? rawContent.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim()
           : String(rawContent);
 
-        // Format image URL as a valid, working URL link
         const siteOrigin = typeof window !== "undefined" ? window.location.origin : "";
         let formattedImageUrl = (art.imageUrl || "").trim();
 
         if (formattedImageUrl.startsWith("http://") || formattedImageUrl.startsWith("https://")) {
-          // Already a direct CDN / Cloud Storage link
           formattedImageUrl = formattedImageUrl;
         } else if (formattedImageUrl.startsWith("/") && siteOrigin) {
-          // Local upload path
           formattedImageUrl = `${siteOrigin}${formattedImageUrl}`;
         } else if (art.slug || art.id) {
-          // Direct image API URL that serves the article's image directly
           formattedImageUrl = `${siteOrigin}/api/articles/image?slug=${art.slug || art.id}`;
         } else {
           formattedImageUrl = "N/A";
@@ -3482,7 +3558,6 @@ export default function AdminDashboardPage() {
         zip.file(filename, txtContent);
       });
 
-      // Add an Index / Summary Manifest text file
       const indexSummary = [
         "================================================================================",
         "LONDON BIGBEN NETWORK - PUBLISHED ARTICLES ARCHIVE",
@@ -3519,6 +3594,8 @@ export default function AdminDashboardPage() {
     } catch (err) {
       console.error("Backup articles ZIP error:", err);
       showNotification("Failed to generate articles ZIP backup.");
+    } finally {
+      setIsBackupLoading(false);
     }
   };
 
@@ -4146,6 +4223,10 @@ export default function AdminDashboardPage() {
           count: articles.length,
           items: articles
         },
+        pendingReviews: {
+          count: pendingSubmissions.length,
+          items: pendingSubmissions
+        },
         newsletterSubscribers: {
           count: newsletterSubscribers.length,
           items: newsletterSubscribers
@@ -4388,25 +4469,19 @@ export default function AdminDashboardPage() {
       >
 
         {/* LOGO HEADER */}
-        <div className="p-5 sm:p-6 border-b border-slate-800/80 flex-shrink-0">
+        <div className="p-4 sm:p-5 bg-white border-b border-slate-200 shadow-[0_4px_16px_rgba(0,0,0,0.45)] relative z-10 flex-shrink-0">
           <div className="flex items-center justify-between">
             <Link
               href="/"
               onClick={() => setIsMobileSidebarOpen(false)}
-              className="flex items-center gap-3 group min-w-0"
+              className="flex items-center group min-w-0 flex-1 py-0.5"
+              aria-label="London BigBen Network"
             >
-              <div className="relative shrink-0">
-                <img
-                  src="/logo.svg"
-                  alt="London BigBen Logo"
-                  className="w-10 h-10 object-contain rounded-xl shadow-md border border-white/10 group-hover:scale-105 transition-transform"
-                />
-              </div>
-              <div className="min-w-0">
-                <h1 className="font-sans font-extrabold text-sm tracking-tight text-white uppercase leading-none group-hover:text-[#D31220] transition-colors truncate">
-                  LONDON BIGBEN
-                </h1>
-              </div>
+              <img
+                src="/header_logo.svg"
+                alt="London BigBen Network"
+                className="h-8 sm:h-9 w-auto max-w-[195px] object-contain transition-transform group-hover:scale-[1.02]"
+              />
             </Link>
 
             {/* Button to Disappear / Hide Sidebar */}
@@ -4415,7 +4490,7 @@ export default function AdminDashboardPage() {
                 setIsSidebarOpen(false);
                 setIsMobileSidebarOpen(false);
               }}
-              className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors ml-2 shrink-0 cursor-pointer flex items-center justify-center"
+              className="text-slate-500 hover:text-slate-900 p-1.5 rounded-lg hover:bg-slate-100 transition-colors ml-2 shrink-0 cursor-pointer flex items-center justify-center"
               title="Disappear Sidebar"
               aria-label="Disappear Sidebar"
             >
@@ -4426,15 +4501,15 @@ export default function AdminDashboardPage() {
           <Link
             href="/"
             onClick={() => setIsMobileSidebarOpen(false)}
-            className="mt-4 flex items-center gap-2 text-slate-400 hover:text-white text-xs font-semibold transition-colors group px-2 py-1.5 rounded-lg hover:bg-slate-800/50"
+            className="mt-3 flex items-center gap-2 text-slate-500 hover:text-[#D31220] text-xs font-semibold transition-colors group px-1.5 py-1 rounded-lg hover:bg-slate-50"
           >
-            <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform text-slate-400 group-hover:text-white" />
+            <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform text-slate-400 group-hover:text-[#D31220]" />
             <span>Back to Live Website</span>
           </Link>
         </div>
 
         {/* SIDEBAR NAVIGATION ITEMS - SCROLLABLE IF CONTENT OVERFLOWS */}
-        <nav className="p-3 flex-1 space-y-1 overflow-y-auto">
+        <nav className="p-3 flex-1 space-y-1 overflow-y-auto admin-dark-scrollbar">
 
           {/* 1. Overview */}
           <button
@@ -4773,6 +4848,10 @@ export default function AdminDashboardPage() {
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 Live Control
               </span>
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EBF0F7] shadow-[inset_2px_2px_4px_#c8d2df,inset_-2px_-2px_4px_#ffffff] border border-white/60 text-[11px] font-bold font-sans ${isB2Connected ? "text-blue-700" : "text-slate-500"}`}>
+                <Cloud className={`w-3.5 h-3.5 ${isB2Connected ? "text-blue-600" : "text-slate-400"}`} />
+                {isB2Connected ? "Backblaze B2 Connected" : "Backblaze B2 Cloud"}
+              </span>
             </div>
             <p className="text-xs sm:text-sm font-medium text-slate-500 mt-1">
               Welcome back, <span className="text-slate-900 font-bold">{adminName}</span>! Here is your daily editorial overview.
@@ -4893,9 +4972,15 @@ export default function AdminDashboardPage() {
 
                   </div>
                 </div>
-                <span className="text-xs font-bold bg-[#EBF0F7] shadow-[inset_2px_2px_4px_#c8d2df,inset_-2px_-2px_4px_#ffffff] border border-white/60 text-slate-700 px-3.5 py-1.5 rounded-full font-sans self-start sm:self-auto">
-                  Pending Count: {pendingSubmissions.length}
-                </span>
+                <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                  <span className="text-[10.5px] font-bold bg-[#EBF0F7] shadow-[inset_2px_2px_4px_#c8d2df,inset_-2px_-2px_4px_#ffffff] border border-white/60 text-blue-700 px-3 py-1.5 rounded-full font-sans flex items-center gap-1.5">
+                    <Cloud className="w-3 h-3 text-blue-600" />
+                    Backblaze Synced
+                  </span>
+                  <span className="text-xs font-bold bg-[#EBF0F7] shadow-[inset_2px_2px_4px_#c8d2df,inset_-2px_-2px_4px_#ffffff] border border-white/60 text-slate-700 px-3.5 py-1.5 rounded-full font-sans">
+                    Pending Count: {pendingSubmissions.length}
+                  </span>
+                </div>
               </div>
 
               {/* Projects Table */}
@@ -5509,10 +5594,11 @@ export default function AdminDashboardPage() {
               <div className="flex items-center gap-3 flex-shrink-0">
                 <button
                   onClick={handleBackupArticlesZIP}
-                  className="flex items-center gap-2 bg-[#EBF0F7] shadow-[4px_4px_10px_#c8d2df,-4px_-4px_10px_#ffffff] active:shadow-[inset_2px_2px_5px_#c8d2df,inset_-2px_-2px_5px_#ffffff] border border-white/80 text-orange-700 hover:text-orange-800 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer uppercase tracking-wider font-mono"
+                  disabled={isBackupLoading}
+                  className="flex items-center gap-2 bg-[#EBF0F7] shadow-[4px_4px_10px_#c8d2df,-4px_-4px_10px_#ffffff] active:shadow-[inset_2px_2px_5px_#c8d2df,inset_-2px_-2px_5px_#ffffff] border border-white/80 text-orange-700 hover:text-orange-800 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer uppercase tracking-wider font-mono disabled:opacity-60"
                 >
                   <Download className="w-3.5 h-3.5 text-orange-600" />
-                  BACKUP ARTICLES (ZIP)
+                  {isBackupLoading ? "CREATING BACKUP..." : "BACKUP ARTICLES (ZIP)"}
                 </button>
 
                 <div className="flex items-center gap-2 bg-[#EBF0F7] shadow-[inset_3px_3px_6px_#c8d2df,inset_-3px_-3px_6px_#ffffff] border border-white/60 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-extrabold font-mono">
@@ -6868,19 +6954,28 @@ export default function AdminDashboardPage() {
                   Database Backups & Cloud Restore
                 </h2>
                 <p className="text-xs font-mono text-slate-400 mt-0.5">
-                  Automated and manual database snapshots stored on Backblaze B2.
+                  Automated daily article backups & cloud snapshots stored on Backblaze B2 (Rolling 5-Day Retention).
                 </p>
-
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
+                {/* BACKUP ARTICLES (ZIP) */}
+                <button
+                  onClick={handleBackupArticlesZIP}
+                  disabled={isBackupLoading}
+                  className="px-4 py-2 border border-orange-300 text-orange-800 bg-orange-50 hover:bg-orange-100 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer font-mono shadow-sm disabled:opacity-50"
+                >
+                  <Download className="w-3.5 h-3.5 text-orange-700" />
+                  {isBackupLoading ? "CREATING BACKUP..." : "BACKUP ARTICLES (ZIP)"}
+                </button>
+
                 {/* CREATE B2 BACKUP */}
                 <button
                   onClick={handleCreateB2Backup}
                   className="px-4 py-2 border border-amber-300 text-amber-800 bg-amber-50 hover:bg-amber-100 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer font-mono shadow-sm"
                 >
                   <Database className="w-3.5 h-3.5 text-amber-700" />
-                  CREATE B2 BACKUP
+                  CREATE B2 SNAPSHOT
                 </button>
 
                 {/* UPLOAD JSON RESTORE */}
@@ -6903,11 +6998,40 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
-            {/* Sub-header Informational Notice */}
-            <p className="text-xs text-slate-500 font-sans leading-relaxed">
-              Backups are automatically taken every 24 hours. The snapshots include all published articles, media links, admin & writer accounts, subscriber list, ad placements, and contact leads.
-            </p>
+            {/* Status & Next Scheduled Backup Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
+                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider font-mono">Last Successful Backup</span>
+                <p className="text-sm font-extrabold text-slate-900 font-mono mt-1">{lastBackupDate || "None recorded"}</p>
+                <span className="inline-flex items-center gap-1.5 mt-2 text-[10.5px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Verified & Ready
+                </span>
+              </div>
 
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
+                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider font-mono">Next Scheduled Backup</span>
+                <p className="text-sm font-extrabold text-slate-900 font-mono mt-1">{nextScheduledBackup || "00:00 GMT Daily"}</p>
+                <span className="inline-flex items-center gap-1.5 mt-2 text-[10.5px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                  <Clock className="w-3 h-3 text-blue-600" />
+                  Automatic Daily Schedule
+                </span>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
+                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider font-mono">Retention Policy</span>
+                <p className="text-sm font-extrabold text-slate-900 font-mono mt-1">Rolling 5-Day Archive</p>
+                <span className="inline-flex items-center gap-1.5 mt-2 text-[10.5px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                  <BadgeCheck className="w-3 h-3 text-amber-600" />
+                  Keeps latest 5 backups
+                </span>
+              </div>
+            </div>
+
+            {/* Informational Notice */}
+            <p className="text-xs text-slate-500 font-sans leading-relaxed">
+              Backups run automatically once every 24 hours at 00:00 GMT via server cron. Only the latest 5 successful daily archives are retained; Day 6 automatically replaces Day 1 while strictly preserving all database articles.
+            </p>
 
             {/* DATABASE BACKUPS TABLE */}
             <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
@@ -6915,26 +7039,34 @@ export default function AdminDashboardPage() {
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="border-b border-slate-200/60 bg-slate-50/80 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 font-mono">
-                      <th className="py-3.5 px-6">BACKUP FILE</th>
-                      <th className="py-3.5 px-4">BACKUP DATE</th>
+                      <th className="py-3.5 px-6">BACKUP ARCHIVE</th>
+                      <th className="py-3.5 px-4">BACKUP DATE & TIME</th>
                       <th className="py-3.5 px-4">FILE SIZE</th>
-                      <th className="py-3.5 px-6 text-right">ACTION DATE</th>
+                      <th className="py-3.5 px-4">STATUS</th>
+                      <th className="py-3.5 px-6 text-right">ACTIONS</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {backupFiles.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="py-12 text-center text-slate-400 font-mono">
-                          No backup snapshots found.
+                        <td colSpan={5} className="py-12 text-center text-slate-400 font-mono">
+                          No backup snapshots found. Click &quot;BACKUP ARTICLES (ZIP)&quot; to generate an initial archive.
                         </td>
                       </tr>
                     ) : (
-                      backupFiles.map((bk, idx) => (
+                      backupFiles.slice(0, 5).map((bk, idx) => (
                         <tr key={`backup-${bk.id}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
 
                           {/* BACKUP FILE */}
                           <td className="py-4 px-6 font-mono text-slate-900 font-extrabold text-xs whitespace-nowrap">
-                            {bk.filename}
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[9.5px] px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wider ${
+                                bk.filename.endsWith(".zip") ? "bg-orange-100 text-orange-800" : "bg-blue-100 text-blue-800"
+                              }`}>
+                                {bk.filename.endsWith(".zip") ? "ZIP" : "JSON"}
+                              </span>
+                              <span>{bk.filename}</span>
+                            </div>
                           </td>
 
                           {/* BACKUP DATE */}
@@ -6947,21 +7079,31 @@ export default function AdminDashboardPage() {
                             {bk.fileSize}
                           </td>
 
+                          {/* STATUS */}
+                          <td className="py-4 px-4 font-mono whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                              {bk.status || "Successful"}
+                            </span>
+                          </td>
+
                           {/* ACTIONS */}
                           <td className="py-4 px-6 whitespace-nowrap text-right">
                             <div className="flex items-center justify-end gap-2">
                               {/* RESTORE BUTTON */}
-                              <button
-                                onClick={() => handleRestoreBackup(bk.filename)}
-                                className="px-3 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-md font-mono text-[10px] font-extrabold uppercase tracking-wider transition-colors cursor-pointer"
-                              >
-                                RESTORE
-                              </button>
+                              {bk.filename.endsWith(".json") && (
+                                <button
+                                  onClick={() => handleRestoreBackup(bk.filename)}
+                                  className="px-3 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-md font-mono text-[10px] font-extrabold uppercase tracking-wider transition-colors cursor-pointer"
+                                >
+                                  RESTORE
+                                </button>
+                              )}
 
                               {/* DOWNLOAD BUTTON */}
                               <button
-                                onClick={() => handleExportDatabase(bk)}
-                                title="Download Backup .json File"
+                                onClick={() => handleDownloadBackup(bk)}
+                                title="Download Backup Archive"
                                 className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 inline-flex items-center justify-center transition-colors cursor-pointer border border-slate-200"
                               >
                                 <Download className="w-3.5 h-3.5" />
